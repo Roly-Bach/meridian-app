@@ -1,6 +1,6 @@
 # PROJ-1: Auth + Workspace
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-05-19
 **Last Updated:** 2026-05-19
 
@@ -89,7 +89,77 @@
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+App Router (Next.js)
+│
+├── /login                   (öffentlich)
+│   ├── LoginForm
+│   │   ├── EmailInput
+│   │   ├── PasswordInput
+│   │   ├── SubmitButton (mit Spinner)
+│   │   └── ErrorToast (Sonner)
+│   └── Link → /signup
+│
+├── /signup                  (öffentlich)
+│   ├── SignupForm
+│   │   ├── WorkspaceNameInput
+│   │   ├── EmailInput
+│   │   ├── PasswordInput
+│   │   ├── SubmitButton (mit Spinner)
+│   │   └── ErrorToast (Sonner)
+│   └── Link → /login
+│
+├── /auth/callback           (öffentlich — Supabase-Redirect-Ziel)
+│   └── Route Handler
+│
+└── /dashboard               (geschützt)
+    └── DashboardShell
+        ├── Sidebar (dunkel)
+        │   ├── WorkspaceName (oben)
+        │   └── LogoutButton (unten)
+        └── MainContent (Platzhalter für PROJ-2+)
+
+middleware.ts                (schützt alle Routen außer /login, /signup, /auth/callback)
+```
+
+### Datenmodell
+
+| Tabelle | Zweck | Isolation |
+|---------|-------|-----------|
+| `workspaces` | Ein Eintrag pro User. Enthält Workspace-Name und Stundensatz | via `user_id = auth.uid()` |
+| `interviews` | Jedes Interview gehört zu einem Workspace | via `workspace_id` |
+| `interview_state` | Zustand eines laufenden Interviews (Phase, Timer, Topics) | via `workspace_id` der verknüpften `interviews` |
+| `turns` | Jede Frage-Antwort-Runde im Interview | via `interview_id` |
+| `knowledge_objects` | Extrahiertes Wissen mit Vektor-Embedding (1536 dim) | via `workspace_id` |
+| `process_steps` | Identifizierte Prozessschritte mit Metriken | via `workspace_id` |
+| `use_cases` | Abgeleitete KI-Use-Cases mit ROI | via `workspace_id` |
+
+Workspace-Anlage via Postgres-Trigger bei `auth.users` INSERT. RLS auf allen Tabellen, nicht deaktivierbar.
+
+### Tech-Entscheidungen
+
+| Entscheidung | Gewählt | Warum |
+|---|---|---|
+| Auth-System | Supabase Auth | Bereits im Stack |
+| Session-Handling | Cookie-based via `@supabase/ssr` | Server Components brauchen Cookies |
+| Route-Schutz | Next.js Middleware | Läuft vor jedem Request, kein Client-seitiger Leak |
+| Datenbankzugriff (UI) | Server-Client (SSR) | Session mitgeführt, keine Tokens im Browser |
+| Datenbankzugriff (Agent) | Service-Role-Client | Schreibt ohne RLS, nur server-seitig |
+| UI-Komponenten | shadcn/ui (bereits installiert) | Button, Input, Form, Toaster vorhanden |
+| Validierung | react-hook-form + Zod | Bereits im Stack |
+
+### Neue Abhängigkeiten
+
+| Paket | Zweck |
+|---|---|
+| `@supabase/ssr` | SSR-kompatible Supabase-Clients (cookie-based) |
+
+### Datenbankmigrationen
+
+Eine Migration: alte Tabellen droppen (`unternehmen`, `mitarbeiter`, `knowledge_chunks`, alte `interviews`), neue Tabellen anlegen mit pgvector-Index, RLS-Policies und `updated_at`-Triggern.
 
 ## QA Test Results
 _To be added by /qa_
