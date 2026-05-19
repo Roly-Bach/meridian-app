@@ -1,6 +1,6 @@
 # PROJ-1: Auth + Workspace
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-05-19
 **Last Updated:** 2026-05-19
 
@@ -160,6 +160,25 @@ Workspace-Anlage via Postgres-Trigger bei `auth.users` INSERT. RLS auf allen Tab
 ### Datenbankmigrationen
 
 Eine Migration: alte Tabellen droppen (`unternehmen`, `mitarbeiter`, `knowledge_chunks`, alte `interviews`), neue Tabellen anlegen mit pgvector-Index, RLS-Policies und `updated_at`-Triggern.
+
+## Implementation Notes (Backend)
+
+**Geliefert:**
+- `supabase/migrations/20260519000001_mvp_schema.sql` — komplette MVP-Migration (Drop + Create + RLS + Trigger + Indexes)
+- `src/lib/supabase.ts` — Browser-Client (rewritten to `@supabase/ssr`)
+- `src/lib/supabase-server.ts` — SSR-Server-Client (cookie-based, für Server Components + API Routes)
+- `src/lib/supabase-admin.ts` — Service-Role-Client (lazy-init, wirft beschreibenden Fehler wenn Key fehlt)
+- `middleware.ts` — Route-Schutz: nicht-auth → `/login`, auth auf public routes → `/dashboard`
+- `src/app/auth/callback/route.ts` — Supabase Auth Callback (Email-Bestätigung, Passwort-Reset)
+- `.env.local.example` — alle drei Env-Vars dokumentiert
+
+**Abweichungen vom Spec:**
+- `interview_state` hat keine eigene `workspace_id` Spalte — RLS-Isolation läuft über JOIN auf `interviews` (sauberer, kein denormalisiertes Feld)
+- `turns` ebenfalls ohne `workspace_id` — gleicher Grund
+
+**Noch ausstehend (via /frontend):**
+- `/login`, `/signup`, `/dashboard` UI-Seiten
+- Logout-Logik im Dashboard
 
 ## QA Test Results
 _To be added by /qa_

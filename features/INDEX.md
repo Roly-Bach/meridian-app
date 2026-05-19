@@ -15,7 +15,7 @@
 
 | ID | Feature | Status | Spec | Created | Priority | Depends |
 |----|---------|--------|------|---------|----------|---------|
-| PROJ-1 | Auth + Workspace | Architected | [spec](PROJ-1-auth-workspace.md) | 2026-05-19 | P0 | — |
+| PROJ-1 | Auth + Workspace | In Progress | [spec](PROJ-1-auth-workspace.md) | 2026-05-19 | P0 | — |
 | PROJ-2 | Interview Engine Backend | Roadmap | — | 2026-05-19 | P0 | PROJ-1 |
 | PROJ-3 | Interview UI | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
 | PROJ-4 | Extraktions-Agent + Wissensbasis | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
