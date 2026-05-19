@@ -13,7 +13,10 @@ import { signup } from './actions'
 
 const schema = z.object({
   workspaceName: z.string().min(1, 'Workspace-Name ist erforderlich'),
-  email: z.string().email('Ungültige E-Mail-Adresse'),
+  email: z.string().min(1, 'E-Mail ist erforderlich').refine(
+    (val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
+    { message: 'Ungültige E-Mail-Adresse' }
+  ),
   password: z.string().min(8, 'Mindestens 8 Zeichen'),
 })
 

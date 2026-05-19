@@ -22,6 +22,7 @@ async function loginTestUser(page: Parameters<Parameters<typeof test>[1]>[0]) {
   await page.fill('input[type="password"]', TEST_PASSWORD)
   await page.click('button[type="submit"]')
   await page.waitForURL('/dashboard', { timeout: 15000 })
+  await page.waitForLoadState('networkidle')
 }
 
 // ============================================================
