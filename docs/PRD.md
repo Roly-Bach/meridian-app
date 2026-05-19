@@ -12,7 +12,7 @@ Meridian erhebt implizites Prozesswissen von Mitarbeitern durch KI-geführte Int
 
 | Priority | Feature | Status |
 |----------|---------|--------|
-| P0 (MVP) | Auth + Workspace | Roadmap |
+| P0 (MVP) | Auth + Workspace | Planned |
 | P0 (MVP) | Interview Engine Backend | Roadmap |
 | P0 (MVP) | Interview UI | Roadmap |
 | P0 (MVP) | Extraktions-Agent + Wissensbasis | Roadmap |
