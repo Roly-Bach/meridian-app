@@ -1,4 +1,15 @@
 import { defineConfig, devices } from '@playwright/test'
+import { readFileSync } from 'fs'
+try {
+  readFileSync('.env.local', 'utf8').split(/\r?\n/).forEach(line => {
+    const eqIdx = line.indexOf('=')
+    if (eqIdx > 0 && !line.trimStart().startsWith('#')) {
+      const key = line.slice(0, eqIdx).trim()
+      const val = line.slice(eqIdx + 1).trim()
+      if (key && val && !process.env[key]) process.env[key] = val
+    }
+  })
+} catch { /* env.local not present in CI */ }
 
 export default defineConfig({
   testDir: './tests',

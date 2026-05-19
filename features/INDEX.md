@@ -15,7 +15,7 @@
 
 | ID | Feature | Status | Spec | Created | Priority | Depends |
 |----|---------|--------|------|---------|----------|---------|
-| PROJ-1 | Auth + Workspace | In Review | [spec](PROJ-1-auth-workspace.md) | 2026-05-19 | P0 | — |
+| PROJ-1 | Auth + Workspace | Approved | [spec](PROJ-1-auth-workspace.md) | 2026-05-19 | P0 | — |
 | PROJ-2 | Interview Engine Backend | Roadmap | — | 2026-05-19 | P0 | PROJ-1 |
 | PROJ-3 | Interview UI | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
 | PROJ-4 | Extraktions-Agent + Wissensbasis | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
@@ -28,3 +28,15 @@
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
+
+## Architecture Notes
+
+### Service-Layer-Constraint (gilt ab PROJ-4)
+
+KI-Logik (LLM-Calls via Claude, Embedding-Calls, Vektor-Operationen) gehört in dedizierte Service-Dateien unter `src/services/` — nicht direkt in API Routes oder Server Components.
+
+**Begründung:** PROJ-4 bis PROJ-6 bauen auf schweren AI-Workloads auf. Eine saubere Service-Schicht hält die Schnittstellen typisiert und ermöglicht, einzelne Services bei Bedarf auf einen externen Python/FastAPI-Dienst auszulagern, ohne dass Frontend-Code angefasst werden muss.
+
+**Konkret für PROJ-4:** Extraktions-Logik in `src/services/extraction.ts`, Embedding-Logik in `src/services/embeddings.ts`. API Routes rufen nur diese Services auf.
+
+Quelle: Architektur-Review 2026-05-19 gegen "Web Application Development & Tech Stacks 2026"-Leitfaden.

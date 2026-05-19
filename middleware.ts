@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // getUser() refreshes the session and must be called in middleware
+  // getUser() verifies the session with Supabase and must be called in middleware
   const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
