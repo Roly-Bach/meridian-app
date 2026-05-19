@@ -176,9 +176,14 @@ Eine Migration: alte Tabellen droppen (`unternehmen`, `mitarbeiter`, `knowledge_
 - `interview_state` hat keine eigene `workspace_id` Spalte — RLS-Isolation läuft über JOIN auf `interviews` (sauberer, kein denormalisiertes Feld)
 - `turns` ebenfalls ohne `workspace_id` — gleicher Grund
 
-**Noch ausstehend (via /frontend):**
-- `/login`, `/signup`, `/dashboard` UI-Seiten
-- Logout-Logik im Dashboard
+**Frontend (via /frontend):**
+- `src/app/login/page.tsx` + `actions.ts` — LoginForm (react-hook-form + Zod, Sonner Toast, window.location.href redirect)
+- `src/app/signup/page.tsx` + `actions.ts` — SignupForm (Workspace-Name + E-Mail + Passwort, gleiche Pattern)
+- `src/app/auth/actions.ts` — logout Server Action (signOut + redirect /login)
+- `src/app/dashboard/layout.tsx` — DashboardShell: dunkle Sidebar (#0F0F11, 240px), Workspace-Name aus user_metadata, Logout-Button
+- `src/app/dashboard/page.tsx` — Platzhalter für PROJ-2+
+- `src/app/layout.tsx` — Root Layout: Inter Font, Sonner Toaster, Metadata "Meridian"
+- `src/app/page.tsx` — Leer (Middleware übernimmt Redirect)
 
 ## QA Test Results
 _To be added by /qa_
