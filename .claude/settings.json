@@ -6,17 +6,46 @@
       "Bash(npm run dev:*)",
       "Bash(npm run build:*)",
       "Bash(npm run lint:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run test:*)",
       "Bash(npm run start:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npx playwright:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git tag:*)",
       "Bash(git log:*)",
       "Bash(git ls-files:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git stash:*)",
+      "Bash(git remote:*)",
+      "Bash(git blame:*)",
+      "Bash(gh:*)",
+      "Bash(aider:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
       "Bash(lsof:*)",
       "Bash(kill:*)",
-      "Bash(npx shadcn@latest add:*)",
-      "Bash(ls:*)",
-      "Bash(cat:*)"
+      "Bash(mkdir:*)",
+      "WebFetch(domain:localhost)",
+      "WebFetch(domain:127.0.0.1)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -E 'git push.*origin[[:space:]]+main' > /dev/null 2>&1; then echo 'WARNING: Direct push to main detected. Consider feature branch + PR.'; fi"
+          }
+        ]
+      }
     ]
   }
 }
