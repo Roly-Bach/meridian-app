@@ -1,6 +1,6 @@
 # ADR-002: Hybrid-Backend mit EU-Region (Vercel + Supabase)
 
-**Status:** Proposed (2026-05-19)
+**Status:** Accepted (2026-05-19)
 **Author:** Lias Hemmersbach
 **Repository:** Roly-Bach/meridian-app
 **Supersedes:** Keine
