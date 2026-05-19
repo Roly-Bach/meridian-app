@@ -186,7 +186,126 @@ Eine Migration: alte Tabellen droppen (`unternehmen`, `mitarbeiter`, `knowledge_
 - `src/app/page.tsx` — Leer (Middleware übernimmt Redirect)
 
 ## QA Test Results
-_To be added by /qa_
+
+**Datum:** 2026-05-19
+**Tester:** QA Agent (Claude Sonnet 4.6)
+**Umgebung:** Chromium / localhost:3000 (npm run dev)
+
+### Acceptance Criteria — Ergebnis
+
+| Kriterium | Status | Anmerkung |
+|---|---|---|
+| Signup via Supabase Auth | ❌ FAIL | Signup bleibt auf /signup — E-Mail-Bestätigung vermutlich noch aktiviert in Supabase |
+| Workspace-Trigger nach Signup | ⚠️ NICHT GETESTET | Signup schlägt fehl |
+| workspace_id in user_metadata | ⚠️ NICHT GETESTET | Signup schlägt fehl |
+| Login cookie-based via @supabase/ssr | ⚠️ NICHT TESTBAR | Abhängig von Signup |
+| Logout → /login | ⚠️ NICHT TESTBAR | Abhängig von Login |
+| Passwort-Reset via Supabase | ✅ PASS (out-of-scope UI) | Kein Custom UI — Supabase Standard |
+| RLS-Isolation User A / User B | ⚠️ NICHT TESTBAR | Abhängig von Signup |
+| Neue Migration ersetzt altes Schema | ✅ PASS (code review) | Migration existiert, SQL korrekt |
+| Alle neuen Tabellen vorhanden | ✅ PASS (code review) | 7 Tabellen gemäß Spec |
+| pgvector + IVFFlat-Index | ✅ PASS (code review) | Migration enthält Index |
+| RLS auf allen Tabellen | ✅ PASS (code review) | Alle 7 Tabellen mit Policies |
+| updated_at-Trigger | ✅ PASS (code review) | workspaces + interview_state |
+| supabase-server.ts vorhanden | ✅ PASS | Cookie-based SSR client |
+| supabase-admin.ts vorhanden | ✅ PASS | Lazy-init, beschreibende Fehlermeldung |
+| supabase.ts (Browser) angepasst | ✅ PASS | @supabase/ssr browser client |
+| .env.local.example dokumentiert | ✅ PASS | Alle 3 Env-Vars |
+| Middleware schützt Routen | ✅ PASS (E2E) | /dashboard → /login ohne Session |
+| / → /dashboard (auth) oder /login | ❌ FAIL | Unauthentifizierter Zugriff auf / bleibt auf / |
+| /auth/callback vorhanden | ✅ PASS (code review + build) | Route Handler korrekt |
+| /login UI | ✅ PASS (E2E) | Form, Button, Link zu /signup |
+| /signup UI | ✅ PASS (E2E, partiell) | Form vorhanden, Validierung partiell |
+| /dashboard Sidebar + Workspace-Name | ⚠️ NICHT TESTBAR | Abhängig von Signup |
+| Loading State | ✅ PASS (code review) | Spinner + disabled Button implementiert |
+| Meridian Pink Button | ✅ PASS (E2E) | rgb(224, 64, 251) = #E040FB bestätigt |
+
+### Bugs
+
+#### BUG-001 — CRITICAL: Signup schlägt fehl, User landet nicht auf /dashboard
+
+**Schritte:** /signup öffnen → gültige Daten eingeben → Registrieren klicken → bleibt auf /signup
+
+**Ursache:** `signup/actions.ts` prüft `if (!data.session)` und gibt Fehler zurück. Supabase gibt keine Session zurück wenn E-Mail-Bestätigung aktiviert ist. Spec sagt: E-Mail-Verifizierung für MVP deaktiviert.
+
+**Fix:** Supabase Dashboard → Authentication → Providers → Email → "Confirm email" deaktivieren.
+
+---
+
+#### BUG-002 — MEDIUM: Zod v4 custom error messages bei .email() werden ignoriert
+
+**Schritte:** /signup → ungültige E-Mail eingeben → Submit → kein deutscher Fehlertext sichtbar
+
+**Ursache:** In Zod v4 änderte sich die API für custom messages. `z.string().email('text')` übergibt den String nicht als message, `.min()` funktioniert korrekt. Default-Zod-Fehlertext erscheint statt "Ungültige E-Mail-Adresse".
+
+**Fix (Codeänderung):**
+```ts
+// Vorher (Zod v3 Syntax, bricht in v4):
+email: z.string().email('Ungültige E-Mail-Adresse')
+
+// Nachher (Zod v4):
+email: z.string().email({ error: 'Ungültige E-Mail-Adresse' })
+```
+Gleiches gilt für login/page.tsx.
+
+---
+
+#### BUG-003 — MEDIUM: / (Root) redirectet unauthentifizierte User nicht zu /login
+
+**Schritte:** Browser ohne Session → localhost:3000/ öffnen → URL bleibt /
+
+**Ursache:** `page.tsx` gibt `null` zurück. Next.js behandelt dies als statischen leeren Inhalt — der Middleware-Redirect greift in dieser Konstellation nicht zuverlässig.
+
+**Fix:** Server-seitiger Redirect als Safety-Net in page.tsx:
+```tsx
+import { redirect } from 'next/navigation'
+export default function RootPage() {
+  redirect('/login')
+}
+```
+Middleware übernimmt danach den auth-basierten Redirect zu /dashboard.
+
+---
+
+#### BUG-004 — LOW: Fehlertext-Erkennung für doppelte E-Mail ist fragil
+
+**Code:** `signup/actions.ts` Zeile 25: `error.message.toLowerCase().includes('already registered')`
+
+**Ursache:** Supabase könnte interne Fehlertexte ändern → Match schlägt fehl → User sieht generischen Fehlertext statt "Diese E-Mail ist bereits registriert".
+
+**Fix:** Supabase Error-Codes prüfen statt Freitext: `error.code === 'user_already_exists'` oder `error.status === 422`.
+
+### Security Audit
+
+| Prüfpunkt | Ergebnis |
+|---|---|
+| `getUser()` statt `getSession()` in Middleware | ✅ Korrekt — server-validiert, nicht spoofbar |
+| Service-Role-Key nie als NEXT_PUBLIC_ | ✅ Korrekt |
+| Lazy-init in supabase-admin.ts | ✅ Korrekt — kein Build-Fehler bei fehlendem Key |
+| CSRF-Schutz auf Server Actions | ✅ Next.js App Router bietet eingebauten CSRF-Schutz |
+| Input-Injection (XSS) | ✅ React escapet automatisch, keine innerHTML-Nutzung |
+| SQL-Injection | ✅ Supabase parametrisierte Queries |
+| RLS — cross-workspace Zugriff | ✅ Code Review bestätigt korrekte Policies |
+| Tokens in Browser-Console/LocalStorage | ✅ @supabase/ssr nutzt httpOnly Cookies |
+| Keine server-seitige Zod-Validierung in Actions | ⚠️ LOW — Supabase fängt ungültige Inputs auf, aber nicht unser Code |
+
+### E2E Test-Ergebnis
+
+**15 Tests definiert | 6 PASS | 2 FAIL | 1 SKIPPED (fixme) | 6 DID NOT RUN (serial-abhängig)**
+
+Bestandene Tests:
+- /dashboard → /login (unauthentifiziert) ✅
+- Empty workspace validation ✅
+- Password < 8 chars validation ✅
+- Meridian Pink Button-Farbe ✅
+- Login-Link auf /signup ✅
+- Signup-Link auf /login ✅
+
+### Produktionsbereitschaft
+
+**❌ NICHT BEREIT** — BUG-001 (CRITICAL) und BUG-002/003 (MEDIUM) müssen behoben werden.
+
+Nach Fixes: `/qa` erneut ausführen.
 
 ## Deployment
 _To be added by /deploy_
