@@ -132,9 +132,30 @@ export interface AgentStreamOptions {
   onFinish?: (text: string) => Promise<void>
 }
 
+function resolveModel(modelString: string) {
+  const slashIdx = modelString.indexOf('/')
+
+  // No slash → treat as bare Anthropic model name (legacy fallback)
+  if (slashIdx === -1) {
+    return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelString as never)
+  }
+
+  const provider = modelString.slice(0, slashIdx)
+  const modelId = modelString.slice(slashIdx + 1)
+
+  if (provider === 'anthropic') {
+    return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId as never)
+  }
+
+  throw new Error(
+    `Unsupported model provider: "${provider}". ` +
+      `Set INTERVIEW_MODEL to "anthropic/<model-id>" (e.g. "anthropic/claude-opus-4-5").`
+  )
+}
+
 export function createInterviewStream(opts: AgentStreamOptions) {
-  const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const modelId = (process.env.INTERVIEW_MODEL ?? 'claude-opus-4-5') as Parameters<typeof anthropic>[0]
+  const modelString = process.env.INTERVIEW_MODEL ?? 'anthropic/claude-opus-4-5'
+  const model = resolveModel(modelString)
 
   const messages: { role: 'user' | 'assistant'; content: string }[] = opts.isReconnect
     ? [
@@ -148,7 +169,7 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     : opts.history.map((t) => ({ role: t.role, content: t.content }))
 
   return streamText({
-    model: anthropic(modelId),
+    model,
     system: buildSystemPrompt(opts.context),
     messages,
     tools: buildTools(opts.context.interviewId),
