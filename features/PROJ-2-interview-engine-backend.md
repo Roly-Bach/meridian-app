@@ -1,6 +1,6 @@
 # PROJ-2: Interview Engine Backend
 
-## Status: In Review
+## Status: Approved
 **Created:** 2026-05-19
 **Last Updated:** 2026-05-20
 
