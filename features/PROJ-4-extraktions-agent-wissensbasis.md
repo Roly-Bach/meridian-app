@@ -221,4 +221,7 @@ src/
 **JA** — Alle Bugs (B1–B4) behoben. Re-QA 2026-05-20 bestanden. 35/35 Tests grün.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-05-20
+**Production URL:** https://meridian-app-tau.vercel.app/
+**Hinweis:** Mit-deployed via Merge-Commit des PROJ-3 Deploys. War bereits auf `origin/main` vorhanden.

@@ -220,4 +220,7 @@ Role ist bereits als Subtitle im Titel-Cell sichtbar UND als eigene Spalte. Verd
 **JA** — keine Critical/High Bugs. B1+B2 sind Low — können nach Deploy behoben werden.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-05-20
+**Production URL:** https://meridian-app-tau.vercel.app/
+**Hinweis:** Mit-deployed via Merge-Commit des PROJ-3 Deploys. War bereits auf `origin/main` vorhanden.

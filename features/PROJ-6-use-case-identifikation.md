@@ -320,4 +320,7 @@ Roadmap-Test im QA-Lauf geschrieben. 104/104 Tests grün.
 Alle 8 Heuristik-Regeln korrekt implementiert und getestet. ROI-Berechnung und Score-Logik verifiziert.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-05-20
+**Production URL:** https://meridian-app-tau.vercel.app/
+**Hinweis:** Mit-deployed via Merge-Commit des PROJ-3 Deploys. War bereits auf `origin/main` vorhanden.
