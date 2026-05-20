@@ -98,10 +98,10 @@ describe('POST /api/use-cases/generate', () => {
     expect(json.total_roi_eur).toBe(0)
   })
 
-  it('deletes existing use_cases and inserts new ones', async () => {
-    const deleteMock = vi.fn().mockReturnThis()
-    const deleteEqMock = vi.fn().mockResolvedValue({ error: null })
+  it('inserts new use_cases then deletes old ones (safe order)', async () => {
     const insertMock = vi.fn().mockResolvedValue({ error: null })
+    const deleteMock = vi.fn().mockReturnThis()
+    const deleteInMock = vi.fn().mockResolvedValue({ error: null })
 
     mockAdminFrom
       // process_steps fetch
@@ -112,10 +112,15 @@ describe('POST /api/use-cases/generate', () => {
           error: null,
         }),
       })
-      // delete old use_cases
-      .mockReturnValueOnce({ delete: deleteMock, eq: deleteEqMock })
+      // fetch existing IDs
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [{ id: 'old-uc-1' }], error: null }),
+      })
       // insert new
       .mockReturnValueOnce({ insert: insertMock })
+      // delete old by IDs
+      .mockReturnValueOnce({ delete: deleteMock, in: deleteInMock })
       // fetch back
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
@@ -127,7 +132,7 @@ describe('POST /api/use-cases/generate', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.use_cases).toHaveLength(1)
-    expect(deleteMock).toHaveBeenCalled()
     expect(insertMock).toHaveBeenCalled()
+    expect(deleteMock).toHaveBeenCalled()
   })
 })

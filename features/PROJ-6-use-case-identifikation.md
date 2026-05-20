@@ -293,18 +293,14 @@ Keine — shadcn Card, Badge, Skeleton bereits installiert.
 
 ### Bugs Gefunden
 
-#### B1 — Medium: Delete-before-insert nicht atomar
-**Steps:** POST /api/use-cases/generate → delete erfolgreich → insert schlägt fehl → alle Use Cases für Workspace gelöscht, keine neuen.
-**Risk:** Datenverlust bei DB-Fehler während Generate.
-**Fix:** Vorherige Use Cases erst nach erfolgreichem Insert löschen (insert-then-delete), oder Ergebnis in Memory halten und bei Fehler revert.
+#### B1 — Medium: Delete-before-insert nicht atomar → BEHOBEN
+**Fix:** Insert-then-delete: neue Use Cases zuerst einfügen, dann alte IDs löschen. Datenverlust bei Insert-Fehler verhindert.
 
-#### B2 — Low: `<a href>` statt `<Link>` in UseCaseBoardClient
-**File:** `src/components/UseCaseBoardClient.tsx` — "Quartals-Roadmap →" Link.
-**Impact:** Kein Client-Side-Navigation, voller Page-Reload. Funktioniert, nicht optimiert.
-**Fix:** `import Link from 'next/link'` und `<Link href="...">` verwenden.
+#### B2 — Low: `<a href>` statt `<Link>` → BEHOBEN
+**Fix:** `import Link from 'next/link'` in `UseCaseBoardClient.tsx`.
 
-#### B3 — Low: Keine Test-Abdeckung für Roadmap-Route (behoben)
-Roadmap-Test wurde im QA-Lauf geschrieben. 104/104 Tests grün.
+#### B3 — Low: Keine Test-Abdeckung für Roadmap-Route → BEHOBEN
+Roadmap-Test im QA-Lauf geschrieben. 104/104 Tests grün.
 
 ### Security Audit
 
@@ -319,7 +315,7 @@ Roadmap-Test wurde im QA-Lauf geschrieben. 104/104 Tests grün.
 
 ### Produktion-Ready?
 
-**JA** — kein Critical/High Bug. B1 ist Medium (akzeptiertes MVP-Risiko), B2 ist Low. Beide nach Deploy behebbar.
+**JA** — alle Bugs (B1–B3) behoben. 104/104 Tests grün.
 
 Alle 8 Heuristik-Regeln korrekt implementiert und getestet. ROI-Berechnung und Score-Logik verifiziert.
 

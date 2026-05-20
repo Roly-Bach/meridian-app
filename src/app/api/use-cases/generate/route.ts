@@ -10,7 +10,7 @@ const GenerateSchema = z.object({
 
 // POST /api/use-cases/generate
 // Runs the 8-rule heuristic engine on all process_steps in a workspace.
-// Deletes existing use_cases first — idempotent.
+// Insert-then-delete: new use_cases inserted first to prevent data loss on failure.
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -54,16 +54,25 @@ export async function POST(req: Request) {
   // Run heuristic engine
   const generated = runHeuristicEngine(steps, hourlyRate)
 
-  // Delete existing use_cases for this workspace
-  await admin.from('use_cases').delete().eq('workspace_id', workspace_id)
+  // Fetch existing IDs before any writes (for safe cleanup after successful insert)
+  const { data: existingIds } = await admin
+    .from('use_cases')
+    .select('id')
+    .eq('workspace_id', workspace_id)
 
-  // Insert new use_cases
+  // Insert new use_cases first — if this fails, old data is preserved
   if (generated.length > 0) {
     const { error } = await admin.from('use_cases').insert(generated)
     if (error) {
       console.error('[use-cases/generate] insert failed:', error.message)
       return NextResponse.json({ error: 'Failed to save use cases' }, { status: 500 })
     }
+  }
+
+  // Delete old use_cases only after successful insert
+  if (existingIds && existingIds.length > 0) {
+    const ids = existingIds.map((r) => r.id)
+    await admin.from('use_cases').delete().in('id', ids)
   }
 
   // Fetch back with IDs

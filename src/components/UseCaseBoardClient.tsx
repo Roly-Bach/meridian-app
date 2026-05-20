@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
@@ -68,12 +69,12 @@ export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalR
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <a
+          <Link
             href="/dashboard/use-cases/roadmap"
             className="text-[13px] text-[#6B7280] hover:text-[#111111] transition-colors"
           >
             Quartals-Roadmap →
-          </a>
+          </Link>
           <Button
             onClick={handleGenerate}
             disabled={generating}
