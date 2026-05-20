@@ -1,6 +1,6 @@
 # PROJ-2: Interview Engine Backend
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-19
 **Last Updated:** 2026-05-20
 
@@ -326,4 +326,13 @@ The feature itself is functionally complete and all 29 acceptance criteria pass.
 BUG-002 (MEDIUM) does not block MVP since Anthropic is the only intended provider.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-05-20
+**Production URL:** https://meridian-app-tau.vercel.app/
+**Provider:** Vercel (GitHub auto-deploy on push to main)
+**AI Provider:** Google Gemini via `@ai-sdk/google` — model configured via `INTERVIEW_MODEL` env var
+**API Routes live:**
+- `GET/POST /api/interviews`
+- `GET /api/interview/[token]`
+- `POST /api/interview/[token]/chat`
+- `POST /api/interview/[token]/reconnect`
