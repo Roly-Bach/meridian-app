@@ -62,7 +62,7 @@ Ausgabeformat — nur valides JSON, kein Text davor oder danach:
 ]`
 
 // Guard: only use attribute value if evidence_quote is present and non-empty
-function applyGroundingGuard<T>(attr: EnrichedAttribute<T>): T | null {
+export function applyGroundingGuard<T>(attr: EnrichedAttribute<T>): T | null {
   if (!attr || !attr.evidence_quote || attr.evidence_quote.trim() === '') return null
   return attr.value
 }

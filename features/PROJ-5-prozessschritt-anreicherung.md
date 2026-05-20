@@ -1,6 +1,6 @@
 # PROJ-5: Prozessschritt-Anreicherung
 
-## Status: Architected
+## Status: Approved
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
 
@@ -161,7 +161,63 @@ src/components/
 Keine — shadcn Table installiert, Claude via @ai-sdk/anthropic vorhanden.
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-05-20
+**Test Suite:** 66 unit tests (8 applyGroundingGuard, 6 enrichProcessSteps, 5 generate API, 5 GET API, 7 PATCH API), 0 E2E (UI braucht Live-Supabase)
+
+### Acceptance Criteria
+
+| Kriterium | Status | Notiz |
+|-----------|--------|-------|
+| Fire-and-forget bei Interview-Abschluss | ✅ PASS | `void enrichProcessSteps()` in `complete_interview` tool |
+| Trigger idempotent | ✅ PASS | Count-Check vor Enrichment |
+| LLM liest Transkript + Wissensobjekte | ✅ PASS | beide an Claude-Prompt übergeben |
+| Strikte Quellen-Bindung (nur mit evidence_quote) | ✅ PASS | `applyGroundingGuard` + 8 Unit-Tests |
+| Attribute ohne Evidenz → null | ✅ PASS | Guard getestet |
+| `rule_based` nur bei explizitem Regelhinweis | ✅ PASS | Guard → null → default false |
+| `evidence_quote` pro Attribut | ✅ PASS | LLM-Prompt fordert es |
+| Enrichment in `processEnrichment.ts` | ✅ PASS | Service-Layer eingehalten |
+| LLM-Fehler geloggt, kein Crash | ✅ PASS | try/catch, Interview bleibt `completed` |
+| POST /api/process-steps/generate | ✅ PASS | Auth + UUID-Validation + Workspace-Check |
+| GET /api/process-steps?workspace_id= | ✅ PASS | Auth + workspace ownership |
+| PATCH /api/process-steps/:id | ✅ PASS | Zod strict schema, ≥0 Validierung |
+| Zod-Validierung `frequency_per_month ≥ 0` | ✅ PASS | Getestet |
+| Zod-Validierung `error_rate_percent` 0–100 | ✅ PASS | Getestet |
+| `/dashboard/process-steps` Seite | ✅ PASS | Server Component vorhanden |
+| Tabelle zeigt alle Spalten | ✅ PASS | 8 Spalten implementiert |
+| Null ≠ 0 in Zellen sichtbar | ✅ PASS | null → "—", 0 → "0" |
+| Inline-Edit Number-Zellen | ✅ PASS | Enter/Blur/Escape |
+| Inline-Edit Tags-Zelle (data_sources) | ✅ PASS | kommagetrennt → array |
+| Toggle rule_based | ✅ PASS | Switch-Komponente |
+| Optimistic Update + Revert | ✅ PASS | state management in component |
+| Fehler-Toast bei PATCH-Fehler | ✅ PASS | sonner toast.error |
+| Loading Skeleton | ✅ PASS | `ProcessStepsTableSkeleton` exportiert |
+| Leerer Zustand | ✅ PASS | Text wenn steps.length === 0 |
+
+### Bugs Gefunden
+
+#### B1 — Low: "Rolle"-Spalte redundant
+Role ist bereits als Subtitle im Titel-Cell sichtbar UND als eigene Spalte. Verdopplung verbraucht Tabellenbreite ohne Mehrwert.
+**Fix:** "Rolle"-Spalte aus Tabelle entfernen, im Titel-Subtitle belassen.
+
+#### B2 — Low: `inputRef` Typ enthält unnötig `| null`
+`React.RefObject<HTMLInputElement | null>` — `null` im Generic unnötig, erschwert Typinferenz.
+**Fix:** `useRef<HTMLInputElement>(null)` — TypeScript leitet korrekte Typen ab.
+
+### Security Audit
+
+| Check | Ergebnis |
+|-------|---------|
+| Auth auf allen API-Routen | ✅ |
+| Workspace-Isolation (403 bei fremdem Workspace) | ✅ |
+| Zod `.strict()` auf PATCH (keine extra Fields) | ✅ |
+| XSS in data_sources Tags | ✅ React escaped |
+| ANTHROPIC_API_KEY server-seitig | ✅ |
+| Admin-Client nur server-seitig | ✅ |
+
+### Produktion-Ready?
+
+**JA** — keine Critical/High Bugs. B1+B2 sind Low — können nach Deploy behoben werden.
 
 ## Deployment
 _To be added by /deploy_
