@@ -68,7 +68,13 @@ ${topicsSection}${timingWarning}
 ## Tool-Regeln
 - transition_phase: Aufrufen wenn du die Phase wechselst. Nicht im Text erwähnen.
 - update_topics: Nach jedem Turn aufrufen mit aktualisierten Listen.
-- complete_interview: Nur in wrap_up nach dem abschließenden Dank.`
+- complete_interview: Nur in wrap_up nach dem abschließenden Dank.
+
+## Gesprächsregeln
+- Pro Antwort GENAU EINE Frage stellen — nie zwei oder mehr gleichzeitig.
+- Wenn der Mitarbeiter etwas bereits (auch beiläufig) erwähnt hat, frage nicht nochmals danach.
+- Antworten kurz halten: maximal 2–3 Sätze Reaktion + eine Folgefrage.
+- Rufe Tools immer AM ENDE deiner Antwort auf — nie vor dem Text, nie mitten im Text.`
 }
 
 function buildTools(interviewId: string) {
@@ -208,9 +214,10 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     system: buildSystemPrompt(opts.context),
     messages,
     tools: buildTools(opts.context.interviewId),
-    // Allow up to 3 LLM steps so tools can be called and the model can produce
-    // follow-up text in the same turn without a separate client roundtrip.
-    stopWhen: stepCountIs(3),
+    // Single LLM step: model generates text + calls tools in one response.
+    // stepCountIs(1) prevents a second LLM call that would re-generate similar
+    // text after tool results, which caused visible text duplication in the UI.
+    stopWhen: stepCountIs(1),
     onFinish: opts.onFinish
       ? async ({ text }) => {
           await opts.onFinish!(text)
