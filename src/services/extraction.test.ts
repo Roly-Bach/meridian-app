@@ -155,6 +155,26 @@ describe('extractAndEmbed', () => {
     errorSpy.mockRestore()
   })
 
+  it('skips objects with invalid type not in allowlist', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const objects = [
+      { type: 'unknown_type', content: { foo: 'bar' }, source_quote: 'some quote' },
+      { type: 'tool', content: { name: 'SAP', purpose: 'ERP' }, source_quote: 'wir nutzen SAP' },
+    ]
+    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(objects) } as never)
+
+    await extractAndEmbed({
+      interviewId: 'iv-1',
+      workspaceId: 'ws-1',
+      turnId: 'turn-1',
+      transcript: MOCK_TRANSCRIPT,
+    })
+
+    expect(mockInsert).toHaveBeenCalledTimes(1)
+    expect(errorSpy).toHaveBeenCalledWith('[extraction] Invalid type, skipping:', 'unknown_type')
+    errorSpy.mockRestore()
+  })
+
   it('skips malformed objects missing required fields', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const partialObjects = [

@@ -24,24 +24,24 @@ export async function GET(
     return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
   }
 
-  // Verify caller has access — either owns the workspace or is the interviewee (token-based)
-  // For dashboard use: verify session workspace matches
+  // Require authenticated session — token alone is not sufficient
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (user) {
-    const { data: workspace } = await supabase
-      .from('workspaces')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('id', interview.workspace_id)
-      .single()
-
-    if (!workspace) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  // If no user session: token alone grants read access (interviewee can see their own extractions)
+
+  const { data: workspace } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('id', interview.workspace_id)
+    .single()
+
+  if (!workspace) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data: objects, error } = await admin
     .from('knowledge_objects')

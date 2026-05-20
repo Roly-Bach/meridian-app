@@ -9,6 +9,8 @@ const anthropic = createAnthropic({
 
 export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool' | 'role'
 
+const ALLOWED_TYPES: readonly KnowledgeObjectType[] = ['process_step', 'pain_point', 'tool', 'role']
+
 interface RawExtraction {
   type: KnowledgeObjectType
   content: Record<string, unknown>
@@ -76,7 +78,7 @@ export async function extractAndEmbed({
       model: anthropic('claude-opus-4-5'),
       system: EXTRACTION_SYSTEM_PROMPT,
       prompt: buildExtractionPrompt(transcript),
-      maxOutputTokens: 1000,
+      maxOutputTokens: 2000,
     })
 
     const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
@@ -97,6 +99,11 @@ export async function extractAndEmbed({
       continue
     }
 
+    if (!ALLOWED_TYPES.includes(item.type)) {
+      console.error('[extraction] Invalid type, skipping:', item.type)
+      continue
+    }
+
     const embeddingInput = `${item.type}: ${JSON.stringify(item.content)}`
     const embedding = await generateEmbedding(embeddingInput)
 
@@ -107,7 +114,7 @@ export async function extractAndEmbed({
       content: item.content,
       source_quote: item.source_quote,
       turn_id: turnId,
-      embedding: embedding as unknown as string,
+      embedding: embedding as number[],
     })
 
     if (error) {

@@ -70,7 +70,37 @@ describe('GET /api/interview/[token]/objects', () => {
     expect(json.error).toBe('Interview not found')
   })
 
-  it('returns objects for valid token (no session — token-based access)', async () => {
+  it('returns 401 when no session', async () => {
+    mockAdminFrom.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: INTERVIEW_ID, workspace_id: WORKSPACE_ID },
+        error: null,
+      }),
+    })
+    // no session (user = null already default in mock)
+
+    const res = await GET(makeGETRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+    expect(res.status).toBe(401)
+    const json = await res.json()
+    expect(json.error).toBe('Unauthorized')
+  })
+
+  it('returns objects for authenticated user who owns workspace', async () => {
+    const USER_ID = 'user-uuid-1'
+
+    // Override createClient mock for this test — user is authenticated
+    const { createClient } = await import('@/lib/supabase-server')
+    vi.mocked(createClient).mockResolvedValueOnce({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } } }) },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: WORKSPACE_ID }, error: null }),
+      }),
+    } as never)
+
     mockAdminFrom
       // Interview lookup
       .mockReturnValueOnce({
@@ -99,6 +129,16 @@ describe('GET /api/interview/[token]/objects', () => {
   })
 
   it('returns empty array when no objects extracted yet', async () => {
+    const { createClient } = await import('@/lib/supabase-server')
+    vi.mocked(createClient).mockResolvedValueOnce({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: WORKSPACE_ID }, error: null }),
+      }),
+    } as never)
+
     mockAdminFrom
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
