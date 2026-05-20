@@ -1,6 +1,6 @@
 # PROJ-5: Prozessschritt-Anreicherung
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
 
@@ -81,7 +81,84 @@
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Datenfluss
+
+```
+Interview wird abgeschlossen (status → completed)
+        ↓ (fire-and-forget)
+POST /api/process-steps/generate
+        ↓
+src/services/processEnrichment.ts
+  Input: vollständiges Transkript + process_step Wissensobjekte
+  Claude claude-opus-4-5
+  Prompt: "Setze Attribut NUR wenn explizit im Transkript belegt.
+           Kein Raten. Ohne Evidenz → null. Gib evidence_quote mit."
+  Output: JSON-Array [{ title, frequency_per_month, evidence_quotes, ... }]
+        ↓
+Guard: Attribut wird verworfen wenn evidence_quote fehlt/leer
+        ↓
+Admin-Client: INSERT INTO process_steps (null wo kein Beleg)
+
+Berater öffnet /dashboard/process-steps
+  ← GET /api/process-steps?workspace_id=xxx
+  Tabelle: befüllte Zellen = aus Interview belegt
+           leere Zellen = kein Hinweis im Interview
+        ↓
+Berater klickt Zelle → Blur/Enter → PATCH /api/process-steps/:id
+  → Optimistic update sofort, Fehler-Toast bei Fehler
+```
+
+### Neue Dateien
+
+```
+src/
+├── services/
+│   └── processEnrichment.ts      NEU — LLM-Anreicherung mit Grounding-Guard
+├── app/api/
+│   └── process-steps/
+│       ├── generate/route.ts     NEU — POST: Anreicherung triggern
+│       ├── route.ts              NEU — GET: Liste nach workspace_id
+│       └── [id]/route.ts         NEU — PATCH: Einzelattribut updaten
+└── app/dashboard/
+    └── process-steps/page.tsx    NEU — Tabellen-UI
+
+src/components/
+    └── ProcessStepsTable.tsx     NEU — Inline-editierbare Tabelle
+```
+
+**Bestehende Datei anpassen:** Interview-Abschluss-Route → fire-and-forget generate hinzufügen.
+
+### Komponenten-Struktur (UI)
+
+```
+/dashboard/process-steps
+├── Header (Titel, Anzahl Einträge)
+├── [Leer-Zustand] "Kein Interview abgeschlossen..."
+├── [Loading Skeleton] während Anreicherung läuft
+└── ProcessStepsTable
+    └── ProcessStepRow (je Zeile)
+        ├── Titel, Rolle (read-only)
+        ├── EditableNumberCell  → frequency_per_month, duration_minutes
+        ├── EditableTagsCell    → data_sources (kommagetrennt → array)
+        ├── EditableBoolCell    → rule_based (Toggle)
+        └── EditableNumberCell  → error_rate_percent, media_breaks
+```
+
+### Tech-Entscheidungen
+
+| Entscheidung | Gewählt | Warum |
+|---|---|---|
+| Inline-Edit Pattern | Blur/Enter → PATCH | Kein Modal — direkter Edit spart Klicks |
+| Optimistic Update | Sofort sichtbar, Revert bei Fehler | Tabelle fühlt sich schnell an |
+| shadcn `Table` | Bereits installiert | Kein extra Package |
+| Grounding-Guard | Server-seitig im Service | LLM-Output vor DB-Insert validiert — nie im Client |
+| fire-and-forget | void-Pattern wie PROJ-4 | Konsistent, kein Queue nötig |
+| Admin-Client für Writes | Service Role Key | Service läuft ohne User-Session |
+
+### Neue Dependencies
+
+Keine — shadcn Table installiert, Claude via @ai-sdk/anthropic vorhanden.
 
 ## QA Test Results
 _To be added by /qa_
