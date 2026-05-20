@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import { logout } from '@/app/auth/actions'
 
@@ -20,8 +21,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <p className="text-[14px] text-white font-semibold truncate">{workspaceName}</p>
         </div>
 
-        <nav className="flex-1 px-3 py-4">
-          {/* Navigation — erweitert durch PROJ-2+ */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 px-2 py-2 text-[13px] text-white/60 hover:text-white rounded-[4px] hover:bg-white/5 transition-colors"
+          >
+            Dashboard
+          </Link>
+          <Link
+            href="/dashboard/process-steps"
+            className="flex items-center gap-2 px-2 py-2 text-[13px] text-white/60 hover:text-white rounded-[4px] hover:bg-white/5 transition-colors"
+          >
+            Prozessschritte
+          </Link>
         </nav>
 
         <div className="px-3 py-4 border-t border-white/10">
