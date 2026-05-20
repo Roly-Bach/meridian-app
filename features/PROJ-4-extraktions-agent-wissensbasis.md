@@ -218,9 +218,7 @@ src/
 
 ### Produktion-Ready?
 
-**NEIN** — 2 Medium-Bugs (B1, B2) müssen vor Deploy behoben werden.
-
-Nach Fixes: `/qa PROJ-4` erneut ausführen.
+**JA** — Alle Bugs (B1–B4) behoben. Re-QA 2026-05-20 bestanden. 35/35 Tests grün.
 
 ## Deployment
 _To be added by /deploy_
