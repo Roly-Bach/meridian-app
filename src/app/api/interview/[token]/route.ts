@@ -20,7 +20,7 @@ export async function GET(
 
   const { data: rawInterview, error } = await supabase
     .from('interviews')
-    .select('id, employee_name, employee_role, department, focus_topics, status, token_expires_at')
+    .select('id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes')
     .eq('access_token', token)
     .single()
 

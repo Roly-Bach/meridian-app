@@ -17,6 +17,7 @@ export interface InterviewContext {
   timerMinutes: number
   topicsCovered: string[]
   topicsOpen: string[]
+  maxDurationMinutes: number
 }
 
 export interface TurnMessage {
@@ -29,11 +30,19 @@ function buildSystemPrompt(ctx: InterviewContext): string {
     ? `Fokusthemen des Beraters: ${ctx.focusTopics}`
     : 'Keine spezifischen Fokusthemen — führe eine offene Prozessexploration durch.'
 
+  const warnAt = ctx.maxDurationMinutes - 5
+  const hardAt = ctx.maxDurationMinutes
+
   const timingWarning =
-    ctx.timerMinutes >= 60
-      ? '\n⚠️ KRITISCH: 60 Minuten erreicht. Beende das Interview sofort mit complete_interview.'
-      : ctx.timerMinutes >= 50
-      ? '\n⚠️ HINWEIS: 50 Minuten erreicht. Leite aktiv in die wrap_up-Phase über.'
+    ctx.timerMinutes >= hardAt
+      ? `\n⚠️ KRITISCH: ${hardAt} Minuten erreicht. Beende das Interview sofort mit complete_interview.`
+      : ctx.timerMinutes >= warnAt
+      ? `\n⚠️ HINWEIS: ${warnAt} Minuten erreicht. Leite aktiv in die wrap_up-Phase über.`
+      : ''
+
+  const shortModeHint =
+    ctx.maxDurationMinutes <= 10
+      ? '\n- Kurzmodus aktiv: Halte Übergänge zwischen Phasen kurz und komm zügig zum Abschluss.'
       : ''
 
   const topicsSection = [
@@ -53,7 +62,8 @@ function buildSystemPrompt(ctx: InterviewContext): string {
 ## Aktueller Stand
 - Phase: ${ctx.phase}
 - Verstrichene Zeit: ${ctx.timerMinutes} Minuten
-${topicsSection}${timingWarning}
+- Geplante Gesamtdauer: ${ctx.maxDurationMinutes} Minuten
+${topicsSection}${timingWarning}${shortModeHint}
 
 ## Phasenverhalten
 

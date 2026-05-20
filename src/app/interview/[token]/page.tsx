@@ -10,6 +10,7 @@ type Interview = {
   employee_name: string
   status: 'created' | 'active' | 'completed'
   token_expires_at: string
+  max_duration_minutes: number
 }
 
 type Turn = {

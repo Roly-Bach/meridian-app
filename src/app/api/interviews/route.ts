@@ -26,7 +26,7 @@ export async function GET() {
     const admin = getSupabaseAdmin()
     const { data, error } = await admin
       .from('interviews')
-      .select('id, employee_name, employee_role, department, focus_topics, status, access_token, token_expires_at, created_at')
+      .select('id, employee_name, employee_role, department, focus_topics, status, access_token, token_expires_at, max_duration_minutes, created_at')
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
       .limit(100)
@@ -53,6 +53,7 @@ const CreateInterviewSchema = z.object({
   employee_role: z.string().min(1).max(200),
   department: z.string().min(1).max(200),
   focus_topics: z.string().max(2000).optional(),
+  max_duration_minutes: z.union([z.literal(10), z.literal(30)]).default(30),
 })
 
 export async function POST(req: Request) {
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
     }
 
-    const { employee_name, employee_role, department, focus_topics } = parsed.data
+    const { employee_name, employee_role, department, focus_topics, max_duration_minutes } = parsed.data
 
     const accessToken = crypto.randomUUID()
     const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -99,6 +100,7 @@ export async function POST(req: Request) {
         status: 'created',
         access_token: accessToken,
         token_expires_at: tokenExpiresAt,
+        max_duration_minutes,
       })
       .select()
       .single()

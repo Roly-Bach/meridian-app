@@ -10,6 +10,7 @@ export type Interview = {
   status: 'created' | 'active' | 'completed'
   access_token: string
   token_expires_at: string
+  max_duration_minutes: number
   created_at: string
 }
 

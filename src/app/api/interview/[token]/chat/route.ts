@@ -41,7 +41,7 @@ export async function POST(
   // ── Load interview ──────────────────────────────────────────────────────────
   const { data: rawInterview, error: fetchError } = await supabase
     .from('interviews')
-    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, created_at')
+    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes, created_at')
     .eq('access_token', token)
     .single()
 
@@ -120,6 +120,7 @@ export async function POST(
       timerMinutes,
       topicsCovered: state?.topics_covered ?? [],
       topicsOpen: state?.topics_open ?? [],
+      maxDurationMinutes: interview.max_duration_minutes ?? 30,
     },
     history,
     onFinish: async (agentText) => {

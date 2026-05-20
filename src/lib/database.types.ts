@@ -44,6 +44,7 @@ export interface Database {
           access_token: string
           token_expires_at: string
           extractions_pending: boolean
+          max_duration_minutes: number
           created_at: string
         }
         Insert: {
@@ -57,11 +58,13 @@ export interface Database {
           access_token: string
           token_expires_at: string
           extractions_pending?: boolean
+          max_duration_minutes?: number
           created_at?: string
         }
         Update: {
           status?: 'created' | 'active' | 'completed'
           extractions_pending?: boolean
+          max_duration_minutes?: number
         }
         Relationships: []
       }

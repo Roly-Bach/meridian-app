@@ -31,7 +31,8 @@
 
 ### Interview-Erstellung (Dialog)
 
-- [ ] Dialog enthält vier Felder: `employee_name` (required), `employee_role` (required), `department` (required), `focus_topics` (optional, Textarea)
+- [ ] Dialog enthält fünf Felder: `employee_name` (required), `employee_role` (required), `department` (required), `focus_topics` (optional, Textarea), `max_duration_minutes` (required, Select)
+- [ ] `max_duration_minutes`-Feld ist ein Dropdown mit zwei Optionen: "30 Minuten (Standard)" und "10 Minuten (Test)" — Default: 30
 - [ ] Alle Pflichtfelder haben Client-seitige Validierung — Submit-Button bleibt disabled bis alle Pflichtfelder gefüllt sind
 - [ ] Submit schickt `POST /api/interviews`, zeigt Loading-State am Button
 - [ ] Bei Erfolg: Dialog wechselt in einen "Link bereit"-Zustand — zeigt den vollständigen Interview-Link mit "Link kopieren"-Button

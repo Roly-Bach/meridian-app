@@ -24,7 +24,8 @@
 - [ ] RLS bleibt erhalten — neue Spalten erben bestehende Policies
 
 ### Interview-Erstellung (Berater)
-- [ ] `POST /api/interviews` — erfordert Berater-Session (server-client), erstellt Interview mit `employee_name`, `employee_role`, `department`, `focus_topics`
+- [ ] `POST /api/interviews` — erfordert Berater-Session (server-client), erstellt Interview mit `employee_name`, `employee_role`, `department`, `focus_topics`, `max_duration_minutes`
+- [ ] `max_duration_minutes` ist ein Integer-Feld (default: 30, erlaubte Werte: 10, 30) — bestimmt die Gesamtlänge des Interviews
 - [ ] Eindeutiger `access_token` (CUID2 oder UUID v4) wird beim Anlegen generiert
 - [ ] `token_expires_at` = Erstellungszeitpunkt + 30 Tage
 - [ ] `GET /api/interviews` — gibt alle Interviews des Workspaces zurück (sortiert nach `created_at` desc)
@@ -45,11 +46,12 @@
 - [ ] Bei Claude-API-Fehler: SSE sendet `event: error`-Event, Turn wird nicht in DB gespeichert
 
 ### Agent-Verhalten
-- [ ] Agent kennt beim ersten Turn: `employee_name`, `employee_role`, `department`, `focus_topics` aus dem Interview-Record
+- [ ] Agent kennt beim ersten Turn: `employee_name`, `employee_role`, `department`, `focus_topics`, `max_duration_minutes` aus dem Interview-Record
 - [ ] Agent startet in Phase `intro` und wechselt autonom basierend auf Gesprächsfortschritt
 - [ ] Phasenreihenfolge: `intro` → `exploration` → `deepdive` → `wrap_up`
-- [ ] Ab 50 Minuten (`timer_minutes >= 50`) drängt der Agent aktiv zu `wrap_up`
-- [ ] 60 Minuten (`timer_minutes >= 60`) ist das Hard Limit — Agent erzwingt `wrap_up` unabhängig vom Stand
+- [ ] Ab `max_duration_minutes - 5` Minuten drängt der Agent aktiv zu `wrap_up` (z.B. bei 30 min → ab 25 min; bei 10 min → ab 8 min)
+- [ ] `max_duration_minutes` ist das Hard Limit — Agent erzwingt `wrap_up` unabhängig vom Stand
+- [ ] Standard-Wert für `max_duration_minutes`: 30 Minuten; Test-Modus: 10 Minuten
 - [ ] Bei Reconnect (Interview `active`, vorhandene `turns`): Agent sendet adaptive Begrüßungsnachricht statt neuem Intro
 - [ ] Leere `user_input`-Nachricht wird abgelehnt (HTTP 400), nicht an Claude weitergeleitet
 
@@ -69,7 +71,7 @@
 | Token abgelaufen (> 30 Tage) | HTTP 410 mit klarer Meldung |
 | Berater legt Interview an, schickt Link nie | Interview bleibt auf `created`, läuft nach 30 Tagen automatisch ab |
 | `focus_topics` leer | Agent nutzt Standard-Explorations-Fragen ohne spezifischen Fokus |
-| `timer_minutes` erreicht 60 | Agent erzwingt Übergang zu `wrap_up` und schließt Interview ab |
+| `timer_minutes` erreicht `max_duration_minutes` | Agent erzwingt Übergang zu `wrap_up` und schließt Interview ab |
 | Zwei Browser-Tabs öffnen denselben Interview-Link | Beide Tabs senden turns — race condition möglich; MVP-Akzeptanz, kein Concurrent-Lock |
 | Claude-Antwort enthält die Phase-Transition-Entscheidung | Agent-Response wird geparst um `phase` und `topics_*` in `interview_state` zu aktualisieren |
 

@@ -11,6 +11,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import type { Interview } from './InterviewRow'
 
@@ -20,7 +27,7 @@ type Props = {
   onCreated: (interview: Interview) => void
 }
 
-const EMPTY_FORM = { employee_name: '', employee_role: '', department: '', focus_topics: '' }
+const EMPTY_FORM = { employee_name: '', employee_role: '', department: '', focus_topics: '', max_duration_minutes: 30 }
 
 export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
   const [step, setStep] = useState<'form' | 'link'>('form')
@@ -49,6 +56,7 @@ export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
           employee_role: form.employee_role.trim(),
           department: form.department.trim(),
           focus_topics: form.focus_topics.trim() || undefined,
+          max_duration_minutes: Number(form.max_duration_minutes),
         }),
       })
 
@@ -161,6 +169,23 @@ export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
                 rows={3}
                 disabled={loading}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[14px] text-[#111111]">Interviewdauer</Label>
+              <Select
+                value={String(form.max_duration_minutes)}
+                onValueChange={(val) => setForm((f) => ({ ...f, max_duration_minutes: Number(val) }))}
+                disabled={loading}
+              >
+                <SelectTrigger className="rounded-[4px] text-[14px] border-[#E5E5E5]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 Minuten (Standard)</SelectItem>
+                  <SelectItem value="10">10 Minuten (Test)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {error && <p className="text-[12px] text-[#EF4444]">{error}</p>}
