@@ -10,12 +10,6 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
 }))
 
-vi.mock('@/services/interviewAgent', () => ({
-  createInterviewStream: vi.fn().mockReturnValue({
-    toDataStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
-  }),
-}))
-
 import { GET } from './route'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
