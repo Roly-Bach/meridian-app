@@ -17,8 +17,7 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = getSupabaseAdmin() as any
+  const supabase = getSupabaseAdmin()
 
   const { data: rawInterview, error: fetchError } = await supabase
     .from('interviews')

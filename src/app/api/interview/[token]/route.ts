@@ -16,8 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = getSupabaseAdmin() as any
+  const supabase = getSupabaseAdmin()
 
   const { data: rawInterview, error } = await supabase
     .from('interviews')
@@ -52,7 +51,7 @@ export async function GET(
 
   return NextResponse.json({
     interview,
-    state: (rawState as Partial<StateRow>) ?? null,
+    state: (rawState as Partial<StateRow> | null) ?? null,
     turns: (rawTurns as TurnRow[]) ?? [],
   })
 }

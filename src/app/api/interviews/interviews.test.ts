@@ -56,7 +56,7 @@ describe('GET /api/interviews', () => {
     mockGetUser.mockResolvedValue({ data: { user: authedUser }, error: null })
 
     const interviews = [{ id: '1', employee_name: 'Max', status: 'created' }]
-    mockFrom.mockReturnValue({
+    mockAdminFrom.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),

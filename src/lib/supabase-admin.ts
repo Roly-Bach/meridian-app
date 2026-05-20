@@ -1,8 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from './database.types'
 
-let _admin: ReturnType<typeof createClient> | null = null
+let _admin: SupabaseClient<Database> | null = null
 
-export function getSupabaseAdmin() {
+export function getSupabaseAdmin(): SupabaseClient<Database> {
   if (_admin) return _admin
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -12,7 +13,7 @@ export function getSupabaseAdmin() {
     )
   }
 
-  _admin = createClient(
+  _admin = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     serviceRoleKey,
     { auth: { autoRefreshToken: false, persistSession: false } }

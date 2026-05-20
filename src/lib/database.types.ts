@@ -30,6 +30,7 @@ export interface Database {
           user_id?: string
           updated_at?: string
         }
+        Relationships: []
       }
       interviews: {
         Row: {
@@ -62,6 +63,7 @@ export interface Database {
           status?: 'created' | 'active' | 'completed'
           extractions_pending?: boolean
         }
+        Relationships: []
       }
       interview_state: {
         Row: {
@@ -83,6 +85,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
+          interview_id?: string
           phase?: 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
           timer_minutes?: number
           topics_covered?: string[]
@@ -90,6 +93,7 @@ export interface Database {
           extractions_log?: Json
           updated_at?: string
         }
+        Relationships: []
       }
       turns: {
         Row: {
@@ -111,6 +115,7 @@ export interface Database {
         Update: {
           agent_response?: string
         }
+        Relationships: []
       }
     }
     Views: Record<string, never>

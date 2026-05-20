@@ -11,8 +11,7 @@ type InterviewRow = Database['public']['Tables']['interviews']['Row']
 
 export async function GET() {
   const supabase = await createClient()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: { user }, error: authError } = await (supabase.auth as any).getUser()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -23,9 +22,8 @@ export async function GET() {
     return NextResponse.json({ error: 'No workspace found' }, { status: 400 })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = supabase as any
-  const { data, error } = await db
+  const admin = getSupabaseAdmin()
+  const { data, error } = await admin
     .from('interviews')
     .select('id, employee_name, employee_role, department, focus_topics, status, access_token, token_expires_at, created_at')
     .eq('workspace_id', workspaceId)
@@ -51,8 +49,7 @@ const CreateInterviewSchema = z.object({
 
 export async function POST(req: Request) {
   const supabase = await createClient()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: { user }, error: authError } = await (supabase.auth as any).getUser()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -80,8 +77,7 @@ export async function POST(req: Request) {
   const accessToken = crypto.randomUUID()
   const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = getSupabaseAdmin() as any
+  const admin = getSupabaseAdmin()
 
   const { data: rawInterview, error: insertError } = await admin
     .from('interviews')

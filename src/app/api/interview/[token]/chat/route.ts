@@ -21,8 +21,7 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = getSupabaseAdmin() as any
+  const supabase = getSupabaseAdmin()
 
   // ── Validate input ──────────────────────────────────────────────────────────
   let body: unknown
@@ -67,10 +66,13 @@ export async function POST(
 
   // ── Activate on first message ───────────────────────────────────────────────
   if (interview.status === 'created') {
-    await supabase
+    const { error: activateError } = await supabase
       .from('interviews')
       .update({ status: 'active' })
       .eq('id', interview.id)
+    if (activateError) {
+      return NextResponse.json({ error: 'Failed to activate interview' }, { status: 500 })
+    }
   }
 
   // ── Load state + turns ──────────────────────────────────────────────────────
