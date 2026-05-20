@@ -1,6 +1,6 @@
 # PROJ-4: Extraktions-Agent + Wissensbasis
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
 
@@ -81,7 +81,72 @@
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Datenfluss
+
+```
+Mitarbeiter schickt Antwort
+        ↓
+POST /api/interview/[token]/chat   (PROJ-2, bereits gebaut)
+        ↓
+Agent Core generiert nächste Frage
+        ↓
+Response geht sofort an Client ✓
+        ↓ (fire-and-forget, kein await)
+extractAndEmbed() startet im Hintergrund
+        ↓
+src/services/extraction.ts
+  Claude claude-opus-4-5
+  Input: vollständiges Transkript
+  Output: JSON-Array [{ type, content, source_quote }]
+        ↓ (für jedes Objekt)
+src/services/embeddings.ts
+  OpenAI text-embedding-3-small
+  Input: content als Text
+  Output: vector[1536]
+        ↓
+Supabase Admin Client
+  INSERT INTO knowledge_objects (inkl. embedding vector)
+```
+
+### Neue Dateien
+
+```
+src/
+├── services/
+│   ├── interviewAgent.ts     (bereits gebaut)
+│   ├── extraction.ts         NEU — LLM-Extraktion via Claude
+│   └── embeddings.ts         NEU — OpenAI Embeddings
+└── app/api/interview/[token]/
+    ├── chat/route.ts          anpassen: fire-and-forget hinzufügen
+    └── objects/route.ts       NEU — GET knowledge_objects
+```
+
+### Komponenten-Verantwortlichkeiten
+
+| Komponente | Verantwortung |
+|-----------|---------------|
+| `extraction.ts` | Claude-Aufruf, Prompt-Bau, JSON-Parsing, Fehler-Logging |
+| `embeddings.ts` | OpenAI-Aufruf, gibt vector[1536] zurück, Fehler-Logging |
+| `chat/route.ts` | Feuert `extractAndEmbed()` ohne `await` nach Agent-Response |
+| `objects/route.ts` | Liest `knowledge_objects` für Interview, prüft Workspace-Zugehörigkeit |
+| `supabase-admin.ts` | Schreibt Objekte mit Embedding (umgeht RLS für server-seitige Writes) |
+
+### Tech-Entscheidungen
+
+| Entscheidung | Gewählt | Warum |
+|---|---|---|
+| Non-blocking Trigger | Fire-and-forget (`void fn()`) | Einfachste Methode — kein Queue-System nötig für MVP |
+| LLM für Extraktion | Claude claude-opus-4-5 | Bereits im Stack (`@ai-sdk/anthropic`) |
+| Embedding-Modell | `text-embedding-3-small` (1536 dim) | Passt zu existierendem pgvector-Index |
+| DB-Client für Writes | `supabase-admin` (Service Role) | Extraktions-Service läuft ohne User-Session |
+| Ähnlichkeitssuche | pgvector Cosine Distance | Bereits im Schema (IVFFlat-Index), kein Extra-Dienst |
+
+### Neue Dependencies
+
+| Package | Zweck |
+|---------|-------|
+| `openai` | OpenAI Embeddings API (text-embedding-3-small) |
 
 ## QA Test Results
 _To be added by /qa_
