@@ -164,6 +164,46 @@ export interface Database {
         }
         Relationships: []
       }
+      use_cases: {
+        Row: {
+          id: string
+          process_step_id: string
+          workspace_id: string
+          type: string
+          title: string
+          description: string | null
+          reasoning: string | null
+          priority: 'high' | 'medium' | 'low' | null
+          roi_hours_per_year: number | null
+          roi_eur_per_year: number | null
+          effort: 'low' | 'medium' | 'high' | null
+          score: number | null
+          quarter: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          process_step_id: string
+          workspace_id: string
+          type: string
+          title: string
+          description?: string | null
+          reasoning?: string | null
+          priority?: 'high' | 'medium' | 'low' | null
+          roi_hours_per_year?: number | null
+          roi_eur_per_year?: number | null
+          effort?: 'low' | 'medium' | 'high' | null
+          score?: number | null
+          quarter?: string | null
+          created_at?: string
+        }
+        Update: {
+          title?: string
+          description?: string | null
+          reasoning?: string | null
+        }
+        Relationships: []
+      }
       knowledge_objects: {
         Row: {
           id: string
