@@ -117,6 +117,53 @@ export interface Database {
         }
         Relationships: []
       }
+      process_steps: {
+        Row: {
+          id: string
+          interview_id: string
+          workspace_id: string
+          title: string
+          description: string | null
+          role: string | null
+          frequency_per_month: number | null
+          duration_minutes: number | null
+          data_sources: string[]
+          rule_based: boolean
+          error_rate_percent: number | null
+          media_breaks: number
+          source_quote: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          interview_id: string
+          workspace_id: string
+          title: string
+          description?: string | null
+          role?: string | null
+          frequency_per_month?: number | null
+          duration_minutes?: number | null
+          data_sources?: string[]
+          rule_based?: boolean
+          error_rate_percent?: number | null
+          media_breaks?: number
+          source_quote?: string | null
+          created_at?: string
+        }
+        Update: {
+          title?: string
+          description?: string | null
+          role?: string | null
+          frequency_per_month?: number | null
+          duration_minutes?: number | null
+          data_sources?: string[]
+          rule_based?: boolean
+          error_rate_percent?: number | null
+          media_breaks?: number
+          source_quote?: string | null
+        }
+        Relationships: []
+      }
       knowledge_objects: {
         Row: {
           id: string
