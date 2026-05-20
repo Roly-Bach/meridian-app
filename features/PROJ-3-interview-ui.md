@@ -234,7 +234,7 @@ Keine. Alle Entscheidungen (useState, fetch + ReadableStream, shadcn/ui-Komponen
 **Bug Fixes:** 2026-05-20
 **QA Re-run:** 2026-05-20
 **Tester:** /qa skill
-**Status:** BLOCKED — Code-Fixes vollständig, aber `SUPABASE_SERVICE_ROLE_KEY` fehlt in `.env.local`
+**Status:** READY — 38/39 E2E passed (1 pre-existing skip), 26/26 unit tests passed
 
 ### Summary (nach Bug-Fixes)
 
@@ -321,7 +321,7 @@ Sobald der Key gesetzt ist, fallen alle verbleibenden Blockierungen weg.
 
 ### Production-Ready Decision
 
-**BLOCKED** — Code vollständig. `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` eintragen + E2E-Rerun nötig. Alle Code-Fixes sind deployed-ready sobald die Umgebungsvariable gesetzt ist.
+**READY** — Alle Code-Fixes implementiert. 38/39 E2E passed, 26/26 Unit-Tests passed. 1 Skip ist pre-existing (Logout-Test, NextJS Dev-Overlay-Interferenz). Keine Critical/High Bugs offen.
 
 ## Deployment
 _To be added by /deploy_
