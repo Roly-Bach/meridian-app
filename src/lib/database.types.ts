@@ -117,6 +117,123 @@ export interface Database {
         }
         Relationships: []
       }
+      process_steps: {
+        Row: {
+          id: string
+          interview_id: string
+          workspace_id: string
+          title: string
+          description: string | null
+          role: string | null
+          frequency_per_month: number | null
+          duration_minutes: number | null
+          data_sources: string[]
+          rule_based: boolean
+          error_rate_percent: number | null
+          media_breaks: number
+          source_quote: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          interview_id: string
+          workspace_id: string
+          title: string
+          description?: string | null
+          role?: string | null
+          frequency_per_month?: number | null
+          duration_minutes?: number | null
+          data_sources?: string[]
+          rule_based?: boolean
+          error_rate_percent?: number | null
+          media_breaks?: number
+          source_quote?: string | null
+          created_at?: string
+        }
+        Update: {
+          title?: string
+          description?: string | null
+          role?: string | null
+          frequency_per_month?: number | null
+          duration_minutes?: number | null
+          data_sources?: string[]
+          rule_based?: boolean
+          error_rate_percent?: number | null
+          media_breaks?: number
+          source_quote?: string | null
+        }
+        Relationships: []
+      }
+      use_cases: {
+        Row: {
+          id: string
+          process_step_id: string
+          workspace_id: string
+          type: string
+          title: string
+          description: string | null
+          reasoning: string | null
+          priority: 'high' | 'medium' | 'low' | null
+          roi_hours_per_year: number | null
+          roi_eur_per_year: number | null
+          effort: 'low' | 'medium' | 'high' | null
+          score: number | null
+          quarter: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          process_step_id: string
+          workspace_id: string
+          type: string
+          title: string
+          description?: string | null
+          reasoning?: string | null
+          priority?: 'high' | 'medium' | 'low' | null
+          roi_hours_per_year?: number | null
+          roi_eur_per_year?: number | null
+          effort?: 'low' | 'medium' | 'high' | null
+          score?: number | null
+          quarter?: string | null
+          created_at?: string
+        }
+        Update: {
+          title?: string
+          description?: string | null
+          reasoning?: string | null
+        }
+        Relationships: []
+      }
+      knowledge_objects: {
+        Row: {
+          id: string
+          interview_id: string
+          workspace_id: string
+          type: 'process_step' | 'tool' | 'pain_point' | 'role' | 'fact' | 'contact'
+          content: Record<string, unknown>
+          source_quote: string | null
+          turn_id: string | null
+          embedding: number[] | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          interview_id: string
+          workspace_id: string
+          type: 'process_step' | 'tool' | 'pain_point' | 'role' | 'fact' | 'contact'
+          content: Record<string, unknown>
+          source_quote?: string | null
+          turn_id?: string | null
+          embedding?: unknown
+          created_at?: string
+        }
+        Update: {
+          content?: Record<string, unknown>
+          source_quote?: string | null
+          embedding?: unknown
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

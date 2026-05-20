@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import { logout } from '@/app/auth/actions'
 import { SidebarNav } from '@/components/dashboard/SidebarNav'

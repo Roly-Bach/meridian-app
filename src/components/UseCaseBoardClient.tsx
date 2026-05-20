@@ -1,0 +1,131 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from 'sonner'
+import { UseCaseCard } from './UseCaseCard'
+
+interface UseCase {
+  id: string
+  type: string
+  title: string
+  description: string | null
+  reasoning: string | null
+  priority: string | null
+  effort: string | null
+  roi_eur_per_year: number | null
+  roi_hours_per_year: number | null
+  score: number | null
+  quarter: string | null
+  process_step_id: string
+}
+
+interface Props {
+  workspaceId: string
+  initialUseCases: UseCase[]
+  initialTotalRoi: number
+}
+
+export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalRoi }: Props) {
+  const [useCases, setUseCases] = useState<UseCase[]>(initialUseCases)
+  const [totalRoi, setTotalRoi] = useState(initialTotalRoi)
+  const [generating, setGenerating] = useState(false)
+
+  async function handleGenerate() {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/use-cases/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Generierung fehlgeschlagen')
+      }
+      const data = await res.json()
+      setUseCases(data.use_cases ?? [])
+      setTotalRoi(data.total_roi_eur ?? 0)
+      toast.success(`${data.use_cases?.length ?? 0} Use Cases generiert`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Fehler beim Generieren')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="max-w-[960px] mx-auto px-8 py-8">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-[24px] font-semibold text-[#111111]">KI Use Cases</h1>
+          <p className="text-[13px] text-[#6B7280] mt-1">
+            {useCases.length > 0
+              ? `${useCases.length} Use Cases identifiziert`
+              : 'Heuristik-Engine analysiert Prozessschritte'}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/use-cases/roadmap"
+            className="text-[13px] text-[#6B7280] hover:text-[#111111] transition-colors"
+          >
+            Quartals-Roadmap →
+          </Link>
+          <Button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="bg-[#E040FB] hover:bg-[#AA00FF] text-white text-[13px] rounded-[6px] h-9 px-4"
+          >
+            {generating ? 'Generiere...' : 'Use Cases generieren'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Total ROI Banner */}
+      {totalRoi > 0 && (
+        <div className="bg-gradient-to-r from-[#F3E5FF] to-[#FCE4FF] border border-[#E040FB]/20 rounded-[6px] px-5 py-4 mb-6">
+          <p className="text-[12px] text-[#9C27B0] font-medium uppercase tracking-wide mb-1">
+            Gesamt-Einsparpotenzial
+          </p>
+          <p className="text-[28px] font-bold text-[#111111]">
+            €{Math.round(totalRoi).toLocaleString('de-DE')}
+            <span className="text-[16px] font-normal text-[#6B7280] ml-2">/Jahr</span>
+          </p>
+        </div>
+      )}
+
+      {/* Loading Skeleton */}
+      {generating && (
+        <div className="grid grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 rounded-[6px]" />
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!generating && useCases.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-[14px] text-[#6B7280]">Noch keine Use Cases vorhanden.</p>
+          <p className="text-[12px] text-[#6B7280] mt-1">
+            Stelle sicher dass Prozessschritte angereichert sind, dann klicke{' '}
+            <span className="font-medium text-[#E040FB]">Use Cases generieren</span>.
+          </p>
+        </div>
+      )}
+
+      {/* Cards Grid */}
+      {!generating && useCases.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          {useCases.map((uc) => (
+            <UseCaseCard key={uc.id} useCase={uc} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

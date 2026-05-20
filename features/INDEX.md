@@ -18,9 +18,9 @@
 | PROJ-1 | Auth + Workspace | Deployed | [spec](PROJ-1-auth-workspace.md) | 2026-05-19 | P0 | — |
 | PROJ-2 | Interview Engine Backend | Deployed | [spec](PROJ-2-interview-engine-backend.md) | 2026-05-19 | P0 | PROJ-1 |
 | PROJ-3 | Interview UI | Approved | [spec](PROJ-3-interview-ui.md) | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
-| PROJ-4 | Extraktions-Agent + Wissensbasis | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
-| PROJ-5 | Prozessschritt-Anreicherung | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-4 |
-| PROJ-6 | Use Case Identifikation | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-5 |
+| PROJ-4 | Extraktions-Agent + Wissensbasis | Approved | [spec](PROJ-4-extraktions-agent-wissensbasis.md) | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
+| PROJ-5 | Prozessschritt-Anreicherung | Approved | [spec](PROJ-5-prozessschritt-anreicherung.md) | 2026-05-19 | P0 | PROJ-1, PROJ-4 |
+| PROJ-6 | Use Case Identifikation | Approved | [spec](PROJ-6-use-case-identifikation.md) | 2026-05-19 | P0 | PROJ-1, PROJ-5 |
 | PROJ-7 | Voice Input (Interview) | Roadmap | — | 2026-05-20 | P1 | PROJ-3 |
 
 <!-- Add features above this line -->

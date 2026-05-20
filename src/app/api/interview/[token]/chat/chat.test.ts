@@ -16,6 +16,10 @@ vi.mock('@/services/interviewAgent', () => ({
   }),
 }))
 
+vi.mock('@/services/extraction', () => ({
+  extractAndEmbed: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { POST } from './route'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

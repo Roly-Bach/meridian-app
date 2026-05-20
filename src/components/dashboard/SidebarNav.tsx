@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, GitBranch, Lightbulb } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Interviews', Icon: MessageSquare },
+  { href: '/dashboard/process-steps', label: 'Prozessschritte', Icon: GitBranch },
+  { href: '/dashboard/use-cases', label: 'KI Use Cases', Icon: Lightbulb },
 ]
 
 export function SidebarNav() {

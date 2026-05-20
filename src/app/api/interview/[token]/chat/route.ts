@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
+import { extractAndEmbed } from '@/services/extraction'
 import type { Database } from '@/lib/database.types'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
@@ -124,13 +125,27 @@ export async function POST(
     onFinish: async (agentText) => {
       if (!agentText) return
 
-      const { error: turnError } = await supabase.from('turns').insert({
+      const { data: newTurn, error: turnError } = await supabase.from('turns').insert({
         interview_id: interview.id,
         turn_number: nextTurnNumber,
         user_input,
         agent_response: agentText,
-      })
+      }).select('id').single()
       if (turnError) console.error('[onFinish] turns insert failed:', turnError.message)
+
+      // Fire-and-forget extraction — does not block stream response
+      if (newTurn?.id) {
+        const transcript = [
+          ...existingTurns.map(t => ({ user_input: t.user_input, agent_response: t.agent_response })),
+          { user_input, agent_response: agentText },
+        ]
+        void extractAndEmbed({
+          interviewId: interview.id,
+          workspaceId: interview.workspace_id,
+          turnId: newTurn.id,
+          transcript,
+        })
+      }
 
       const { error: stateError } = await supabase
         .from('interview_state')
