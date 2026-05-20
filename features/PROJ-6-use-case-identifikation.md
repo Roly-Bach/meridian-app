@@ -19,7 +19,7 @@
 
 ### Heuristik-Engine (regelbasiert — kein LLM)
 
-Alle Regeln laufen serverbasiert auf `process_steps`. Pro Prozessschritt kann maximal ein Use Case pro Typ generiert werden — kein doppelter `automation`-Use-Case (Rules 1 und 4 schließen sich gegenseitig aus). Rules 2, 3 und 5 sind unabhängig und können gleichzeitig feuern.
+Alle Regeln laufen serverbasiert auf `process_steps`. Pro Prozessschritt und Typ maximal ein Use Case — bei Konflikt gewinnt die Regel mit höherem ROI. Ein Prozessschritt kann mehrere Use Cases unterschiedlichen Typs bekommen.
 
 **Regel 1 — Vollautomatisierung:**
 > Gleichförmige, häufige Prozesse können vollständig durch Software übernommen werden.
@@ -50,9 +50,9 @@ Alle Regeln laufen serverbasiert auf `process_steps`. Pro Prozessschritt kann ma
 > Medienbruch = Mitarbeiter überträgt Daten manuell zwischen zwei Systemen die nicht verbunden sind.
 > ("Ich schaue in SAP nach und tippe das in Excel ab" = 1 Medienbruch)
 > Ab 3 Medienbrüchen: Schnittstellen-Automatisierung oder RPA lohnt sich klar.
-> Nur wenn Regel 1 nicht greift — sonst wäre es doppelter `automation`-Use-Case.
-> 60% statt 85%: Prozess ist nicht vollständig regelbasiert, aber Datentransfer automatisierbar.
-- [ ] Trifft zu wenn: `media_breaks ≥ 3` UND Regel 1 trifft NICHT zu
+> 60% statt 85%: Prozess nicht vollständig regelbasiert, aber Datentransfer automatisierbar.
+> Bei Konflikt mit Regel 1 (selber Typ `automation`): höherer ROI gewinnt.
+- [ ] Trifft zu wenn: `media_breaks ≥ 3`
 - [ ] Typ: `automation`, Effort: `low`
 - [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.60 × hourly_rate`
 
@@ -64,6 +64,45 @@ Alle Regeln laufen serverbasiert auf `process_steps`. Pro Prozessschritt kann ma
 - [ ] Trifft zu wenn: `description` oder `title` enthält eines von `['suchen', 'nachschlagen', 'klären', 'prüfen', 'finden', 'recherchieren']` (case-insensitive) UND `duration_minutes ≥ 10`
 - [ ] Typ: `rag`, Effort: `medium`
 - [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.50 × hourly_rate`
+
+**Regel 6 — Fehlerhafte Regelautomatisierung:**
+> Prozess hat feste Regeln — aber trotzdem hohe Fehlerrate. Symptom: Regeln werden nicht konsequent eingehalten oder sind zu komplex für manuelle Durchführung.
+> KI setzt Regeln strenger und konsistenter durch als Menschen — eliminiert Flüchtigkeitsfehler.
+> Unterschied zu R1: R1 schließt error_rate ≥ 10 aus. R6 deckt genau diesen Fall ab.
+> Effort `medium` weil die bestehende Logik analysiert und korrigiert werden muss.
+- [ ] Trifft zu wenn: `rule_based = true` UND `frequency_per_month ≥ 5` UND `error_rate_percent ≥ 10`
+- [ ] Typ: `automation`, Effort: `medium`
+- [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.60 × hourly_rate`
+
+**Regel 7 — KI-unterstützte Routinearbeit:**
+> Wiederkehrende Tätigkeiten ohne feste Regel die gut funktionieren — aber manuell aufwändig sind.
+> Kein Fehler-Signal → KI muss nicht korrigieren, sondern unterstützen und beschleunigen.
+> Unterschied zu R3: R3 braucht error_rate ≥ 10. R7 deckt gut laufende, repetitive Arbeit ab.
+> 30% weil kein vollständiges Regelwerk → KI übernimmt Teile, Mensch bleibt im Loop.
+- [ ] Trifft zu wenn: `rule_based = false` UND `frequency_per_month ≥ 10` UND `duration_minutes ≥ 20` UND `(error_rate_percent IS NULL ODER error_rate_percent < 10)`
+- [ ] Typ: `llm_extraction`, Effort: `medium`
+- [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.30 × hourly_rate`
+
+**Regel 8 — Daten-Aggregation für Entscheidungen:**
+> Lange Entscheidungsprozesse die gut funktionieren — aber viel Zeit geht fürs Zusammensuchen der Datenbasis drauf.
+> KI aggregiert alle relevanten Daten und bereitet die Entscheidungsgrundlage vor — Mensch entscheidet weiterhin.
+> Unterschied zu R3: R3 braucht error_rate ≥ 10. Unterschied zu R5: R5 braucht Suchbegriffe im Titel/Beschreibung.
+- [ ] Trifft zu wenn: `rule_based = false` UND `duration_minutes ≥ 30` UND `(error_rate_percent IS NULL ODER error_rate_percent < 10)` UND KEIN Suchwort-Match aus Regel 5
+- [ ] Typ: `rag`, Effort: `medium`
+- [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.40 × hourly_rate`
+
+### Coverage-Matrix — alle relevanten KI-Fälle
+
+| Praxisfall | Regel |
+|------------|-------|
+| Täglich gleiche Aufgabe, fehlerfrei | R1 — Vollautomatisierung |
+| Täglich gleiche Aufgabe, trotzdem Fehler | R6 — Fehlerhafte Regelautomatisierung |
+| Dokumente lesen und Infos herausziehen | R2 — LLM-Extraktion |
+| Daten manuell zwischen Systemen übertragen | R4 — Medienbruch-Automatisierung |
+| Komplexe Entscheidung mit hoher Fehlerrate | R3 — Entscheidungsunterstützung |
+| Komplexe Entscheidung, gut, aber dauert lang | R8 — Daten-Aggregation |
+| Suchen, Nachschlagen, Klären | R5 — RAG Wissensassistent |
+| Wiederkehrend, nicht regelbasiert, läuft gut | R7 — KI-unterstützte Routinearbeit |
 
 ### ROI-Berechnung (für alle Regeln gleich)
 > Stunden/Jahr = wie viel Arbeitszeit dieser Prozess jährlich bindet.
