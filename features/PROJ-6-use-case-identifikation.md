@@ -22,39 +22,63 @@
 Alle Regeln laufen serverbasiert auf `process_steps`. Pro Prozessschritt kann maximal ein Use Case pro Typ generiert werden — kein doppelter `automation`-Use-Case (Rules 1 und 4 schließen sich gegenseitig aus). Rules 2, 3 und 5 sind unabhängig und können gleichzeitig feuern.
 
 **Regel 1 — Vollautomatisierung:**
+> Gleichförmige, häufige Prozesse können vollständig durch Software übernommen werden.
+> 85% Zeitersparnis weil kein menschliches Eingreifen mehr nötig.
+> Effort `low` weil RPA/Scripting-Tools dafür ausgereift sind.
 - [ ] Trifft zu wenn: `frequency_per_month ≥ 20` UND `rule_based = true` UND (`error_rate_percent IS NULL` ODER `error_rate_percent < 10`)
 - [ ] Typ: `automation`, Effort: `low`
 - [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.85 × hourly_rate`
 
 **Regel 2 — LLM-Extraktion:**
+> Unstrukturierte Dokumente (E-Mails, PDFs, Word) enthalten Informationen die manuell herausgelesen werden.
+> Ein LLM kann das automatisch — spart ~40% der Bearbeitungszeit (Rest: Prüfung + Ausnahmen).
+> Effort `medium` weil Prompt-Engineering + Validierungslogik nötig ist.
 - [ ] Trifft zu wenn: `data_sources` enthält eines von `['E-Mail', 'PDF', 'Word', 'email', 'pdf', 'word']` (case-insensitive) UND `duration_minutes ≥ 15`
 - [ ] Typ: `llm_extraction`, Effort: `medium`
 - [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.40 × hourly_rate`
 
 **Regel 3 — Entscheidungsunterstützung:**
+> Prozesse ohne feste Regel brauchen menschliches Urteil — aber KI kann Empfehlungen geben und Fehler reduzieren.
+> Hohe Fehlerrate (≥10%) zeigt: hier läuft etwas schief, KI kann helfen.
+> Effort `high` weil Change Management + Modell-Training + Validierung aufwändig sind.
+> 40% Ersparnis = kürzere Entscheidungszeit + weniger Nacharbeit durch Fehler.
 - [ ] Trifft zu wenn: `rule_based = false` UND `duration_minutes ≥ 30` UND `error_rate_percent ≥ 10`
 - [ ] Typ: `decision_support`, Effort: `high`
 - [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.40 × hourly_rate`
 
 **Regel 4 — Medienbruch-Automatisierung:**
-- [ ] Trifft zu wenn: `media_breaks ≥ 3` UND Regel 1 trifft NICHT zu (verhindert doppelten `automation`-Use-Case)
+> Medienbruch = Mitarbeiter überträgt Daten manuell zwischen zwei Systemen die nicht verbunden sind.
+> ("Ich schaue in SAP nach und tippe das in Excel ab" = 1 Medienbruch)
+> Ab 3 Medienbrüchen: Schnittstellen-Automatisierung oder RPA lohnt sich klar.
+> Nur wenn Regel 1 nicht greift — sonst wäre es doppelter `automation`-Use-Case.
+> 60% statt 85%: Prozess ist nicht vollständig regelbasiert, aber Datentransfer automatisierbar.
+- [ ] Trifft zu wenn: `media_breaks ≥ 3` UND Regel 1 trifft NICHT zu
 - [ ] Typ: `automation`, Effort: `low`
 - [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.60 × hourly_rate`
 
 **Regel 5 — RAG Wissensassistent:**
+> Mitarbeiter verbringen Zeit mit Suchen: in Handbüchern, Datenbanken, Kolleginnen fragen.
+> Ein RAG-System (Retrieval-Augmented Generation) beantwortet diese Fragen sofort aus dem Unternehmenswissen.
+> 50% Ersparnis = Hälfte der Suchzeit entfällt, Rest bleibt für komplexe Fragen.
+> Effort `medium` weil Wissensbasis aufgebaut und gepflegt werden muss.
 - [ ] Trifft zu wenn: `description` oder `title` enthält eines von `['suchen', 'nachschlagen', 'klären', 'prüfen', 'finden', 'recherchieren']` (case-insensitive) UND `duration_minutes ≥ 10`
 - [ ] Typ: `rag`, Effort: `medium`
 - [ ] ROI: `(frequency_per_month × duration_minutes / 60) × 12 × 0.50 × hourly_rate`
 
 ### ROI-Berechnung (für alle Regeln gleich)
+> Stunden/Jahr = wie viel Arbeitszeit dieser Prozess jährlich bindet.
+> Reduktionsrate = wie viel davon KI übernehmen kann (je nach Automatisierbarkeit).
+> Ergebnis in € = direkt vergleichbar mit Implementierungskosten.
 - [ ] `hourly_rate` kommt aus `workspaces.hourly_rate` (Default: 45 €/h)
-- [ ] Wenn `frequency_per_month IS NULL` oder `duration_minutes IS NULL` → Regel trifft NICHT zu (kein Raten)
+- [ ] Wenn `frequency_per_month IS NULL` oder `duration_minutes IS NULL` → Regel trifft NICHT zu (kein Raten ohne Datenbasis)
 - [ ] ROI wird auf 2 Dezimalstellen gerundet
 
 ### Scoring + Priorisierung
+> Score normiert ROI auf den Implementierungsaufwand — zeigt welche Use Cases das beste Verhältnis haben.
+> Wer viel spart und wenig kostet, kommt zuerst.
 - [ ] `score = roi_eur_per_year / effort_factor` (effort_factor: low=1, medium=2, high=3)
 - [ ] `priority`: score > 5.000 → `high`, score 1.001–5.000 → `medium`, score ≤ 1.000 → `low`
-- [ ] `quarter`: score > 5.000 → `Q1`, score 1.001–5.000 → `Q2`, score ≤ 1.000 → `Q3`
+- [ ] `quarter`: score > 5.000 → `Q1` (Quick Win, sofort starten), score 1.001–5.000 → `Q2`, score ≤ 1.000 → `Q3`
 - [ ] Use Cases sortiert nach `score desc`
 
 ### Idempotenz + Re-Generierung
