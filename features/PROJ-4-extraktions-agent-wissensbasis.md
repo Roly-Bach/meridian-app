@@ -149,7 +149,78 @@ src/
 | `openai` | OpenAI Embeddings API (text-embedding-3-small) |
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-05-20
+**Tester:** QA Engineer (automated)
+**Test Suite:** 33 unit tests, 0 E2E (backend-only feature, no UI)
+
+### Acceptance Criteria Results
+
+| Kriterium | Status | Notiz |
+|-----------|--------|-------|
+| Extraktion non-blocking nach Turn | ✅ PASS | `void extractAndEmbed()` in `onFinish` |
+| Agent sieht nur Transkript | ✅ PASS | `interview_state` nicht übergeben |
+| Extrahiert 4 Typen | ✅ PASS | process_step, pain_point, tool, role |
+| source_quote aus user_input | ✅ PASS | Prompt erzwingt wörtliches Zitat |
+| Claude claude-opus-4-5 | ✅ PASS | `anthropic('claude-opus-4-5')` |
+| 0–N Objekte pro Turn | ✅ PASS | Leeres Array = kein Insert, kein Fehler |
+| Extraktion in `extraction.ts` | ✅ PASS | Service-Layer eingehalten |
+| Fehler geloggt, Turn unberührt | ✅ PASS | try/catch mit console.error |
+| Embedding via text-embedding-3-small | ✅ PASS | `@ai-sdk/openai` |
+| Embedding-Input = content als Text | ✅ PASS | `${type}: ${JSON.stringify(content)}` |
+| Embedding-Logik in `embeddings.ts` | ✅ PASS | Service-Layer eingehalten |
+| Embedding + Insert in einer Operation | ✅ PASS | Sequenziell pro Objekt |
+| knowledge_objects Schema korrekt | ✅ PASS | Migration vorhanden |
+| RLS Workspace-Isolation | ✅ PASS | Admin-Client schreibt; RLS schützt Lesezugriff |
+| pgvector Ähnlichkeitssuche | ⚠️ PARTIAL | Index vorhanden, Suche noch nicht als API exponiert |
+| GET /api/interview/:id/objects | ✅ PASS | Route implementiert |
+| Response `{ objects[], count }` | ✅ PASS | |
+| Auth Required | ⚠️ BUG-B2 | Token-only Zugriff möglich ohne Session |
+
+### Bugs Gefunden
+
+#### B1 — Medium: Kein Typ-Allowlist-Check vor DB-Insert
+**Steps:** LLM gibt `type: "unknown"` zurück → DB CHECK schlägt fehl → kryptischer Supabase-Error statt sauberem "[extraction] Invalid type" Log.
+**Fix:** `const ALLOWED_TYPES = ['process_step', 'pain_point', 'tool', 'role'] as const` — vor Insert prüfen.
+
+#### B2 — Medium: Unauthentifizierter Zugriff auf knowledge_objects via Token
+**Steps:** GET `/api/interview/[token]/objects` ohne Session-Cookie → 200 + Daten.
+**Spec sagt:** "Nur für authenticated User mit Zugriff auf diesen Workspace."
+**Fix:** Wenn kein `user` in Session → 401 zurückgeben. Token-Only-Zugriff auf Objects nur in PROJ-3 UI klären (Interviewee braucht ggf. separaten Endpoint).
+
+#### B3 — Low: `embedding as unknown as string` Typ-Cast
+**Impact:** Funktioniert in Praxis (Supabase serialisiert number[] zu pgvector), aber versteckt Typfehler.
+**Fix:** Korrektes Typing in `database.types.ts` — `embedding` als `number[] | null` mit pgvector-kompatibler Insert-Logik.
+
+#### B4 — Low: `maxOutputTokens: 1000` könnte bei vielen Items truncaten
+**Impact:** Interviews mit dichten Antworten könnten JSON mid-array truncaten → JSON.parse Error (bereits abgefangen).
+**Fix:** Auf 2000 erhöhen.
+
+### Security Audit
+
+| Check | Ergebnis |
+|-------|---------|
+| ANTHROPIC_API_KEY nur server-seitig | ✅ |
+| OPENAI_API_KEY nur server-seitig | ✅ |
+| Service Role Key nie im Browser | ✅ |
+| User-Input in LLM-Prompt (Prompt Injection) | ⚠️ Akzeptiertes MVP-Risiko |
+| Workspace-Isolation bei auth. Zugriff | ✅ |
+| Unauthentifizierter Zugriff objects-Route | 🔴 B2 |
+| SQL Injection via Supabase | ✅ Parameterisiert |
+
+### Test-Abdeckung
+
+- `src/services/extraction.test.ts`: 9 Tests — LLM-Fehler, valide Extraktion, malformed Objects, DB-Fehler, Markdown-Strip, null-Embedding
+- `src/app/api/interview/[token]/objects/objects.test.ts`: 3 Tests — 404, Success, Empty
+- `src/app/api/interview/[token]/chat/chat.test.ts`: extraction Mock ergänzt
+
+**Gesamt: 33/33 Tests bestanden**
+
+### Produktion-Ready?
+
+**NEIN** — 2 Medium-Bugs (B1, B2) müssen vor Deploy behoben werden.
+
+Nach Fixes: `/qa PROJ-4` erneut ausführen.
 
 ## Deployment
 _To be added by /deploy_
