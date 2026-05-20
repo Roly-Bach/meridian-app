@@ -1,4 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { streamText, tool, stepCountIs } from 'ai'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
@@ -147,9 +148,13 @@ function resolveModel(modelString: string) {
     return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId as never)
   }
 
+  if (provider === 'google') {
+    return createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })(modelId as never)
+  }
+
   throw new Error(
     `Unsupported model provider: "${provider}". ` +
-      `Set INTERVIEW_MODEL to "anthropic/<model-id>" (e.g. "anthropic/claude-opus-4-5").`
+      `Set INTERVIEW_MODEL to "anthropic/<model-id>" or "google/<model-id>".`
   )
 }
 
