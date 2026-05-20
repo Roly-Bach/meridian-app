@@ -54,14 +54,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'Process step not found' }, { status: 404 })
   }
 
-  const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('id')
+  const { data: membership } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
     .eq('user_id', user.id)
-    .eq('id', step.workspace_id)
+    .eq('workspace_id', step.workspace_id)
     .single()
 
-  if (!workspace) {
+  if (!membership) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

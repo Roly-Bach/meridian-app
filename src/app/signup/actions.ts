@@ -5,20 +5,25 @@ import { createClient } from '@/lib/supabase-server'
 export async function signup({
   email,
   password,
-  workspaceName,
 }: {
   email: string
   password: string
-  workspaceName: string
 }) {
+  // Invite-only allowlist (PROJ-10)
+  const allowed = (process.env.ALLOWED_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+
+  if (allowed.length > 0 && !allowed.includes(email.trim().toLowerCase())) {
+    return { error: 'Registrierung ist nur auf Einladung möglich.' }
+  }
+
   const supabase = await createClient()
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: {
-      data: { workspace_name: workspaceName },
-    },
   })
 
   if (error) {

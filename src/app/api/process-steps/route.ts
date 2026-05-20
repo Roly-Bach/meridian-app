@@ -17,15 +17,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'workspace_id query param required' }, { status: 400 })
   }
 
-  // Verify caller owns this workspace
-  const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('id')
+  // Verify caller is a member of this workspace
+  const { data: membership } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
     .eq('user_id', user.id)
-    .eq('id', workspaceId)
+    .eq('workspace_id', workspaceId)
     .single()
 
-  if (!workspace) {
+  if (!membership) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

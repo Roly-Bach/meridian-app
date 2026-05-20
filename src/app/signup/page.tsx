@@ -12,7 +12,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { signup } from './actions'
 
 const schema = z.object({
-  workspaceName: z.string().min(1, 'Workspace-Name ist erforderlich'),
   email: z.string().min(1, 'E-Mail ist erforderlich').refine(
     (val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
     { message: 'Ungültige E-Mail-Adresse' }
@@ -27,7 +26,7 @@ export default function SignupPage() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { workspaceName: '', email: '', password: '' },
+    defaultValues: { email: '', password: '' },
   })
 
   function onSubmit(data: FormData) {
@@ -51,20 +50,6 @@ export default function SignupPage() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            <FormField
-              control={form.control}
-              name="workspaceName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-[14px] text-[#111111]">Workspace-Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="z.B. Mahr GmbH" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <FormField
               control={form.control}
               name="email"

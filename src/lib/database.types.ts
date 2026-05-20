@@ -32,6 +32,39 @@ export interface Database {
         }
         Relationships: []
       }
+      workspace_members: {
+        Row: {
+          workspace_id: string
+          user_id: string
+          joined_at: string
+        }
+        Insert: {
+          workspace_id: string
+          user_id: string
+          joined_at?: string | null
+        }
+        Update: {
+          workspace_id?: string
+          user_id?: string
+          joined_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       interviews: {
         Row: {
           id: string

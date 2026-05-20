@@ -11,12 +11,13 @@ export default async function RoadmapPage() {
 
   let workspaceId = user.user_metadata?.workspace_id as string | undefined
   if (!workspaceId) {
-    const { data: workspace } = await supabase
-      .from('workspaces')
-      .select('id')
+    const { data: member } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
       .eq('user_id', user.id)
+      .limit(1)
       .single()
-    workspaceId = workspace?.id
+    workspaceId = member?.workspace_id
   }
 
   const admin = getSupabaseAdmin()

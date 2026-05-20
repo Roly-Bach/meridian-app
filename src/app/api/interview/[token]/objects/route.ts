@@ -32,14 +32,14 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('id')
+  const { data: membership } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
     .eq('user_id', user.id)
-    .eq('id', interview.workspace_id)
+    .eq('workspace_id', interview.workspace_id)
     .single()
 
-  if (!workspace) {
+  if (!membership) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

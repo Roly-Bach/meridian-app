@@ -1,8 +1,42 @@
 # PROJ-10: Access Control & Shared Workspace
 
-## Status: Roadmap
+## Status: In Progress
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
+
+## Implementation Notes (2026-05-20)
+
+Umgesetzt durch Coder-Pipeline:
+
+- **Migration** `supabase/migrations/20260520000005_proj10_workspace_members.sql`
+  - Neue Tabelle `workspace_members(workspace_id, user_id, joined_at)` mit PK auf (workspace_id, user_id) und Index auf user_id
+  - RLS auf workspace_members, Policy "Members see own memberships" (SELECT only)
+  - Backfill bestehender Workspaces in workspace_members
+  - Alte Policies gedroppt (echte Namen aus mvp_schema + proj2_rls_policies): "Workspace isolation", "Users manage own workspace", "Enable read/insert/update/delete for users based on workspace/interview owner"
+  - Neue Policies auf workspaces, interviews, knowledge_objects, process_steps, use_cases, interview_state, turns — alle joinen über workspace_members
+  - `handle_new_user()` neu geschrieben: nimmt ältesten Workspace (created_at ASC) als geteilten Workspace, fügt User zu workspace_members hinzu, schreibt workspace_id in user_metadata. Bootstrap-Pfad (erster User) erhalten.
+- **Allowlist** in `src/app/signup/actions.ts`
+  - Env-Var `ALLOWED_EMAILS` (comma-separated, lowercase normalisiert)
+  - Bei leerer Liste: keine Einschränkung (für lokale Entwicklung)
+  - workspaceName-Parameter entfernt
+- **Signup-Form** `src/app/signup/page.tsx`
+  - workspaceName-Feld und -Validierung entfernt
+- **`.env.local.example`** mit `ALLOWED_EMAILS=lias.hemmersbach@gmail.com,bennewroly@gmail.com` dokumentiert
+- **Code-Anpassungen** (10 Stellen, in denen `workspaces` mit `eq('user_id', user.id)` für Autorisierung genutzt wurde, alle umgestellt auf `workspace_members`):
+  - `src/app/dashboard/use-cases/page.tsx`
+  - `src/app/dashboard/use-cases/roadmap/page.tsx`
+  - `src/app/dashboard/process-steps/page.tsx`
+  - `src/app/api/use-cases/route.ts`
+  - `src/app/api/use-cases/roadmap/route.ts`
+  - `src/app/api/use-cases/generate/route.ts` (membership-Check separiert, hourly_rate via admin-Client)
+  - `src/app/api/process-steps/route.ts`
+  - `src/app/api/process-steps/generate/route.ts`
+  - `src/app/api/process-steps/[id]/route.ts`
+  - `src/app/api/interview/[token]/objects/route.ts`
+
+Offene Punkte (außerhalb dieses Patches):
+- Migration noch nicht auf Remote-DB angewendet
+- Bendewars zweite E-Mail-Adresse bestätigen (aktuell `bennewroly@gmail.com` als Platzhalter aus Architect-Plan)
 
 ## Dependencies
 - Requires: PROJ-1 (Auth + Workspace) — Auth-Flow, RLS-Policies, Workspace-Schema

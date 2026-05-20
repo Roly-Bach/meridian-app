@@ -18,10 +18,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const workspaceId = user.user_metadata?.workspace_id as string | undefined
-    if (!workspaceId) {
-      return NextResponse.json({ error: 'No workspace found' }, { status: 400 })
-    }
+    const { data: member } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single()
+    if (!member) return NextResponse.json({ error: 'No workspace found' }, { status: 400 })
+    const workspaceId = member.workspace_id
 
     const admin = getSupabaseAdmin()
     const { data, error } = await admin
@@ -65,10 +69,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const workspaceId = user.user_metadata?.workspace_id as string | undefined
-    if (!workspaceId) {
-      return NextResponse.json({ error: 'No workspace found' }, { status: 400 })
-    }
+    const { data: member } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single()
+    if (!member) return NextResponse.json({ error: 'No workspace found' }, { status: 400 })
+    const workspaceId = member.workspace_id
 
     let body: unknown
     try {

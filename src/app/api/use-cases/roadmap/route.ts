@@ -16,14 +16,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'workspace_id query param required' }, { status: 400 })
   }
 
-  const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('id')
+  const { data: membership } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
     .eq('user_id', user.id)
-    .eq('id', workspaceId)
+    .eq('workspace_id', workspaceId)
     .single()
 
-  if (!workspace) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = getSupabaseAdmin()
   const { data: useCases, error } = await admin

@@ -28,18 +28,24 @@ export async function POST(req: Request) {
   }
   const { workspace_id } = parsed.data
 
-  // Verify caller owns this workspace
-  const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('id, hourly_rate')
+  // Verify caller is a member of this workspace
+  const { data: membership } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
     .eq('user_id', user.id)
+    .eq('workspace_id', workspace_id)
+    .single()
+
+  if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const admin = getSupabaseAdmin()
+  const { data: workspace } = await admin
+    .from('workspaces')
+    .select('hourly_rate')
     .eq('id', workspace_id)
     .single()
 
-  if (!workspace) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
-  const hourlyRate = workspace.hourly_rate ?? 45
-  const admin = getSupabaseAdmin()
+  const hourlyRate = workspace?.hourly_rate ?? 45
 
   // Fetch all process_steps for workspace
   const { data: steps } = await admin

@@ -27,7 +27,16 @@ import { GET, POST } from './route'
 const WORKSPACE_ID = 'ws-111'
 const authedUser = {
   id: 'user-abc',
-  user_metadata: { workspace_id: WORKSPACE_ID },
+  user_metadata: {},
+}
+
+function mockWorkspaceMembership() {
+  mockFrom.mockReturnValue({
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: { workspace_id: WORKSPACE_ID }, error: null }),
+  })
 }
 
 function makeRequest(body?: unknown) {
@@ -54,6 +63,7 @@ describe('GET /api/interviews', () => {
 
   it('returns interview list for authenticated user', async () => {
     mockGetUser.mockResolvedValue({ data: { user: authedUser }, error: null })
+    mockWorkspaceMembership()
 
     const interviews = [{ id: '1', employee_name: 'Max', status: 'created' }]
     mockAdminFrom.mockReturnValue({
@@ -100,6 +110,7 @@ describe('POST /api/interviews', () => {
 
   it('creates interview and returns 201 with access_token', async () => {
     mockGetUser.mockResolvedValue({ data: { user: authedUser }, error: null })
+    mockWorkspaceMembership()
 
     const createdInterview = {
       id: 'iv-123',

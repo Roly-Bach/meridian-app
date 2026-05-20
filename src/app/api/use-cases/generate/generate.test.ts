@@ -89,6 +89,11 @@ describe('POST /api/use-cases/generate', () => {
     mockAdminFrom
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { hourly_rate: 45 }, error: null }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
     const res = await POST(makeRequest({ workspace_id: WORKSPACE_ID }))
@@ -104,6 +109,12 @@ describe('POST /api/use-cases/generate', () => {
     const deleteInMock = vi.fn().mockResolvedValue({ error: null })
 
     mockAdminFrom
+      // workspace hourly_rate fetch
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { hourly_rate: 45 }, error: null }),
+      })
       // process_steps fetch
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
