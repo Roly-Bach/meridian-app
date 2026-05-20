@@ -112,13 +112,14 @@ test.describe('Dashboard — empty state (serial, signup first)', () => {
     await expect(page.getByText('Rolle')).toBeVisible()
     await expect(page.getByText('Abteilung')).toBeVisible()
     await expect(page.getByText('Status')).toBeVisible()
-    await expect(page.getByText('Erstellt')).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Erstellt' })).toBeVisible()
     await expect(page.getByText('Aktionen')).toBeVisible()
   })
 
   test('Dashboard: shows status badge for created interview', async ({ page }) => {
     await loginAndLand(page)
-    await expect(page.getByText('Erstellt')).toBeVisible()
+    // Status badge is a <span> inside a table row
+    await expect(page.locator('tbody span').filter({ hasText: 'Erstellt' }).first()).toBeVisible()
   })
 })
 
