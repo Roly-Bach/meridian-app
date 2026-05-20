@@ -34,6 +34,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           >
             Prozessschritte
           </Link>
+          <Link
+            href="/dashboard/use-cases"
+            className="flex items-center gap-2 px-2 py-2 text-[13px] text-white/60 hover:text-white rounded-[4px] hover:bg-white/5 transition-colors"
+          >
+            KI Use Cases
+          </Link>
         </nav>
 
         <div className="px-3 py-4 border-t border-white/10">
