@@ -1,6 +1,6 @@
 # PROJ-4: Extraktions-Agent + Wissensbasis
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
 
