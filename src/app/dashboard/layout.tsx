@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 import { logout } from '@/app/auth/actions'
+import { SidebarNav } from '@/components/dashboard/SidebarNav'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -20,9 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <p className="text-[14px] text-white font-semibold truncate">{workspaceName}</p>
         </div>
 
-        <nav className="flex-1 px-3 py-4">
-          {/* Navigation — erweitert durch PROJ-2+ */}
-        </nav>
+        <SidebarNav />
 
         <div className="px-3 py-4 border-t border-white/10">
           <form action={logout}>

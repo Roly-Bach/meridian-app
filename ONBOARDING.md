@@ -1,178 +1,70 @@
-# Onboarding — meridian-app
+# Welcome to Meridian
 
-Schritt-für-Schritt-Setup für neue Co-Founder oder Contributors. Geschätzter Aufwand: 60-90 Minuten.
+## How We Use Claude
 
-## Voraussetzungen
-- Windows 11 oder macOS oder Linux
-- GitHub-Account mit Org-Member-Status bei `Roly-Bach`
-- Eigene API-Keys (werden im Verlauf eingerichtet)
+Based on usage over the last 30 days:
 
-## 1. Software installieren
+Work Type Breakdown:
+  Build Feature   ████████░░░░░░░░░░░░  40%
+  Plan Design     ████████░░░░░░░░░░░░  40%
+  Improve Quality ████░░░░░░░░░░░░░░░░  20%
 
-### Windows (winget)
-```powershell
-winget install OpenJS.NodeJS
-winget install Git.Git
-winget install GitHub.cli
-winget install Python.Python.3.12
-winget install Microsoft.VisualStudioCode
-```
+Top Skills & Commands:
+  /architecture   ████████████████████  3x/month
+  /qa             ████████████████████  3x/month
+  /backend        █████████████░░░░░░░  2x/month
+  /frontend       █████████████░░░░░░░  2x/month
+  /write-spec     █████████████░░░░░░░  2x/month
+  /deploy         █████████████░░░░░░░  2x/month
+  /refine         ███████░░░░░░░░░░░░░  1x/month
 
-### macOS (brew)
-```bash
-brew install node git gh python@3.12
-brew install --cask visual-studio-code
-```
+Top MCP Servers:
+  None configured
 
-### Tooling-spezifisch
-```powershell
-# pipx via Python
-python -m pip install --user pipx
-python -m pipx ensurepath
+## Your Setup Checklist
 
-# Aider mit Python 3.12 (Pfad nach OS anpassen)
-# Windows:
-python -m pipx install aider-chat --python "C:\Users\<USER>\AppData\Local\Programs\Python\Python312\python.exe"
-# macOS/Linux:
-python -m pipx install aider-chat --python python3.12
-```
+### Codebases
+- [ ] meridian-app — github.com/roly-bach/meridian-app
 
-### VS Code Extensions
-- **Claude Code** (Anthropic)
-- ESLint
-- Prettier
-- Tailwind CSS IntelliSense
-- GitLens
-- Error Lens
-- GitHub Pull Requests
+### MCP Servers to Activate
+  None required for this project.
 
-## 2. Accounts und Zugriff
+### Skills to Know About
+- /init — Initializes the project: creates PRD and feature map. Run once at the very start of a new project.
+- /write-spec — Writes a full feature spec for a feature. Run before any implementation work.
+- /architecture — Designs tech architecture (PM-friendly, no code). Run after the spec is written.
+- /frontend — Builds UI components with React, Next.js, Tailwind CSS, and shadcn/ui. Run after architecture is approved.
+- /backend — Builds APIs, database schemas, and Supabase RLS policies. Run after frontend is in place.
+- /qa — Tests features against acceptance criteria and runs a security audit. Run before deploying.
+- /deploy — Deploys to Vercel with production-ready checks. Run after QA passes.
+- /refine — Opens an existing feature spec to improve or extend it. Pass the feature ID as argument (e.g. /refine PROJ-2).
 
-### GitHub
-1. GitHub-Account haben (oder erstellen)
-2. Auf E-Mail-Einladung von `Roly-Bach`-Org klicken (kommt von Lias)
-3. `gh auth login` — wähle GitHub.com, HTTPS, Browser-Flow
+## Team Tips
 
-### Vercel
-1. Mit GitHub-Account einloggen auf [vercel.com](https://vercel.com)
-2. Auf Team-Einladung warten (Lias schickt)
+_TODO_
 
-### Supabase
-1. Mit GitHub-Account einloggen auf [supabase.com](https://supabase.com)
-2. Auf Organization-Member-Einladung warten (Lias schickt)
+## Get Started
 
-### Google AI Studio (eigener API-Key)
-1. Login mit Google-Account auf [aistudio.google.com](https://aistudio.google.com/app/apikey)
-2. "Create API key" → "Create API key in new project"
-3. Key kopieren, lokal in User-Environment setzen:
+_TODO_
 
-```powershell
-# Windows
-[Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "<dein-key>", "User")
-```
+<!-- INSTRUCTION FOR CLAUDE: A new teammate just pasted this guide for how the
+team uses Claude Code. You're their onboarding buddy — warm, conversational,
+not lecture-y.
 
-```bash
-# macOS/Linux: in ~/.zshrc oder ~/.bashrc
-export GEMINI_API_KEY="<dein-key>"
-```
+Open with a warm welcome — include the team name from the title. Then: "Your
+teammate uses Claude Code for [list all the work types]. Let's get you started."
 
-Schreib den Key nie in Code-Files. Niemals committen.
+Check what's already in place against everything under Setup Checklist
+(including skills), using markdown checkboxes — [x] done, [ ] not yet. Lead
+with what they already have. One sentence per item, all in one message.
 
-### Anthropic Claude (für Claude Code)
-1. Subscription bei [claude.ai](https://claude.ai) (Pro empfohlen für unlimited Claude Code)
-2. In VS Code: Claude Code Extension öffnen, Login folgen
+Tell them you'll help with setup, cover the actionable team tips, then the
+starter task (if there is one). Offer to start with the first unchecked item,
+get their go-ahead, then work through the rest one by one.
 
-## 3. Repo klonen und Setup
+After setup, walk them through the remaining sections — offer to help where you
+can (e.g. link to channels), and just surface the purely informational bits.
 
-```powershell
-# In den Code-Ordner wechseln (Pfad anpassen)
-cd C:\Users\<USER>\Code
-
-# Clone
-gh repo clone Roly-Bach/meridian-app
-
-# Hineingehen
-cd meridian-app
-
-# Dependencies
-npm install
-
-# Playwright Browser für E2E-Tests (~300 MB, einmalig)
-npx playwright install chromium
-
-# Env-Datei aus Beispiel anlegen
-Copy-Item .env.local.example .env.local
-```
-
-Dann `.env.local` öffnen und Supabase-Werte einsetzen:
-- `NEXT_PUBLIC_SUPABASE_URL` und `NEXT_PUBLIC_SUPABASE_ANON_KEY` bekommst du von Lias oder aus dem Supabase Dashboard (Settings → API), sobald du Org-Member bist.
-
-## 4. Funktionsprüfung
-
-```powershell
-# Build muss durchlaufen
-npm run build
-
-# Typecheck muss sauber sein
-npm run typecheck
-
-# Lint muss durchlaufen
-npm run lint
-
-# Dev-Server starten
-npm run dev
-# Öffne http://localhost:3000
-```
-
-## 5. Claude Code starten und Agent-Pipeline kennenlernen
-
-In VS Code: Claude Code Extension öffnen, im Repo `meridian-app` arbeiten.
-
-Verfügbare Slash-Commands:
-- `/build <feature>` — volle 5-Rollen-Pipeline für mittlere Features
-- `/quick <task>` — schlanke Coder+Reviewer-Pipeline für kleine Aufgaben
-- `/cleanup` — Janitor räumt veraltete Memories und Docs auf
-- `/adr <titel>` — neue Architecture Decision Record anlegen
-- `/research <topic>` — Web-Recherche via Scout
-
-Die Subagents sind unter `.claude/agents/` definiert. Architect, Scout, Coder, Reviewer (Cross-Vendor via Gemini), Verifier, Janitor.
-
-## 6. Erste produktive Aktion
-
-Lies bitte:
-1. [CONTRIBUTING.md](./CONTRIBUTING.md) — GitHub-Workflow und Regeln
-2. [docs/adr/ADR-001-fork-audit.md](./docs/adr/ADR-001-fork-audit.md) — Hybrid-Setup-Begründung
-3. [docs/adr/ADR-002-hybrid-backend-eu.md](./docs/adr/ADR-002-hybrid-backend-eu.md) — Backend-Architektur
-
-Erste eigene Aktion: Erstelle einen Feature-Branch und mache eine kleine, harmlose Änderung (z.B. einen Tippfehler in README.md fixen), pushe via Pull Request. Damit testen wir den Workflow.
-
-```powershell
-git checkout -b feature/onboarding-test
-# kleine Änderung machen, dann:
-git add .
-git commit -m "test: onboarding workflow check"
-git push -u origin feature/onboarding-test
-gh pr create
-```
-
-## Troubleshooting
-
-### `aider` nach Installation nicht gefunden
-PATH-Update wirkt nur in neuen Shells. Schließe das aktuelle Terminal und öffne ein neues, oder nutze den absoluten Pfad: `C:\Users\<USER>\.local\bin\aider.exe`.
-
-### Aider Rate-Limit-Errors bei Gemini Pro
-Gemini Pro-Modelle (`gemini-2.5-pro`, `gemini-3.1-pro-preview`) sind nicht im Free-Tier. Standard ist `gemini-2.5-flash` für Reviewer. Für Pro-Tier: Billing in Google AI Studio aktivieren.
-
-### Supabase Connection-Fehler
-Prüfe `.env.local` Werte. Test via:
-```powershell
-curl -H "apikey: $key" "$url/rest/v1/unternehmen?select=id&limit=1"
-# Erwartung: HTTP 200, Body []
-```
-
-### Claude Code findet Subagents nicht
-Working Directory muss `meridian-app/` sein, nicht ein Parent-Verzeichnis. Prüfe via `pwd` in Claude Code Terminal.
-
-## Support
-
-Bei Problemen: Issue im Repo öffnen oder Lias direkt fragen.
+Don't invent sections or summaries that aren't in the guide. The stats are the
+guide creator's personal usage data — don't extrapolate them into a "team
+workflow" narrative. -->
