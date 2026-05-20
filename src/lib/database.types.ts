@@ -117,6 +117,36 @@ export interface Database {
         }
         Relationships: []
       }
+      knowledge_objects: {
+        Row: {
+          id: string
+          interview_id: string
+          workspace_id: string
+          type: 'process_step' | 'tool' | 'pain_point' | 'role' | 'fact' | 'contact'
+          content: Record<string, unknown>
+          source_quote: string | null
+          turn_id: string | null
+          embedding: number[] | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          interview_id: string
+          workspace_id: string
+          type: 'process_step' | 'tool' | 'pain_point' | 'role' | 'fact' | 'contact'
+          content: Record<string, unknown>
+          source_quote?: string | null
+          turn_id?: string | null
+          embedding?: unknown
+          created_at?: string
+        }
+        Update: {
+          content?: Record<string, unknown>
+          source_quote?: string | null
+          embedding?: unknown
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
