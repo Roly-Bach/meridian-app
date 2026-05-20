@@ -17,14 +17,15 @@
 |----|---------|--------|------|---------|----------|---------|
 | PROJ-1 | Auth + Workspace | Approved | [spec](PROJ-1-auth-workspace.md) | 2026-05-19 | P0 | — |
 | PROJ-2 | Interview Engine Backend | Deployed | [spec](PROJ-2-interview-engine-backend.md) | 2026-05-19 | P0 | PROJ-1 |
-| PROJ-3 | Interview UI | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
+| PROJ-3 | Interview UI | Architected | [spec](PROJ-3-interview-ui.md) | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
 | PROJ-4 | Extraktions-Agent + Wissensbasis | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-2 |
 | PROJ-5 | Prozessschritt-Anreicherung | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-4 |
 | PROJ-6 | Use Case Identifikation | Roadmap | — | 2026-05-19 | P0 | PROJ-1, PROJ-5 |
+| PROJ-7 | Voice Input (Interview) | Roadmap | — | 2026-05-20 | P1 | PROJ-3 |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-7
+## Next Available ID: PROJ-8
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6

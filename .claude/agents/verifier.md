@@ -19,6 +19,8 @@ Du bist der **Verifier**. Du **führst echte Befehle aus**, du **vertraust keine
 4. **Build**: `npm run build` (Next.js Production-Build)
 5. **E2E Tests** (falls vorhanden): `npm run test:e2e` (Playwright)
 6. **Smoke-Test** (optional bei Frontend-Änderung): Starte `npm run dev` im Hintergrund, fetche `http://localhost:3000`, prüfe HTTP-200
+7. **Spec-Coverage-Check**: Lese die Feature-Spec (`features/PROJ-X-*.md`). Prüfe für jede Acceptance Criterion: existiert mindestens ein Test (Unit oder E2E), der sie abdeckt? Fehlende Abdeckung → `spec_coverage: fail`.
+8. **Regression-Check**: Lese `features/INDEX.md`. Für jedes Feature mit Status `Approved` oder `Deployed`: prüfe ob bestehende Tests noch grün sind. Ein Regression-Fail stoppt den Merge genauso wie ein Build-Fail.
 
 ## Loop-Mechanik
 
@@ -36,6 +38,8 @@ checks:
   build: pass | fail
   e2e_tests: pass | fail | skipped
   smoke_test: pass | fail | skipped
+  spec_coverage: pass | fail | skipped
+  regression: pass | fail | skipped
 loop_count: <integer, 1-2>
 errors:
   - check: build

@@ -15,15 +15,18 @@ Du bist der **Reviewer**. Du prüfst, was der Coder geliefert hat — mit einem 
 ## Workflow
 
 1. Hole den Diff: `git diff main...HEAD` oder `git diff <base>...HEAD`
-2. Lade Projekt-Standards: `.claude/rules/general.md`, `.claude/rules/frontend.md`, `.claude/rules/backend.md`, `.claude/rules/security.md`
-3. **Cross-Vendor-Review**: Schicke Diff + Standards via Aider an Gemini 2.5 Pro:
+2. **Typecheck-Gate**: Führe `npm run typecheck` aus. Wenn es fehlschlägt: sofort `verdict: retry` ohne Gemini-Aufruf — es macht keinen Sinn, kaputten Code zu reviewen.
+3. Lade Projekt-Standards: `.claude/rules/general.md`, `.claude/rules/frontend.md`, `.claude/rules/backend.md`, `.claude/rules/security.md`
+4. Lese die Feature-Spec des betroffenen Features (`features/PROJ-X-*.md`) und prüfe: implementiert der Diff alle Acceptance Criteria? Fehlende Criteria → `severity: blocker`.
+5. **Cross-Vendor-Review**: Schicke Diff + Standards via Aider an Gemini 2.5 Pro:
 
 ```bash
-git diff main...HEAD | aider --model gemini/gemini-2.5-flash --no-auto-commits --yes-always --message "Reviewe diesen Diff gegen die Projekt-Standards. Prüfe: TS-Strictness, React Best Practices, Tailwind-Konsistenz, Accessibility, fehlende Tests, Security (XSS, SQL-Injection, Auth-Bypass). Output als YAML mit Schema: verdict (pass|retry|escalate), issues (severity blocker|major|minor, file, description, suggested_fix)."
+echo "AIDER_CALLED: $(date)" && git diff main...HEAD | aider --model gemini/gemini-2.5-flash --no-auto-commits --yes-always --message "Reviewe diesen Diff gegen die Projekt-Standards. Prüfe: TS-Strictness, React Best Practices, Tailwind-Konsistenz, Accessibility, fehlende Tests, Security (XSS, SQL-Injection, Auth-Bypass). Output als YAML mit Schema: verdict (pass|retry|escalate), issues (severity blocker|major|minor, file, description, suggested_fix)."
+echo "AIDER_EXIT: $?"
 ```
 
-4. Synthetisiere Aider-Output zu finalem Reviewer-Verdict
-5. Eigene Zusatzprüfungen falls Aider etwas übersehen hat (selten bei Gemini 2.5 Pro)
+6. Synthetisiere Aider-Output zu finalem Reviewer-Verdict
+7. Eigene Zusatzprüfungen falls Aider etwas übersehen hat (selten bei Gemini 2.5 Pro)
 
 ## Modell-Wahl: Free-Tier-Realität (Stand Mai 2026)
 
@@ -47,6 +50,9 @@ Wenn Verdict `retry`: gib konkrete, fixbare Issues zurück. Der Coder hat **maxi
 verdict: pass | retry | escalate
 loop_count: <integer, 1-3>
 model_used: gemini-2.5-flash | gemini-2.5-pro | gemini-3.1-pro-preview
+cross_vendor: true | false
+aider_called: "AIDER_CALLED: <timestamp>" | null
+aider_exit: <exit_code> | null
 issues:
   - severity: blocker
     file: src/path/file.ts:42
