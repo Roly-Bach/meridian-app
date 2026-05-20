@@ -87,7 +87,7 @@ describe('POST /api/interview/[token]/reconnect', () => {
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [] }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [] }, error: null }),
       })
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
@@ -144,7 +144,7 @@ describe('POST /api/interview/[token]/reconnect', () => {
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: state, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: state, error: null }),
       })
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),

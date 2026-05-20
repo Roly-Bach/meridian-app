@@ -147,7 +147,7 @@ describe('POST /api/interview/[token]/chat', () => {
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
+        maybeSingle: vi.fn().mockResolvedValue({
           data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [] },
           error: null,
         }),

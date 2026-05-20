@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { MessageList, type Message } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { useInterviewStream } from '@/hooks/useInterviewStream'
-import { useState } from 'react'
 
 type Turn = {
   id: string
@@ -32,13 +31,23 @@ function turnsToMessages(turns: Turn[]): Message[] {
 
 export function ChatInterface({ token, employeeName, existingTurns, status, onCompleted }: Props) {
   const [messages, setMessages] = useState<Message[]>(() => turnsToMessages(existingTurns))
+  const [showReconnectBanner, setShowReconnectBanner] = useState(() => existingTurns.length > 0)
+  const reconnectBannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { isStreaming, error, sendMessage, reconnect, clearError } = useInterviewStream(token)
+
+  // Auto-dismiss reconnect banner after 5s
+  useEffect(() => {
+    if (!showReconnectBanner) return
+    reconnectBannerTimer.current = setTimeout(() => setShowReconnectBanner(false), 5_000)
+    return () => {
+      if (reconnectBannerTimer.current) clearTimeout(reconnectBannerTimer.current)
+    }
+  }, [showReconnectBanner])
 
   // Auto-greet: on first open (no turns) OR on reconnect (existing turns + active).
   // Both cases stream via the reconnect endpoint (no DB write).
   useEffect(() => {
     if (status === undefined) return
-    // Skip if this is a completed interview (shouldn't happen but guard anyway)
 
     const agentMsgId = `greet-${Date.now()}`
     setMessages((prev) => [
@@ -50,11 +59,15 @@ export function ChatInterface({ token, employeeName, existingTurns, status, onCo
       setMessages((prev) =>
         prev.map((m) => (m.id === agentMsgId ? { ...m, content: m.content + chunk } : m))
       )
-    }).then(() => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === agentMsgId ? { ...m, isStreaming: false } : m))
-      )
     })
+      .then(() => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === agentMsgId ? { ...m, isStreaming: false } : m))
+        )
+      })
+      .catch(() => {
+        setMessages((prev) => prev.filter((m) => m.id !== agentMsgId))
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -92,12 +105,17 @@ export function ChatInterface({ token, employeeName, existingTurns, status, onCo
       setMessages((prev) =>
         prev.map((m) => (m.id === agentMsgId ? { ...m, content: m.content + chunk } : m))
       )
-    }).then(async () => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === agentMsgId ? { ...m, isStreaming: false } : m))
-      )
-      await checkCompleted()
     })
+      .then(async () => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === agentMsgId ? { ...m, isStreaming: false } : m))
+        )
+        await checkCompleted()
+      })
+      .catch(() => {
+        // Error is shown via the `error` state → toast. Remove empty agent bubble.
+        setMessages((prev) => prev.filter((m) => m.id !== agentMsgId))
+      })
   }
 
   return (
@@ -107,6 +125,19 @@ export function ChatInterface({ token, employeeName, existingTurns, status, onCo
         <span className="text-[#E5E5E5]">|</span>
         <span className="text-[14px] font-medium text-[#111111]">Interview mit {employeeName}</span>
       </header>
+
+      {showReconnectBanner && (
+        <div className="flex items-center justify-between bg-[#FFF8E1] border-b border-[#FFE082] px-6 py-2 text-[13px] text-[#7B6000]">
+          <span>Verbindung unterbrochen — dein Gespräch wurde fortgesetzt.</span>
+          <button
+            onClick={() => setShowReconnectBanner(false)}
+            className="ml-4 text-[#7B6000] hover:text-[#3E3000] leading-none"
+            aria-label="Schließen"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <MessageList messages={messages} />
 

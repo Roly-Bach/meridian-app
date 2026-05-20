@@ -82,11 +82,16 @@ function buildTools(interviewId: string) {
         new_phase: z.enum(['exploration', 'deepdive', 'wrap_up']),
       }),
       execute: async ({ new_phase }) => {
-        await supabase
-          .from('interview_state')
-          .update({ phase: new_phase, updated_at: new Date().toISOString() })
-          .eq('interview_id', interviewId)
-        return { success: true, phase: new_phase }
+        try {
+          await supabase
+            .from('interview_state')
+            .update({ phase: new_phase, updated_at: new Date().toISOString() })
+            .eq('interview_id', interviewId)
+          return { success: true, phase: new_phase }
+        } catch (err) {
+          console.error('[transition_phase] failed:', err)
+          return { success: false, error: (err as Error).message }
+        }
       },
     }),
 
@@ -97,15 +102,20 @@ function buildTools(interviewId: string) {
         open: z.array(z.string()),
       }),
       execute: async ({ covered, open }) => {
-        await supabase
-          .from('interview_state')
-          .update({
-            topics_covered: covered,
-            topics_open: open,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('interview_id', interviewId)
-        return { success: true }
+        try {
+          await supabase
+            .from('interview_state')
+            .update({
+              topics_covered: covered,
+              topics_open: open,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('interview_id', interviewId)
+          return { success: true }
+        } catch (err) {
+          console.error('[update_topics] failed:', err)
+          return { success: false, error: (err as Error).message }
+        }
       },
     }),
 
@@ -113,31 +123,34 @@ function buildTools(interviewId: string) {
       description: 'Schließt das Interview ab. Nur in wrap_up nach dem abschließenden Dank aufrufen.',
       inputSchema: z.object({}),
       execute: async () => {
-        // Fetch workspace_id before update for enrichment trigger
-        const { data: interviewData } = await supabase
-          .from('interviews')
-          .select('workspace_id')
-          .eq('id', interviewId)
-          .single()
+        try {
+          const { data: interviewData } = await supabase
+            .from('interviews')
+            .select('workspace_id')
+            .eq('id', interviewId)
+            .single()
 
-        await supabase
-          .from('interviews')
-          .update({ status: 'completed', extractions_pending: true })
-          .eq('id', interviewId)
-        await supabase
-          .from('interview_state')
-          .update({ phase: 'wrap_up', updated_at: new Date().toISOString() })
-          .eq('interview_id', interviewId)
+          await supabase
+            .from('interviews')
+            .update({ status: 'completed', extractions_pending: true })
+            .eq('id', interviewId)
+          await supabase
+            .from('interview_state')
+            .update({ phase: 'wrap_up', updated_at: new Date().toISOString() })
+            .eq('interview_id', interviewId)
 
-        // Fire-and-forget process step enrichment
-        if (interviewData?.workspace_id) {
-          void enrichProcessSteps({
-            interviewId,
-            workspaceId: interviewData.workspace_id,
-          })
+          if (interviewData?.workspace_id) {
+            void enrichProcessSteps({
+              interviewId,
+              workspaceId: interviewData.workspace_id,
+            })
+          }
+
+          return { success: true }
+        } catch (err) {
+          console.error('[complete_interview] failed:', err)
+          return { success: false, error: (err as Error).message }
         }
-
-        return { success: true }
       },
     }),
   }

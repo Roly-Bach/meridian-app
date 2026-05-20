@@ -276,6 +276,42 @@ test.describe('Employee Chat Page — chat interface (serial)', () => {
     // Agent message bubble should appear left-aligned (justify-start) without user sending anything
     await expect(page.locator('.justify-start').first()).toBeVisible({ timeout: 15000 })
   })
+
+  test('Chat page: reconnect banner shown on page reload mid-interview', async ({ page }) => {
+    test.skip(!interviewToken, 'Setup did not run')
+
+    // Send one message to ensure turns exist in DB
+    await page.goto(`/interview/${interviewToken}`)
+    await page.waitForLoadState('networkidle')
+    const textarea = page.locator('textarea')
+    await textarea.waitFor({ state: 'visible', timeout: 8000 })
+    await textarea.fill('Kurze Test-Nachricht')
+    await textarea.press('Enter')
+    // Wait for agent response to confirm turn is saved
+    await expect(page.locator('.justify-start').first()).toBeVisible({ timeout: 20000 })
+
+    // Reload — this time existingTurns.length > 0 → banner should show
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(
+      page.getByText('Verbindung unterbrochen — dein Gespräch wurde fortgesetzt.')
+    ).toBeVisible({ timeout: 10000 })
+  })
+
+  test('Chat page: reconnect banner dismisses on click', async ({ page }) => {
+    test.skip(!interviewToken, 'Setup did not run')
+
+    await page.goto(`/interview/${interviewToken}`)
+    await page.waitForLoadState('networkidle')
+
+    const banner = page.getByText('Verbindung unterbrochen — dein Gespräch wurde fortgesetzt.')
+    // Only check if banner is present (depends on prior test having run)
+    const bannerVisible = await banner.isVisible({ timeout: 5000 }).catch(() => false)
+    test.skip(!bannerVisible, 'No banner to dismiss (no prior turns)')
+
+    await page.getByRole('button', { name: 'Schließen' }).click()
+    await expect(banner).not.toBeVisible()
+  })
 })
 
 // ── Dashboard: Sidebar navigation ─────────────────────────────────────────────

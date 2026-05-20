@@ -41,7 +41,7 @@ export async function POST(
   // ── Load interview ──────────────────────────────────────────────────────────
   const { data: rawInterview, error: fetchError } = await supabase
     .from('interviews')
-    .select('id, employee_name, employee_role, department, focus_topics, status, token_expires_at, created_at')
+    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, created_at')
     .eq('access_token', token)
     .single()
 
@@ -82,7 +82,7 @@ export async function POST(
       .from('interview_state')
       .select('phase, timer_minutes, topics_covered, topics_open')
       .eq('interview_id', interview.id)
-      .single(),
+      .maybeSingle(),
     supabase
       .from('turns')
       .select('turn_number, user_input, agent_response, created_at')

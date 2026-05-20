@@ -19,6 +19,8 @@ export function useInterviewStream(token: string) {
       setIsStreaming(true)
       setError(null)
 
+      const timeoutId = setTimeout(() => controller.abort('timeout'), 90_000)
+
       try {
         const res = await fetch(url, {
           method: 'POST',
@@ -42,9 +44,16 @@ export function useInterviewStream(token: string) {
           onChunk(decoder.decode(value, { stream: true }))
         }
       } catch (err) {
-        if ((err as Error).name === 'AbortError') return
-        setError((err as Error).message)
+        const e = err as Error & { cause?: unknown }
+        if (e.name === 'AbortError') {
+          if (e.cause === 'timeout') {
+            setError('Antwort dauert zu lange – bitte erneut versuchen.')
+          }
+          return
+        }
+        setError(e.message)
       } finally {
+        clearTimeout(timeoutId)
         setIsStreaming(false)
       }
     },
