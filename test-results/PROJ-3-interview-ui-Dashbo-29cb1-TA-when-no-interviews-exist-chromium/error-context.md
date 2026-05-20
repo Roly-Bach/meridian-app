@@ -59,9 +59,9 @@
               - generic [ref=e75]:
                 - paragraph [ref=e76]:
                   - text: Call Stack
-                  - generic [ref=e77]: "8"
-                - button "Show 6 ignore-listed frame(s)" [ref=e78] [cursor=pointer]:
-                  - text: Show 6 ignore-listed frame(s)
+                  - generic [ref=e77]: "9"
+                - button "Show 7 ignore-listed frame(s)" [ref=e78] [cursor=pointer]:
+                  - text: Show 7 ignore-listed frame(s)
                   - img [ref=e79]
               - generic [ref=e81]:
                 - generic [ref=e82]:
@@ -71,10 +71,10 @@
                 - text: src/lib/supabase-server.ts (7:28)
               - generic [ref=e86]:
                 - generic [ref=e87]:
-                  - text: DashboardLayout
-                  - button "Open DashboardLayout in editor" [ref=e88] [cursor=pointer]:
+                  - text: signup
+                  - button "Open signup in editor" [ref=e88] [cursor=pointer]:
                     - img [ref=e89]
-                - text: src/app/dashboard/layout.tsx (8:20)
+                - text: src/app/signup/actions.ts (14:20)
         - generic [ref=e91]: "1"
         - generic [ref=e92]: "2"
     - generic [ref=e97] [cursor=pointer]:
@@ -90,5 +90,5 @@
           - img [ref=e109]
   - generic [ref=e112]:
     - 'heading "Application error: a server-side exception has occurred while loading localhost (see the server logs for more information)." [level=2] [ref=e113]'
-    - paragraph [ref=e114]: "Digest: 3509893449"
+    - paragraph [ref=e114]: "Digest: 3166951421"
 ```
