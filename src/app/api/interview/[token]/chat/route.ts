@@ -124,17 +124,19 @@ export async function POST(
     onFinish: async (agentText) => {
       if (!agentText) return
 
-      await supabase.from('turns').insert({
+      const { error: turnError } = await supabase.from('turns').insert({
         interview_id: interview.id,
         turn_number: nextTurnNumber,
         user_input,
         agent_response: agentText,
       })
+      if (turnError) console.error('[onFinish] turns insert failed:', turnError.message)
 
-      await supabase
+      const { error: stateError } = await supabase
         .from('interview_state')
         .update({ timer_minutes: timerMinutes, updated_at: new Date().toISOString() })
         .eq('interview_id', interview.id)
+      if (stateError) console.error('[onFinish] state update failed:', stateError.message)
     },
   })
 
