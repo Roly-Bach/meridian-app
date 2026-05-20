@@ -1,6 +1,6 @@
 # PROJ-2: Interview Engine Backend
 
-## Status: In Progress
+## Status: In Review
 **Created:** 2026-05-19
 **Last Updated:** 2026-05-20
 
@@ -230,7 +230,100 @@ complete_interview() aufgerufen?
 - 9 unit tests passing: `src/app/api/interviews/interviews.test.ts` + `src/app/api/interview/[token]/token.test.ts`
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-05-20
+**Tester:** /qa skill
+
+### Acceptance Criteria — Pass/Fail
+
+| Criterion | Result | Notes |
+|---|---|---|
+| Schema: department (text, not null) | PASS | Migration adds column + NOT NULL after backfill |
+| Schema: focus_topics (text, nullable) | PASS | Migration adds column |
+| Schema: access_token (text, unique, not null) | PASS | Migration adds column + UNIQUE constraint |
+| Schema: token_expires_at (timestamptz, not null) | PASS | Migration adds column + NOT NULL |
+| Schema: status values created/active/completed | PASS | Migration replaces old constraint |
+| Schema: RLS maintained | PASS | Separate migration adds RLS policies for all 3 tables |
+| POST /api/interviews requires auth | PASS | Returns 401 without session |
+| POST /api/interviews creates with all fields | PASS | Zod validation + insert |
+| Unique access_token generated | PASS | crypto.randomUUID() |
+| token_expires_at = now + 30 days | PASS | Hardcoded 30 * 24 * 60 * 60 * 1000 ms |
+| GET /api/interviews returns list sorted desc | PASS | .order('created_at', { ascending: false }) |
+| GET /api/interview/[token] returns metadata + state + turns | PASS | Three parallel queries |
+| Unknown token → 404 | PASS | Unit tested |
+| Expired token → 410 | PASS | Unit tested |
+| Completed interview → chat returns 409 | PASS | Unit tested |
+| POST chat accepts user_input | PASS | Zod min(1) enforced |
+| Response is SSE stream | PASS | toTextStreamResponse() |
+| Turn saved atomically in onFinish | PASS | onFinish callback inserts turn |
+| interview_state.phase updated by agent | PASS | transition_phase tool executes DB update |
+| timer_minutes updated per turn | PASS | Calculated from first turn created_at |
+| topics_covered/topics_open updated | PASS | update_topics tool executes DB update |
+| Claude error → SSE error event, no turn saved | PASS | onFinish not called on stream error |
+| Empty user_input → HTTP 400 | PASS | Zod z.string().min(1) |
+| Agent knows employee context | PASS | buildSystemPrompt includes all context |
+| Agent starts in intro phase | PASS | insert interview_state with phase='intro' |
+| Phase order enforced | PASS | Tool Use: transition_phase only allows exploration/deepdive/wrap_up |
+| 50 min warning / 60 min hard limit | PASS | buildSystemPrompt adds timing warnings |
+| Reconnect: adaptive greeting | PASS | Reconnect endpoint with isReconnect=true |
+| complete_interview → status=completed + extractions_pending=true | PASS | complete_interview tool executes both updates |
+| Dashboard sees completed status | PASS | GET /api/interviews returns status |
+
+**Total: 29/29 acceptance criteria PASS**
+
+### Bugs Found
+
+#### BUG-001 HIGH — `npm test` fails (Vitest picks up Playwright files)
+**File:** `vitest.config.ts`
+**Steps to reproduce:** Run `npm test`
+**Expected:** All unit tests run cleanly
+**Actual:** Exit code 1 — `tests/PROJ-1-auth-workspace.spec.ts` is matched by Vitest glob and fails immediately ("Playwright Test did not expect test() to be called here")
+**Fix:** Add `exclude: ['tests/**']` to `vitest.config.ts`
+**Note:** Pre-existing regression from PROJ-1. The PROJ-2 unit tests themselves all pass (`npx vitest run src` → 20/20 green).
+
+#### BUG-002 MEDIUM — interviewAgent.ts hardcodes Anthropic provider
+**File:** [src/services/interviewAgent.ts](src/services/interviewAgent.ts) line 136
+**Description:** The service always uses `createAnthropic` regardless of the `INTERVIEW_MODEL` env var. The tech design specifies provider-agnostic behavior via Vercel AI SDK. If `INTERVIEW_MODEL` is set to `openai/gpt-4o` or `google/gemini-2.0-flash`, the code would use the Anthropic provider with a wrong model ID and fail at runtime.
+**MVP Impact:** Low — Anthropic is the only intended provider for MVP. The `INTERVIEW_MODEL` env var effectively only controls the model name, not the provider.
+**Fix:** Replace `createAnthropic` with the Vercel AI SDK gateway pattern (e.g., via `ai.createProvider` or parse the `provider/model` string to select the right SDK).
+
+#### BUG-003 LOW — Misleading mock in token.test.ts
+**File:** [src/app/api/interview/[token]/token.test.ts](src/app/api/interview/%5Btoken%5D/token.test.ts) line 15
+**Description:** The mock uses `toDataStreamResponse` (old API), but the `GET /api/interview/[token]` endpoint never calls `createInterviewStream`. The mock is dead code and misleads about the endpoint's contract.
+**Fix:** Remove the `createInterviewStream` mock from token.test.ts entirely.
+
+### Test Coverage Added by QA
+
+| File | Tests Added | What they cover |
+|---|---|---|
+| [src/app/api/interview/[token]/reconnect/reconnect.test.ts](src/app/api/interview/%5Btoken%5D/reconnect/reconnect.test.ts) | 5 | 404, 410, 409 (created), 409 (completed), 200 stream with isReconnect=true |
+| [src/app/api/interview/[token]/chat/chat.test.ts](src/app/api/interview/%5Btoken%5D/chat/chat.test.ts) | 1 | created→active status transition on first message |
+
+**Unit test totals:** 20 tests across 4 files — all passing (`npx vitest run src`)
+
+### E2E Tests
+Not written — PROJ-2 is a pure backend feature with no UI. Meaningful E2E tests require a live Supabase instance and Claude API key. The unit test suite covers all acceptance criteria at the integration boundary. E2E browser tests are deferred to PROJ-3 (Interview UI), which wraps this backend.
+
+### Security Audit
+
+| Check | Result |
+|---|---|
+| Auth bypass on consultant endpoints | PASS — 401 returned without valid session |
+| Token enumeration / brute force | ACCEPTABLE — UUID v4 tokens (128-bit entropy); no rate limiting on GET [token] endpoint (MVP-acceptable) |
+| Cross-workspace data access | PASS — GET /api/interviews filters by workspace_id from user_metadata |
+| SQL injection | PASS — Supabase parameterized queries; Zod validates all inputs |
+| Empty/oversized input | PASS — Zod max(10000) on user_input, max(200) on names |
+| Secrets in responses | PASS — access_token only returned to authenticated consultant on creation |
+| Admin client scope | ACCEPTABLE — admin client bypasses RLS for public endpoints (intentional: employee has no account) |
+| RLS on interview_state + turns | PASS — migration enables RLS + adds workspace-scoped policies |
+
+### Production-Ready Decision
+
+**NOT READY** — BUG-001 (HIGH) must be fixed first.
+
+The feature itself is functionally complete and all 29 acceptance criteria pass. The blocking issue is infrastructure: `npm test` exits with code 1 due to Vitest picking up the Playwright E2E file. Fix `vitest.config.ts` (add `exclude: ['tests/**']`), then this feature is ready.
+
+BUG-002 (MEDIUM) does not block MVP since Anthropic is the only intended provider.
 
 ## Deployment
 _To be added by /deploy_

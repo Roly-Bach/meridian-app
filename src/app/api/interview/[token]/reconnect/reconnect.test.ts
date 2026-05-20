@@ -20,42 +20,24 @@ import { POST } from './route'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const VALID_TOKEN = 'valid-token-xyz'
+const VALID_TOKEN = 'reconnect-token-xyz'
 const FUTURE_EXPIRY = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
 const PAST_EXPIRY = new Date(Date.now() - 1000).toISOString()
-
-function makePOSTRequest(token: string, body: unknown = { user_input: 'Hallo' }) {
-  return new Request(`http://localhost/api/interview/${token}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-}
 
 function makeParams(token: string) {
   return { params: Promise.resolve({ token }) }
 }
 
-// ─── POST /api/interview/[token]/chat ─────────────────────────────────────────
+function makePOSTRequest(token: string) {
+  return new Request(`http://localhost/api/interview/${token}/reconnect`, {
+    method: 'POST',
+  })
+}
 
-describe('POST /api/interview/[token]/chat', () => {
+// ─── POST /api/interview/[token]/reconnect ────────────────────────────────────
+
+describe('POST /api/interview/[token]/reconnect', () => {
   beforeEach(() => vi.clearAllMocks())
-
-  it('returns 400 for invalid JSON', async () => {
-    const req = new Request(`http://localhost/api/interview/${VALID_TOKEN}/chat`, {
-      method: 'POST',
-      body: 'not-json',
-    })
-    const res = await POST(req, makeParams(VALID_TOKEN))
-    expect(res.status).toBe(400)
-    const json = await res.json()
-    expect(json.error).toBe('Invalid JSON')
-  })
-
-  it('returns 400 for empty user_input', async () => {
-    const res = await POST(makePOSTRequest(VALID_TOKEN, { user_input: '' }), makeParams(VALID_TOKEN))
-    expect(res.status).toBe(400)
-  })
 
   it('returns 404 for unknown token', async () => {
     mockAdminFrom.mockReturnValue({
@@ -86,21 +68,12 @@ describe('POST /api/interview/[token]/chat', () => {
     expect(json.error).toContain('nicht mehr gültig')
   })
 
-  it('returns 409 when interview is already completed', async () => {
+  it('returns 409 when interview is not active (status: created)', async () => {
     mockAdminFrom.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({
-        data: {
-          id: 'iv-completed',
-          employee_name: 'Anna',
-          employee_role: null,
-          department: 'QA',
-          focus_topics: null,
-          status: 'completed',
-          token_expires_at: FUTURE_EXPIRY,
-          created_at: new Date().toISOString(),
-        },
+        data: { id: 'iv-1', status: 'created', token_expires_at: FUTURE_EXPIRY },
         error: null,
       }),
     })
@@ -108,56 +81,68 @@ describe('POST /api/interview/[token]/chat', () => {
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(409)
     const json = await res.json()
-    expect(json.error).toContain('abgeschlossen')
+    expect(json.error).toBe('Interview is not active')
   })
 
-  it('activates interview from created to active on first message', async () => {
-    const updateMock = vi.fn().mockReturnThis()
-    const eqUpdateMock = vi.fn().mockResolvedValue({ data: null, error: null })
-
-    mockAdminFrom
-      // Interview fetch
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: {
-            id: 'iv-new',
-            employee_name: 'Klaus',
-            employee_role: null,
-            department: 'IT',
-            focus_topics: null,
-            status: 'created',
-            token_expires_at: FUTURE_EXPIRY,
-            created_at: new Date().toISOString(),
-          },
-          error: null,
-        }),
-      })
-      // Status update: created → active
-      .mockReturnValueOnce({
-        update: updateMock,
-        eq: eqUpdateMock,
-      })
-      // interview_state fetch (parallel)
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [] },
-          error: null,
-        }),
-      })
-      // turns fetch (parallel)
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
+  it('returns 409 when interview is already completed', async () => {
+    mockAdminFrom.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'iv-1', status: 'completed', token_expires_at: FUTURE_EXPIRY },
+        error: null,
+      }),
+    })
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+    expect(res.status).toBe(409)
+    const json = await res.json()
+    expect(json.error).toBe('Interview is not active')
+  })
+
+  it('streams adaptive greeting for active interview with prior turns', async () => {
+    const interview = {
+      id: 'iv-active',
+      employee_name: 'Hans',
+      employee_role: 'Schichtleiter',
+      department: 'Fertigung',
+      focus_topics: null,
+      status: 'active',
+      token_expires_at: FUTURE_EXPIRY,
+    }
+    const state = { phase: 'exploration', timer_minutes: 15, topics_covered: ['Tagesablauf'], topics_open: [] }
+    const turns = [
+      {
+        turn_number: 1,
+        user_input: 'Hallo',
+        agent_response: 'Willkommen',
+        created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      },
+    ]
+
+    mockAdminFrom
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: interview, error: null }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: state, error: null }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: turns, error: null }),
+      })
+
+    const { createInterviewStream } = await import('@/services/interviewAgent')
+    const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+
     expect(res.status).toBe(200)
-    // Verify the activation update was called
-    expect(updateMock).toHaveBeenCalledWith({ status: 'active' })
+    expect(createInterviewStream).toHaveBeenCalledWith(
+      expect.objectContaining({ isReconnect: true })
+    )
   })
 })
