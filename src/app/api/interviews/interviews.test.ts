@@ -119,7 +119,7 @@ describe('POST /api/interviews', () => {
         insert: vi.fn().mockResolvedValue({ data: null, error: null }),
       })
 
-    const res = await POST(makeRequest({ employee_name: 'Anna', department: 'HR' }))
+    const res = await POST(makeRequest({ employee_name: 'Anna', employee_role: 'QA Ingenieurin', department: 'HR' }))
     expect(res.status).toBe(201)
     const json = await res.json()
     expect(json.interview.access_token).toBe('tok-abc')

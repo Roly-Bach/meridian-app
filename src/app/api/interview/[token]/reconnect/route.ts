@@ -38,8 +38,8 @@ export async function POST(
     )
   }
 
-  if (interview.status !== 'active') {
-    return NextResponse.json({ error: 'Interview is not active' }, { status: 409 })
+  if (interview.status === 'completed') {
+    return NextResponse.json({ error: 'Interview is already completed' }, { status: 409 })
   }
 
   const [{ data: rawState }, { data: rawTurns }] = await Promise.all([

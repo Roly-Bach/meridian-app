@@ -60,13 +60,24 @@ test.describe('Dashboard — empty state (serial, signup first)', () => {
     await expect(submitBtn).toBeDisabled()
   })
 
-  test('Dialog: submit button enabled when required fields filled', async ({ page }) => {
+  test('Dialog: submit button enabled when all required fields filled', async ({ page }) => {
+    await loginAndLand(page)
+    await page.click('button:has-text("Neues Interview")')
+    await page.fill('input[placeholder="z.B. Hans Becker"]', 'Hans Becker')
+    await page.fill('input[placeholder="z.B. Produktionsleiter"]', 'Produktionsleiter')
+    await page.fill('input[placeholder="z.B. Qualitätssicherung"]', 'Qualitätssicherung')
+    const submitBtn = page.getByRole('button', { name: 'Interview anlegen' })
+    await expect(submitBtn).not.toBeDisabled()
+  })
+
+  test('Dialog: submit button stays disabled when employee_role is missing', async ({ page }) => {
     await loginAndLand(page)
     await page.click('button:has-text("Neues Interview")')
     await page.fill('input[placeholder="z.B. Hans Becker"]', 'Hans Becker')
     await page.fill('input[placeholder="z.B. Qualitätssicherung"]', 'Qualitätssicherung')
+    // employee_role NOT filled
     const submitBtn = page.getByRole('button', { name: 'Interview anlegen' })
-    await expect(submitBtn).not.toBeDisabled()
+    await expect(submitBtn).toBeDisabled()
   })
 
   test('Dialog: creates interview and shows link-ready step', async ({ page }) => {
@@ -86,6 +97,7 @@ test.describe('Dashboard — empty state (serial, signup first)', () => {
     await loginAndLand(page)
     await page.click('button:has-text("Neues Interview")')
     await page.fill('input[placeholder="z.B. Hans Becker"]', 'Maria Müller')
+    await page.fill('input[placeholder="z.B. Produktionsleiter"]', 'Einkäuferin')
     await page.fill('input[placeholder="z.B. Qualitätssicherung"]', 'Einkauf')
     await page.getByRole('button', { name: 'Interview anlegen', exact: true }).click()
     await expect(page.getByText('Interview erstellt')).toBeVisible({ timeout: 10000 })
@@ -107,6 +119,21 @@ test.describe('Dashboard — empty state (serial, signup first)', () => {
   test('Dashboard: shows status badge for created interview', async ({ page }) => {
     await loginAndLand(page)
     await expect(page.getByText('Erstellt')).toBeVisible()
+  })
+})
+
+// ── Employee Chat Page: Error States ─────────────────────────────────────────
+
+// ── API: POST /api/interviews error handling ──────────────────────────────────
+
+test.describe('API: POST /api/interviews error handling', () => {
+  test('POST /api/interviews without auth returns JSON 401, not empty 500', async ({ request }) => {
+    const res = await request.post('/api/interviews', {
+      data: { employee_name: 'X', employee_role: 'Y', department: 'Z' },
+    })
+    expect(res.status()).toBe(401)
+    const body = await res.json()
+    expect(body.error).toBeTruthy()
   })
 })
 
@@ -156,6 +183,7 @@ test.describe('Employee Chat Page — chat interface (serial)', () => {
     // Create interview and capture token from link
     await page.click('button:has-text("Neues Interview")')
     await page.fill('input[placeholder="z.B. Hans Becker"]', 'Test Employee')
+    await page.fill('input[placeholder="z.B. Produktionsleiter"]', 'IT-Mitarbeiter')
     await page.fill('input[placeholder="z.B. Qualitätssicherung"]', 'IT')
     await page.getByRole('button', { name: 'Interview anlegen', exact: true }).click()
     await expect(page.getByText('Interview erstellt')).toBeVisible({ timeout: 10000 })
@@ -238,6 +266,14 @@ test.describe('Employee Chat Page — chat interface (serial)', () => {
     await page.goto(`/interview/${interviewToken}`)
     await page.waitForLoadState('networkidle')
     await expect(page.getByText('Meridian')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('Chat page: agent greeting appears automatically on first open (no user input needed)', async ({ page }) => {
+    test.skip(!interviewToken, 'Setup did not run')
+    await page.goto(`/interview/${interviewToken}`)
+    await page.waitForLoadState('networkidle')
+    // Agent message bubble should appear left-aligned (justify-start) without user sending anything
+    await expect(page.locator('.justify-start').first()).toBeVisible({ timeout: 15000 })
   })
 })
 

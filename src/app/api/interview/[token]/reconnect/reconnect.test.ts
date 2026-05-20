@@ -68,20 +68,35 @@ describe('POST /api/interview/[token]/reconnect', () => {
     expect(json.error).toContain('nicht mehr gültig')
   })
 
-  it('returns 409 when interview is not active (status: created)', async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { id: 'iv-1', status: 'created', token_expires_at: FUTURE_EXPIRY },
-        error: null,
-      }),
-    })
+  it('accepts status: created (initial greeting)', async () => {
+    const interview = {
+      id: 'iv-new',
+      employee_name: 'Anna',
+      employee_role: 'Teamleiterin',
+      department: 'Qualität',
+      focus_topics: null,
+      status: 'created',
+      token_expires_at: FUTURE_EXPIRY,
+    }
+    mockAdminFrom
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: interview, error: null }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [] }, error: null }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
-    expect(res.status).toBe(409)
-    const json = await res.json()
-    expect(json.error).toBe('Interview is not active')
+    expect(res.status).toBe(200)
   })
 
   it('returns 409 when interview is already completed', async () => {
@@ -97,7 +112,7 @@ describe('POST /api/interview/[token]/reconnect', () => {
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(409)
     const json = await res.json()
-    expect(json.error).toBe('Interview is not active')
+    expect(json.error).toBe('Interview is already completed')
   })
 
   it('streams adaptive greeting for active interview with prior turns', async () => {
