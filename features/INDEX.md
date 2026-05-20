@@ -24,7 +24,7 @@
 | PROJ-7 | Voice Input (Interview) | Roadmap | — | 2026-05-20 | P1 | PROJ-3 |
 | PROJ-8 | Interview-Design Optimierung | Roadmap | [spec](PROJ-8-interview-design-optimierung.md) | 2026-05-20 | P1 | PROJ-2, PROJ-3 |
 | PROJ-9 | LLM Provider Optimierung | Roadmap | [spec](PROJ-9-llm-provider-optimierung.md) | 2026-05-20 | P1 | PROJ-2 |
-| PROJ-10 | Access Control & Shared Workspace | In Progress | [spec](PROJ-10-access-control-shared-workspace.md) | 2026-05-20 | P0 | PROJ-1 |
+| PROJ-10 | Access Control & Shared Workspace | Deployed | [spec](PROJ-10-access-control-shared-workspace.md) | 2026-05-20 | P0 | PROJ-1 |
 
 <!-- Add features above this line -->
 
