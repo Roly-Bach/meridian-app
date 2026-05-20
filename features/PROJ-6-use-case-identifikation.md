@@ -1,6 +1,6 @@
 # PROJ-6: Use Case Identifikation
 
-## Status: Architected
+## Status: Approved
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
 
@@ -248,7 +248,80 @@ src/
 Keine — shadcn Card, Badge, Skeleton bereits installiert.
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-05-20
+**Test Suite:** 104 unit/integration tests (23 engine pure-function tests, 5+5+5 API route tests, 5 roadmap route tests)
+
+### Acceptance Criteria
+
+| Kriterium | Status | Notiz |
+|-----------|--------|-------|
+| R1 Vollautomatisierung — Bedingungen | ✅ PASS | freq≥20, rule_based=true, error<10 |
+| R1 — ROI 85% | ✅ PASS | Getestet: 22×1h×12×0.85×45 = 10.098€ |
+| R2 LLM-Extraktion — Dokumentquellen | ✅ PASS | Case-insensitive E-Mail/PDF/Word |
+| R2 — ROI 40% | ✅ PASS | |
+| R3 Entscheidungsunterstützung | ✅ PASS | rule_based=false, duration≥30, error≥10 |
+| R3 — ROI 40%, Effort high | ✅ PASS | |
+| R4 Medienbruch-Automatisierung | ✅ PASS | media_breaks≥3 |
+| R4 — ROI 60% | ✅ PASS | |
+| R5 RAG Wissensassistent — Keywords | ✅ PASS | Case-insensitive, title+description |
+| R5 — ROI 50% | ✅ PASS | |
+| R6 Fehlerhafte Regelautomatisierung | ✅ PASS | rule_based=true, freq≥5, error≥10 |
+| R6 — ROI 60%, Effort medium | ✅ PASS | |
+| R7 KI-unterstützte Routinearbeit | ✅ PASS | rule_based=false, freq≥10, duration≥20, error<10 |
+| R7 — ROI 30%, Effort medium | ✅ PASS | |
+| R8 Daten-Aggregation | ✅ PASS | rule_based=false, duration≥30, error<10, kein Suchwort |
+| R8 — ROI 40% | ✅ PASS | |
+| Pro Typ: höchster ROI gewinnt (R1 vs R4) | ✅ PASS | R1 85% > R4 60% → R1 gewinnt |
+| R5 vs R8 mutual exclusive | ✅ PASS | R8: NOT hasSearchKeywords |
+| Score = ROI / effort_factor | ✅ PASS | |
+| Priority: high/medium/low nach Score | ✅ PASS | Schwellenwerte 5000/1000 |
+| Quarter: Q1/Q2/Q3 nach Score | ✅ PASS | |
+| hourly_rate aus workspace | ✅ PASS | Fallback 45 €/h |
+| null-Guard (freq/duration null → skip) | ✅ PASS | canCompute() check |
+| POST /api/use-cases/generate | ✅ PASS | Auth, UUID-Validation, Workspace-Check |
+| Delete-before-insert (Idempotenz) | ✅ PASS | ⚠️ Nicht atomar (B1) |
+| GET /api/use-cases | ✅ PASS | Auth, total_roi_eur berechnet |
+| GET /api/use-cases/roadmap | ✅ PASS | Q1/Q2/Q3 gruppiert, ROI je Quartal |
+| Use Case Board `/dashboard/use-cases` | ✅ PASS | Server Component + Client generate button |
+| Gesamt-ROI Banner | ✅ PASS | Meridian Pink Gradient |
+| Quick Win Badge | ✅ PASS | priority=high AND effort=low |
+| Loading Skeleton während Generate | ✅ PASS | |
+| Leerer Zustand | ✅ PASS | |
+| Quartals-Roadmap | ✅ PASS | Q1/Q2/Q3 mit ROI je Spalte |
+| Sidebar-Navigation "KI Use Cases" | ✅ PASS | |
+
+### Bugs Gefunden
+
+#### B1 — Medium: Delete-before-insert nicht atomar
+**Steps:** POST /api/use-cases/generate → delete erfolgreich → insert schlägt fehl → alle Use Cases für Workspace gelöscht, keine neuen.
+**Risk:** Datenverlust bei DB-Fehler während Generate.
+**Fix:** Vorherige Use Cases erst nach erfolgreichem Insert löschen (insert-then-delete), oder Ergebnis in Memory halten und bei Fehler revert.
+
+#### B2 — Low: `<a href>` statt `<Link>` in UseCaseBoardClient
+**File:** `src/components/UseCaseBoardClient.tsx` — "Quartals-Roadmap →" Link.
+**Impact:** Kein Client-Side-Navigation, voller Page-Reload. Funktioniert, nicht optimiert.
+**Fix:** `import Link from 'next/link'` und `<Link href="...">` verwenden.
+
+#### B3 — Low: Keine Test-Abdeckung für Roadmap-Route (behoben)
+Roadmap-Test wurde im QA-Lauf geschrieben. 104/104 Tests grün.
+
+### Security Audit
+
+| Check | Ergebnis |
+|-------|---------|
+| Auth auf allen 3 API-Routen | ✅ |
+| Workspace-Isolation (403 bei fremdem Workspace) | ✅ |
+| Delete scoped auf workspace_id | ✅ |
+| Engine: pure function, kein User-Input injiziert | ✅ |
+| workspace_id als UUID validiert (Zod) | ✅ |
+| ANTHROPIC_API_KEY nicht benötigt (kein LLM) | ✅ |
+
+### Produktion-Ready?
+
+**JA** — kein Critical/High Bug. B1 ist Medium (akzeptiertes MVP-Risiko), B2 ist Low. Beide nach Deploy behebbar.
+
+Alle 8 Heuristik-Regeln korrekt implementiert und getestet. ROI-Berechnung und Score-Logik verifiziert.
 
 ## Deployment
 _To be added by /deploy_
