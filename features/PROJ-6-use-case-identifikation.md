@@ -1,6 +1,6 @@
 # PROJ-6: Use Case Identifikation
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
 
@@ -171,7 +171,81 @@ Alle Regeln laufen serverbasiert auf `process_steps`. Pro Prozessschritt und Typ
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Datenfluss
+
+```
+Berater klickt "Use Cases generieren"
+        ↓
+POST /api/use-cases/generate
+        ↓
+Workspace-Autorisierung
+        ↓
+Alle process_steps des Workspaces laden
+        ↓
+src/services/useCaseEngine.ts (pure TypeScript, kein LLM)
+  Für jeden process_step: alle 8 Regeln prüfen
+  Pro Typ nur ein Use Case (höchster ROI gewinnt)
+  ROI berechnen → Score berechnen → Quarter zuweisen
+  Output: use_cases[]
+        ↓
+Vorhandene Use Cases des Workspaces löschen
+        ↓
+Neue Use Cases in DB schreiben
+        ↓
+Response: { use_cases[], total_roi_eur }
+```
+
+### Neue Dateien
+
+```
+src/
+├── services/
+│   └── useCaseEngine.ts          NEU — 8 Regeln, ROI/Score/Quarter-Logik
+│                                       exportierte Konstanten (Schwellenwerte)
+├── app/api/
+│   └── use-cases/
+│       ├── generate/route.ts     NEU — POST: Generate + Delete + Insert
+│       ├── route.ts              NEU — GET: Liste nach workspace_id
+│       └── roadmap/route.ts      NEU — GET: Q1/Q2/Q3 gruppiert
+└── app/dashboard/
+    ├── use-cases/page.tsx        NEU — Use Case Board
+    └── use-cases/roadmap/page.tsx NEU — Quartals-Roadmap
+```
+
+### Komponenten-Struktur (UI)
+
+```
+/dashboard/use-cases
+├── Header: Titel + Gesamt-ROI + Generieren-Button + Roadmap-Link
+├── [Leer-Zustand] "Keine Use Cases..."
+├── [Loading Skeleton]
+└── Use Case Karten-Grid (3 Spalten)
+    └── UseCaseCard
+        ├── Typ-Icon (⚡/📄/🎯/🔍) + Typ-Label
+        ├── Titel + Prozessschritt-Quelle
+        ├── ROI €/Jahr
+        ├── Aufwand-Badge + Priorität-Badge
+        └── [Quick Win Badge] wenn priority=high UND effort=low
+
+/dashboard/use-cases/roadmap
+└── 3-Spalten: Q1 / Q2 / Q3
+    ├── Spalten-ROI je Quartal
+    └── UseCaseCard (mini) je Quartal
+```
+
+### Tech-Entscheidungen
+
+| Entscheidung | Gewählt | Warum |
+|---|---|---|
+| Engine in Service | Pure TypeScript-Funktion | Kein LLM nötig — Regeln deterministisch, testbar, keine API-Kosten |
+| Delete-before-insert | Vorher löschen, dann neu | Idempotenz: sauberer Stand bei jedem Generate |
+| Schwellenwerte als Konstanten | Exportierte Variablen | Änderung = 1 Zeile Code, kein DB-Eingriff |
+| Roadmap als eigene Route | `GET /api/use-cases/roadmap` | Backend liefert fertig Q1/Q2/Q3 — Client muss nicht gruppieren |
+
+### Neue Dependencies
+
+Keine — shadcn Card, Badge, Skeleton bereits installiert.
 
 ## QA Test Results
 _To be added by /qa_
