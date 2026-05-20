@@ -1,0 +1,120 @@
+// Minimal Supabase table types — generated manually from the migration schema.
+// Replace with full generated types from `supabase gen types typescript` when available.
+
+export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
+
+export interface Database {
+  public: {
+    Tables: {
+      workspaces: {
+        Row: {
+          id: string
+          name: string
+          hourly_rate: number
+          user_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          hourly_rate?: number
+          user_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          hourly_rate?: number
+          user_id?: string
+          updated_at?: string
+        }
+      }
+      interviews: {
+        Row: {
+          id: string
+          workspace_id: string
+          employee_name: string
+          employee_role: string | null
+          department: string
+          focus_topics: string | null
+          status: 'created' | 'active' | 'completed'
+          access_token: string
+          token_expires_at: string
+          extractions_pending: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          employee_name: string
+          employee_role?: string | null
+          department: string
+          focus_topics?: string | null
+          status?: 'created' | 'active' | 'completed'
+          access_token: string
+          token_expires_at: string
+          extractions_pending?: boolean
+          created_at?: string
+        }
+        Update: {
+          status?: 'created' | 'active' | 'completed'
+          extractions_pending?: boolean
+        }
+      }
+      interview_state: {
+        Row: {
+          interview_id: string
+          phase: 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
+          timer_minutes: number
+          topics_covered: string[]
+          topics_open: string[]
+          extractions_log: Json
+          updated_at: string
+        }
+        Insert: {
+          interview_id: string
+          phase?: 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
+          timer_minutes?: number
+          topics_covered?: string[]
+          topics_open?: string[]
+          extractions_log?: Json
+          updated_at?: string
+        }
+        Update: {
+          phase?: 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
+          timer_minutes?: number
+          topics_covered?: string[]
+          topics_open?: string[]
+          extractions_log?: Json
+          updated_at?: string
+        }
+      }
+      turns: {
+        Row: {
+          id: string
+          interview_id: string
+          turn_number: number
+          user_input: string
+          agent_response: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          interview_id: string
+          turn_number: number
+          user_input: string
+          agent_response: string
+          created_at?: string
+        }
+        Update: {
+          agent_response?: string
+        }
+      }
+    }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+  }
+}
