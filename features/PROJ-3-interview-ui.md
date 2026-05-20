@@ -343,6 +343,7 @@ Sobald der Key gesetzt ist, fallen alle verbleibenden Blockierungen weg.
 ## Deployment
 
 **Deployed:** 2026-05-20
+**Patch Deployed:** 2026-05-20 — Interview Engine Stall-Fix + Reconnect UX (commit `4d0bfa2`)
 **Production URL:** https://meridian-app-tau.vercel.app/
 **Model:** `google/gemini-3.5-flash`
 
@@ -353,3 +354,4 @@ Sobald der Key gesetzt ist, fallen alle verbleibenden Blockierungen weg.
 - Konflikt in `dashboard/layout.tsx` zugunsten `<SidebarNav />` aufgelöst; SidebarNav um PROJ-5/6-Links erweitert (Prozessschritte, KI Use Cases)
 - `@ai-sdk/openai` war lokal nicht installiert (fehlte im package.json) — beim Merge-Build nachinstalliert
 - `INTERVIEW_MODEL=google/gemini-3.5-flash` in `.env.local` und auf Vercel gesetzt
+- Patch `4d0bfa2`: 7 stall/edge-case fixes deployed via git push → Vercel auto-deploy
