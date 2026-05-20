@@ -1,0 +1,90 @@
+# PROJ-5: Prozessschritt-Anreicherung
+
+## Status: Planned
+**Created:** 2026-05-20
+**Last Updated:** 2026-05-20
+
+## Dependencies
+- Requires: PROJ-1 (Auth + Workspace) — Auth, workspace_id, RLS
+- Requires: PROJ-4 (Extraktions-Agent + Wissensbasis) — `knowledge_objects` mit type `process_step` als Input
+
+## User Stories
+- Als Berater bekomme ich nach Interview-Abschluss automatisch angereicherte Prozessschritte — ohne manuell etwas zu triggern.
+- Als Berater sehe ich alle Prozessschritte in einer Tabelle mit quantitativen Attributen (Häufigkeit, Dauer, Datenquellen, etc.).
+- Als Berater kann ich nicht ableitbare oder falsche Attributwerte direkt in der Tabelle inline bearbeiten und speichern.
+- Als Backend kann ich per `GET /api/process-steps?workspace_id=xxx` alle Prozessschritte eines Workspaces abrufen (Grundlage für PROJ-6).
+- Als Berater erkenne ich sofort welche Attribute aus dem Interview ableitbar waren (befüllt) und welche manuell ergänzt werden müssen (leer).
+
+## Acceptance Criteria
+
+### Automatischer Trigger bei Interview-Abschluss
+- [ ] Wenn `interviews.status` auf `completed` gesetzt wird, triggert `POST /api/process-steps/generate` automatisch (fire-and-forget)
+- [ ] Trigger ist idempotent: läuft nicht wenn für dieses Interview bereits `process_steps` vorhanden sind
+
+### LLM-Anreicherung — strikt quellengebunden
+- [ ] LLM liest vollständiges Interview-Transkript + alle `process_step` Wissensobjekte des Interviews
+- [ ] **Strikte Quellen-Bindung:** Jedes Attribut wird **nur** gesetzt wenn es explizit im Interview erwähnt wurde — niemals geraten oder erfunden
+  - Beispiel: "jeden Montag" → `frequency_per_month = 4`
+  - Beispiel: "dauert so 2 Stunden" → `duration_minutes = 120`
+  - Beispiel: "wir nutzen SAP und Excel" → `data_sources = ["SAP", "Excel"]`
+  - Kein Hinweis im Transkript → Attribut = `null`
+- [ ] `rule_based = true` **nur wenn** Mitarbeiter explizit regelbasiertes Verhalten beschreibt: "immer gleich", "feste Regel", "immer wenn X dann Y" — sonst `false`
+- [ ] `error_rate_percent` und `media_breaks` nur gesetzt wenn Mitarbeiter explizit Fehler oder Systemwechsel beschreibt
+- [ ] Für jedes gesetzte Attribut gibt LLM ein `evidence_quote` zurück — das Originalzitat das zur Ableitung führte
+- [ ] Anreicherungs-Logik in `src/services/processEnrichment.ts` — nicht direkt in API Route
+- [ ] LLM-Fehler: geloggt via console.error, Interview bleibt `completed`, kein Crash
+
+### API
+- [ ] `POST /api/process-steps/generate` — Body: `{ interview_id }`, Response: `{ process_steps[], count: number }`
+- [ ] `GET /api/process-steps?workspace_id=xxx` — Response: `{ process_steps[] }` sortiert nach `created_at desc`, limit 200
+- [ ] `PATCH /api/process-steps/:id` — Body: Subset der Attribute (alle optional), Response: `{ process_step }`
+- [ ] Alle Endpoints: Auth-Session + Workspace-Zugehörigkeit erforderlich
+- [ ] Zod-Validierung auf PATCH: `frequency_per_month ≥ 0`, `duration_minutes ≥ 0`, `error_rate_percent` 0–100, `media_breaks ≥ 0`
+
+### UI — Prozessschritt-Tabelle
+- [ ] Seite `/dashboard/process-steps` zeigt alle Prozessschritte des Workspaces
+- [ ] Tabellen-Spalten: Titel, Rolle, Häufigkeit/Monat, Dauer (Min), Datenquellen, Regelbasiert, Fehlerrate %, Medienbrüche
+- [ ] Leere Zellen (null) klar sichtbar unterscheidbar von Zellen mit Wert "0"
+- [ ] Jede Zelle inline editierbar — Klick öffnet Input/Select in der Zelle
+  - `frequency_per_month`, `duration_minutes`, `error_rate_percent`, `media_breaks` → number input
+  - `data_sources` → text input (kommagetrennt, wird zu array)
+  - `rule_based` → toggle/checkbox
+- [ ] Speichern via `PATCH` bei Blur/Enter — optimistic update, Fehler-Toast bei API-Fehler
+- [ ] Loading Skeleton während Anreicherung läuft (nach Interview-Abschluss)
+- [ ] Leerer Zustand: "Kein Interview abgeschlossen. Schließe ein Interview ab, um Prozessschritte zu generieren."
+
+## Edge Cases
+
+| Szenario | Erwartetes Verhalten |
+|----------|---------------------|
+| Interview hat keine `process_step` Wissensobjekte | Generate läuft, erzeugt 0 Einträge, kein Fehler |
+| Generate für Interview bereits vorhanden (Idempotenz) | Kein zweites Generate — prüft `process_steps count > 0` für dieses Interview |
+| PATCH mit `frequency_per_month: -1` | 400 Validierungsfehler: "Muss ≥ 0 sein" |
+| LLM gibt Attribut ohne Evidenz trotzdem befüllt zurück | Guard: Wert nur übernommen wenn `evidence_quote` vorhanden und nicht leer |
+| Zwei Berater bearbeiten denselben Prozessschritt gleichzeitig | Last-write-wins (MVP — kein Conflict-Resolution) |
+| `PATCH` auf nicht-existierende ID | 404 |
+| `PATCH` auf Prozessschritt eines fremden Workspaces | RLS blockiert → 403 |
+
+## Technical Requirements
+- Service-Layer: LLM-Logik ausschließlich in `src/services/processEnrichment.ts`
+- Grounding: LLM-Prompt muss explizit instruieren: "Setze ein Attribut NUR wenn eine klare Aussage im Transkript existiert. Keine Schätzung, kein Raten. Bei Unsicherheit: null."
+- Security: ANTHROPIC_API_KEY nur server-seitig
+- Admin-Client für `process_steps` Writes (RLS bypass)
+
+## Out of Scope
+- Manuelle Anlage von Prozessschritten ohne Interview
+- Löschen von Prozessschritten in UI
+- Paginierung der Tabelle (MVP: max 200 Einträge)
+- Bulk-Edit (mehrere Zeilen gleichzeitig)
+
+---
+<!-- Sections below are added by subsequent skills -->
+
+## Tech Design (Solution Architect)
+_To be added by /architecture_
+
+## QA Test Results
+_To be added by /qa_
+
+## Deployment
+_To be added by /deploy_
