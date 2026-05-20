@@ -324,4 +324,15 @@ Sobald der Key gesetzt ist, fallen alle verbleibenden Blockierungen weg.
 **READY** — Alle Code-Fixes implementiert. 38/39 E2E passed, 26/26 Unit-Tests passed. 1 Skip ist pre-existing (Logout-Test, NextJS Dev-Overlay-Interferenz). Keine Critical/High Bugs offen.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-05-20
+**Production URL:** https://meridian-app-tau.vercel.app/
+**Model:** `google/gemini-3.5-flash`
+
+### Deployment Notes
+
+- PROJ-3 UI-Komponenten wurden lokal entwickelt und erst beim Deploy committet (Branch war divergiert)
+- Merge mit `origin/main` notwendig: Remote hatte PROJ-4 bis PROJ-6 bereits deployed, local hatte nur PROJ-3
+- Konflikt in `dashboard/layout.tsx` zugunsten `<SidebarNav />` aufgelöst; SidebarNav um PROJ-5/6-Links erweitert (Prozessschritte, KI Use Cases)
+- `@ai-sdk/openai` war lokal nicht installiert (fehlte im package.json) — beim Merge-Build nachinstalliert
+- `INTERVIEW_MODEL=google/gemini-3.5-flash` in `.env.local` und auf Vercel gesetzt
