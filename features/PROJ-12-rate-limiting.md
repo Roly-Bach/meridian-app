@@ -1,6 +1,6 @@
 # PROJ-12: Rate Limiting
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
 
@@ -179,4 +179,11 @@ All counters live in Upstash Redis — no Supabase changes needed.
 **Test results:** 129 unit tests pass, 5/5 E2E tests pass (Chromium)
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-05-21
+**Production URL:** https://meridian-app.vercel.app
+**Git Tag:** v1.12.0-PROJ-12
+
+### Env Vars Required in Vercel
+- `UPSTASH_REDIS_REST_URL` (server-only)
+- `UPSTASH_REDIS_REST_TOKEN` (server-only)
