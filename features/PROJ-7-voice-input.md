@@ -1,6 +1,6 @@
 # PROJ-7 Voice Input (Interview)
 
-**Status:** In Review
+**Status:** Approved
 **Priority:** P1
 **Created:** 2026-05-20
 **Depends:** PROJ-3
@@ -167,8 +167,13 @@ Employees can dictate answers into the interview chat instead of typing.
 
 ### Production-Ready Decision
 
-**NOT READY** — 2 High/Medium bugs must be fixed before deploy:
+**APPROVED** — All High/Medium bugs fixed in commit `d4c54d5`.
 
-1. **BUG-01 (High):** Voice continues recording during agent stream → can abort agent responses unexpectedly.
-2. **BUG-02 (Medium):** Error state is unrecoverable without page reload.
-3. **BUG-04 (Medium):** ElevenLabs response field name must be verified against live API.
+| Bug | Status |
+|---|---|
+| BUG-01 (High): Recording continues during agent stream | Fixed — `disabled` effect stops active session |
+| BUG-02 (Medium): Error state dead-end | Fixed — `start()` now accepts `error` state |
+| BUG-03 (Medium): `stop()` may trigger auto-send | Fixed — flush removed from `stop()` |
+| BUG-04 (Medium): ElevenLabs field name unconfirmed | Fixed — `token` confirmed as primary, `signed_url` as fallback |
+| BUG-05 (Low): partial_transcript as caption not textarea | Accepted — equivalent UX, not a blocker |
+| BUG-06 (Low): Worktree tests pollute main test run | Resolved on merge to main |
