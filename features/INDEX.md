@@ -28,7 +28,7 @@
 | PROJ-11 | Interview PDF Report | Deployed | [spec](PROJ-11-interview-pdf-report.md) | 2026-05-21 | P1 | PROJ-4, PROJ-5, PROJ-6 |
 | PROJ-12 | Rate Limiting | Deployed | [spec](PROJ-12-rate-limiting.md) | 2026-05-21 | P1 | PROJ-2, PROJ-3 |
 | PROJ-13 | LLM Observability & Tracing | Planned | [spec](PROJ-13-llm-observability-tracing.md) | 2026-05-21 | P1 | PROJ-2, PROJ-4, PROJ-5, PROJ-6 |
-| PROJ-14 | Embedding-Modell Auswahl | Approved | [spec](PROJ-14-embedding-modell-auswahl.md) | 2026-05-21 | P1 | PROJ-4 |
+| PROJ-14 | Embedding-Modell Auswahl | Deployed | [spec](PROJ-14-embedding-modell-auswahl.md) | 2026-05-21 | P1 | PROJ-4 |
 
 <!-- Add features above this line -->
 

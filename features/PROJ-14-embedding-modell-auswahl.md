@@ -1,8 +1,10 @@
 # PROJ-14: Embedding-Modell Auswahl
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
+**Deployed:** 2026-05-21
+**Tag:** v1.14.0-PROJ-14
 **Priority:** P1 — Prio 1 vor LLM-Provider-Wechsel
 
 ## Dependencies
