@@ -1,6 +1,6 @@
 # PROJ-7 Voice Input (Interview)
 
-**Status:** Approved
+**Status:** Deployed
 **Priority:** P1
 **Created:** 2026-05-20
 **Depends:** PROJ-3
@@ -177,3 +177,16 @@ Employees can dictate answers into the interview chat instead of typing.
 | BUG-04 (Medium): ElevenLabs field name unconfirmed | Fixed — `token` confirmed as primary, `signed_url` as fallback |
 | BUG-05 (Low): partial_transcript as caption not textarea | Accepted — equivalent UX, not a blocker |
 | BUG-06 (Low): Worktree tests pollute main test run | Resolved on merge to main |
+
+## Deployment
+
+**Date:** 2026-05-21
+**Branch merged:** `feature/proj-7-voice-input` → `main`
+**Build:** `npm run build` — PASS (TypeScript + Next.js 16)
+**Lint:** `npm run lint` — PASS
+
+**New env variable required in Vercel:**
+- `ELEVENLABS_API_KEY=sk_...`
+
+**New route in production:**
+- `POST /api/interview/[token]/voice-token`
