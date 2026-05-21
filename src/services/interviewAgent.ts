@@ -1,5 +1,4 @@
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { resolveModel } from '@/lib/llm-provider'
 import { streamText, tool, stepCountIs } from 'ai'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
@@ -165,34 +164,8 @@ export interface AgentStreamOptions {
   onFinish?: (text: string) => Promise<void>
 }
 
-function resolveModel(modelString: string) {
-  const slashIdx = modelString.indexOf('/')
-
-  // No slash → treat as bare Anthropic model name (legacy fallback)
-  if (slashIdx === -1) {
-    return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelString as never)
-  }
-
-  const provider = modelString.slice(0, slashIdx)
-  const modelId = modelString.slice(slashIdx + 1)
-
-  if (provider === 'anthropic') {
-    return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId as never)
-  }
-
-  if (provider === 'google') {
-    return createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })(modelId as never)
-  }
-
-  throw new Error(
-    `Unsupported model provider: "${provider}". ` +
-      `Set INTERVIEW_MODEL to "anthropic/<model-id>" or "google/<model-id>".`
-  )
-}
-
 export function createInterviewStream(opts: AgentStreamOptions) {
-  const modelString = process.env.INTERVIEW_MODEL ?? 'anthropic/claude-opus-4-5'
-  const model = resolveModel(modelString)
+  const model = resolveModel(process.env.INTERVIEW_MODEL)
 
   const messages: { role: 'user' | 'assistant'; content: string }[] = opts.isReconnect
     ? [

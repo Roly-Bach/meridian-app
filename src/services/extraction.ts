@@ -1,11 +1,7 @@
-import { createAnthropic } from '@ai-sdk/anthropic'
 import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { generateEmbedding } from './embeddings'
-
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+import { resolveModel } from '@/lib/llm-provider'
 
 export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool' | 'role'
 
@@ -75,7 +71,7 @@ export async function extractAndEmbed({
   let extractions: RawExtraction[] = []
   try {
     const { text } = await generateText({
-      model: anthropic('claude-opus-4-5'),
+      model: resolveModel(process.env.EXTRACTION_MODEL),
       system: EXTRACTION_SYSTEM_PROMPT,
       prompt: buildExtractionPrompt(transcript),
       maxOutputTokens: 2000,

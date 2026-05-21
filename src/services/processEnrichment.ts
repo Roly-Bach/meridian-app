@@ -1,10 +1,6 @@
-import { createAnthropic } from '@ai-sdk/anthropic'
 import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+import { resolveModel } from '@/lib/llm-provider'
 
 interface EnrichedAttribute<T> {
   value: T | null
@@ -120,7 +116,7 @@ export async function enrichProcessSteps({
   let enriched: LLMProcessStep[] = []
   try {
     const { text } = await generateText({
-      model: anthropic('claude-opus-4-5'),
+      model: resolveModel(process.env.ENRICHMENT_MODEL),
       system: ENRICHMENT_SYSTEM_PROMPT,
       prompt: `Vollständiges Transkript:\n${transcript}\n\nProzessschritte zum Anreichern:\n${objectsInput}`,
       maxOutputTokens: 4000,
