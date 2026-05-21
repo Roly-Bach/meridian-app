@@ -240,7 +240,7 @@ describe('extractAndEmbed', () => {
     expect(mockInsert.mock.calls[0][0].type).toBe('role')
   })
 
-  it('calls generateEmbedding even when OpenAI returns null — still inserts object', async () => {
+  it('calls generateEmbedding even when Jina returns null — still inserts object', async () => {
     vi.mocked(generateEmbedding).mockResolvedValue(null)
     const objects = [
       { type: 'pain_point', content: { description: 'Viel Handarbeit' }, source_quote: 'alles von Hand' },
