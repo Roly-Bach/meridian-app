@@ -1,6 +1,6 @@
 # PROJ-14: Embedding-Modell Auswahl
 
-## Status: In Review
+## Status: Approved
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
 **Priority:** P1 — Prio 1 vor LLM-Provider-Wechsel
@@ -97,24 +97,18 @@ Was sich nicht ändert:
   Alle UI-Komponenten
 ```
 
-### Provider-Abstraktion
+### Provider-Strategie
 
-Analoges Pattern zu `llm-provider.ts`: Präfix-basierte Modell-Auflösung.
+Jina AI ist der feste Embedding-Provider. Ein dynamischer Provider-Wechsel via Env-Var macht keinen Sinn — Embedding-Modelle sind nicht austauschbar ohne vollständiges Re-Embedding aller gespeicherten Vektoren. Ein Wechsel (z.B. DSGVO-Fallback) ist ein expliziter Migrations-Schritt, kein Config-Toggle.
 
-```
-EMBEDDING_MODEL = "jina/jina-embeddings-v3"         Standard-MVP
-EMBEDDING_MODEL = "openai/text-embedding-3-small"   Legacy-Fallback
-EMBEDDING_MODEL = "hf/<model-id>"                   DSGVO-Fallback (späterer Schritt)
-```
-
-`embeddings.ts` liest die Variable, leitet an den richtigen Anbieter weiter. Der restliche Code merkt davon nichts.
+`EMBEDDING_MODEL` steuert nur den Jina-Modellnamen (z.B. `jina-embeddings-v3` → `jina-embeddings-v4`), nicht den Provider.
 
 ### Neue Umgebungsvariablen
 
 | Variable | Standard-Wert | Zweck |
 |----------|---------------|-------|
 | `JINA_API_KEY` | — | Authentifizierung bei der Jina-API |
-| `EMBEDDING_MODEL` | `jina/jina-embeddings-v3` | Steuert welcher Anbieter verwendet wird |
+| `EMBEDDING_MODEL` | `jina-embeddings-v3` | Jina-Modellname (kein Provider-Prefix) |
 
 `OPENAI_API_KEY` bleibt bestehen (LLM-Calls im Interview-Agent).
 
@@ -203,15 +197,9 @@ CREATE INDEX ON knowledge_objects
 
 ### Bugs
 
-#### BUG-01 — Medium: Provider-Routing nicht implementiert
+#### BUG-01 — ~~Medium: Provider-Routing nicht implementiert~~ → Won't Fix / By Design
 
-**Beschreibung:** Die Spec definiert `EMBEDDING_MODEL` mit Provider-Prefix (`jina/jina-embeddings-v3`, `openai/text-embedding-3-small`, `hf/<model-id>`) analog zu `llm-provider.ts`, sodass ein Wechsel ohne Code-Änderung möglich ist. Die Implementierung ignoriert den Prefix und leitet immer an den Jina-Client weiter. Der Wert in `.env.local.example` (`EMBEDDING_MODEL=jina-embeddings-v3`) hat keinen Prefix, was von der Spec-Beschreibung abweicht.
-
-**Impact:** `EMBEDDING_MODEL=openai/text-embedding-3-small` würde diesen String als Modellnamen an die Jina-API senden → API-Fehler. Der DSGVO-Fallback (Qwen3/HF) erfordert weiterhin Code-Änderungen, obwohl die Spec "ohne Code-Änderung" verspricht.
-
-**Workaround:** Für den aktuellen MVP-Scope (Jina only) funktioniert der Env-Var korrekt — nur der Modellname innerhalb der Jina-API ist steuerbar.
-
-**Steps to reproduce:** `EMBEDDING_MODEL=openai/text-embedding-3-small` in `.env.local` setzen → nächstes Interview starten → Embedding-Aufruf schlägt fehl mit Jina-API-Fehler.
+Provider-Routing via Env-Var macht keinen Sinn: Ein Embedding-Modellwechsel erfordert immer vollständiges Re-Embedding aller Vektoren — das ist kein Config-Toggle, sondern ein expliziter Migrationsschritt. Jina bleibt fester Provider. Spec und Tech Design entsprechend vereinfacht (2026-05-21).
 
 #### BUG-02 — Low: Veralteter Test-Kommentar in extraction.test.ts
 
@@ -233,6 +221,4 @@ Neue Testdatei: `src/services/embeddings.test.ts` (3 Tests, alle grün):
 
 ### Production-Ready Decision
 
-**NOT READY** — BUG-01 (Medium) sollte vor Deployment adressiert werden.
-
-Der Scope ist klein: Entweder (a) Provider-Routing analog zu `llm-provider.ts` implementieren, oder (b) die Spec-Beschreibung anpassen und den Env-Var auf reinen Modellnamen (kein Prefix) reduzieren und als "Jina-model-only" dokumentieren.
+**READY** — Alle Bugs geschlossen. BUG-01 als Won't Fix / By Design entschieden (2026-05-21).
