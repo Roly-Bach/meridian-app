@@ -18,6 +18,7 @@ Meridian erhebt implizites Prozesswissen von Mitarbeitern durch KI-geführte Int
 | P0 (MVP) | Extraktions-Agent + Wissensbasis | Planned |
 | P0 (MVP) | Prozessschritt-Anreicherung | Planned |
 | P0 (MVP) | Use Case Identifikation | Planned |
+| P1 | Interview PDF Report | Planned |
 
 ## Success Metrics
 - Interview vollständig abschließbar (Start → wrap_up → Abschluss)
