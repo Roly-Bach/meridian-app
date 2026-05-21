@@ -1,6 +1,6 @@
 # PROJ-11: Interview PDF Report
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
 
@@ -227,6 +227,12 @@ Browser: PDF-Download startet automatisch
 ### Production-Ready Decision
 
 **READY** — 2 Bugs: BUG-001 (Medium, Rate Limiting) ist Enhancement, kein Feature-Blocker für MVP. BUG-002 (Low) ist kosmetisch. Keine Critical/High Bugs offen.
+
+## Deployment
+
+**Deployed:** 2026-05-21
+**Production URL:** https://meridian-app-tau.vercel.app/
+**Commit:** `cc333f5`
 
 ## Out of Scope
 
