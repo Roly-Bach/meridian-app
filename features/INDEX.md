@@ -25,7 +25,7 @@
 | PROJ-8 | Interview-Design Optimierung | Roadmap | [spec](PROJ-8-interview-design-optimierung.md) | 2026-05-20 | P1 | PROJ-2, PROJ-3 |
 | PROJ-9 | LLM Provider Optimierung | Roadmap | [spec](PROJ-9-llm-provider-optimierung.md) | 2026-05-20 | P1 | PROJ-2 |
 | PROJ-10 | Access Control & Shared Workspace | Deployed | [spec](PROJ-10-access-control-shared-workspace.md) | 2026-05-20 | P0 | PROJ-1 |
-| PROJ-11 | Interview PDF Report | Planned | [spec](PROJ-11-interview-pdf-report.md) | 2026-05-21 | P1 | PROJ-4, PROJ-5, PROJ-6 |
+| PROJ-11 | Interview PDF Report | Architected | [spec](PROJ-11-interview-pdf-report.md) | 2026-05-21 | P1 | PROJ-4, PROJ-5, PROJ-6 |
 
 <!-- Add features above this line -->
 

@@ -70,6 +70,95 @@
 - **Keine Speicherung:** PDF wird on-demand generiert, nicht in Supabase Storage abgelegt
 - **Sprache:** Deutsch (Executive Summary, Sektions-Überschriften, Fußzeile)
 
+---
+<!-- Sections below are added by subsequent skills -->
+
+## Tech Design (Solution Architect)
+
+### Komponenten-Struktur
+
+```
+InterviewRow.tsx (bestehend — ergänzt)
+  ├── CopyLinkButton (unverändert)
+  └── DownloadPdfButton (NEU — nur für status: completed)
+        └── Klick → GET /api/interviews/[id]/pdf → Browser-Download
+
+src/components/pdf/ (NEU)
+  └── InterviewReport.tsx (@react-pdf Document)
+        ├── ReportHeader      (Meridian-Branding, Name/Rolle/Abteilung/Datum)
+        ├── ExecutiveSummarySection   (LLM-generiert, 2–4 Sätze)
+        ├── ProcessStepsSection       (Tabelle: Schritt / Häufigkeit / Dauer / Systeme)
+        ├── PainPointsSection         (Liste: Beschreibung / Schweregrad)
+        ├── ToolsSection              (Liste: Tool / Zweck)
+        └── UseCasesSection           (Tabelle: Typ / ROI / Score)
+
+src/services/reportGenerator.ts (NEU)
+  └── generateReportData(): Lädt alle DB-Daten für ein Interview
+  └── generateExecutiveSummary(): LLM-Call via INTERVIEW_MODEL
+
+src/app/api/interviews/[id]/pdf/route.ts (NEU)
+  └── GET → Auth-Check → Daten laden → Summary generieren → PDF rendern → Download
+```
+
+### Datenquellen
+
+| PDF-Abschnitt | Tabelle | Filter |
+|---|---|---|
+| Mitarbeiter-Info | `interviews` | id |
+| Executive Summary | LLM (INTERVIEW_MODEL) | knowledge_objects als Input |
+| Prozessschritte | `process_steps` | interview_id |
+| Pain Points + Tools | `knowledge_objects` | interview_id + type |
+| KI Use Cases | `use_cases` | workspace_id + process_step_id |
+
+### Anfrage-Flow
+
+```
+Berater klickt "PDF erstellen"
+  ↓
+DownloadPdfButton: GET /api/interviews/[id]/pdf
+  (Authorization: Bearer <session-token>)
+  ↓
+API Route:
+  1. Auth-Check (workspace_members)
+  2. Daten aus 4 Tabellen laden (parallel)
+  3. reportGenerator: Executive Summary via LLM
+  4. InterviewReport mit @react-pdf rendern → PDF-Buffer
+  5. Response: application/pdf + Content-Disposition: attachment
+  ↓
+Browser: PDF-Download startet automatisch
+```
+
+### Tech-Entscheidungen
+
+| Entscheidung | Gewählt | Warum |
+|---|---|---|
+| PDF-Library | `@react-pdf/renderer` | Kein Headless Browser, Node.js-kompatibel, layoutbar per React-Komponenten |
+| Speicherung | Keine (on-demand) | Einfacher, kein Supabase Storage Bucket nötig |
+| LLM für Summary | `INTERVIEW_MODEL` Env-Var | Konsistent mit restlicher KI-Logik (Gemini oder Anthropic) |
+| Auth | Supabase Session Bearer | Gleiche Pattern wie alle Dashboard-APIs |
+| Rendering | Server-Side (Vercel Function) | PDF-Buffer bleibt serverseitig, kein Client-Download-Trick nötig |
+
+### Neue Dateien
+
+| Datei | Zweck |
+|---|---|
+| `src/app/api/interviews/[id]/pdf/route.ts` | API Route — Auth, Daten, Render, Response |
+| `src/services/reportGenerator.ts` | LLM Executive Summary + DB-Aggregation |
+| `src/components/pdf/InterviewReport.tsx` | @react-pdf Dokument mit allen Sektionen |
+| `src/components/interviews/DownloadPdfButton.tsx` | Client-Button mit Loading-State + fetch |
+
+### Geänderte Dateien
+
+| Datei | Änderung |
+|---|---|
+| `src/components/interviews/InterviewRow.tsx` | DownloadPdfButton für completed-Interviews einbinden |
+
+### Neue Abhängigkeit
+
+| Package | Zweck |
+|---|---|
+| `@react-pdf/renderer` | Server-side PDF-Rendering aus React-Komponenten |
+
 ## Out of Scope
 
 - PDF-Speicherung in Supabase Storage
