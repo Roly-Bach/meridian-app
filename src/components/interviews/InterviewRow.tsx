@@ -1,5 +1,6 @@
 import { StatusBadge } from './StatusBadge'
 import { CopyLinkButton } from './CopyLinkButton'
+import { DownloadPdfButton } from './DownloadPdfButton'
 
 export type Interview = {
   id: string
@@ -33,7 +34,15 @@ export function InterviewRow({ interview }: { interview: Interview }) {
         {new Date(interview.created_at).toLocaleDateString('de-DE')}
       </td>
       <td className="px-4 py-3">
-        <CopyLinkButton token={interview.access_token} />
+        <div className="flex flex-col gap-1">
+          <CopyLinkButton token={interview.access_token} />
+          {interview.status === 'completed' && (
+            <DownloadPdfButton
+              interviewId={interview.id}
+              employeeName={interview.employee_name}
+            />
+          )}
+        </div>
       </td>
     </tr>
   )
