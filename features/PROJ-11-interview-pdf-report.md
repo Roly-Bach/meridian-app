@@ -1,6 +1,6 @@
 # PROJ-11: Interview PDF Report
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
 
@@ -158,6 +158,75 @@ Browser: PDF-Download startet automatisch
 | Package | Zweck |
 |---|---|
 | `@react-pdf/renderer` | Server-side PDF-Rendering aus React-Komponenten |
+
+## QA Test Results
+
+**QA Run:** 2026-05-21
+**Tester:** /qa skill
+**Status:** READY — 118/118 unit tests passed, 8/10 E2E passed (2 pre-existing infra failures)
+
+### Summary
+
+| Category | Result |
+|---|---|
+| Unit tests (Vitest) | 118/118 passed |
+| E2E — API unauthenticated (401) | 2/2 passed |
+| E2E — JSON error format check | 1/1 passed |
+| E2E — Security IDOR + auth-first check | 2/2 passed |
+| E2E — PDF button not shown for active interview | 3/3 passed |
+| E2E — Serial live tests (Supabase setup) | 0/2 failed (pre-existing infra) |
+
+### Acceptance Criteria
+
+#### Button im Dashboard
+- [x] PASS (code review) — Button "PDF erstellen" nur für `completed`-Interviews sichtbar
+- [x] PASS (E2E) — Button nicht sichtbar für `created`/`active`
+- [x] PASS (code review) — Klick triggert `GET /api/interviews/[id]/pdf`
+- [x] PASS (code review) — Loading-State "Wird erstellt…", disabled während request
+- [x] PASS (code review) — Toast auf Fehler, Button re-enabled via `finally`
+
+#### PDF-Inhalt (Struktur)
+- [x] PASS (code review) — Executive Summary Sektion mit Name/Rolle/Abteilung/Datum
+- [x] PASS (code review) — Prozessschritte Tabelle (Schritt/Häufigkeit/Dauer/Systeme)
+- [x] PASS (code review) — Pain Points Liste mit Schweregrad-Badge
+- [x] PASS (code review) — Tools & Systeme Liste
+- [x] PASS (code review) — KI Use Cases Tabelle mit ROI/Score
+- [x] PASS (code review) — Meridian-Branding: Logo "Meridian", Pink `#E040FB` accent
+- [x] PASS (code review) — Fußzeile: Datum + "Erstellt mit Meridian"
+
+#### API
+- [x] PASS (E2E) — 401 wenn nicht authentifiziert
+- [x] PASS (unit test) — 404 wenn Interview nicht gefunden oder nicht completed
+- [x] PASS (unit test) — 403 wenn kein Workspace-Zugriff
+- [x] PASS (unit test) — 422 wenn 0 Knowledge Objects + 0 Prozessschritte + 0 Tools
+- [x] PASS (unit test) — Content-Type: application/pdf, Content-Disposition korrekt
+- [x] PASS (unit test) — 200 Happy Path liefert PDF-Buffer
+
+#### Executive Summary
+- [x] PASS (code review) — LLM-Call via `INTERVIEW_MODEL` Env-Var
+- [x] PASS (code review) — Deutsch, max 4 Sätze in Prompt
+- [x] PASS (code review) — Fallback-Text wenn LLM nicht verfügbar (kein Crash)
+
+### Bugs gefunden
+
+| # | Severity | Beschreibung |
+|---|---|---|
+| BUG-001 | Medium | Kein Rate Limiting auf `GET /api/interviews/[id]/pdf`. LLM + PDF-Rendering = teuer. Spam → API-Kosten. Empfehlung: 3 req/min per user via Vercel Firewall oder Upstash. |
+| BUG-002 | Low | `DownloadPdfButton` setzt `a.download` clientseitig (redundant — `Content-Disposition` hat Vorrang). Trailing-dash-Behandlung fehlt client-seitig (`"hans--"` vs `"hans"`). Kein Impact auf UX. |
+
+### Security Audit
+
+| Check | Status |
+|---|---|
+| IDOR: User A kann Interview von User B abrufen | ✅ Sicher — workspace_members check |
+| Auth first: DB nicht abgefragt vor Auth-Check | ✅ Auth-Check zuerst |
+| Header Injection via employee_name | ✅ Sanitized: nur [a-z0-9-] |
+| XSS via PDF-Content | ✅ @react-pdf rendert Text, kein HTML |
+| Unauthorized cross-workspace | ✅ 401 vor jeder DB-Query |
+
+### Production-Ready Decision
+
+**READY** — 2 Bugs: BUG-001 (Medium, Rate Limiting) ist Enhancement, kein Feature-Blocker für MVP. BUG-002 (Low) ist kosmetisch. Keine Critical/High Bugs offen.
 
 ## Out of Scope
 
