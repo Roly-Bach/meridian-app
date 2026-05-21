@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { FileText, Loader2 } from 'lucide-react'
-import { createClient } from '@/lib/supabase'
 
 export function DownloadPdfButton({ interviewId, employeeName }: {
   interviewId: string
@@ -15,16 +14,8 @@ export function DownloadPdfButton({ interviewId, employeeName }: {
   async function handleDownload() {
     setLoading(true)
     try {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        toast.error('Nicht eingeloggt.')
-        return
-      }
-
-      const res = await fetch(`/api/interviews/${interviewId}/pdf`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
+      // Cookies sent automatically for same-origin requests
+      const res = await fetch(`/api/interviews/${interviewId}/pdf`)
 
       if (!res.ok) {
         const json = await res.json().catch(() => ({})) as { error?: string }
