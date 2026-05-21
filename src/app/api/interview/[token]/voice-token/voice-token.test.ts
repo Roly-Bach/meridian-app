@@ -123,6 +123,22 @@ describe('POST /api/interview/[token]/voice-token', () => {
     expect(res.status).toBe(502)
   })
 
+  it('returns 200 with sessionToken when ElevenLabs responds with signed_url field (fallback)', async () => {
+    mockInterview()
+    vi.stubEnv('ELEVENLABS_API_KEY', 'sk_test_key')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ signed_url: 'wss://api.elevenlabs.io/...?token=xyz' }),
+      })
+    )
+    const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { sessionToken: string }
+    expect(body.sessionToken).toBe('wss://api.elevenlabs.io/...?token=xyz')
+  })
+
   it('returns 200 with sessionToken when ElevenLabs responds with token field', async () => {
     mockInterview()
     vi.stubEnv('ELEVENLABS_API_KEY', 'sk_test_key')

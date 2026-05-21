@@ -95,28 +95,15 @@ export function useVoiceInput({
   }, [])
 
   const stop = useCallback(() => {
-    // Flush any remaining audio before closing
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(
-          JSON.stringify({
-            message_type: 'input_audio_chunk',
-            audio_base_64: '',
-            commit: true,
-          })
-        )
-      } catch {
-        // Best-effort — ignore if WS is already closing
-      }
-    }
     cleanup()
     setState('idle')
   }, [cleanup])
 
   const start = useCallback(async () => {
     if (disabled) return
-    if (state !== 'idle') return
+    if (state !== 'idle' && state !== 'error') return
 
+    cleanup()
     setState('connecting')
 
     // ── 1. Fetch session token ─────────────────────────────────────────────
@@ -245,6 +232,20 @@ export function useVoiceInput({
       }
     }
   }, [token, disabled, state, cleanup])
+
+  // Stop recording when disabled becomes true mid-session (e.g. agent is streaming).
+  // Uses a ref so the effect dependency only tracks the disabled flag, not the full stop fn.
+  const stopRef = useRef(stop)
+  useEffect(() => { stopRef.current = stop }, [stop])
+  const isActiveRef = useRef(false)
+  useEffect(() => {
+    isActiveRef.current = state !== 'idle' && state !== 'error'
+  }, [state])
+  useEffect(() => {
+    if (disabled && isActiveRef.current) {
+      stopRef.current()
+    }
+  }, [disabled])
 
   // Cleanup on unmount
   useEffect(() => {

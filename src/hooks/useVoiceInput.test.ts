@@ -368,4 +368,85 @@ describe('useVoiceInput — cleanup and error handling', () => {
     await waitFor(() => result.current.state === 'error')
     expect(result.current.state).toBe('error')
   })
+
+  it('BUG-02: start() from error state resets and reconnects', async () => {
+    const onCommitted = vi.fn()
+    const { result } = await setupListening(onCommitted)
+
+    // Simulate WS error → state becomes 'error'
+    act(() => {
+      MockWebSocket.latest().simulateError()
+    })
+    await waitFor(() => result.current.state === 'error')
+
+    // Calling start() again should recover — not be a no-op
+    act(() => {
+      void result.current.start()
+    })
+
+    await waitFor(() => result.current.state === 'connecting')
+
+    // Open the new WS
+    await waitFor(() => MockWebSocket._instances.length >= 2)
+    act(() => {
+      MockWebSocket.latest().simulateOpen()
+    })
+
+    await waitFor(() => result.current.state === 'listening')
+    expect(result.current.state).toBe('listening')
+  })
+
+  it('BUG-03: stop() does not send commit message to ElevenLabs', async () => {
+    const onCommitted = vi.fn()
+    const { result } = await setupListening(onCommitted)
+
+    const mockWs = MockWebSocket.latest()
+    const sendSpy = vi.spyOn(mockWs, 'send')
+
+    act(() => {
+      result.current.stop()
+    })
+
+    // No messages should be sent before closing
+    expect(sendSpy).not.toHaveBeenCalled()
+    await waitFor(() => result.current.state === 'idle')
+  })
+})
+
+describe('useVoiceInput — BUG-01: disabled prop stops active recording', () => {
+  it('stops recording when disabled transitions to true while listening', async () => {
+    const onCommitted = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ disabled }) => useVoiceInput({ token: 'test-token', onCommitted, disabled }),
+      { initialProps: { disabled: false } }
+    )
+
+    // Start recording
+    act(() => {
+      void result.current.start()
+    })
+    await waitFor(() => MockWebSocket._instances.length > 0)
+    act(() => {
+      MockWebSocket.latest().simulateOpen()
+    })
+    await waitFor(() => result.current.state === 'listening')
+
+    // Simulate agent streaming: disabled becomes true
+    rerender({ disabled: true })
+
+    await waitFor(() => result.current.state === 'idle')
+    expect(result.current.state).toBe('idle')
+  })
+
+  it('does not affect idle state when disabled becomes true', () => {
+    const onCommitted = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ disabled }) => useVoiceInput({ token: 'test-token', onCommitted, disabled }),
+      { initialProps: { disabled: false } }
+    )
+
+    expect(result.current.state).toBe('idle')
+    rerender({ disabled: true })
+    expect(result.current.state).toBe('idle')
+  })
 })

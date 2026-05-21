@@ -91,12 +91,11 @@ export async function POST(
     )
   }
 
-  // ElevenLabs response field not confirmed in docs — parse defensively
-  // TODO: confirm exact field name when API is stable and remove fallbacks
+  // ElevenLabs returns { token: "..." } for single-use tokens.
+  // signed_url is a documented fallback for WebSocket-URL style responses.
   const sessionToken =
     (data.token as string | undefined) ??
-    (data.signed_url as string | undefined) ??
-    (data.session_id as string | undefined)
+    (data.signed_url as string | undefined)
 
   if (!sessionToken) {
     console.error('[voice-token] Unexpected response shape:', JSON.stringify(data))
