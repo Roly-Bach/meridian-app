@@ -1,91 +1,85 @@
 # PROJ-8: Interview-Design Optimierung
 
-## Status: Roadmap
+## Status: Planned
 **Created:** 2026-05-20
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-05-21
 
 ## Dependencies
-- Requires: PROJ-2 (Interview Engine Backend) — Agent-Service, System Prompt
-- Requires: PROJ-3 (Interview UI) — Chat-Interface
-
-## Kontext
-
-### Wo sind die Agent Operating Procedures?
-
-Die gesamte Gesprächssteuerung des KI-Interviewers ist aktuell in einer einzigen Funktion `buildSystemPrompt()` in [src/services/interviewAgent.ts:27](../src/services/interviewAgent.ts#L27) eingebettet. Es gibt kein separates Dokument, das die Interviewlogik beschreibt oder begründet.
-
-**Problem:** Die Methodik ist implizit und nicht auf wissenschaftlicher Grundlage dokumentiert. Phase-Übergänge, Fragestrategien und Gesprächsregeln sind direkt im Code ohne Begründung.
+- Requires: PROJ-2 (Interview Engine Backend) — Agent-Service, System Prompt, Phasenmodell
+- Test-Dependency: PROJ-3 (Interview UI) — kein Code-Change, aber E2E-Tests laufen gegen das UI
 
 ## User Stories
-
-- Als Entwickler möchte ich die Interview-Methodik in einem dedizierten Dokument (`docs/agent-procedures.md`) lesen können, damit ich Änderungen am System Prompt nachvollziehen kann.
-- Als Berater möchte ich, dass der Interview-Agent wissenschaftlich fundierte Fragetechniken anwendet, damit ich qualitativ hochwertigeres Prozesswissen extrahiere.
-- Als Mitarbeiter möchte ich, dass das Interview einem natürlichen Gesprächsfluss folgt, damit ich mich nicht befragt fühle sondern gehört.
+- Als Entwickler möchte ich die Interview-Methodik in einem dedizierten Dokument (`docs/agent-procedures.md`) lesen können, damit ich Änderungen am System Prompt nachvollziehen und begründen kann.
+- Als Berater möchte ich, dass der Interview-Agent wissenschaftlich fundierte Fragetechniken anwendet, damit ich qualitativ hochwertigeres Prozesswissen mit konkreten Bottlenecks extrahiere.
+- Als Mitarbeiter möchte ich, dass das Interview einem natürlichen Gesprächsfluss folgt, damit ich mich gehört fühle und nicht befragt.
+- Als Entwickler möchte ich ein Review-Interview mit synthetischen Eingaben durchführen können, um zu validieren, dass das neue Interview-Design die gewünschten Erkenntnisse liefert.
 
 ## Acceptance Criteria
 
-### Dokumentation: `docs/agent-procedures.md`
+### Deliverable 1: `docs/agent-procedures.md`
 
-- [ ] Neue Datei `docs/agent-procedures.md` erstellt als "Single Source of Truth" für Agent-Verhalten
-- [ ] Dokument enthält: wissenschaftliche Grundlagen, Phasenbeschreibung mit Begründung, Fragekatalog pro Phase, Transition-Regeln, Qualitätskriterien
-- [ ] `buildSystemPrompt()` in `interviewAgent.ts` verweist auf dieses Dokument (Kommentar)
+- [ ] Neue Datei `docs/agent-procedures.md` erstellt — "Single Source of Truth" für Agent-Verhalten
+- [ ] Dokument enthält folgende Abschnitte:
+  - Wissenschaftliche Grundlagen (begründete Methodenauswahl mit Erklärung, was übernommen wurde und was nicht)
+  - Interview-Ziel und Erfolgskriterien
+  - Phasenmodell (intro / exploration / deepdive / wrap_up) mit Beschreibung, Zielen und Übergangsbedingungen je Phase
+  - Fragekatalog pro Phase mit konkreten Beispielfragen
+  - Fragetechniken (Laddering, Paraphrasierung, Short-Answer-Handling, Halluzinations-Guard)
+  - Umgang mit schwierigen Gesprächssituationen
+- [ ] `buildSystemPrompt()` in `interviewAgent.ts` enthält einen Kommentar, der auf `docs/agent-procedures.md` verweist
+- [ ] Folgende Methoden werden im Dokument bewertet und ihre Übernahme begründet: Critical Incident Technique (CIT), Cognitive Task Analysis (CTA), SECI-Modell, TODS, Appreciative Inquiry
 
-### Wissenschaftliche Grundlagen (Research-Phase)
-
-Relevante Methoden zu evaluieren und anzupassen für einen KI-gestützten Kontext:
-
-- [ ] **TODS (Task-Oriented Dialogue System)** — strukturierte Dialogführung mit State Tracking; bereits in Out-of-Scope von PROJ-2 erwähnt, jetzt explizit einplanen
-- [ ] **Critical Incident Technique (CIT)** nach Flanagan (1954) — Fokus auf konkrete Ereignisse statt abstrakte Aussagen; besonders wertvoll für Prozess-Extraktion
-- [ ] **Cognitive Task Analysis (CTA)** — Methode zur Wissenserhebung von Experten; ermöglicht tiefes Verständnis impliziter Entscheidungsprozesse
-- [ ] **SECI-Modell** (Nonaka & Takeuchi) — Explizitierung von tacit knowledge; Grundlage für Wissensmanagement
-- [ ] **Appreciative Inquiry** — Wertschätzende Gesprächsführung; erhöht Gesprächsbereitschaft
-
-### Verbesserungen am System Prompt
+### Deliverable 2: Überarbeiteter System Prompt (`buildSystemPrompt()`)
 
 - [ ] **Fragekatalog pro Phase** im System Prompt verankert — konkrete Beispielfragen statt genereller Beschreibung
 - [ ] **Konkret-Abstrakt-Prinzip**: Agent fragt zuerst nach konkreten Beispielen ("Erzählen Sie mir von einem typischen Montag..."), nicht nach abstrakten Prozessen
-- [ ] **Schweige-Toleranz**: Agent akzeptiert kurze Pausen ohne sofort nachzufragen
+- [ ] **Short-Answer-Handling**: Bei einsilbigen oder ausweichenden Antworten verwendet der Agent eine Vertiefungstechnik (z.B. Laddering: "Was passiert dann?", "Warum ist das so?") bevor er zur nächsten Frage wechselt
 - [ ] **Paraphrasierung**: Agent paraphrasiert Antworten vor Folgefragen um Verständnis zu signalisieren
-- [ ] **Tiefbohr-Regeln**: bei vagen Antworten gezielt nachbohren mit Technik des "Laddering" (Warum ist das so? Was passiert dann?)
-- [ ] **Wrap-Up-Qualität**: Zusammenfassung am Ende enthält konkrete Prozessschritte, nicht nur Themen
-- [ ] **Halluzinations-Guard**: Agent vermeidet Interpretationen, fragt stattdessen nach ("Habe ich das richtig verstanden, dass...")
+- [ ] **Halluzinations-Guard**: Agent vermeidet Interpretationen und fragt stattdessen nach ("Habe ich das richtig verstanden, dass...")
+- [ ] **Wrap-Up-Qualität**: Zusammenfassung am Ende enthält konkrete Prozessschritte und identifizierte Bottlenecks, nicht nur Themen
+- [ ] **Tiefbohr-Regeln**: Bei vagen Antworten gezielt nachbohren mit Laddering-Technik
 
-### Agent Operating Procedures Dokument — Struktur
+### Deliverable 3: Review-Interview
 
-```markdown
-# Agent Operating Procedures — Meridian Interview Agent
-
-## 1. Wissenschaftliche Grundlagen
-## 2. Interview-Ziel und Erfolgskriterien
-## 3. Phasenmodell (intro / exploration / deepdive / wrap_up)
-### 3.1 Intro
-### 3.2 Exploration
-### 3.3 Deepdive
-### 3.4 Wrap-Up
-## 4. Fragetechniken
-## 5. Transition-Regeln (wann Phase wechseln)
-## 6. Qualitätskriterien für Antworten
-## 7. Umgang mit schwierigen Situationen
-```
+- [ ] Ein Test-Interview wurde mit synthetischen Eingaben (simulierter Mitarbeiter) vollständig durchgeführt
+- [ ] Das Ergebnis wurde manuell bewertet: Enthält die Interview-Zusammenfassung konkrete Prozessschritte und mindestens einen identifizierten Bottleneck?
+- [ ] Befund ist dokumentiert (kurze Notiz in `docs/agent-procedures.md` unter einem Abschnitt "Review-Ergebnis")
 
 ## Edge Cases
 
 | Szenario | Erwartetes Verhalten |
 |---|---|
-| Mitarbeiter antwortet sehr kurz ("Ich weiß nicht") | Agent verwendet Konkretisierungstechnik, kein direktes Nachhaken |
-| Mitarbeiter weicht vom Thema ab | Agent folgt kurz dem Faden, kehrt dann sanft zurück |
-| Mitarbeiter erwähnt sensibles Thema (Konflikt, Fehler) | Agent bleibt neutral-wertschätzend, dokumentiert ohne Bewertung |
+| Mitarbeiter antwortet einsilbig ("Ja", "Weiß nicht", "Keine Ahnung") | Agent verwendet Short-Answer-Handling: Vertiefungstechnik, kein sofortiger Themenwechsel |
+| Mitarbeiter weicht vom Thema ab | Agent folgt kurz dem Faden, kehrt dann sanft mit Brücke zurück ("Das ist interessant — bezogen auf Ihren Hauptprozess...") |
+| Mitarbeiter erwähnt sensibles Thema (Konflikt, Fehler, Kollegen) | Agent bleibt neutral-wertschätzend, dokumentiert ohne Bewertung, fragt sachlich weiter |
+| Mitarbeiter liefert sehr ausführliche Antwort | Agent paraphrasiert komprimiert, bestätigt Verständnis, bohrt an einem konkreten Punkt nach |
+| Agent hat in der Exploration-Phase noch kein konkretes Beispiel erhalten | Agent wechselt nicht in Deepdive, sondern wiederholt Konkretisierungsversuch mit anderer Formulierung |
 
 ## Technical Requirements
 
-- Keine Schema-Änderungen erforderlich
+- Keine Datenbankschema-Änderungen
+- Keine neuen API-Endpunkte
 - Änderungen ausschließlich an `src/services/interviewAgent.ts` → `buildSystemPrompt()`
 - Neues Dokument: `docs/agent-procedures.md`
-- Die Änderungen am Prompt müssen mit bestehenden E2E-Tests kompatibel sein
+- Überarbeiteter System Prompt muss mit bestehenden E2E-Tests in `tests/PROJ-3-interview-ui.spec.ts` kompatibel sein
 
 ## Out of Scope
 
 - Voice-TTS Ausgabe des Agenten
 - Mehrsprachige Interviews (aktuell nur Deutsch)
-- Adaptive Fragestrategie via separatem ML-Modell (wäre PROJ-11+)
+- Adaptive Fragestrategie via separatem ML-Modell
 - Automatische Qualitätsbewertung einzelner Turns
+- Änderungen am Phasenmodell (intro / exploration / deepdive / wrap_up bleibt wie in PROJ-2 definiert)
+- UI-Änderungen am Interview-Interface
+
+---
+<!-- Sections below are added by subsequent skills -->
+
+## Tech Design (Solution Architect)
+_To be added by /architecture_
+
+## QA Test Results
+_To be added by /qa_
+
+## Deployment
+_To be added by /deploy_

@@ -27,10 +27,11 @@
 | PROJ-10 | Access Control & Shared Workspace | Deployed | [spec](PROJ-10-access-control-shared-workspace.md) | 2026-05-20 | P0 | PROJ-1 |
 | PROJ-11 | Interview PDF Report | Deployed | [spec](PROJ-11-interview-pdf-report.md) | 2026-05-21 | P1 | PROJ-4, PROJ-5, PROJ-6 |
 | PROJ-12 | Rate Limiting | Deployed | [spec](PROJ-12-rate-limiting.md) | 2026-05-21 | P1 | PROJ-2, PROJ-3 |
+| PROJ-13 | LLM Observability & Tracing | Planned | [spec](PROJ-13-llm-observability-tracing.md) | 2026-05-21 | P1 | PROJ-2, PROJ-4, PROJ-5, PROJ-6 |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-13
+## Next Available ID: PROJ-14
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
