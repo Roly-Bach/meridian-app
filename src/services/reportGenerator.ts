@@ -1,31 +1,12 @@
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { resolveModel } from '@/lib/llm-provider'
 import type {
   ReportData,
   ReportKnowledgeObject,
   ReportProcessStep,
   ReportUseCase,
 } from '@/components/pdf/InterviewReport'
-
-// ─── Model resolver (mirrors interviewAgent.ts) ───────────────────────────────
-
-function resolveModel(modelString: string) {
-  const slashIdx = modelString.indexOf('/')
-  if (slashIdx === -1) {
-    return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelString as never)
-  }
-  const provider = modelString.slice(0, slashIdx)
-  const modelId = modelString.slice(slashIdx + 1)
-  if (provider === 'anthropic') {
-    return createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(modelId as never)
-  }
-  if (provider === 'google') {
-    return createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })(modelId as never)
-  }
-  throw new Error(`Unsupported model provider: "${provider}". Set INTERVIEW_MODEL to "anthropic/<model>" or "google/<model>".`)
-}
 
 // ─── Executive Summary ────────────────────────────────────────────────────────
 
@@ -35,8 +16,7 @@ async function generateExecutiveSummary(
   processSteps: { title: string; description: string | null }[],
 ): Promise<string> {
   try {
-    const modelString = process.env.INTERVIEW_MODEL ?? 'anthropic/claude-opus-4-5'
-    const model = resolveModel(modelString)
+    const model = resolveModel(process.env.INTERVIEW_MODEL)
 
     const context = [
       `Mitarbeiter: ${interview.employee_name}${interview.employee_role ? `, ${interview.employee_role}` : ''}, Abteilung: ${interview.department}`,
