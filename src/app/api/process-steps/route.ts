@@ -16,6 +16,9 @@ export async function GET(req: Request) {
   if (!workspaceId) {
     return NextResponse.json({ error: 'workspace_id query param required' }, { status: 400 })
   }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(workspaceId)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   // Verify caller is a member of this workspace
   const { data: membership } = await supabase

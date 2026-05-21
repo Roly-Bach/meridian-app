@@ -11,11 +11,16 @@ type TurnRow = Database['public']['Tables']['turns']['Row']
 // Returns interview metadata + all turns so the frontend can render history
 // and detect reconnect scenarios.
 
+const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
+  if (!TOKEN_UUID_RE.test(token)) {
+    return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
+  }
   const supabase = getSupabaseAdmin()
 
   const { data: rawInterview, error } = await supabase

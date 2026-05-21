@@ -12,7 +12,7 @@ vi.mock('@/lib/supabase-server', () => ({
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'ws-1' }, error: null }),
+      single: vi.fn().mockResolvedValue({ data: { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }, error: null }),
     }),
   }),
 }))
@@ -41,7 +41,7 @@ describe('GET /api/use-cases/roadmap', () => {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
       from: vi.fn(),
     } as never)
-    const res = await GET(makeRequest('ws-1'))
+    const res = await GET(makeRequest('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'))
     expect(res.status).toBe(401)
   })
 
@@ -60,7 +60,7 @@ describe('GET /api/use-cases/roadmap', () => {
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
       }),
     } as never)
-    const res = await GET(makeRequest('ws-1'))
+    const res = await GET(makeRequest('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'))
     expect(res.status).toBe(403)
   })
 
@@ -71,7 +71,7 @@ describe('GET /api/use-cases/roadmap', () => {
       order: vi.fn().mockResolvedValue({ data: SAMPLE_UCS, error: null }),
     })
 
-    const res = await GET(makeRequest('ws-1'))
+    const res = await GET(makeRequest('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'))
     expect(res.status).toBe(200)
     const json = await res.json()
 
@@ -90,7 +90,7 @@ describe('GET /api/use-cases/roadmap', () => {
       order: vi.fn().mockResolvedValue({ data: SAMPLE_UCS, error: null }),
     })
 
-    const res = await GET(makeRequest('ws-1'))
+    const res = await GET(makeRequest('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'))
     const json = await res.json()
 
     expect(json.roi_Q1).toBe(10000)
@@ -106,7 +106,7 @@ describe('GET /api/use-cases/roadmap', () => {
       order: vi.fn().mockResolvedValue({ data: [], error: null }),
     })
 
-    const res = await GET(makeRequest('ws-1'))
+    const res = await GET(makeRequest('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'))
     const json = await res.json()
     expect(json.Q1).toEqual([])
     expect(json.Q2).toEqual([])

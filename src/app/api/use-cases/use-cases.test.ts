@@ -19,7 +19,7 @@ vi.mock('@/lib/supabase-server', () => ({
 
 import { GET } from './route'
 
-const WORKSPACE_ID = 'ws-1'
+const WORKSPACE_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 const SAMPLE_UCS = [
   { id: 'uc-1', type: 'automation', title: 'Test', roi_eur_per_year: 10000, score: 10000, quarter: 'Q1' },
   { id: 'uc-2', type: 'rag', title: 'RAG', roi_eur_per_year: 2000, score: 1000, quarter: 'Q2' },

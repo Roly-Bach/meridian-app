@@ -15,6 +15,8 @@ const ChatInputSchema = z.object({
   user_input: z.string().min(1, 'Nachricht darf nicht leer sein').max(10000),
 })
 
+const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 // ─── POST /api/interview/[token]/chat ─────────────────────────────────────────
 // Public endpoint — authenticated via token only.
 // Streams the agent response as a text stream.
@@ -24,6 +26,9 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
+  if (!TOKEN_UUID_RE.test(token)) {
+    return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
+  }
   const supabase = getSupabaseAdmin()
 
   // ── Validate input ──────────────────────────────────────────────────────────

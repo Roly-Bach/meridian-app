@@ -14,7 +14,7 @@ import { GET } from './route'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const VALID_TOKEN = 'valid-token-abc'
+const VALID_TOKEN = '33333333-3333-3333-3333-333333333333'
 const FUTURE_EXPIRY = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
 const PAST_EXPIRY = new Date(Date.now() - 1000).toISOString()
 

@@ -19,7 +19,7 @@ vi.mock('@/lib/supabase-server', () => ({
 
 import { GET } from './route'
 
-const WORKSPACE_ID = 'ws-1'
+const WORKSPACE_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
 function makeRequest(workspaceId?: string) {
   const url = workspaceId

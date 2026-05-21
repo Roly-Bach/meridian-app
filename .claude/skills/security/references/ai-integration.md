@@ -3,9 +3,9 @@
 ## API Keys Must Be Server-Only
 
 Meridian uses three AI providers:
-- `ANTHROPIC_API_KEY` — Claude (interview agent)
-- `GOOGLE_GENERATIVE_AI_API_KEY` — Gemini (interview agent)
-- `OPENAI_API_KEY` — text-embedding-3-small (knowledge extraction)
+- `ANTHROPIC_API_KEY` — Claude (optional, wenn INTERVIEW_MODEL auf anthropic/ gesetzt)
+- `GOOGLE_GENERATIVE_AI_API_KEY` — Gemini (Standard-Provider für alle LLM-Calls)
+- `JINA_API_KEY` — jina-embeddings-v3 (knowledge extraction, PROJ-14)
 
 None of these may appear with `NEXT_PUBLIC_` prefix. None may be imported in Client Components. All AI calls go through API routes or services in `src/services/`.
 

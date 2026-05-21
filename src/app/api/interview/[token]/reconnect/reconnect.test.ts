@@ -27,7 +27,7 @@ import { POST } from './route'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const VALID_TOKEN = 'reconnect-token-xyz'
+const VALID_TOKEN = '22222222-2222-2222-2222-222222222222'
 const FUTURE_EXPIRY = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
 const PAST_EXPIRY = new Date(Date.now() - 1000).toISOString()
 

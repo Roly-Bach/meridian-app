@@ -31,7 +31,7 @@ import { POST } from './route'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const VALID_TOKEN = 'valid-token-xyz'
+const VALID_TOKEN = '11111111-1111-1111-1111-111111111111'
 const FUTURE_EXPIRY = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
 const PAST_EXPIRY = new Date(Date.now() - 1000).toISOString()
 

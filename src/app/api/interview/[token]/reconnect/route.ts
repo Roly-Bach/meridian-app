@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+
+const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
@@ -18,6 +20,9 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
+  if (!TOKEN_UUID_RE.test(token)) {
+    return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
+  }
   const supabase = getSupabaseAdmin()
 
   const { data: rawInterview, error: fetchError } = await supabase
