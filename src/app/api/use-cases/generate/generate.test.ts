@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockAdminFrom } = vi.hoisted(() => ({ mockAdminFrom: vi.fn() }))
+const { mockAdminFrom, mockCheckUserLimitUseCases } = vi.hoisted(() => ({
+  mockAdminFrom: vi.fn(),
+  mockCheckUserLimitUseCases: vi.fn().mockResolvedValue(null),
+}))
 
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
@@ -15,6 +18,10 @@ vi.mock('@/lib/supabase-server', () => ({
       single: vi.fn().mockResolvedValue({ data: { id: 'ws-1', hourly_rate: 45 }, error: null }),
     }),
   }),
+}))
+
+vi.mock('@/lib/ratelimit', () => ({
+  checkUserLimitUseCases: mockCheckUserLimitUseCases,
 }))
 
 vi.mock('@/services/useCaseEngine', () => ({
@@ -83,6 +90,19 @@ describe('POST /api/use-cases/generate', () => {
     } as never)
     const res = await POST(makeRequest({ workspace_id: WORKSPACE_ID }))
     expect(res.status).toBe(403)
+  })
+
+  it('returns 429 when rate limit exceeded', async () => {
+    const rateLimitResponse = new Response(
+      JSON.stringify({ error: 'Rate limit exceeded. Try again later.' }),
+      { status: 429, headers: { 'Retry-After': '60' } }
+    )
+    mockCheckUserLimitUseCases.mockResolvedValueOnce(rateLimitResponse)
+
+    const res = await POST(makeRequest({ workspace_id: WORKSPACE_ID }))
+    expect(res.status).toBe(429)
+    const json = await res.json()
+    expect(json.error).toBe('Rate limit exceeded. Try again later.')
   })
 
   it('returns empty when no process_steps exist', async () => {

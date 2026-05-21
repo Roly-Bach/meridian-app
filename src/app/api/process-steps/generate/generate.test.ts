@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockAdminFrom } = vi.hoisted(() => ({ mockAdminFrom: vi.fn() }))
+const { mockAdminFrom, mockCheckUserLimitProcessSteps } = vi.hoisted(() => ({
+  mockAdminFrom: vi.fn(),
+  mockCheckUserLimitProcessSteps: vi.fn().mockResolvedValue(null),
+}))
 
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
@@ -19,6 +22,10 @@ vi.mock('@/lib/supabase-server', () => ({
 
 vi.mock('@/services/processEnrichment', () => ({
   enrichProcessSteps: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/ratelimit', () => ({
+  checkUserLimitProcessSteps: mockCheckUserLimitProcessSteps,
 }))
 
 import { POST } from './route'
@@ -73,6 +80,25 @@ describe('POST /api/process-steps/generate', () => {
 
     const res = await POST(makeRequest({ interview_id: INTERVIEW_ID }))
     expect(res.status).toBe(404)
+  })
+
+  it('returns 429 when rate limit exceeded', async () => {
+    const rateLimitResponse = new Response(
+      JSON.stringify({ error: 'Rate limit exceeded. Try again later.' }),
+      { status: 429, headers: { 'Retry-After': '60' } }
+    )
+    mockCheckUserLimitProcessSteps.mockResolvedValueOnce(rateLimitResponse)
+
+    mockAdminFrom.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: INTERVIEW_ID, workspace_id: WORKSPACE_ID }, error: null }),
+    })
+
+    const res = await POST(makeRequest({ interview_id: INTERVIEW_ID }))
+    expect(res.status).toBe(429)
+    const json = await res.json()
+    expect(json.error).toBe('Rate limit exceeded. Try again later.')
   })
 
   it('calls enrichProcessSteps and returns process_steps on success', async () => {

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextResponse } from 'next/server'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockAdminFrom } = vi.hoisted(() => ({
+const { mockAdminFrom, mockCheckTokenEndpointLimits } = vi.hoisted(() => ({
   mockAdminFrom: vi.fn(),
+  mockCheckTokenEndpointLimits: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('@/lib/supabase-admin', () => ({
@@ -14,6 +16,11 @@ vi.mock('@/services/interviewAgent', () => ({
   createInterviewStream: vi.fn().mockReturnValue({
     toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
   }),
+}))
+
+vi.mock('@/lib/ratelimit', () => ({
+  checkTokenEndpointLimits: mockCheckTokenEndpointLimits,
+  extractIP: vi.fn().mockReturnValue('1.2.3.4'),
 }))
 
 import { POST } from './route'
@@ -97,6 +104,29 @@ describe('POST /api/interview/[token]/reconnect', () => {
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(200)
+  })
+
+  it('returns 429 with German error message and Retry-After header when rate limit exceeded', async () => {
+    const rateLimitResponse = NextResponse.json(
+      { error: 'Sie haben zu viele Nachrichten gesendet. Bitte warten Sie einen Moment.' },
+      { status: 429, headers: { 'Retry-After': '60' } }
+    )
+    mockCheckTokenEndpointLimits.mockResolvedValueOnce(rateLimitResponse)
+
+    mockAdminFrom.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'iv-1', status: 'active', token_expires_at: FUTURE_EXPIRY },
+        error: null,
+      }),
+    })
+
+    const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('60')
+    const json = await res.json()
+    expect(json.error).toBe('Sie haben zu viele Nachrichten gesendet. Bitte warten Sie einen Moment.')
   })
 
   it('returns 409 when interview is already completed', async () => {

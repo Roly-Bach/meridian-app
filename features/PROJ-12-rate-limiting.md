@@ -1,6 +1,6 @@
 # PROJ-12: Rate Limiting
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
 
@@ -115,7 +115,68 @@ None. Fail-open is implemented via try/catch in `runLimit()`. Env vars missing i
 All counters live in Upstash Redis — no Supabase changes needed.
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-05-21
+**QA Engineer:** Claude (automated)
+**Status:** APPROVED — no Critical or High bugs
+
+### Acceptance Criteria Results
+
+| # | Criterion | Result | Notes |
+|---|-----------|--------|-------|
+| AC-1 | Token-Endpoint: max 120 req/h per token, HTTP 429 on breach | PASS | Implemented via `tokenLimiter` sliding window, unit-tested |
+| AC-2 | IP-Endpoint: max 200 req/h per IP, HTTP 429 on breach | PASS | Implemented via `ipLimiter`, unit-tested |
+| AC-3 | Chat UI: German error toast on 429 | PASS | `useInterviewStream` extracts `error` from 429 JSON body → Sonner toast; E2E tested via route interception |
+| AC-4 | Normal 30-min interview (≤60 msgs) never hits limit | PASS | 60 << 120; verified by design |
+| AC-5 | `Retry-After` header in 429 response | PASS | Computed as `Math.ceil((result.reset - Date.now()) / 1000)`, unit-tested |
+| AC-6 | `process-steps/generate`: max 10 req/h per user | PASS | `processStepsLimiter` after membership check, unit-tested |
+| AC-7 | `use-cases/generate`: max 30 req/h per user | PASS | `useCasesLimiter` after membership check, unit-tested |
+| AC-8 | Structured JSON error for auth-secured 429 | PASS | `{ "error": "Rate limit exceeded. Try again later." }` |
+| AC-9 | Upstash Redis with Sliding Window | PASS | `@upstash/ratelimit` v2.0.8, `slidingWindow` algorithm |
+| AC-10 | Env vars without `NEXT_PUBLIC_` prefix | PASS | `process.env.UPSTASH_REDIS_REST_URL/TOKEN`, server-only |
+| AC-11 | Fail-open on Upstash outage | PASS | try/catch in `runLimit()` returns `{ blocked: false }` on any error; unit-tested |
+
+### Edge Cases Verified
+
+| Edge Case | Result |
+|-----------|--------|
+| Upstash not reachable → fail-open | PASS (unit test) |
+| Missing `x-forwarded-for` → fallback `"unknown"` | PASS (unit test) |
+| Token expiry check before rate limit check | PASS (code review — 410 returned before `checkTokenEndpointLimits`) |
+| chat + reconnect share same token counter | PASS (both call `checkTokenEndpointLimits(token, ip)` with same prefix) |
+
+### Bugs Found
+
+| ID | Severity | Description | Fixed? |
+|----|----------|-------------|--------|
+| — | — | No bugs found | — |
+
+### Security Audit
+
+- Rate limit logic is 100% server-side — no client-side bypass possible ✓
+- No `NEXT_PUBLIC_` prefix on Upstash credentials ✓
+- Token key uses raw token value — no sensitive data exposed in Redis keys beyond what's already in DB ✓
+- IP extraction uses first IP from `x-forwarded-for` (standard proxy behaviour) ✓
+- 429 responses contain no sensitive data ✓
+
+### Pre-existing Regression (not caused by PROJ-12)
+
+`src/app/api/interviews/[id]/pdf/pdf.test.ts` fails with `@react-pdf/renderer` not found. This is a pre-existing issue from PROJ-11 (the package is not installed). **PROJ-12 did not introduce this failure.**
+
+### Test Coverage Added
+
+**Unit tests:**
+- `src/lib/ratelimit.test.ts` — 13 tests (extractIP, fail-open without env vars, limit/block/fail-open with Upstash mocked)
+- `src/app/api/interview/[token]/chat/chat.test.ts` — +1 test (429 with German message + Retry-After)
+- `src/app/api/interview/[token]/reconnect/reconnect.test.ts` — +1 test (429 with German message + Retry-After)
+- `src/app/api/process-steps/generate/generate.test.ts` — +1 test (429 path)
+- `src/app/api/use-cases/generate/generate.test.ts` — +1 test (429 path)
+
+**E2E tests:**
+- `tests/PROJ-12-rate-limiting.spec.ts` — 5 tests (chat UI toast on 429, reconnect UI toast on 429, API auth guard checks, token-not-found check)
+- Note: Mobile Safari E2E skipped — WebKit browser binary not installed on this machine (pre-existing infra gap)
+
+**Test results:** 129 unit tests pass, 5/5 E2E tests pass (Chromium)
 
 ## Deployment
 _To be added by /deploy_
