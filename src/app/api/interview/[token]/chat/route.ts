@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
 import { extractAndEmbed } from '@/services/extraction'
+import { enrichProcessSteps } from '@/services/processEnrichment'
+import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
@@ -64,6 +66,11 @@ export async function POST(
       { status: 409 }
     )
   }
+
+  // ── Rate limiting ───────────────────────────────────────────────────────────
+  const ip = extractIP(req)
+  const rateLimitResponse = await checkTokenEndpointLimits(token, ip)
+  if (rateLimitResponse) return rateLimitResponse
 
   // ── Activate on first message ───────────────────────────────────────────────
   if (interview.status === 'created') {
@@ -134,13 +141,13 @@ export async function POST(
       }).select('id').single()
       if (turnError) console.error('[onFinish] turns insert failed:', turnError.message)
 
-      // Fire-and-forget extraction — does not block stream response
+      // Await extraction so knowledge_objects are in DB before potential enrichment
       if (newTurn?.id) {
         const transcript = [
           ...existingTurns.map(t => ({ user_input: t.user_input, agent_response: t.agent_response })),
           { user_input, agent_response: agentText },
         ]
-        void extractAndEmbed({
+        await extractAndEmbed({
           interviewId: interview.id,
           workspaceId: interview.workspace_id,
           turnId: newTurn.id,
@@ -153,6 +160,21 @@ export async function POST(
         .update({ timer_minutes: timerMinutes, updated_at: new Date().toISOString() })
         .eq('interview_id', interview.id)
       if (stateError) console.error('[onFinish] state update failed:', stateError.message)
+
+      // If the interview was completed this turn, enrich process steps now that
+      // all knowledge_objects for this turn are committed to the DB
+      const { data: currentInterview } = await supabase
+        .from('interviews')
+        .select('status')
+        .eq('id', interview.id)
+        .single()
+
+      if (currentInterview?.status === 'completed') {
+        await enrichProcessSteps({
+          interviewId: interview.id,
+          workspaceId: interview.workspace_id,
+        })
+      }
     },
   })
 

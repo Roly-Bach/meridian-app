@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { runHeuristicEngine } from '@/services/useCaseEngine'
+import { checkUserLimitUseCases } from '@/lib/ratelimit'
 
 const GenerateSchema = z.object({
   workspace_id: z.string().uuid('workspace_id must be a valid UUID'),
@@ -37,6 +38,9 @@ export async function POST(req: Request) {
     .single()
 
   if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const rateLimitResponse = await checkUserLimitUseCases(user.id)
+  if (rateLimitResponse) return rateLimitResponse
 
   const admin = getSupabaseAdmin()
   const { data: workspace } = await admin

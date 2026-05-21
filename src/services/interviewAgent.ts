@@ -3,7 +3,6 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { streamText, tool, stepCountIs } from 'ai'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { enrichProcessSteps } from './processEnrichment'
 
 export type Phase = 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
 
@@ -140,12 +139,6 @@ function buildTools(interviewId: string) {
       inputSchema: z.object({}),
       execute: async () => {
         try {
-          const { data: interviewData } = await supabase
-            .from('interviews')
-            .select('workspace_id')
-            .eq('id', interviewId)
-            .single()
-
           await supabase
             .from('interviews')
             .update({ status: 'completed', extractions_pending: true })
@@ -154,13 +147,6 @@ function buildTools(interviewId: string) {
             .from('interview_state')
             .update({ phase: 'wrap_up', updated_at: new Date().toISOString() })
             .eq('interview_id', interviewId)
-
-          if (interviewData?.workspace_id) {
-            void enrichProcessSteps({
-              interviewId,
-              workspaceId: interviewData.workspace_id,
-            })
-          }
 
           return { success: true }
         } catch (err) {

@@ -224,3 +224,25 @@ Role ist bereits als Subtitle im Titel-Cell sichtbar UND als eigene Spalte. Verd
 **Deployed:** 2026-05-20
 **Production URL:** https://meridian-app-tau.vercel.app/
 **Hinweis:** Mit-deployed via Merge-Commit des PROJ-3 Deploys. War bereits auf `origin/main` vorhanden.
+
+## Bug Fix — 2026-05-21: Race Condition bei Interview-Abschluss
+
+**Problem:** Nach Interview-Abschluss blieb der Reiter "Prozess-Schritte" immer leer.
+
+**Ursache:** `enrichProcessSteps` wurde fire-and-forget aus dem `complete_interview`-Tool aufgerufen — also mitten im Stream, bevor `onFinish` lief. Zum Zeitpunkt des Aufrufs waren die `knowledge_objects` des letzten Turns noch nicht in der DB (da `extractAndEmbed` erst in `onFinish` aufgerufen wird). `enrichProcessSteps` fand 0 Einträge und beendete sich still. Die Idempotenz-Prüfung verhinderte anschließend einen zweiten Lauf.
+
+**Fix:**
+- `enrichProcessSteps` aus `complete_interview`-Tool in `interviewAgent.ts` entfernt
+- In `chat/route.ts` `onFinish`: `extractAndEmbed` von `void` auf `await` umgestellt
+- Danach: Status-Check — wenn Interview jetzt `completed`, `enrichProcessSteps` aufgerufen (ebenfalls `await`)
+
+**Reihenfolge nach Fix:**
+1. Stream endet
+2. `onFinish`: Turn in DB gespeichert
+3. `await extractAndEmbed(...)` — knowledge_objects committet
+4. Status-Check → `completed`
+5. `await enrichProcessSteps(...)` — findet alle knowledge_objects, erstellt process_steps
+
+**Geänderte Dateien:**
+- `src/app/api/interview/[token]/chat/route.ts`
+- `src/services/interviewAgent.ts`

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
+import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
@@ -13,7 +14,7 @@ type TurnRow = Database['public']['Tables']['turns']['Row']
 // Streams an adaptive greeting. NOT saved as a turn in the DB.
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
@@ -41,6 +42,11 @@ export async function POST(
   if (interview.status === 'completed') {
     return NextResponse.json({ error: 'Interview is already completed' }, { status: 409 })
   }
+
+  // ── Rate limiting ───────────────────────────────────────────────────────────
+  const ip = extractIP(req)
+  const rateLimitResponse = await checkTokenEndpointLimits(token, ip)
+  if (rateLimitResponse) return rateLimitResponse
 
   const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
     supabase

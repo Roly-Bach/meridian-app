@@ -80,17 +80,32 @@ test.describe('Dashboard — empty state (serial, signup first)', () => {
     await expect(submitBtn).toBeDisabled()
   })
 
-  test('Dialog: creates interview and shows link-ready step', async ({ page }) => {
+  test('Dialog: creates interview with default duration (30 min) and shows link-ready step', async ({ page }) => {
     await loginAndLand(page)
     await page.click('button:has-text("Neues Interview")')
     await page.fill('input[placeholder="z.B. Hans Becker"]', 'Hans Becker')
     await page.fill('input[placeholder="z.B. Produktionsleiter"]', 'Produktionsleiter')
     await page.fill('input[placeholder="z.B. Qualitätssicherung"]', 'Fertigung')
+    // Default duration is 30 minutes, no action needed on select
     await page.getByRole('button', { name: 'Interview anlegen', exact: true }).click()
     await expect(page.getByText('Interview erstellt')).toBeVisible({ timeout: 10000 })
     await expect(page.getByRole('button', { name: 'Link kopieren' })).toBeVisible()
     // Interview link contains /interview/
     await expect(page.getByText('/interview/')).toBeVisible()
+  })
+
+  test('Dialog: creates interview with 10 minutes duration and shows link-ready step', async ({ page }) => {
+    await loginAndLand(page)
+    await page.click('button:has-text("Neues Interview")')
+    await page.fill('input[placeholder="z.B. Hans Becker"]', 'Heidi Kurz')
+    await page.fill('input[placeholder="z.B. Produktionsleiter"]', 'Testperson')
+    await page.fill('input[placeholder="z.B. Qualitätssicherung"]', 'Testing')
+    // Select 10 minutes duration
+    await page.getByRole('combobox', { name: 'Interviewdauer' }).click()
+    await page.getByRole('option', { name: '10 Minuten (Test)' }).click()
+    await page.getByRole('button', { name: 'Interview anlegen', exact: true }).click()
+    await expect(page.getByText('Interview erstellt')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('button', { name: 'Link kopieren' })).toBeVisible()
   })
 
   test('Dialog: shows new interview in table after closing', async ({ page }) => {
@@ -130,7 +145,7 @@ test.describe('Dashboard — empty state (serial, signup first)', () => {
 test.describe('API: POST /api/interviews error handling', () => {
   test('POST /api/interviews without auth returns JSON 401, not empty 500', async ({ request }) => {
     const res = await request.post('/api/interviews', {
-      data: { employee_name: 'X', employee_role: 'Y', department: 'Z' },
+      data: { employee_name: 'X', employee_role: 'Y', department: 'Z', max_duration_minutes: 30 },
     })
     expect(res.status()).toBe(401)
     const body = await res.json()
