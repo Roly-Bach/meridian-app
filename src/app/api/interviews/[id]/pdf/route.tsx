@@ -45,7 +45,7 @@ export async function GET(
   // ── Verify workspace membership ─────────────────────────────────────────────
   const { data: membership } = await supabase
     .from('workspace_members')
-    .select('id')
+    .select('workspace_id')
     .eq('workspace_id', interview.workspace_id)
     .eq('user_id', user.id)
     .maybeSingle()

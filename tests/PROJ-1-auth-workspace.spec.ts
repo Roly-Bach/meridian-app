@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { deleteTestUsers } from './helpers/cleanup'
 
 const RUN_ID = Date.now()
 const TEST_EMAIL = `qa-${RUN_ID}@meridian-test.dev`
@@ -153,4 +154,8 @@ test('UI: Login page has link to /signup', async ({ page }) => {
 test('UI: Signup page has link to /login', async ({ page }) => {
   await page.goto('/signup')
   await expect(page.locator('a[href="/login"]')).toBeVisible()
+})
+
+test.afterAll(async () => {
+  await deleteTestUsers([TEST_EMAIL])
 })

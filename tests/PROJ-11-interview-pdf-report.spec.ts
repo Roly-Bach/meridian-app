@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { deleteTestUsers } from './helpers/cleanup'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -109,4 +110,8 @@ test.describe('Security: PDF endpoint authorization', () => {
     // Should be 401 (auth) not 500 (DB error with invalid UUID)
     expect(res.status()).toBe(401)
   })
+})
+
+test.afterAll(async () => {
+  await deleteTestUsers([`qa11-${RUN_ID}@meridian-test.dev`])
 })

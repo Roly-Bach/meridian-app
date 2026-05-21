@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { deleteTestUsers } from './helpers/cleanup'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -345,4 +346,12 @@ test.describe('Dashboard — sidebar navigation', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('link', { name: 'Interviews' })).toBeVisible()
   })
+})
+
+test.afterAll(async () => {
+  await deleteTestUsers([
+    TEST_EMAIL,
+    `qa3b-${RUN_ID}@meridian-test.dev`,
+    `qa3c-${RUN_ID}@meridian-test.dev`,
+  ])
 })
