@@ -141,7 +141,13 @@ export function ChatInterface({ token, employeeName, existingTurns, status, onCo
 
       <MessageList messages={messages} />
 
-      <ChatInput onSend={handleSend} disabled={isStreaming} />
+      <ChatInput
+        onSend={handleSend}
+        disabled={isStreaming}
+        voiceToken={token}
+        onVoiceCommitted={handleSend}
+        isStreamingAgent={isStreaming}
+      />
     </div>
   )
 }
