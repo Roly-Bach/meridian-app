@@ -2,6 +2,7 @@ import { resolveModel } from '@/lib/llm-provider'
 import { streamText, tool, stepCountIs } from 'ai'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import type { RawExtraction } from './extraction'
 
 export type Phase = 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
 
@@ -15,12 +16,40 @@ export interface InterviewContext {
   timerMinutes: number
   topicsCovered: string[]
   topicsOpen: string[]
+  extractionsLog: RawExtraction[]
   maxDurationMinutes: number
 }
 
 export interface TurnMessage {
   role: 'user' | 'assistant'
   content: string
+}
+
+function formatExtractionsLog(log: RawExtraction[]): string {
+  if (log.length === 0) return '- Noch nichts extrahiert.'
+
+  const lines: string[] = []
+  for (const item of log) {
+    if (item.type === 'process_step') {
+      const c = item.content as Record<string, unknown>
+      const freq = c.frequency_per_month != null ? `${c.frequency_per_month}x/Monat ✓` : 'fehlt'
+      const dur = c.duration_minutes != null ? `${c.duration_minutes} min ✓` : 'fehlt'
+      const tools = Array.isArray(c.data_sources) && c.data_sources.length > 0
+        ? `[${(c.data_sources as string[]).join(', ')}] ✓`
+        : 'fehlt'
+      lines.push(`- [process_step] "${c.title}" — Häufigkeit: ${freq} | Dauer: ${dur} | Systeme: ${tools}`)
+    } else if (item.type === 'pain_point') {
+      const c = item.content as Record<string, unknown>
+      lines.push(`- [pain_point] "${c.description}"`)
+    } else if (item.type === 'tool') {
+      const c = item.content as Record<string, unknown>
+      lines.push(`- [tool] "${c.name}" — ${c.purpose}`)
+    } else if (item.type === 'role') {
+      const c = item.content as Record<string, unknown>
+      lines.push(`- [role] "${c.title}"`)
+    }
+  }
+  return lines.join('\n')
 }
 
 function buildSystemPrompt(ctx: InterviewContext): string {
@@ -63,6 +92,9 @@ function buildSystemPrompt(ctx: InterviewContext): string {
 - Geplante Gesamtdauer: ${ctx.maxDurationMinutes} Minuten
 ${topicsSection}${timingWarning}${shortModeHint}
 
+## Bereits extrahierte Wissensobjekte
+${formatExtractionsLog(ctx.extractionsLog)}
+
 ## Phasenverhalten
 
 **intro**: Stelle dich als KI-Interviewer von Meridian vor. Erkläre kurz den Zweck (Prozesswissen dokumentieren, nicht bewerten). Baue Vertrauen auf. Wechsle nach 1–2 Austauschen zu exploration via transition_phase.
@@ -80,6 +112,8 @@ ${topicsSection}${timingWarning}${shortModeHint}
 
 ## Gesprächsregeln
 - Pro Antwort GENAU EINE Frage stellen — nie zwei oder mehr gleichzeitig.
+- Prüfe vor jeder Nachfrage die Liste "Bereits extrahierte Wissensobjekte": Frage ein Attribut NICHT nach wenn es dort mit ✓ markiert ist.
+- Frage gezielt nach wenn "fehlt" steht und es natürlich in den Gesprächsfluss passt.
 - Wenn der Mitarbeiter etwas bereits (auch beiläufig) erwähnt hat, frage nicht nochmals danach.
 - Antworten kurz halten: maximal 2–3 Sätze Reaktion + eine Folgefrage.
 - Rufe Tools immer AM ENDE deiner Antwort auf — nie vor dem Text, nie mitten im Text.`

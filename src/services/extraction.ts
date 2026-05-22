@@ -7,7 +7,7 @@ export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool' | 'role
 
 const ALLOWED_TYPES: readonly KnowledgeObjectType[] = ['process_step', 'pain_point', 'tool', 'role']
 
-interface RawExtraction {
+export interface RawExtraction {
   type: KnowledgeObjectType
   content: Record<string, unknown>
   source_quote: string
@@ -62,8 +62,8 @@ export async function extractAndEmbed({
   workspaceId: string
   turnId: string
   transcript: TurnTranscript[]
-}): Promise<void> {
-  if (transcript.length === 0) return
+}): Promise<RawExtraction[]> {
+  if (transcript.length === 0) return []
 
   const supabase = getSupabaseAdmin()
 
@@ -83,12 +83,13 @@ export async function extractAndEmbed({
     extractions = parsed
   } catch (err) {
     console.error('[extraction] LLM extraction failed:', err)
-    return
+    return []
   }
 
-  if (extractions.length === 0) return
+  if (extractions.length === 0) return []
 
   // ── Embed + Insert each object ───────────────────────────────────────────────
+  const inserted: RawExtraction[] = []
   for (const item of extractions) {
     if (!item.type || !item.content || !item.source_quote) {
       console.error('[extraction] Skipping malformed object:', item)
@@ -115,6 +116,9 @@ export async function extractAndEmbed({
 
     if (error) {
       console.error('[extraction] DB insert failed:', error.message)
+    } else {
+      inserted.push(item)
     }
   }
+  return inserted
 }

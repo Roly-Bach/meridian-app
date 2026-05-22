@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
-import { extractAndEmbed } from '@/services/extraction'
+import { extractAndEmbed, type RawExtraction } from '@/services/extraction'
 import { enrichProcessSteps } from '@/services/processEnrichment'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
@@ -92,7 +92,7 @@ export async function POST(
   const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
     supabase
       .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open')
+      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log')
       .eq('interview_id', interview.id)
       .maybeSingle(),
     supabase
@@ -132,6 +132,7 @@ export async function POST(
       timerMinutes,
       topicsCovered: state?.topics_covered ?? [],
       topicsOpen: state?.topics_open ?? [],
+      extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
     },
     history,
@@ -147,12 +148,13 @@ export async function POST(
       if (turnError) console.error('[onFinish] turns insert failed:', turnError.message)
 
       // Await extraction so knowledge_objects are in DB before potential enrichment
+      let newExtractions: RawExtraction[] = []
       if (newTurn?.id) {
         const transcript = [
           ...existingTurns.map(t => ({ user_input: t.user_input, agent_response: t.agent_response })),
           { user_input, agent_response: agentText },
         ]
-        await extractAndEmbed({
+        newExtractions = await extractAndEmbed({
           interviewId: interview.id,
           workspaceId: interview.workspace_id,
           turnId: newTurn.id,
@@ -160,9 +162,16 @@ export async function POST(
         })
       }
 
+      const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
+      const updatedLog = [...currentLog, ...newExtractions]
+
       const { error: stateError } = await supabase
         .from('interview_state')
-        .update({ timer_minutes: timerMinutes, updated_at: new Date().toISOString() })
+        .update({
+          timer_minutes: timerMinutes,
+          updated_at: new Date().toISOString(),
+          extractions_log: updatedLog as unknown as import('@/lib/database.types').Json,
+        })
         .eq('interview_id', interview.id)
       if (stateError) console.error('[onFinish] state update failed:', stateError.message)
 

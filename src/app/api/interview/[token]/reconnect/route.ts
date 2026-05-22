@@ -5,6 +5,7 @@ const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
+import type { RawExtraction } from '@/services/extraction'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
 type StateRow = Database['public']['Tables']['interview_state']['Row']
@@ -56,7 +57,7 @@ export async function POST(
   const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
     supabase
       .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open')
+      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log')
       .eq('interview_id', interview.id)
       .maybeSingle(),
     supabase
@@ -91,6 +92,7 @@ export async function POST(
       timerMinutes,
       topicsCovered: state?.topics_covered ?? [],
       topicsOpen: state?.topics_open ?? [],
+      extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
     },
     history,
