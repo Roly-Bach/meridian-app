@@ -341,6 +341,12 @@ Quantitativer Track (R1-R8) + qualitativer Track (P1-P3) implementiert und getes
 
 ## Deployment
 
-**Deployed:** 2026-05-20
-**Production URL:** https://meridian-app-tau.vercel.app/
-**Hinweis:** Mit-deployed via Merge-Commit des PROJ-3 Deploys. War bereits auf `origin/main` vorhanden.
+**Initial Deploy:** 2026-05-20
+**Re-Deploy (qualitative track + fixes):** 2026-05-22
+**Production URL:** https://meridian-app-tau.vercel.app/dashboard/use-cases
+
+**Änderungen 2026-05-22:**
+- Qualitative Use Case Track (P1-P3) basierend auf pain_points + tools aus knowledge_objects
+- Score-Overflow-Fix (numeric(5,2) cap)
+- "Qualitativ"-Badge für Use Cases ohne ROI-Daten
+- 3 neue Use Case Typen: process_improvement, tool_consolidation, automation_candidate
