@@ -107,14 +107,22 @@ describe('POST /api/use-cases/generate', () => {
 
   it('returns empty when no process_steps exist', async () => {
     mockAdminFrom
+      // workspace hourly_rate
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: { hourly_rate: 45 }, error: null }),
       })
+      // process_steps (Promise.all[0])
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+      // knowledge_objects (Promise.all[1])
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
     const res = await POST(makeRequest({ workspace_id: WORKSPACE_ID }))
     expect(res.status).toBe(200)
@@ -135,13 +143,19 @@ describe('POST /api/use-cases/generate', () => {
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: { hourly_rate: 45 }, error: null }),
       })
-      // process_steps fetch
+      // process_steps fetch (Promise.all[0])
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({
-          data: [{ id: 'step-1', workspace_id: 'ws-1', title: 'Test', description: null, frequency_per_month: 22, duration_minutes: 60, data_sources: [], rule_based: true, error_rate_percent: 5, media_breaks: 0 }],
+          data: [{ id: 'step-1', workspace_id: 'ws-1', interview_id: 'iv-1', title: 'Test', description: null, frequency_per_month: 22, duration_minutes: 60, data_sources: [], rule_based: true, error_rate_percent: 5, media_breaks: 0 }],
           error: null,
         }),
+      })
+      // knowledge_objects fetch (Promise.all[1])
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
       // fetch existing IDs
       .mockReturnValueOnce({

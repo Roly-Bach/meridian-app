@@ -126,7 +126,7 @@ describe('extractAndEmbed', () => {
         turnId: 'turn-1',
         transcript: MOCK_TRANSCRIPT,
       })
-    ).resolves.toBeUndefined()
+    ).resolves.toEqual([])
 
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('[extraction]'),

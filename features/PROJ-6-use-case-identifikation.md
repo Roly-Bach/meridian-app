@@ -249,8 +249,8 @@ Keine — shadcn Card, Badge, Skeleton bereits installiert.
 
 ## QA Test Results
 
-**QA Date:** 2026-05-20
-**Test Suite:** 104 unit/integration tests (23 engine pure-function tests, 5+5+5 API route tests, 5 roadmap route tests)
+**QA Date:** 2026-05-22 (Re-QA nach qualitativem Track + score-Fix)
+**Test Suite:** 174 unit/integration tests (30 engine pure-function tests inkl. P1-P3, generate route tests, roadmap route tests) + 16 E2E Tests
 
 ### Acceptance Criteria
 
@@ -300,7 +300,27 @@ Keine — shadcn Card, Badge, Skeleton bereits installiert.
 **Fix:** `import Link from 'next/link'` in `UseCaseBoardClient.tsx`.
 
 #### B3 — Low: Keine Test-Abdeckung für Roadmap-Route → BEHOBEN
-Roadmap-Test im QA-Lauf geschrieben. 104/104 Tests grün.
+Roadmap-Test im QA-Lauf geschrieben.
+
+#### B4 — High: `score` Column overflow (numeric(5,2)) → BEHOBEN (2026-05-22)
+`score = roi_eur / effort_factor` kann >999.99 sein → DB INSERT schlägt fehl. Fix: score auf 999.99 gecapped; priority/quarter nutzen raw score. Migration `20260522000000_fix_use_cases_score_precision.sql` für langfristige Schema-Korrektur vorhanden.
+
+#### B5 — High: `@upstash` packages nicht in node_modules → BEHOBEN (2026-05-22)
+`npm install` hatte die Packages nicht gezogen → API-Route crashte mit 500 lokal. Fix: `npm install` ausgeführt.
+
+#### B6 — Medium: generate route Mock fehlte knowledge_objects-Query → BEHOBEN (2026-05-22)
+`generate.test.ts` Mock hatte keinen Handler für neuen `knowledge_objects` parallel-Query → 2 Tests schlugen fehl. Mock aktualisiert.
+
+### Neue Funktionalität (2026-05-22)
+
+| Feature | Status | Tests |
+|---------|--------|-------|
+| P1: process_improvement aus high-severity pain_point | ✅ | 2 Unit Tests |
+| P2: tool_consolidation bei ≥3 Tools | ✅ | 2 Unit Tests |
+| P3: automation_candidate bei manuell/Excel Keywords | ✅ | 2 Unit Tests |
+| Deduplication: 1 UC pro Typ pro Interview | ✅ | 1 Unit Test |
+| "Qualitativ"-Badge wenn roi_eur_per_year = null | ✅ | E2E |
+| knowledge_objects werden in generate route gefetcht | ✅ | Unit Test |
 
 ### Security Audit
 
@@ -311,13 +331,13 @@ Roadmap-Test im QA-Lauf geschrieben. 104/104 Tests grün.
 | Delete scoped auf workspace_id | ✅ |
 | Engine: pure function, kein User-Input injiziert | ✅ |
 | workspace_id als UUID validiert (Zod) | ✅ |
-| ANTHROPIC_API_KEY nicht benötigt (kein LLM) | ✅ |
+| knowledge_objects nur aus eigenem Workspace geladen | ✅ |
 
 ### Produktion-Ready?
 
-**JA** — alle Bugs (B1–B3) behoben. 104/104 Tests grün.
+**JA** — alle Bugs behoben. 174/174 Unit/Integration Tests + 16/16 E2E Tests grün.
 
-Alle 8 Heuristik-Regeln korrekt implementiert und getestet. ROI-Berechnung und Score-Logik verifiziert.
+Quantitativer Track (R1-R8) + qualitativer Track (P1-P3) implementiert und getestet.
 
 ## Deployment
 

@@ -282,3 +282,91 @@ describe('runHeuristicEngine', () => {
     expect(at90).toBeCloseTo(at45 * 2, 0)
   })
 })
+
+// ── Qualitative Rules (P1-P3) ─────────────────────────────────────────────────
+
+const QUAL_STEP: EngineProcessStep = {
+  ...BASE_STEP,
+  id: 'qual-step-1',
+  interview_id: 'interview-qual',
+  frequency_per_month: null,
+  duration_minutes: null,
+}
+
+describe('runHeuristicEngine — qualitative rules (P1-P3)', () => {
+  it('P1: generates process_improvement for high-severity pain_point', () => {
+    const kos = [
+      { type: 'pain_point' as const, content: { description: 'Kritischer Engpass', severity: 'high' }, interview_id: 'interview-qual' },
+    ]
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, kos)
+    const uc = results.find(u => u.type === 'process_improvement')
+    expect(uc).toBeDefined()
+    expect(uc!.priority).toBe('high')
+    expect(uc!.roi_eur_per_year).toBeNull()
+    expect(uc!.roi_hours_per_year).toBeNull()
+    expect(uc!.reasoning).toContain('Kritischer Engpass')
+  })
+
+  it('P1: does NOT generate process_improvement for medium-severity pain_point', () => {
+    const kos = [
+      { type: 'pain_point' as const, content: { description: 'Mittlerer Engpass', severity: 'medium' }, interview_id: 'interview-qual' },
+    ]
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, kos)
+    expect(results.find(u => u.type === 'process_improvement')).toBeUndefined()
+  })
+
+  it('P2: generates tool_consolidation for ≥3 distinct tools', () => {
+    const kos = [
+      { type: 'tool' as const, content: { name: 'SAP' }, interview_id: 'interview-qual' },
+      { type: 'tool' as const, content: { name: 'Excel' }, interview_id: 'interview-qual' },
+      { type: 'tool' as const, content: { name: 'Outlook' }, interview_id: 'interview-qual' },
+    ]
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, kos)
+    const uc = results.find(u => u.type === 'tool_consolidation')
+    expect(uc).toBeDefined()
+    expect(uc!.priority).toBe('medium')
+    expect(uc!.roi_eur_per_year).toBeNull()
+    expect(uc!.description).toContain('SAP')
+  })
+
+  it('P2: does NOT generate tool_consolidation for <3 tools', () => {
+    const kos = [
+      { type: 'tool' as const, content: { name: 'SAP' }, interview_id: 'interview-qual' },
+      { type: 'tool' as const, content: { name: 'Excel' }, interview_id: 'interview-qual' },
+    ]
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, kos)
+    expect(results.find(u => u.type === 'tool_consolidation')).toBeUndefined()
+  })
+
+  it('P3: generates automation_candidate for pain_point with manual keyword', () => {
+    const kos = [
+      { type: 'pain_point' as const, content: { description: 'Alles wird manuell eingetragen', severity: 'medium' }, interview_id: 'interview-qual' },
+    ]
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, kos)
+    const uc = results.find(u => u.type === 'automation_candidate')
+    expect(uc).toBeDefined()
+    expect(uc!.reasoning).toContain('manuell')
+  })
+
+  it('P3: triggers on Excel keyword in pain_point', () => {
+    const kos = [
+      { type: 'pain_point' as const, content: { description: 'Daten in Excel übertragen', severity: 'low' }, interview_id: 'interview-qual' },
+    ]
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, kos)
+    expect(results.find(u => u.type === 'automation_candidate')).toBeDefined()
+  })
+
+  it('no qualitative UCs when knowledgeObjects empty', () => {
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, [])
+    expect(results.filter(u => ['process_improvement', 'tool_consolidation', 'automation_candidate'].includes(u.type))).toHaveLength(0)
+  })
+
+  it('deduplicates: only one process_improvement per interview', () => {
+    const kos = [
+      { type: 'pain_point' as const, content: { description: 'Engpass 1', severity: 'high' }, interview_id: 'interview-qual' },
+      { type: 'pain_point' as const, content: { description: 'Engpass 2', severity: 'high' }, interview_id: 'interview-qual' },
+    ]
+    const results = runHeuristicEngine([QUAL_STEP], HOURLY_RATE, kos)
+    expect(results.filter(u => u.type === 'process_improvement')).toHaveLength(1)
+  })
+})
