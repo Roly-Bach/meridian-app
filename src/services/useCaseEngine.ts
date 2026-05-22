@@ -55,6 +55,12 @@ function hours(step: EngineProcessStep, rate: number): number {
 }
 
 function score(roiEur: number, effort: keyof typeof EFFORT_FACTORS): number {
+  // Raw score for priority/quarter logic; stored value capped at 999.99
+  // to fit numeric(5,2) DB column until schema migration runs.
+  return Math.min(r2(roiEur / EFFORT_FACTORS[effort]), 999.99)
+}
+
+function rawScore(roiEur: number, effort: keyof typeof EFFORT_FACTORS): number {
   return r2(roiEur / EFFORT_FACTORS[effort])
 }
 
@@ -95,6 +101,7 @@ function makeUC(
 ): GeneratedUseCase {
   const roiEur = roi(step, rate, hourlyRate)
   const sc = score(roiEur, effort)
+  const scRaw = rawScore(roiEur, effort)
   return {
     process_step_id: step.id,
     workspace_id: step.workspace_id,
@@ -106,8 +113,8 @@ function makeUC(
     roi_hours_per_year: hours(step, rate),
     roi_eur_per_year: roiEur,
     score: sc,
-    priority: priority(sc),
-    quarter: quarter(sc),
+    priority: priority(scRaw),
+    quarter: quarter(scRaw),
   }
 }
 
