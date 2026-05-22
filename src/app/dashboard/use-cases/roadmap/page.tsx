@@ -15,6 +15,7 @@ export default async function RoadmapPage() {
       .from('workspace_members')
       .select('workspace_id')
       .eq('user_id', user.id)
+      .order('joined_at', { ascending: true })
       .limit(1)
       .single()
     workspaceId = member?.workspace_id
