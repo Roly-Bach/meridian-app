@@ -51,18 +51,29 @@ export async function POST(req: Request) {
 
   const hourlyRate = workspace?.hourly_rate ?? 45
 
-  // Fetch all process_steps for workspace
-  const { data: steps } = await admin
-    .from('process_steps')
-    .select('id, workspace_id, title, description, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks')
-    .eq('workspace_id', workspace_id)
+  // Fetch all process_steps + knowledge_objects for workspace in parallel
+  const [{ data: steps }, { data: knowledgeObjects }] = await Promise.all([
+    admin
+      .from('process_steps')
+      .select('id, workspace_id, title, description, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks, interview_id')
+      .eq('workspace_id', workspace_id),
+    admin
+      .from('knowledge_objects')
+      .select('type, content, interview_id')
+      .eq('workspace_id', workspace_id)
+      .in('type', ['pain_point', 'tool']),
+  ])
 
   if (!steps || steps.length === 0) {
     return NextResponse.json({ use_cases: [], total_roi_eur: 0 })
   }
 
-  // Run heuristic engine
-  const generated = runHeuristicEngine(steps, hourlyRate)
+  // Run heuristic engine (quantitative R1-R8 + qualitative P1-P3)
+  const generated = runHeuristicEngine(
+    steps,
+    hourlyRate,
+    (knowledgeObjects ?? []) as import('@/services/useCaseEngine').KnowledgeObjectContext[]
+  )
 
   // Fetch existing IDs before any writes (for safe cleanup after successful insert)
   const { data: existingIds } = await admin

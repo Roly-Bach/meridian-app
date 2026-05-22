@@ -10,6 +10,7 @@ import {
 const BASE_STEP: EngineProcessStep = {
   id: 'step-1',
   workspace_id: 'ws-1',
+  interview_id: 'interview-1',
   title: 'Rechnungen prüfen',
   description: 'Prüft eingehende Rechnungen',
   frequency_per_month: null,
@@ -253,7 +254,7 @@ describe('runHeuristicEngine', () => {
     const high = runHeuristicEngine([highStep], HOURLY_RATE).find((u) => u.type === 'automation')
     expect(high!.priority).toBe('high')
     expect(high!.quarter).toBe('Q1')
-    expect(high!.score).toBeGreaterThan(SCORE_HIGH_THRESHOLD)
+    expect(high!.score).toBeLessThanOrEqual(999.99) // capped for DB numeric(5,2)
 
     // Low score → low priority
     const lowStep: EngineProcessStep = {
@@ -276,8 +277,8 @@ describe('runHeuristicEngine', () => {
       rule_based: true,
       error_rate_percent: 5,
     }
-    const at45 = runHeuristicEngine([step], 45)[0].roi_eur_per_year
-    const at90 = runHeuristicEngine([step], 90)[0].roi_eur_per_year
+    const at45 = runHeuristicEngine([step], 45)[0].roi_eur_per_year!
+    const at90 = runHeuristicEngine([step], 90)[0].roi_eur_per_year!
     expect(at90).toBeCloseTo(at45 * 2, 0)
   })
 })

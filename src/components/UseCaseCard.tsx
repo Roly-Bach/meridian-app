@@ -6,6 +6,9 @@ const TYPE_ICONS: Record<string, string> = {
   llm_extraction: '📄',
   decision_support: '🎯',
   rag: '🔍',
+  process_improvement: '🔧',
+  tool_consolidation: '🔗',
+  automation_candidate: '⚙️',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -13,6 +16,9 @@ const TYPE_LABELS: Record<string, string> = {
   llm_extraction: 'LLM-Extraktion',
   decision_support: 'Entscheidungshilfe',
   rag: 'Wissensassistent',
+  process_improvement: 'Prozessverbesserung',
+  tool_consolidation: 'Tool-Integration',
+  automation_candidate: 'Automatisierungskandidat',
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -89,13 +95,21 @@ export function UseCaseCard({ useCase: uc, compact = false }: Props) {
 
         {/* ROI */}
         <div className="mb-3">
-          <span className="text-[18px] font-bold text-[#111111]">
-            €{Math.round(uc.roi_eur_per_year ?? 0).toLocaleString('de-DE')}
-          </span>
-          <span className="text-[11px] text-[#6B7280] ml-1">/Jahr</span>
-          {!compact && uc.roi_hours_per_year != null && (
-            <span className="text-[11px] text-[#6B7280] ml-2">
-              ({Math.round(uc.roi_hours_per_year)} h/Jahr)
+          {uc.roi_eur_per_year != null ? (
+            <>
+              <span className="text-[18px] font-bold text-[#111111]">
+                €{Math.round(uc.roi_eur_per_year).toLocaleString('de-DE')}
+              </span>
+              <span className="text-[11px] text-[#6B7280] ml-1">/Jahr</span>
+              {!compact && uc.roi_hours_per_year != null && (
+                <span className="text-[11px] text-[#6B7280] ml-2">
+                  ({Math.round(uc.roi_hours_per_year)} h/Jahr)
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-[#F3F4F6] text-[#6B7280] border-[#E5E5E5]">
+              Qualitativ
             </span>
           )}
         </div>

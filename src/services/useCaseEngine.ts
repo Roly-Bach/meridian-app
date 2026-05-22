@@ -15,6 +15,7 @@ const SEARCH_KEYWORDS = ['suchen', 'nachschlagen', 'klären', 'prüfen', 'finden
 export interface EngineProcessStep {
   id: string
   workspace_id: string
+  interview_id: string
   title: string
   description: string | null
   frequency_per_month: number | null
@@ -25,6 +26,12 @@ export interface EngineProcessStep {
   media_breaks: number
 }
 
+export interface KnowledgeObjectContext {
+  type: 'pain_point' | 'tool'
+  content: Record<string, unknown>
+  interview_id: string
+}
+
 export interface GeneratedUseCase {
   process_step_id: string
   workspace_id: string
@@ -33,8 +40,8 @@ export interface GeneratedUseCase {
   description: string
   reasoning: string
   effort: 'low' | 'medium' | 'high'
-  roi_hours_per_year: number
-  roi_eur_per_year: number
+  roi_hours_per_year: number | null
+  roi_eur_per_year: number | null
   score: number
   priority: 'high' | 'medium' | 'low'
   quarter: string
@@ -120,9 +127,39 @@ function makeUC(
 
 // ── Engine ───────────────────────────────────────────────────────────────────
 
+const MANUAL_KEYWORDS = ['manuell', 'händisch', 'excel', 'copy', 'kopier', 'abtippen', 'per hand']
+
+// ── Qualitative Use Case builder (no ROI) ────────────────────────────────────
+
+function makeQualitativeUC(
+  step: EngineProcessStep,
+  type: string,
+  title: string,
+  description: string,
+  reasoning: string,
+  effort: 'low' | 'medium' | 'high',
+  pri: 'high' | 'medium' | 'low',
+): GeneratedUseCase {
+  return {
+    process_step_id: step.id,
+    workspace_id: step.workspace_id,
+    type,
+    title,
+    description,
+    reasoning,
+    effort,
+    roi_hours_per_year: null,
+    roi_eur_per_year: null,
+    score: pri === 'high' ? 50 : pri === 'medium' ? 30 : 10,
+    priority: pri,
+    quarter: pri === 'high' ? 'Q1' : pri === 'medium' ? 'Q2' : 'Q3',
+  }
+}
+
 export function runHeuristicEngine(
   steps: EngineProcessStep[],
-  hourlyRate: number
+  hourlyRate: number,
+  knowledgeObjects: KnowledgeObjectContext[] = []
 ): GeneratedUseCase[] {
   const results: GeneratedUseCase[] = []
 
@@ -134,7 +171,7 @@ export function runHeuristicEngine(
 
     function add(uc: GeneratedUseCase) {
       const existing = best.get(uc.type)
-      if (!existing || uc.roi_eur_per_year > existing.roi_eur_per_year) {
+      if (!existing || (uc.roi_eur_per_year ?? 0) > (existing.roi_eur_per_year ?? 0)) {
         best.set(uc.type, uc)
       }
     }
@@ -244,6 +281,94 @@ export function runHeuristicEngine(
     }
 
     results.push(...best.values())
+  }
+
+  // ── Qualitative Track: P1-P3 (pain_point + tool based, no ROI) ──────────────
+  // Group knowledge objects by interview_id for fast lookup
+  const painPointsByInterview = new Map<string, { description: string; severity: string }[]>()
+  const toolsByInterview = new Map<string, string[]>()
+
+  for (const ko of knowledgeObjects) {
+    if (ko.type === 'pain_point') {
+      const c = ko.content as { description?: string; severity?: string }
+      if (!c.description) continue
+      const list = painPointsByInterview.get(ko.interview_id) ?? []
+      list.push({ description: c.description, severity: c.severity ?? 'medium' })
+      painPointsByInterview.set(ko.interview_id, list)
+    } else if (ko.type === 'tool') {
+      const c = ko.content as { name?: string }
+      if (!c.name) continue
+      const list = toolsByInterview.get(ko.interview_id) ?? []
+      if (!list.includes(c.name)) list.push(c.name)
+      toolsByInterview.set(ko.interview_id, list)
+    }
+  }
+
+  // Per interview: pick the first process_step as anchor for qualitative UCs
+  const stepByInterview = new Map<string, EngineProcessStep>()
+  for (const step of steps) {
+    if (!stepByInterview.has(step.interview_id)) {
+      stepByInterview.set(step.interview_id, step)
+    }
+  }
+
+  const qualitativeKeys = new Set<string>() // deduplicate per interview+type
+
+  for (const [interviewId, anchorStep] of stepByInterview) {
+    const painPoints = painPointsByInterview.get(interviewId) ?? []
+    const tools = toolsByInterview.get(interviewId) ?? []
+
+    // P1 — High-severity pain point → process improvement
+    const highPains = painPoints.filter(p => p.severity === 'high')
+    if (highPains.length > 0) {
+      const key = `${interviewId}:process_improvement`
+      if (!qualitativeKeys.has(key)) {
+        qualitativeKeys.add(key)
+        results.push(makeQualitativeUC(
+          anchorStep,
+          'process_improvement',
+          `${anchorStep.title} — Prozessverbesserung`,
+          'KI adressiert identifizierte Engpässe und reduziert manuelle Aufwände gezielt.',
+          `Kritischer Engpass: "${highPains[0].description}"`,
+          'medium', 'high',
+        ))
+      }
+    }
+
+    // P2 — ≥3 distinct tools → tool consolidation / integration
+    if (tools.length >= 3) {
+      const key = `${interviewId}:tool_consolidation`
+      if (!qualitativeKeys.has(key)) {
+        qualitativeKeys.add(key)
+        results.push(makeQualitativeUC(
+          anchorStep,
+          'tool_consolidation',
+          `${anchorStep.title} — Tool-Integration`,
+          `Systemintegration der genutzten Tools (${tools.slice(0, 3).join(', ')}) eliminiert Medienbrüche.`,
+          `${tools.length} verschiedene Systeme identifiziert — Integrationsansatz reduziert manuelle Übergaben.`,
+          'medium', 'medium',
+        ))
+      }
+    }
+
+    // P3 — Pain point with manual/Excel keywords → automation candidate
+    const manualPains = painPoints.filter(p =>
+      MANUAL_KEYWORDS.some(kw => p.description.toLowerCase().includes(kw))
+    )
+    if (manualPains.length > 0) {
+      const key = `${interviewId}:automation_candidate`
+      if (!qualitativeKeys.has(key)) {
+        qualitativeKeys.add(key)
+        results.push(makeQualitativeUC(
+          anchorStep,
+          'automation_candidate',
+          `${anchorStep.title} — Automatisierungskandidat`,
+          'Manuelle Schritte durch KI-gestützte Automatisierung ersetzen.',
+          `Manueller Aufwand identifiziert: "${manualPains[0].description}"`,
+          'low', 'medium',
+        ))
+      }
+    }
   }
 
   results.sort((a, b) => b.score - a.score)
