@@ -77,16 +77,17 @@ export async function POST(
       const text = await response.text()
       console.error('[voice-token] ElevenLabs error:', response.status, text)
       return NextResponse.json(
-        { error: 'Sprachaufnahme konnte nicht gestartet werden' },
+        { error: 'Sprachaufnahme konnte nicht gestartet werden', _debug: { elevenLabsStatus: response.status, elevenLabsBody: text } },
         { status: 502 }
       )
     }
 
     data = (await response.json()) as Record<string, unknown>
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     console.error('[voice-token] fetch failed:', err)
     return NextResponse.json(
-      { error: 'Sprachaufnahme konnte nicht gestartet werden' },
+      { error: 'Sprachaufnahme konnte nicht gestartet werden', _debug: { fetchError: message } },
       { status: 502 }
     )
   }
@@ -100,7 +101,7 @@ export async function POST(
   if (!sessionToken) {
     console.error('[voice-token] Unexpected response shape:', JSON.stringify(data))
     return NextResponse.json(
-      { error: 'Sprachaufnahme konnte nicht gestartet werden' },
+      { error: 'Sprachaufnahme konnte nicht gestartet werden', _debug: { unexpectedShape: data } },
       { status: 502 }
     )
   }
