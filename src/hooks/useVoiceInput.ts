@@ -189,9 +189,13 @@ export function useVoiceInput({
     }
 
     // ── 4. Open WebSocket ──────────────────────────────────────────────────
-    const ws = new WebSocket(
-      `wss://api.elevenlabs.io/v1/speech-to-text/realtime?token=${sessionToken}&model_id=scribe_v2_realtime`
-    )
+    const wsUrl = new URL('wss://api.elevenlabs.io/v1/speech-to-text/realtime')
+    wsUrl.searchParams.set('token', sessionToken)
+    wsUrl.searchParams.set('model_id', 'scribe_v2_realtime')
+    wsUrl.searchParams.set('commit_strategy', 'vad')
+    wsUrl.searchParams.set('vad_silence_threshold_secs', '1.5')
+    wsUrl.searchParams.set('audio_format', 'pcm_16000')
+    const ws = new WebSocket(wsUrl.toString())
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -214,6 +218,9 @@ export function useVoiceInput({
         if (trimmed) {
           onCommittedRef.current(trimmed)
         }
+        // Auto-stop after commit — one answer per mic activation
+        cleanup()
+        setState('idle')
       }
     }
 
