@@ -190,7 +190,7 @@ export function useVoiceInput({
 
     // ── 4. Open WebSocket ──────────────────────────────────────────────────
     const ws = new WebSocket(
-      `wss://api.elevenlabs.io/v1/speech-to-text-realtime?token=${sessionToken}`
+      `wss://api.elevenlabs.io/v1/speech-to-text/realtime?token=${sessionToken}&model_id=scribe_v2_realtime`
     )
     wsRef.current = ws
 
