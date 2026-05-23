@@ -22,7 +22,7 @@
 | PROJ-5 | Prozessschritt-Anreicherung | Deployed | [spec](PROJ-5-prozessschritt-anreicherung.md) | 2026-05-19 | P0 | PROJ-1, PROJ-4 |
 | PROJ-6 | Use Case Identifikation | Deployed | [spec](PROJ-6-use-case-identifikation.md) | 2026-05-19 | P0 | PROJ-1, PROJ-5 |
 | PROJ-7 | Voice Input (Interview) | Deployed | [spec](PROJ-7-voice-input.md) | 2026-05-20 | P1 | PROJ-3 |
-| PROJ-8 | Interview-Design Optimierung | Planned | [spec](PROJ-8-interview-design-optimierung.md) | 2026-05-20 | P1 | PROJ-2, PROJ-3 |
+| PROJ-8 | Interview-Design Optimierung | Approved | [spec](PROJ-8-interview-design-optimierung.md) | 2026-05-20 | P1 | PROJ-2, PROJ-3 |
 | PROJ-9 | LLM Provider Optimierung | Roadmap | [spec](PROJ-9-llm-provider-optimierung.md) | 2026-05-20 | P1 | PROJ-2 |
 | PROJ-10 | Access Control & Shared Workspace | Deployed | [spec](PROJ-10-access-control-shared-workspace.md) | 2026-05-20 | P0 | PROJ-1 |
 | PROJ-11 | Interview PDF Report | Deployed | [spec](PROJ-11-interview-pdf-report.md) | 2026-05-21 | P1 | PROJ-4, PROJ-5, PROJ-6 |
