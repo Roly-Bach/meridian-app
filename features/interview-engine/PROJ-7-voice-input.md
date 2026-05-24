@@ -3,7 +3,6 @@
 **Status:** Deployed
 **Priority:** P1
 **Created:** 2026-05-20
-**Depends:** PROJ-3
 **Type:** Extension
 **Domain:** Interview Engine
 **Extends:** PROJ-3

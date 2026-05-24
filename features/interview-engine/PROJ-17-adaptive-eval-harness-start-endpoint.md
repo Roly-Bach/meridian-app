@@ -165,3 +165,15 @@ _To be added by /qa_
 
 ## Deployment
 _To be added by /deploy_
+
+## Post-Mortem
+_To be added by /deploy_
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | — |
