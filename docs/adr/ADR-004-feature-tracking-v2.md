@@ -388,7 +388,7 @@ Diese Punkte sind explizit so gewählt, dass der Workflow nach der Migration min
 
 ---
 
-**Migrations-Status:** In Arbeit (Stand 2026-05-24).
+**Migrations-Status:** ABGESCHLOSSEN am 2026-05-24.
 
 | Phase | Status | Commit |
 |-------|--------|--------|
@@ -398,6 +398,6 @@ Diese Punkte sind explizit so gewählt, dass der Workflow nach der Migration min
 | 3 — Spec-Header-Backfill | ✅ Abgeschlossen | `d607080` — Type/Domain/Extends/Appetite/Bugs + Post-Mortem-Skeleton in allen 17 Specs |
 | 4 — Template + Skill-Updates | ✅ Abgeschlossen | `44a9f87` — v2 Header + Post-Mortem in template, Classify-Step in write-spec, Scout-First + Bug-Tally in qa, G1-G4 + Post-Mortem + retro-Reminder in deploy, Approval Gates in backend |
 | 5 — /retro Command | ✅ Abgeschlossen | `c0fcd49` — .claude/commands/retro.md; Leerlauf-Test bestätigt korrekte Leeranzeige bei 12 Backfill-Skeletten |
-| 6 — Closure | 🔲 Offen | Appendix A "ABGESCHLOSSEN"-Vermerk |
+| 6 — Closure | ✅ Abgeschlossen | `255f84b` — Appendix A geschlossen |
 
-**Nächster Schritt:** Phase 6 — Closure.
+**ABGESCHLOSSEN am 2026-05-24.**
