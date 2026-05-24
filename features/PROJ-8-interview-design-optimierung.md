@@ -1,8 +1,9 @@
 # PROJ-8: Interview-Design Optimierung (Re-Architektur)
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-20
-**Last Updated:** 2026-05-23
+**Last Updated:** 2026-05-24
+**Deployed:** 2026-05-24
 
 ## Dependencies
 - Requires: PROJ-2 (Interview Engine Backend) — Agent-Service, System Prompt, Phasenmodell, Tool-Use
@@ -415,4 +416,46 @@ PROJ-3 (Interview UI) UI unchanged — no PROJ-3 code touched. Route API backwar
 `npm run eval:interview` requires `npm run dev` + test workspace credentials (`TEST_INTERVIEW_TOKEN`, `TEST_WORKSPACE_ID` in `.env.local`). Must be run manually before merge per spec. Expected results per persona: mandatory-slot-coverage ≥ 80 %, ≥ 1 bottleneck located, ≥ 1 use case generated.
 
 ## Deployment
-_To be added by /deploy_
+
+**Date:** 2026-05-24
+**Vercel deployment:** `dpl_D2oUimKCgHxjh9yb9geQxBG2vA5B` (production, region fra1, build 63s)
+**Production aliases:**
+- https://meridian-app-tau.vercel.app
+- https://meridian-app-roly-bach.vercel.app
+- https://meridian-app-git-main-roly-bach.vercel.app (branch alias)
+
+**Inspector:** https://vercel.com/roly-bach/meridian-app/D2oUimKCgHxjh9yb9geQxBG2vA5B
+
+### Deployed commits
+
+```
+27dce58 docs(PROJ-16):  Add Supabase Hardening + Dependency Hygiene spec
+00cd348 chore(deps):    Bump Next.js to 16.2.6 + npm overrides → 0 audit issues
+7a8ca6c chore(claude):  Add pre-deploy and post-migration reminder hooks
+690c192 docs(PRD):      ElevenLabs Scribe v2 statt Whisper
+6e40262 feat(PROJ-8):   Interview-Design Re-Architektur with slot-coverage tool-use
+55a77a2 chore:          Ignore Playwright test artifacts
+604b5e3 chore(PROJ-15): Revert nonce-CSP attempt, document Next.js 16.1.1 blocker
+4689d8e test(PROJ-15):  QA test results for CSP Hardening (pre-existing)
+753e26a test(PROJ-8):   QA test results for Interview-Design Optimierung (pre-existing)
+```
+
+### Database migration
+
+Migration `20260524121453_proj8_step_tracker` (adds `interview_state.step_tracker JSONB`, updates phase constraint from `intro|exploration|deepdive|wrap_up` to `intro|process_loop|coverage_check|wrap_up`, backfills existing rows) applied to Supabase project `Meridian MVP` via MCP prior to the push so that the new backend never queries the old schema. Verified via `mcp__supabase__list_migrations`.
+
+### Pre-deploy gate state
+
+- 197 unit tests green
+- `npm run lint` (tsc --noEmit) clean
+- `npm audit` → 0 vulnerabilities (Next.js bump 16.1.1 → 16.2.6 + transitive overrides)
+- Production build succeeded locally with the same Next.js version
+
+### Known limitations carried into production
+
+- **PROJ-15 CSP Hardening still Blocked.** Production CSP keeps `'unsafe-inline'` in `script-src` because Next.js 16.x silently drops custom response headers set from `proxy.ts`. `'unsafe-eval'` is gone — actual delta vs. pre-PROJ-15 is the eval removal. See [PROJ-15-csp-hardening.md](PROJ-15-csp-hardening.md) for the full debug history.
+- **Supabase advisor findings deferred to PROJ-16.** 5 security WARN (no CRITICAL) and 17 performance WARN/INFO are tracked in [PROJ-16-supabase-hardening.md](PROJ-16-supabase-hardening.md) as a dedicated follow-up sprint.
+
+### Post-deploy verification
+
+Vercel reports `state: READY`, `readyState: READY` at 2026-05-24 ~14:42 (CET). The production aliases respond — direct anonymous `curl` returns 401 because the Vercel team has deployment protection enabled on this project; authenticated browser access works via the Vercel SSO bypass.
