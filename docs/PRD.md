@@ -31,7 +31,7 @@ Meridian erhebt implizites Prozesswissen von Mitarbeitern durch KI-geführte Int
 ## Constraints
 - Solo-Developer MVP, kein fixes Deadline-Datum
 - Backend: Supabase (PostgreSQL + pgvector + Auth)
-- KI-Stack: Claude claude-opus-4-5 (Agent Core + Extraktion), OpenAI Whisper (Voice), text-embedding-3-small (Embeddings)
+- KI-Stack: Claude claude-opus-4-5 (Agent Core + Extraktion), ElevenLabs Scribe v2 Realtime (Voice/STT), text-embedding-3-small (Embeddings)
 - Deployment: Vercel
 - Desktop-only für MVP — kein Mobile
 - Design system: siehe `docs/design-system.md` (Meridian Pink #E040FB, Linear-ähnlich)
