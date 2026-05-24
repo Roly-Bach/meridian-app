@@ -3,6 +3,11 @@
 ## Status: Deployed
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
+**Type:** Feature
+**Domain:** Platform
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Implementation Notes (2026-05-20)
 
@@ -160,3 +165,16 @@ INSERT INTO allowed_emails VALUES ('lias.hemmersbach@gmail.com'), ('bendewar@exa
 - Nutzer aus Workspace entfernen (UI)
 - Mehrere Workspaces pro Nutzer
 - SSO / OAuth Login
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

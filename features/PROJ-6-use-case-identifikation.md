@@ -1,8 +1,13 @@
 # PROJ-6: Use Case Identifikation
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
+**Type:** Epic
+**Domain:** Use Case Engine
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-1 (Auth + Workspace) — Auth, workspace_id, RLS
@@ -350,3 +355,16 @@ Quantitativer Track (R1-R8) + qualitativer Track (P1-P3) implementiert und getes
 - Score-Overflow-Fix (numeric(5,2) cap)
 - "Qualitativ"-Badge für Use Cases ohne ROI-Daten
 - 3 neue Use Case Typen: process_improvement, tool_consolidation, automation_candidate
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

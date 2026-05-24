@@ -3,6 +3,11 @@
 ## Status: Roadmap
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-21
+**Type:** Feature
+**Domain:** Platform
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-2 (Interview Engine Backend) — `INTERVIEW_MODEL` Env-Variable, `interviewAgent.ts`

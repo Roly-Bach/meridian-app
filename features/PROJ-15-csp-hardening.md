@@ -3,6 +3,11 @@
 ## Status: Blocked (Next.js 16.1.1 Bug)
 **Created:** 2026-05-23
 **Blocked:** 2026-05-24
+**Type:** Feature
+**Domain:** Platform
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Blocker
 

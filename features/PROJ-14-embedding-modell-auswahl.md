@@ -6,6 +6,11 @@
 **Deployed:** 2026-05-21
 **Tag:** v1.14.0-PROJ-14
 **Priority:** P1 — Prio 1 vor LLM-Provider-Wechsel
+**Type:** Extension
+**Domain:** Wissensbank
+**Extends:** PROJ-4
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-4 (Extraktions-Agent + Wissensbasis) — `src/services/embeddings.ts`, pgvector-Schema
@@ -224,3 +229,16 @@ Neue Testdatei: `src/services/embeddings.test.ts` (3 Tests, alle grün):
 ### Production-Ready Decision
 
 **READY** — Alle Bugs geschlossen. BUG-01 als Won't Fix / By Design entschieden (2026-05-21).
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

@@ -1,8 +1,13 @@
 # PROJ-1: Auth + Workspace
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-19
 **Last Updated:** 2026-05-19
+**Type:** Epic
+**Domain:** Platform
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - None — Basis für alle anderen Features
@@ -347,3 +352,16 @@ Umgebungshinweis: Mobile Safari (WebKit) nicht installiert — `npx playwright i
 
 ## Deployment
 _To be added by /deploy_
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

@@ -3,6 +3,11 @@
 ## Status: Planned
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
+**Type:** Feature
+**Domain:** Platform
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - PROJ-2 (Interview Engine Backend) — interviewAgent.ts ist primäre Trace-Root

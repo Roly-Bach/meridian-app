@@ -3,6 +3,11 @@
 ## Status: Deployed
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
+**Type:** Feature
+**Domain:** Platform
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-2 (Interview Engine Backend) — betrifft die Chat- und Reconnect-Endpunkte
@@ -187,3 +192,16 @@ All counters live in Upstash Redis — no Supabase changes needed.
 ### Env Vars Required in Vercel
 - `UPSTASH_REDIS_REST_URL` (server-only)
 - `UPSTASH_REDIS_REST_TOKEN` (server-only)
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

@@ -1,8 +1,13 @@
 # PROJ-5: Prozessschritt-Anreicherung
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
+**Type:** Feature
+**Domain:** Wissensbank
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-1 (Auth + Workspace) — Auth, workspace_id, RLS
@@ -246,3 +251,16 @@ Role ist bereits als Subtitle im Titel-Cell sichtbar UND als eigene Spalte. Verd
 **Geänderte Dateien:**
 - `src/app/api/interview/[token]/chat/route.ts`
 - `src/services/interviewAgent.ts`
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

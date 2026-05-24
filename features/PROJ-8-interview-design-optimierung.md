@@ -4,6 +4,11 @@
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-24
 **Deployed:** 2026-05-24
+**Type:** Revision
+**Domain:** Interview Engine
+**Extends:** PROJ-2
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-2 (Interview Engine Backend) — Agent-Service, System Prompt, Phasenmodell, Tool-Use
@@ -495,3 +500,16 @@ Migration `20260524121453_proj8_step_tracker` (adds `interview_state.step_tracke
 ### Post-deploy verification
 
 Vercel reports `state: READY`, `readyState: READY` at 2026-05-24 ~14:42 (CET). The production aliases respond — direct anonymous `curl` returns 401 because the Vercel team has deployment protection enabled on this project; authenticated browser access works via the Vercel SSO bypass.
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

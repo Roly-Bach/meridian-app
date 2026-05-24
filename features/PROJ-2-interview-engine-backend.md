@@ -3,6 +3,11 @@
 ## Status: Deployed
 **Created:** 2026-05-19
 **Last Updated:** 2026-05-20
+**Type:** Epic
+**Domain:** Interview Engine
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-1 (Auth + Workspace) — für Workspace-Isolation, Supabase-Clients, DB-Schema
@@ -338,3 +343,16 @@ BUG-002 (MEDIUM) does not block MVP since Anthropic is the only intended provide
 - `GET /api/interview/[token]`
 - `POST /api/interview/[token]/chat`
 - `POST /api/interview/[token]/reconnect`
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

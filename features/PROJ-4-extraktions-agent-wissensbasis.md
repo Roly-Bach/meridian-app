@@ -1,8 +1,13 @@
 # PROJ-4: Extraktions-Agent + Wissensbasis
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
+**Type:** Epic
+**Domain:** Wissensbank
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-1 (Auth + Workspace) — RLS, workspace_id
@@ -225,3 +230,16 @@ src/
 **Deployed:** 2026-05-20
 **Production URL:** https://meridian-app-tau.vercel.app/
 **Hinweis:** Mit-deployed via Merge-Commit des PROJ-3 Deploys. War bereits auf `origin/main` vorhanden.
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

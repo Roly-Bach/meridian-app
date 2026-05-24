@@ -4,6 +4,11 @@
 **Priority:** P1
 **Created:** 2026-05-20
 **Depends:** PROJ-3
+**Type:** Extension
+**Domain:** Interview Engine
+**Extends:** PROJ-3
+**Appetite:** —
+**Bugs:** —
 
 ## Summary
 
@@ -190,3 +195,16 @@ Employees can dictate answers into the interview chat instead of typing.
 
 **New route in production:**
 - `POST /api/interview/[token]/voice-token`
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

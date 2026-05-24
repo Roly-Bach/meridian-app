@@ -3,6 +3,11 @@
 ## Status: Deployed
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-21
+**Type:** Feature
+**Domain:** Dashboard & Output
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-4 (Extraktions-Agent) — Knowledge Objects (Prozessschritte, Pain Points, Tools)
@@ -242,3 +247,16 @@ Browser: PDF-Download startet automatisch
 - Anpassbares Layout oder Branding pro Workspace
 - Export als Excel/DOCX
 - Report für Use Cases ohne Interview-Kontext (PROJ-6 standalone)
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

@@ -1,8 +1,13 @@
 # PROJ-3: Interview UI
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-20
+**Type:** Feature
+**Domain:** Interview Engine
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Requires: PROJ-1 (Auth + Workspace) — Berater-Session, Dashboard-Layout, Supabase-Client
@@ -356,3 +361,16 @@ Sobald der Key gesetzt ist, fallen alle verbleibenden Blockierungen weg.
 - `@ai-sdk/openai` war lokal nicht installiert (fehlte im package.json) — beim Merge-Build nachinstalliert
 - `INTERVIEW_MODEL=google/gemini-3.5-flash` in `.env.local` und auf Vercel gesetzt
 - Patch `4d0bfa2`: 7 stall/edge-case fixes deployed via git push → Vercel auto-deploy
+
+
+## Post-Mortem
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — |
+| Häufigste Fehlerkategorie im Loop | — |
+
+_ohne Backfill, vor v2-Migration deployed_

@@ -2,6 +2,11 @@
 
 ## Status: Planned
 **Created:** 2026-05-24
+**Type:** Feature
+**Domain:** Platform
+**Extends:** —
+**Appetite:** —
+**Bugs:** —
 
 ## Dependencies
 - Touches: PROJ-1 (Auth + Workspace), PROJ-10 (Access Control & Shared Workspace) — `handle_new_user`, `workspaces`-Policies, `workspace_members`-Policies
