@@ -1,7 +1,17 @@
 # PROJ-15: CSP Hardening (Nonce-basiertes CSP)
 
-## Status: In Review
+## Status: Blocked (Next.js 16.1.1 Bug)
 **Created:** 2026-05-23
+**Blocked:** 2026-05-24
+
+## Blocker
+
+Next.js 16.1.1 verwirft alle Custom-Response-Header, die aus `proxy.ts`/`middleware.ts` gesetzt werden — sowohl im Dev-Modus (Turbopack) als auch im Production-Build (`next start`). Auth-Logik (Redirects) funktioniert nachweislich, aber `response.headers.set('Content-Security-Policy', ...)` und Header über den NextResponse-Konstruktor erscheinen nicht in der HTTP-Response. Damit ist nonce-basiertes CSP nach offiziellem Pattern (Doku: nextjs.org/docs/app/guides/content-security-policy) in dieser Next.js-Version nicht implementierbar.
+
+**Aktueller Zustand (Pre-PROJ-15 minus `unsafe-eval`):**
+CSP zurück in `next.config.ts` mit `script-src 'self' 'unsafe-inline' blob:`. Kein `unsafe-eval`, restliche Security-Header (HSTS, X-Frame-Options, etc.) bleiben aktiv.
+
+**Nächster Schritt:** GitHub-Issue bei vercel/next.js öffnen oder auf Patch warten. Bei Next.js 16.2+ erneut versuchen.
 
 ## Dependencies
 - Requires: PROJ-3 (Interview UI) — alle Inline-Scripts und die AudioWorklet-Initialisierung müssen nach CSP-Änderung weiterhin funktionieren
@@ -99,6 +109,48 @@ Kein `'unsafe-inline'`, kein `'unsafe-eval'`. Jeder Script-Tag, der ausgeführt 
 - `next.config.ts`: CSP-Header entfernt; alle anderen Security-Header (HSTS, X-Frame-Options etc.) bleiben dort.
 - `src/proxy.test.ts`: 4 Unit-Tests für `buildCsp` — nonce in script-src, kein unsafe-inline in script-src, kein unsafe-eval, blob: in script-src.
 
+**BUG-1 Fix (2026-05-24) — NOCH NICHT VOLLSTÄNDIG BEHOBEN:**
+
+**Was bisher herausgefunden wurde:**
+
+1. `proxy.ts` heißt korrekt (Next.js 16 hat middleware.ts → proxy.ts umbenannt, v16.0.0).
+2. Export-Name `proxy` ist korrekt laut Docs und Source-Code.
+3. `buildCsp` und `crypto.randomUUID()` sind korrekt (kein Buffer.from-Bug).
+4. `worker-src blob: 'self'` wurde hinzugefügt.
+5. Unit-Tests: 5 passed (`src/middleware.test.ts` importiert von `src/proxy.ts`).
+
+**Kern-Problem (verifiziert):**
+`src/proxy.ts` wird von Next.js 16.1.1 zur Laufzeit **nicht als Proxy-Einstiegspunkt registriert**.
+Beweis: Nach vollständigem Löschen von `.next` entsteht **kein** `middleware-manifest.json`.
+GET `/proxy-test` (der einen direkten `new Response('PROXY_IS_RUNNING')` zurückgeben würde) liefert stattdessen die Login-Seite — die Proxy-Funktion wird nie aufgerufen.
+
+**Aktueller Dateizustand:**
+- `src/proxy.ts` — enthält `buildCsp` + `proxy`-Funktion mit `/proxy-test`-Debugging-Branch + `config`-Matcher
+- `src/middleware.test.ts` — 5 Unit-Tests, alle grün
+- `proxy.ts` (Projekt-Root) — neu angelegt als nächster Test-Schritt, importiert `buildCsp` aus `src/proxy.ts`
+- `next.config.ts` — kein CSP-Header mehr (entfernt, korrekt)
+- `src/app/layout.tsx` — async, liest `x-nonce` Header
+
+**Nächster Debug-Schritt (noch nicht ausgeführt):**
+
+**Test A — Root-Level proxy.ts:**
+Server stoppen → `.next` löschen → `npm run dev`.
+Erwartetes Ergebnis bei Erfolg: Fehler "Both middleware and proxy file detected" ODER CSP-Header erscheint.
+Erwartetes Ergebnis bei Misserfolg: Weiterhin kein CSP-Header, kein Fehler.
+
+Falls Test A schlägt fehl → **Test B — middleware.ts:**
+`proxy.ts` (Root) und `src/proxy.ts` löschen. `src/middleware.ts` mit `middleware`-Export erstellen (deprecated, aber lt. Source-Code-Analyse korrekt erkannt). Gleicher Code, nur anderer Dateiname und Export-Name.
+
+**Source-Code-Analyse-Ergebnis:**
+Relevante Datei: `node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js`, Zeile 321:
+```javascript
+const isAtConventionLevel = fileDir === dir || fileDir === path.join(dir, 'src');
+```
+Theoretisch sollte `src/proxy.ts` erkannt werden. Mögliche Ursachen für Fehler:
+- Pfad-Separator-Inkonsistenz auf Windows (watchpack forward-slash vs. path.join backslash)
+- `knownFiles` enthält `src/proxy.ts` nicht beim Start (Timing/Watch-Issue)
+- Next.js 16.1.1-spezifischer Bug mit Turbopack + proxy.ts in src/
+
 ## QA Test Results
 
 **QA-Datum:** 2026-05-23
@@ -156,6 +208,28 @@ Kein `'unsafe-inline'`, kein `'unsafe-eval'`. Jeder Script-Tag, der ausgeführt 
 
 E2E-Tests (Playwright) ausgeführt: 16 passed, restliche Failures sind pre-existing Supabase-Auth-Abhängigkeiten — keine neuen Regressions durch PROJ-15.
 
+### BUG-1 Final Status (2026-05-24)
+
+**NICHT BEHEBBAR mit Next.js 16.1.1.** Vollständige Debug-Historie:
+
+1. `src/proxy.ts` mit `proxy`-Export: Wurde nicht ausgeführt (existierende `middleware.ts` am Root hat gewonnen).
+2. Root-Level `proxy.ts` und `middleware.ts` verschmolzen mit CSP-Logik: Code lief nachweislich (Auth-Redirects funktionieren), aber `response.headers.set('Content-Security-Policy', ...)` wurde in der HTTP-Response nicht ausgeliefert.
+3. Header via NextResponse-Konstruktor (`new NextResponse(null, { headers })` und `NextResponse.next({ headers })`): ebenfalls verworfen.
+4. Header via NextResponse.redirect-Konstruktor: ebenfalls verworfen.
+5. Test mit Production-Build (`next build` + `next start`, kein Turbopack): identisches Verhalten. **Damit ausgeschlossen, dass es ein Turbopack-spezifischer Bug ist.**
+
+**Beweise dass die Proxy-Funktion läuft:** `/dashboard` ohne Auth wird zu `/login` redirected (307) — diese Logik kommt nachweislich aus unserer proxy.ts.
+
+**Beweise dass Header verworfen werden:** Keiner der gesetzten Custom-Header (`Content-Security-Policy`, `x-csp-via`, `x-nonce-debug`) erscheint in der Response — weder bei 200-OK noch bei 307-Redirect. Header aus `next.config.ts` `headers()` erscheinen dagegen problemlos.
+
 ### Production-Ready Decision
 
-**NOT READY** — 1 Critical Bug (BUG-1) muss behoben werden vor Deployment.
+**SHIPPED (revertet auf Pre-PROJ-15 Stand minus `unsafe-eval`)** — 2026-05-24.
+
+Konkrete Änderungen wieder aktiv:
+- `next.config.ts`: CSP zurück mit `script-src 'self' 'unsafe-inline' blob:` (kein `'unsafe-eval'`, kein Nonce). Andere Security-Header (HSTS, X-Frame-Options, Referrer-Policy, X-Content-Type-Options, X-Permitted-Cross-Domain-Policies, Permissions-Policy) bleiben.
+- `proxy.ts`: Reverted auf Supabase-Auth-only Variante (kein CSP-Code mehr).
+- `src/app/layout.tsx`: `async` und `x-nonce`-Lookup entfernt — wieder die einfache synchron-Variante.
+- `proxy.test.ts` entfernt (testete `buildCsp` aus reverted Code).
+
+**Sicherheits-Delta gegenüber Pre-PROJ-15:** Reduktion um `'unsafe-eval'` (über PROJ-8 Pre-Step bereits durchgeführt) bleibt erhalten. `'unsafe-inline'` weiterhin notwendig, bis Next.js den Header-Drop-Bug behebt.

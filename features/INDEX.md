@@ -29,7 +29,7 @@
 | PROJ-12 | Rate Limiting | Deployed | [spec](PROJ-12-rate-limiting.md) | 2026-05-21 | P1 | PROJ-2, PROJ-3 |
 | PROJ-13 | LLM Observability & Tracing | Planned | [spec](PROJ-13-llm-observability-tracing.md) | 2026-05-21 | P1 | PROJ-2, PROJ-4, PROJ-5, PROJ-6 |
 | PROJ-14 | Embedding-Modell Auswahl | Deployed | [spec](PROJ-14-embedding-modell-auswahl.md) | 2026-05-21 | P1 | PROJ-4 |
-| PROJ-15 | CSP Hardening | In Review | [spec](PROJ-15-csp-hardening.md) | 2026-05-23 | P1 | PROJ-3, PROJ-7 |
+| PROJ-15 | CSP Hardening | Blocked | [spec](PROJ-15-csp-hardening.md) | 2026-05-23 | P1 | PROJ-3, PROJ-7 |
 
 <!-- Add features above this line -->
 
