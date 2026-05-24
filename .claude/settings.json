@@ -45,6 +45,26 @@
             "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -E 'git push.*origin[[:space:]]+main' > /dev/null 2>&1; then echo 'WARNING: Direct push to main detected. Consider feature branch + PR.'; fi"
           }
         ]
+      },
+      {
+        "matcher": "mcp__plugin_vercel_vercel__deploy_to_vercel",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'PRE-DEPLOY REMINDER: Run mcp__supabase__get_advisors (security + performance) and review the last mcp__plugin_vercel_vercel__get_deployment_build_logs before deploying. Verify RLS coverage and no critical advisor findings.'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__supabase__apply_migration",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'POST-MIGRATION REMINDER: Regenerate TypeScript types via mcp__supabase__generate_typescript_types so src/lib/database.types.ts stays in sync with the new schema.'"
+          }
+        ]
       }
     ]
   }
