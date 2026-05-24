@@ -30,10 +30,11 @@
 | PROJ-13 | LLM Observability & Tracing | Planned | [spec](PROJ-13-llm-observability-tracing.md) | 2026-05-21 | P1 | PROJ-2, PROJ-4, PROJ-5, PROJ-6 |
 | PROJ-14 | Embedding-Modell Auswahl | Deployed | [spec](PROJ-14-embedding-modell-auswahl.md) | 2026-05-21 | P1 | PROJ-4 |
 | PROJ-15 | CSP Hardening | Blocked | [spec](PROJ-15-csp-hardening.md) | 2026-05-23 | P1 | PROJ-3, PROJ-7 |
+| PROJ-16 | Supabase Hardening + Dependency Hygiene | Planned | [spec](PROJ-16-supabase-hardening.md) | 2026-05-24 | P1 | PROJ-1, PROJ-10 |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-16
+## Next Available ID: PROJ-17
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
