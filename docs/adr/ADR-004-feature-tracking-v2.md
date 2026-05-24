@@ -396,8 +396,8 @@ Diese Punkte sind explizit so gewählt, dass der Workflow nach der Migration min
 | 1 — Definitionen in general.md | ✅ Abgeschlossen | `d833974` — 5 Domains, 4 Typen, Bookkeeping-Regeln, Approval Gates; README archiviert |
 | 2 — INDEX.md migrieren | ✅ Abgeschlossen | `c9fcfed` — 10 Spalten, alle 17 Features klassifiziert |
 | 3 — Spec-Header-Backfill | ✅ Abgeschlossen | `d607080` — Type/Domain/Extends/Appetite/Bugs + Post-Mortem-Skeleton in allen 17 Specs |
-| 4 — Template + Skill-Updates | 🔲 Offen | write-spec/template.md, write-spec/SKILL.md, qa/SKILL.md, deploy/SKILL.md, backend/SKILL.md |
+| 4 — Template + Skill-Updates | ✅ Abgeschlossen | `44a9f87` — v2 Header + Post-Mortem in template, Classify-Step in write-spec, Scout-First + Bug-Tally in qa, G1-G4 + Post-Mortem + retro-Reminder in deploy, Approval Gates in backend |
 | 5 — /retro Command | 🔲 Offen | .claude/commands/retro.md erstellen |
 | 6 — Closure | 🔲 Offen | Appendix A "ABGESCHLOSSEN"-Vermerk |
 
-**Nächster Schritt:** Phase 4 — Template + Skill-Updates.
+**Nächster Schritt:** Phase 5 — /retro Command erstellen.
