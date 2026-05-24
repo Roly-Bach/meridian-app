@@ -411,9 +411,45 @@ Alle Deliverables sind mit dem bestehenden Stack umsetzbar: AI SDK (Tool Use), Z
 
 PROJ-3 (Interview UI) UI unchanged — no PROJ-3 code touched. Route API backward-compatible (step_tracker defaults to `[]` for existing state rows). PROJ-4/PROJ-6 pipelines unaffected (extraction and use case engine unchanged).
 
-### Eval Harness (Pending)
+### Eval Harness (Run 2026-05-24)
 
-`npm run eval:interview` requires `npm run dev` + test workspace credentials (`TEST_INTERVIEW_TOKEN`, `TEST_WORKSPACE_ID` in `.env.local`). Must be run manually before merge per spec. Expected results per persona: mandatory-slot-coverage ≥ 80 %, ≥ 1 bottleneck located, ≥ 1 use case generated.
+**Run date:** 2026-05-24
+**Model used:** `google/gemini-3.1-flash-lite` (INTERVIEW_MODEL in .env.local)
+**Infrastructure:** localhost:3000 (Next.js 16.1.1 Turbopack), Supabase project `ktatfdrhasohxkpiawrz`, workspace `Testing`
+
+| Persona | Schritte | Ø Pflicht-Cov. | Ø Optional-Cov. | Bottlenecks | UCs | Pass/Fail |
+|---|---|---|---|---|---|---|
+| buchhalter | 1 | 67 % | 33 % | 1 | 0 | ❌ FAIL |
+| vertriebler | 0 | 0 % | 0 % | 0 | 0 | ❌ FAIL |
+| it-support | 3 | 33 % | 11 % | 0 | 0 | ❌ FAIL |
+
+**Alle drei Personas verfehlen den Output-Kontrakt.** Reports unter `docs/evals/interview/2026-05-24-*.md`.
+
+**Auffälligkeiten:**
+
+1. **Empty-Agent-Turns**: Agent ruft Tools auf (register_step, record_slot) ohne anschließend Text zu generieren. Der streaming consumer in runner.ts konsumiert diese Turns als leere Strings, was das 25-Turn-Limit verbrennt ohne Fortschritt. Buchhalter: Turns 3, 7, 11, 14, 22-25 leer. IT-Support: Turns 14-25 alle leer (12 von 25 Turns verbraucht).
+
+2. **Vertriebler-Default-Loop**: `responses['default']` der Vertriebler-Persona ist die Selbstvorstellung ("Hi, ich bin Sandra..."). Da die Begrüßung des Agenten kein Keyword trifft, gibt der Selector in jedem Turn `default` zurück → Agent begrüßt erneut → Selector gibt wieder `default` → perfekte Endlosschleife über alle 25 Turns.
+
+3. **Selector-Loop bei Buchhalter**: Nachdem die Frequenz-Antwort gegeben wurde, fragt der Agent weiter nach Frequenz (umformuliert mit "Monat"/"Mal"). Selector erkennt diese Keywords und gibt erneut die Frequenz-Antwort zurück, statt zur nächsten Frage weiterzugehen. Turns 16-20: 5 identische Frequenz-Antworten in Folge.
+
+4. **Kein wrap_up erreicht**: Alle drei Runs treffen das 25-Turn-Limit. Da `wrap_up` nie eintritt, wird der Use-Case-Generator nicht getriggert → 0 Use Cases in allen Runs.
+
+5. **Nur 1 Schritt beim Buchhalter**: Agent blieb in Kreditorenbuchhaltung, hat Debitoren und Monatsabschluss nie exploriert, obwohl die Persona diese in Turn 1 erwähnt hat.
+
+**Bugs aus dem Eval-Lauf:**
+
+**BUG-4 (High) — Agent generiert keinen Text nach Tool-Calls**
+Agent ruft `register_step`/`record_slot` auf und sendet danach keine Text-Antwort mehr. Runner.ts bekommt einen leeren String zurück, schickt als nächstes den `default`-Persona-Response, und der Agent befindet sich in einem inkonsistenten Zustand (hat Tool aufgerufen, wartet ggf. auf weitere Bestätigung). Fix: System-Prompt muss explizit fordern: "Nach jedem Tool-Call MUSS eine Textantwort an den Nutzer folgen." Alternativ: Konversations-Histerie prüfen ob letzter Agenten-Turn leer war, und nochmals senden. → Prompt-Tuning, kein Code-Fix.
+
+**BUG-5 (High) — Vertriebler `default`-Response ist die Selbstvorstellung**
+`personas/vertriebler.ts` hat `responses['default']` = Einleitung "Hi, ich bin Sandra...". Da der Selector keinen Keyword-Match findet, wird dieser Response immer wieder gesendet, was einen Boot-Loop erzeugt. Fix: `default`-Response aller Personas muss eine neutrale Aussage sein, die das Interview vorwärtsbewegt (z.B. ein Prozessbeschreibungs-Response). → Persona-Datei ändern.
+
+**BUG-6 (Medium) — Selector hat kein Gedächtnis, ob ein Slot bereits beantwortet wurde**
+Wenn der Agent eine Frage zum selben Slot erneut stellt (auch leicht umformuliert), gibt der Selector denselben Response zurück, statt zu eskalieren oder weiterzugehen. Mehrfach-Antworten auf dieselbe Frage verbrennen Turns ohne neue Information. Fix: Selector könnte einen lokalen Set "already answered" tracken und bei erneutem Match auf `default` switchen. → Runner-Code-Änderung (Rücksprache nötig per Handoff-Regeln).
+
+**Einschätzung:**
+BUG-4 und BUG-5 sind die Ursache für alle drei Fail-Verdicts. BUG-4 (Prompt-Fix) und BUG-5 (Persona-Fix) wären die prioritären Iterationen vor einem Re-Run. PROJ-8-Status bleibt "Deployed" — die Infrastruktur ist korrekt, die Qualitätsschwellen sind jedoch nicht erreicht. Empfehlung: Prompt-Tuning-Session + Persona-Fix vor Re-Run.
 
 ## Deployment
 
