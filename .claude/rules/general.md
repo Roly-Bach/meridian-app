@@ -15,6 +15,88 @@ Before starting ANY work, check if the project has been initialized:
 - Guide them to run `/write-spec` first to create the feature spec before any implementation
 
 ## Feature Tracking
+
+### Domains (5)
+
+Jedes Feature gehört zu genau einer dieser 5 Domains:
+
+| Domain | Beschreibung |
+|--------|-------------|
+| **Platform** | Auth, Workspace, Infrastruktur, LLM-Konfiguration, Observability, Security |
+| **Interview Engine** | Interview-Führung: Agent-Backend, UI, Voice, Design, Eval |
+| **Wissensbank** | Extraktion, Strukturierung und Speicherung von Prozesswissen |
+| **Use Case Engine** | Ableitung, Priorisierung und ROI-Berechnung von Use Cases |
+| **Dashboard & Output** | Admin-Übersicht, Reports, Exports |
+
+Grenze Wissensbank / Use Case Engine: Wissensbank speichert *was ist* (Prozesse, Schritte, Tools). Use Case Engine leitet *was tun wir damit* ab (KI-Use-Cases, ROI).
+
+### Feature-Typen (4)
+
+| Typ | Definition |
+|-----|-----------|
+| **Epic** | Foundational, eigene DB-Tabellen + Service, andere bauen darauf auf |
+| **Feature** | Neue nutzersichtbare Fähigkeit innerhalb einer Domain |
+| **Extension** | Ergänzt ein bestehendes Feature ohne dessen Verhalten zu ersetzen |
+| **Revision** | Überarbeitet/ersetzt Verhalten eines bestehenden Features |
+
+`Extends` ist immer genau ein PROJ-X. Cross-Cutting-Features (Observability, Rate Limiting, Security) bekommen Type=Feature und Extends=—.
+
+### Status-Modell
+
+Lifecycle (linear): `Roadmap → Planned → Architected → In Progress → In Review → Approved → Deployed`
+
+**Blocked** ist ein orthogonaler Zustand, erreichbar von Planned/Architected/In Progress. Bedeutet: Arbeit pausiert wegen externem Faktor. Spec dokumentiert was blockt und wann erneut prüfen. Resolution geht zurück zum vorherigen Status oder weiter zu Deployed.
+
+| Status | Erreicht durch |
+|--------|---------------|
+| Roadmap | /init |
+| Planned | /write-spec |
+| Architected | /architecture |
+| In Progress | /frontend oder /backend startet |
+| In Review | /qa startet |
+| Approved | /qa passt (keine Critical/High Bugs) |
+| Deployed | /deploy |
+
+### INDEX.md-Format (10 Spalten)
+
+```
+| ID | Feature | Type | Domain | Extends | Status | Spec | Priority | Appetite | Bugs |
+```
+
+| Feld | Definition |
+|------|-----------|
+| `Type` | Epic / Feature / Extension / Revision |
+| `Domain` | eine der 5 Domains |
+| `Extends` | PROJ-X bei Extension/Revision, sonst `—` |
+| `Appetite` | S (1-2d) / M (3-5d) / L (1-2w) / XL (>2w), Schätzung vor Implementierung |
+| `Bugs` | H:M:L nach QA (z.B. `0:2:1`), vor QA `—` |
+
+### Bookkeeping-Regeln
+
+| Feld | Erstmals gesetzt durch | Zuständige Skill |
+|------|----------------------|------------------|
+| ID | INDEX.md "Next Available ID" | jede schreibende Skill |
+| Feature | /write-spec | write-spec |
+| Type | /write-spec | write-spec |
+| Domain | /write-spec | write-spec |
+| Extends | /write-spec | write-spec |
+| Status | jeder Lifecycle-Event | jeweilige Skill |
+| Spec | Filename-Konvention | write-spec |
+| Priority | /init oder /write-spec | init / write-spec |
+| Appetite | /write-spec | write-spec |
+| Bugs | /qa (am Ende, H:M:L) | qa |
+
+### Hard Rules
+
+1. `Appetite` muss spätestens beim Übergang zu Status=Architected gefüllt sein.
+2. `Bugs` muss spätestens beim Übergang zu Status=Approved gefüllt sein.
+3. `Type`, `Domain`, `Extends` müssen ab Status=Planned gefüllt sein.
+4. Eine Skill, die einen Status-Übergang vollzieht, muss vorher prüfen, ob alle Hard Rules erfüllt sind. Wenn nicht: abbrechen und User informieren.
+5. Eine Skill, die ein Feld setzt, muss das Write-Then-Verify-Muster befolgen (Read → Edit → Re-read).
+
+Ein `—` ist nur erlaubt, solange das Lifecycle-Event noch nicht erreicht wurde.
+
+### Basis-Tracking-Regeln
 - All features are tracked in `features/INDEX.md` - read it before starting any work
 - Feature specs live in `features/PROJ-X-feature-name.md`
 - Feature IDs are sequential: check INDEX.md for the next available number
@@ -73,3 +155,19 @@ After completing work on any feature, you MUST update tracking files. Follow thi
 - After completing a skill, suggest the next skill to the user
 - Format: "Next step: Run `/skillname` to [action]"
 - Handoffs are always user-initiated, never automatic
+
+## Approval Gates
+
+Die folgenden Operationen erfordern zwingend User-Approval **vor** der Ausführung:
+
+| Operation | Begründung |
+|-----------|-----------|
+| Supabase Schema-Änderung (`apply_migration`, direkte SQL-Writes über Service Role) | Unumkehrbar oder nur mit Datenmigration rollbackbar |
+| Production-Deploy (Vercel `--prod`, Domain-Promote) | Unmittelbar nutzersichtbar, Rollback mit Latenz |
+| Löschen oder Umbenennen von Dateien in `features/`, `docs/`, `.claude/`, `src/` | Risiko von Datenverlust und Workflow-Bruch |
+| `git push --force`, Branch-Delete, `git reset --hard` mit lokalen Änderungen | Datenverlust |
+| API-Key-Rotation, Änderung von Environment-Variablen in Produktion (`vercel env`) | Auswirkung auf Live-System |
+| Dependency-Major-Upgrade in `package.json` | Breaking-Change-Risiko |
+| Skip von Pre-Commit-Hooks (`--no-verify`) | Umgeht Qualitäts-Gates |
+
+**Hard Rule:** Eine Skill, die eine dieser Operationen ausführen will, muss vorher per Tool (`AskUserQuestion` oder explizite Bestätigungsabfrage) eine Freigabe einholen. Eine einmalige Freigabe gilt nur für den aktuellen Aufruf, nicht für nachfolgende gleichartige Aufrufe.

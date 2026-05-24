@@ -1,4 +1,4 @@
-# Feature Specifications
+# Feature Specifications — Alex Sprogis AI Coding Starter Kit
 
 Dieser Ordner enthält detaillierte Feature Specs vom Requirements Engineer.
 
