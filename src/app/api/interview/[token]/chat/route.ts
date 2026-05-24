@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
+import {
+  createInterviewStream,
+  computeMissingMandatorySlots,
+  type Phase,
+  type TurnMessage,
+  type StepEntry,
+} from '@/services/interviewAgent'
 import { extractAndEmbed, type RawExtraction } from '@/services/extraction'
 import { enrichProcessSteps } from '@/services/processEnrichment'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
@@ -92,7 +98,7 @@ export async function POST(
   const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
     supabase
       .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log')
+      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker')
       .eq('interview_id', interview.id)
       .maybeSingle(),
     supabase
@@ -102,9 +108,10 @@ export async function POST(
       .order('turn_number', { ascending: true }),
   ])
 
-  const state = rawState as Partial<StateRow> | null
+  const state = rawState as (Partial<StateRow> & { step_tracker?: unknown }) | null
   const existingTurns = (rawTurns as TurnRow[]) ?? []
   const currentPhase = (state?.phase ?? 'intro') as Phase
+  const stepTracker: StepEntry[] = (state?.step_tracker as StepEntry[] | null) ?? []
   const nextTurnNumber = existingTurns.length + 1
 
   let timerMinutes = 0
@@ -112,6 +119,12 @@ export async function POST(
     const firstTurnTime = new Date(existingTurns[0].created_at).getTime()
     timerMinutes = Math.floor((Date.now() - firstTurnTime) / 60000)
   }
+
+  // ── Compute missing slots for coverage_check phase ──────────────────────────
+  const missingSlotsForCoverageCheck =
+    currentPhase === 'coverage_check'
+      ? computeMissingMandatorySlots(stepTracker)
+      : undefined
 
   // ── Build conversation history ──────────────────────────────────────────────
   const history: TurnMessage[] = existingTurns.flatMap((t) => [
@@ -124,6 +137,7 @@ export async function POST(
   const stream = createInterviewStream({
     context: {
       interviewId: interview.id,
+      workspaceId: interview.workspace_id,
       employeeName: interview.employee_name,
       employeeRole: interview.employee_role,
       department: interview.department,
@@ -134,6 +148,8 @@ export async function POST(
       topicsOpen: state?.topics_open ?? [],
       extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
+      stepTracker,
+      missingSlotsForCoverageCheck,
     },
     history,
     onFinish: async (agentText) => {

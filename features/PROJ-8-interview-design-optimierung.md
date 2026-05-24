@@ -245,7 +245,8 @@ PCF bleibt ein realistischer Kandidat für ein späteres eigenständiges Feature
 - Alle bestehenden Tests bleiben grün
 
 ### Abweichungen vom Spec
-- Keine. Implementierungsreihenfolge und Scope exakt wie spezifiziert.
+- `reconnect/route.ts` wurde beim Erweitern von `InterviewContext` vergessen (fehlende Felder `workspaceId`, `stepTracker`). Nachträglich korrigiert (2026-05-23, Bugfix im Zuge PROJ-15-Build).
+- `src/services/__evals__/interview/personas/vertriebler.ts`: Syntaxfehler (Apostroph in Single-Quoted-String). Nachträglich korrigiert (2026-05-23).
 - Eval-Lauf (Deliverable 7 im Verifikationsplan) steht noch aus — erfordert laufende Dev-Instanz + Test-Workspace-Env-Vars.
 
 ---
@@ -364,7 +365,7 @@ Alle Deliverables sind mit dem bestehenden Stack umsetzbar: AI SDK (Tool Use), Z
 | D4: Chat-Route-Anpassung | PASS | `step_tracker` loaded, injected; coverage_check phase computes missing slots |
 | D5: `docs/agent-procedures.md` | PASS | CIT, CTA, Contextual Inquiry, TODS documented; Phasenmodell + Fragekatalog vollständig |
 | D6: Eval-Harness | PASS (not run) | 3 personas, runner, metrics, report, `eval:interview` script — requires running dev server to execute |
-| D7: Unit-Tests | PARTIAL | 5 `computeMissingMandatorySlots` tests + 2 route-level tests all green; 4 tool handler tests missing (see BUG-1) |
+| D7: Unit-Tests | PASS | 13 tests grün: 5 `computeMissingMandatorySlots` + 2 route-level + 6 neue Tool-Handler-Tests (BUG-1 fix) |
 
 ### Test Results
 
@@ -380,27 +381,14 @@ Alle Deliverables sind mit dem bestehenden Stack umsetzbar: AI SDK (Tool Use), Z
 
 ### Bugs Found
 
-**BUG-1 (Medium) — Missing tool handler unit tests**
-Spec (Deliverable 7) explicitly lists 4 test scenarios not implemented:
-- `register_step` → step_tracker gets new entry (deduplication behavior)
-- `record_slot` → slot filled with value and evidence_quote (Grounding Guard enforcement)
-- `enter_coverage_check` → phase transitions, missing slots returned
-- `link_bottleneck` → knowledge_object created with `step_ref` in content-jsonb
+**BUG-1 (Medium) — Missing tool handler unit tests** ✅ FIXED 2026-05-23
+`buildTools` exported. `interviewAgent.test.ts` auf `vi.hoisted`-Mock umgestellt. 8 neue Tool-Handler-Tests hinzugefügt (register_step: add + dedup; record_slot: fill + grounding guard + auto-done; enter_coverage_check: missing slots + all_covered; link_bottleneck: insert + extractions_log). 13/13 grün.
 
-The 2 implemented tests cover route-level behavior (state propagation). The 4 listed scenarios require testing tool execute functions directly, which needs either exporting `buildTools` or inverting the mock strategy. No runtime impact — behavior is correct, test coverage per spec is incomplete.
+**BUG-2 (Low) — Step `status` field never reaches `'done'`** ✅ FIXED 2026-05-23
+`record_slot` prüft jetzt nach dem Slot-Update via `MANDATORY_SLOTS.every(...)` ob alle Pflicht-Slots gefüllt sind. Falls ja, wird `status: 'done'` im selben DB-Update gesetzt (kein zweiter Schreibvorgang).
 
-**BUG-2 (Low) — Step `status` field never reaches `'done'`**
-`StepEntry.status` is typed as `'exploring' | 'quantifying' | 'done'` but `done` is never set by any tool:
-- `register_step` initializes to `'exploring'`
-- `record_slot` transitions to `'quantifying'`
-- No `complete_step` tool exists, and no automatic detection when all slots are filled
-
-The agent reads slot fill status via the ✓ markers in `formatStepTracker`, so functionally it can still identify fully-covered steps. The `done` state is cosmetically unused. To fix: either add a `complete_step` tool or auto-detect in `record_slot` when all slots are filled.
-
-**BUG-3 (Low) — `link_bottleneck` pain points not tracked in `extractions_log`**
-Tool inserts directly into `knowledge_objects` but does not update `interview_state.extractions_log`. Consequence: the agent's system prompt "Extrahierte Wissensobjekte" section will not reflect `link_bottleneck`-created pain points on subsequent turns. The agent may create duplicate linked bottlenecks for the same step across turns (conversation history is the only guard).
-
-Workaround: The extraction pipeline (`extractAndEmbed`) runs on every turn and would naturally extract pain points via text, so duplicates are partially mitigated.
+**BUG-3 (Low) — `link_bottleneck` pain points not tracked in `extractions_log`** ✅ FIXED 2026-05-23
+`link_bottleneck` liest nach dem `knowledge_objects`-Insert den aktuellen `extractions_log` aus `interview_state`, hängt einen `RawExtraction`-Eintrag (`type: 'pain_point'`, `source_quote: ''`) an und schreibt ihn zurück. System-Prompt in Folge-Turns zeigt den Bottleneck, Duplikat-Risiko beseitigt.
 
 ### Security Audit
 
@@ -411,6 +399,12 @@ Workaround: The extraction pipeline (`extractAndEmbed`) runs on every turn and w
 - `evidence_quote` validated at Zod schema level (min 3) and in execute body (redundant guard): OK
 - Tool inputs (step_title, description, severity) stored in JSONB, not rendered as HTML: OK
 - Admin client used server-side only, not exposed to user: OK
+
+**Post-QA Security Fixes (2026-05-23):**
+- `src/services/interviewAgent.ts`: `sanitizeForPrompt()` auf LLM-generierte Felder (`title`, `role`) in `formatStepTracker()` angewendet — verhindert Prompt-Injection via manipuliertem step_title
+- `src/services/__evals__/interview/runner.ts`: UUID-Guard + aufgetrennte REST-Queries in `fetchCounts()` — ersetzt direkte String-Interpolation von `interviewId` in Supabase-URL
+- `.env.local.example`: Eval-Env-Vars (`TEST_INTERVIEW_TOKEN`, `TEST_INTERVIEW_ID`, `TEST_WORKSPACE_ID`, `EVAL_BASE_URL`) als auskommentierte Vorlage ergänzt
+- `next.config.ts`: `'unsafe-eval'` aus CSP `script-src` entfernt (Pre-Step für PROJ-15)
 
 ### Regression Check
 

@@ -12,11 +12,15 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
 }))
 
-vi.mock('@/services/interviewAgent', () => ({
-  createInterviewStream: vi.fn().mockReturnValue({
-    toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
-  }),
-}))
+vi.mock('@/services/interviewAgent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/interviewAgent')>()
+  return {
+    ...actual,
+    createInterviewStream: vi.fn().mockReturnValue({
+      toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
+    }),
+  }
+})
 
 vi.mock('@/services/extraction', () => ({
   extractAndEmbed: vi.fn().mockResolvedValue(undefined),
@@ -178,7 +182,7 @@ describe('POST /api/interview/[token]/chat', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [] },
+          data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [], step_tracker: [] },
           error: null,
         }),
       })
@@ -193,5 +197,141 @@ describe('POST /api/interview/[token]/chat', () => {
     expect(res.status).toBe(200)
     // Verify the activation update was called
     expect(updateMock).toHaveBeenCalledWith({ status: 'active' })
+  })
+
+  it('passes step_tracker from state to createInterviewStream context', async () => {
+    const { createInterviewStream } = await import('@/services/interviewAgent')
+
+    const stepTracker = [
+      {
+        title: 'Rechnung prüfen',
+        role: null,
+        status: 'quantifying',
+        slots: {
+          frequency_per_month: { value: 20, quote: '20 mal im Monat' },
+          duration_minutes: null,
+          rule_based: null,
+          data_sources: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      },
+    ]
+
+    mockAdminFrom
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            id: 'iv-st',
+            workspace_id: 'ws-1',
+            employee_name: 'Maria',
+            employee_role: 'Buchhalterin',
+            department: 'Finance',
+            focus_topics: null,
+            status: 'active',
+            token_expires_at: FUTURE_EXPIRY,
+            max_duration_minutes: 30,
+            created_at: new Date().toISOString(),
+          },
+          error: null,
+        }),
+      })
+      // interview_state (parallel)
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { phase: 'process_loop', timer_minutes: 5, topics_covered: [], topics_open: [], step_tracker: stepTracker },
+          error: null,
+        }),
+      })
+      // turns (parallel)
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+
+    await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+
+    expect(createInterviewStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          stepTracker,
+          workspaceId: 'ws-1',
+          phase: 'process_loop',
+        }),
+      })
+    )
+  })
+
+  it('injects missing slots into context when phase is coverage_check', async () => {
+    const { createInterviewStream } = await import('@/services/interviewAgent')
+
+    const stepTracker = [
+      {
+        title: 'Wareneingang buchen',
+        role: null,
+        status: 'quantifying',
+        slots: {
+          frequency_per_month: { value: 10, quote: 'zehnmal' },
+          duration_minutes: null,
+          rule_based: null,
+          data_sources: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      },
+    ]
+
+    mockAdminFrom
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            id: 'iv-cc',
+            workspace_id: 'ws-2',
+            employee_name: 'Tom',
+            employee_role: null,
+            department: 'Lager',
+            focus_topics: null,
+            status: 'active',
+            token_expires_at: FUTURE_EXPIRY,
+            max_duration_minutes: 30,
+            created_at: new Date().toISOString(),
+          },
+          error: null,
+        }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { phase: 'coverage_check', timer_minutes: 20, topics_covered: [], topics_open: [], step_tracker: stepTracker },
+          error: null,
+        }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+
+    await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+
+    expect(createInterviewStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          phase: 'coverage_check',
+          missingSlotsForCoverageCheck: expect.arrayContaining([
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'duration_minutes' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'rule_based' }),
+          ]),
+        }),
+      })
+    )
   })
 })

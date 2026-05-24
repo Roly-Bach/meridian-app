@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-import { createInterviewStream, type Phase, type TurnMessage } from '@/services/interviewAgent'
+import { createInterviewStream, type Phase, type TurnMessage, type StepEntry } from '@/services/interviewAgent'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
 import type { RawExtraction } from '@/services/extraction'
@@ -28,7 +28,7 @@ export async function POST(
 
   const { data: rawInterview, error: fetchError } = await supabase
     .from('interviews')
-    .select('id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes')
+    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes')
     .eq('access_token', token)
     .single()
 
@@ -57,7 +57,7 @@ export async function POST(
   const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
     supabase
       .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log')
+      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker')
       .eq('interview_id', interview.id)
       .maybeSingle(),
     supabase
@@ -67,8 +67,9 @@ export async function POST(
       .order('turn_number', { ascending: true }),
   ])
 
-  const state = rawState as Partial<StateRow> | null
+  const state = rawState as (Partial<StateRow> & { step_tracker?: unknown }) | null
   const existingTurns = (rawTurns as TurnRow[]) ?? []
+  const stepTracker: StepEntry[] = (state?.step_tracker as StepEntry[] | null) ?? []
 
   let timerMinutes = 0
   if (existingTurns.length > 0) {
@@ -84,6 +85,7 @@ export async function POST(
   const stream = createInterviewStream({
     context: {
       interviewId: interview.id,
+      workspaceId: interview.workspace_id,
       employeeName: interview.employee_name,
       employeeRole: interview.employee_role,
       department: interview.department,
@@ -94,6 +96,7 @@ export async function POST(
       topicsOpen: state?.topics_open ?? [],
       extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
+      stepTracker,
     },
     history,
     isReconnect: true,

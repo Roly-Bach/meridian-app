@@ -104,29 +104,32 @@ export interface Database {
       interview_state: {
         Row: {
           interview_id: string
-          phase: 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
+          phase: 'intro' | 'process_loop' | 'coverage_check' | 'wrap_up'
           timer_minutes: number
           topics_covered: string[]
           topics_open: string[]
           extractions_log: Json
+          step_tracker: Json
           updated_at: string
         }
         Insert: {
           interview_id: string
-          phase?: 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
+          phase?: 'intro' | 'process_loop' | 'coverage_check' | 'wrap_up'
           timer_minutes?: number
           topics_covered?: string[]
           topics_open?: string[]
           extractions_log?: Json
+          step_tracker?: Json
           updated_at?: string
         }
         Update: {
           interview_id?: string
-          phase?: 'intro' | 'exploration' | 'deepdive' | 'wrap_up'
+          phase?: 'intro' | 'process_loop' | 'coverage_check' | 'wrap_up'
           timer_minutes?: number
           topics_covered?: string[]
           topics_open?: string[]
           extractions_log?: Json
+          step_tracker?: Json
           updated_at?: string
         }
         Relationships: []

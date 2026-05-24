@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:all": "vitest run && playwright test"
+    "test:all": "vitest run && playwright test",
+    "eval:interview": "tsx src/services/__evals__/interview/runner.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
