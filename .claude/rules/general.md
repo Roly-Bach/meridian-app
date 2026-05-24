@@ -98,7 +98,7 @@ Ein `—` ist nur erlaubt, solange das Lifecycle-Event noch nicht erreicht wurde
 
 ### Basis-Tracking-Regeln
 - All features are tracked in `features/INDEX.md` - read it before starting any work
-- Feature specs live in `features/PROJ-X-feature-name.md`
+- Feature specs live in `features/<domain>/PROJ-X-feature-name.md` (domain subfolder matches the feature's Domain field: `platform/`, `interview-engine/`, `wissensbank/`, `use-case-engine/`, `dashboard-output/`)
 - Feature IDs are sequential: check INDEX.md for the next available number
 - One feature per spec file (Single Responsibility)
 - Never combine multiple independent functionalities in one spec
@@ -118,7 +118,7 @@ Ein `—` ist nur erlaubt, solange das Lifecycle-Event noch nicht erreicht wurde
 ## Status Updates (MANDATORY - Write-Then-Verify)
 After completing work on any feature, you MUST update tracking files. Follow this exact sequence:
 
-1. **Read** the feature spec (`features/PROJ-X-*.md`) and `features/INDEX.md` BEFORE editing
+1. **Read** the feature spec (path from `features/INDEX.md`, e.g. `features/<domain>/PROJ-X-*.md`) and `features/INDEX.md` BEFORE editing
 2. **Write** your changes using the Edit tool — do NOT just describe what you would write
 3. **Re-read** the file AFTER editing to verify the changes are actually present
 4. **If changes are missing**, repeat step 2 — never claim updates were made without verifying

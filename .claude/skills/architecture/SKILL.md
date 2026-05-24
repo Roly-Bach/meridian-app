@@ -21,7 +21,7 @@ NEVER write code or show implementation details:
 1. Read `features/INDEX.md` to understand project context
 2. Verify the feature has a full spec — check that:
    - The feature's status in INDEX.md is **"Planned"** (not "Roadmap")
-   - A spec file `features/PROJ-X-*.md` actually exists on disk
+   - A spec file `features/*/PROJ-X-*.md` actually exists on disk (domain subfolder, e.g. `features/platform/PROJ-1-auth-workspace.md`)
 3. Check existing components: `git ls-files src/components/`
 4. Check existing APIs: `git ls-files src/app/api/`
 5. Read the feature spec the user references
@@ -33,7 +33,7 @@ NEVER write code or show implementation details:
 ## Workflow
 
 ### 1. Read Feature Spec
-- Read `/features/PROJ-X.md`
+- Read the spec file — path is in the `Spec` column of `features/INDEX.md` (e.g. `features/platform/PROJ-X.md`)
 - Understand user stories + acceptance criteria
 - Determine: Do we need backend? Or frontend-only?
 
@@ -78,7 +78,7 @@ Explain WHY specific tools/approaches are chosen in plain language.
 List only package names with brief purpose.
 
 ### 4. Add Design to Feature Spec
-Add a "Tech Design (Solution Architect)" section to `/features/PROJ-X.md`
+Add a "Tech Design (Solution Architect)" section to the spec file (path from `features/INDEX.md`)
 
 ### 5. User Review
 - Present the design for review

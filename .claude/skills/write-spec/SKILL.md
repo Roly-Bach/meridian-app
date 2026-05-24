@@ -92,7 +92,12 @@ Stelle diese vier Fragen als einzelne AskUserQuestion-Calls mit Empfehlung. Erst
 Use [template.md](template.md) to create the feature spec:
 - Use the PROJ-X ID already in INDEX.md (or the one assigned in Entry Point B)
 - Fill all header fields: Type, Domain, Extends, Appetite, Bugs=`—`
-- Save to `features/PROJ-X-feature-name.md` (kebab-case filename)
+- Save to `features/<domain>/PROJ-X-feature-name.md` — domain is the kebab-case subfolder matching the feature's Domain field:
+  - Platform → `features/platform/`
+  - Interview Engine → `features/interview-engine/`
+  - Wissensbank → `features/wissensbank/`
+  - Use Case Engine → `features/use-case-engine/`
+  - Dashboard & Output → `features/dashboard-output/`
 
 Present the draft spec to the user for review. Apply feedback, then save.
 
@@ -137,7 +142,7 @@ Each spec = ONE testable, deployable unit.
 - [ ] At least 3–5 edge cases documented
 - [ ] Feature ID assigned (PROJ-X)
 - [ ] Type, Domain, Extends, Appetite filled (Hard Rule: Pflicht ab Status=Planned)
-- [ ] File saved to `features/PROJ-X-feature-name.md`
+- [ ] File saved to `features/<domain>/PROJ-X-feature-name.md`
 - [ ] `features/INDEX.md` updated (status: Roadmap → Planned; Type, Domain, Extends, Appetite, Bugs=`—` gesetzt; next ID updated if Entry Point B)
 - [ ] `docs/PRD.md` roadmap table updated if applicable
 - [ ] User has reviewed and approved the spec

@@ -1,6 +1,6 @@
 # QA Test Results Template
 
-Add this section to the END of the feature spec `/features/PROJ-X.md`:
+Add this section to the END of the feature spec (path from `features/INDEX.md`, e.g. `features/<domain>/PROJ-X.md`):
 
 ```markdown
 ---

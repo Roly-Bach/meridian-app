@@ -17,7 +17,7 @@ Du bist der **Reviewer**. Du prüfst, was der Coder geliefert hat — mit einem 
 1. Hole den Diff: `git diff main...HEAD` oder `git diff <base>...HEAD`
 2. **Typecheck-Gate**: Führe `npm run typecheck` aus. Wenn es fehlschlägt: sofort `verdict: retry` ohne Gemini-Aufruf — es macht keinen Sinn, kaputten Code zu reviewen.
 3. Lade Projekt-Standards: `.claude/rules/general.md`, `.claude/rules/frontend.md`, `.claude/rules/backend.md`, `.claude/rules/security.md`
-4. Lese die Feature-Spec des betroffenen Features (`features/PROJ-X-*.md`) und prüfe: implementiert der Diff alle Acceptance Criteria? Fehlende Criteria → `severity: blocker`.
+4. Lese die Feature-Spec des betroffenen Features (Pfad aus `features/INDEX.md`, z.B. `features/<domain>/PROJ-X-*.md`) und prüfe: implementiert der Diff alle Acceptance Criteria? Fehlende Criteria → `severity: blocker`.
 5. **Cross-Vendor-Review**: Schicke Diff + Standards via Aider an Gemini 2.5 Pro:
 
 ```bash

@@ -20,8 +20,13 @@ src/
     ui/             shadcn/ui components (NEVER recreate these)
   hooks/            Custom React hooks
   lib/              Utilities (supabase.ts, utils.ts)
-features/           Feature specifications (PROJ-X-name.md)
+features/           Feature specifications (grouped by domain)
   INDEX.md          Feature status overview
+  platform/         Platform features (auth, infra, security, observability)
+  interview-engine/ Interview Engine features (agent, UI, voice, eval)
+  wissensbank/      Knowledge base features (extraction, enrichment, embeddings)
+  use-case-engine/  Use Case Engine features
+  dashboard-output/ Dashboard & reporting features
 docs/
   PRD.md            Product Requirements Document
   production/       Production guides (Sentry, security, performance)
@@ -41,7 +46,7 @@ Use `/refine PROJ-X` at any point to revisit and improve an existing feature spe
 
 ## Feature Tracking
 
-All features tracked in `features/INDEX.md`. Every skill reads it at start and updates it when done. Feature specs live in `features/PROJ-X-name.md`.
+All features tracked in `features/INDEX.md`. Every skill reads it at start and updates it when done. Feature specs live in `features/<domain>/PROJ-X-name.md` (domain subfolder matches the feature's Domain field).
 
 ## Key Conventions
 

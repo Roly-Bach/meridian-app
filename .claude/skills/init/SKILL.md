@@ -112,7 +112,7 @@ Present the feature map to the user:
 Apply feedback, then update `features/INDEX.md` and the "Next Available ID" line.
 
 ## What NOT to do
-- Do NOT create individual `features/PROJ-X-*.md` spec files — that is `/write-spec`'s job
+- Do NOT create individual spec files in `features/<domain>/` — that is `/write-spec`'s job
 - Do NOT write code or make technical decisions
 - Do NOT ask multiple questions at once
 - Do NOT stop early — keep going until you have full clarity on the project

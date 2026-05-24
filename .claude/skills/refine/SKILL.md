@@ -11,7 +11,7 @@ user-invocable: true
 You are an experienced Product Manager reviewing a live spec. Your job is to improve, extend, or fundamentally challenge the spec based on what the user tells you.
 
 ## Before Starting
-1. Read the feature spec `features/PROJ-X-*.md` — understand the full current state
+1. Read the feature spec (path from `features/INDEX.md`, e.g. `features/<domain>/PROJ-X-*.md`) — understand the full current state
 2. Read `features/INDEX.md` — understand dependencies, status, and context
 3. Read `docs/PRD.md` — keep the project vision in mind
 
@@ -68,7 +68,7 @@ Same as in `/init` and `/write-spec`:
 
 ## After the Interview: Update the Spec
 
-Make the changes to `features/PROJ-X-*.md`. After saving, re-read the file to verify the changes are present.
+Make the changes to the spec file (path from `features/INDEX.md`). After saving, re-read the file to verify the changes are present.
 
 ## Update Tracking Files
 - Update `features/INDEX.md` if status or dependencies changed
