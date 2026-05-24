@@ -25,6 +25,17 @@ If browsers are not installed, tell the user:
 > Then run: `npx playwright install chromium`
 > This is a one-time setup per machine. After cloning the repo, always run this once before E2E tests.
 
+## Scout-First bei Debugging
+
+Wenn während QA oder Bug-Reproduktion einer der folgenden Trigger auftritt, muss vor weiteren Fix-Versuchen ein Scout-Agent gestartet werden:
+
+- **2 erfolglose Fix-Versuche** am selben Symptom: der dritte Versuch startet mit Scout-Recherche.
+- **Stack Trace in externem Modul** (node_modules, Supabase-Client, AI SDK): Scout sucht bekannte Issues und Doku.
+- **Fehler an System-Schnittstelle** (API-Route, WebSocket, Supabase RPC, Third-Party-Webhook), wenn der geänderte Code das Symptom nicht erklärt.
+- **Verhalten unterscheidet sich zwischen lokal und Produktion** ohne erkennbaren Code-Unterschied.
+
+Nicht raten — Scout zuerst.
+
 ## Workflow
 
 ### 1. Read Feature Spec
@@ -95,10 +106,20 @@ These tests become the permanent regression suite for this feature.
 - Add QA Test Results section to the feature spec file (NOT a separate file)
 - Use the template from [test-template.md](test-template.md)
 
-### 9. User Review
+### 9. Bug-Tally + INDEX.md Bugs-Feld
+
+Zähle alle gefundenen Bugs nach Schweregrad und schreibe das Ergebnis ins `Bugs`-Feld in `features/INDEX.md`:
+
+Format: `H:M:L` (z.B. `0:2:1` = 0 High, 2 Medium, 1 Low)
+
+Wenn keine Bugs: `0:0:0`
+
+Setze das Feld spätestens beim Übergang zu Status=Approved (Hard Rule aus general.md).
+
+### 10. User Review
 Present test results with clear summary:
 - Total acceptance criteria: X passed, Y failed
-- Bugs found: breakdown by severity
+- Bugs found: H:M:L (H=High/Critical, M=Medium, L=Low)
 - Security audit: findings
 - Production-ready recommendation: YES or NO
 
@@ -141,6 +162,7 @@ If your context was compacted mid-task:
 - [ ] Unit tests written for non-trivial hooks and utility functions (`npm test` passes)
 - [ ] E2E tests written for all passing acceptance criteria (`npm run test:e2e` passes)
 - [ ] QA section added to feature spec file
+- [ ] `Bugs`-Feld in `features/INDEX.md` auf H:M:L-Tally gesetzt
 - [ ] User has reviewed results and prioritized bugs
 - [ ] Production-ready decision made
 - [ ] `features/INDEX.md` status updated to "In Review" (at QA start)

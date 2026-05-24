@@ -69,10 +69,29 @@ Cover these topics through natural conversation (not as a checklist):
 - "What if two users edit the same record simultaneously?"
 - "What should happen if the API call times out?"
 
+## After the Interview: Classify the Feature
+
+Before writing the spec, determine the four classification fields. Present each as a question with a recommendation:
+
+**Type** (one of four):
+- Epic — foundational, eigene DB-Tabellen + Service, andere bauen darauf auf
+- Feature — neue nutzersichtbare Fähigkeit innerhalb einer Domain
+- Extension — ergänzt ein bestehendes Feature ohne dessen Verhalten zu ersetzen
+- Revision — überarbeitet/ersetzt Verhalten eines bestehenden Features
+
+**Domain** (eine der fünf): Platform / Interview Engine / Wissensbank / Use Case Engine / Dashboard & Output
+
+**Extends**: bei Extension oder Revision genau ein PROJ-X. Bei Feature/Epic: `—`. Cross-Cutting-Features (Security, Observability, Rate Limiting) bekommen Type=Feature und Extends=`—`.
+
+**Appetite** (Schätzung vor Implementierung): S (1-2d) / M (3-5d) / L (1-2w) / XL (>2w)
+
+Stelle diese vier Fragen als einzelne AskUserQuestion-Calls mit Empfehlung. Erst danach die Spec schreiben.
+
 ## After the Interview: Write the Spec
 
 Use [template.md](template.md) to create the feature spec:
 - Use the PROJ-X ID already in INDEX.md (or the one assigned in Entry Point B)
+- Fill all header fields: Type, Domain, Extends, Appetite, Bugs=`—`
 - Save to `features/PROJ-X-feature-name.md` (kebab-case filename)
 
 Present the draft spec to the user for review. Apply feedback, then save.
@@ -117,8 +136,9 @@ Each spec = ONE testable, deployable unit.
 - [ ] Every acceptance criterion is testable (not vague)
 - [ ] At least 3–5 edge cases documented
 - [ ] Feature ID assigned (PROJ-X)
+- [ ] Type, Domain, Extends, Appetite filled (Hard Rule: Pflicht ab Status=Planned)
 - [ ] File saved to `features/PROJ-X-feature-name.md`
-- [ ] `features/INDEX.md` updated (status: Roadmap → Planned; next ID updated if Entry Point B)
+- [ ] `features/INDEX.md` updated (status: Roadmap → Planned; Type, Domain, Extends, Appetite, Bugs=`—` gesetzt; next ID updated if Entry Point B)
 - [ ] `docs/PRD.md` roadmap table updated if applicable
 - [ ] User has reviewed and approved the spec
 

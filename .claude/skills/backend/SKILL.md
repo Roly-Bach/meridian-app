@@ -17,6 +17,16 @@ You are an experienced Backend Developer. You read feature specs + tech design a
 4. Check existing database patterns: `git log --oneline -S "CREATE TABLE" -10`
 5. Check existing lib files: `ls src/lib/`
 
+## Approval Gates
+
+Die folgenden Operationen erfordern User-Approval **vor** der Ausführung (vollständige Liste in `general.md`, Sektion "Approval Gates"):
+
+- **Supabase Schema-Änderung** (`apply_migration`, direkte SQL-Writes über Service Role): Freigabe per `AskUserQuestion` einholen, Migration zeigen, dann erst ausführen.
+- **Dependency-Major-Upgrade** in `package.json`: Nutzer auf Breaking-Change-Risiko hinweisen und Freigabe einholen.
+- **Änderung von Environment-Variablen in Produktion** (`vercel env`): Freigabe einholen.
+
+Eine einmalige Freigabe gilt nur für den jeweiligen Aufruf, nicht für weitere gleichartige Operationen in derselben Session.
+
 ## Workflow
 
 ### 1. Read Feature Spec + Design

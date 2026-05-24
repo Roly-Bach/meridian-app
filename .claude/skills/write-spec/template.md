@@ -1,6 +1,11 @@
 # PROJ-X: Feature Name
 
 ## Status: Planned
+**Type:** Epic / Feature / Extension / Revision
+**Domain:** Platform / Interview Engine / Wissensbank / Use Case Engine / Dashboard & Output
+**Extends:** —
+**Appetite:** S / M / L / XL
+**Bugs:** —
 **Created:** YYYY-MM-DD
 **Last Updated:** YYYY-MM-DD
 
@@ -21,7 +26,6 @@
 ## Technical Requirements (optional)
 - Performance: < 200ms response time
 - Security: Authentication required
-- Browser Support: Chrome, Firefox, Safari
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -34,3 +38,15 @@ _To be added by /qa_
 
 ## Deployment
 _To be added by /deploy_
+
+## Post-Mortem
+_To be added by /deploy_
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | — |
