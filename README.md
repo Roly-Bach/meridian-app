@@ -2,8 +2,6 @@
 
 Meridian erhebt implizites Prozesswissen von Mitarbeitern durch KI-geführte Interviews, speichert es strukturiert mit Vektorsemantik in Supabase und leitet daraus priorisierte KI-Use-Cases mit ROI-Berechnung ab.
 
-**Zielgruppe:** KI-Berater, die Unternehmen bei der Adoption begleiten, und Process Owner, die Prozesswissen sichern wollen.
-
 **Deployment:** [meridian-app-tau.vercel.app](https://meridian-app-tau.vercel.app)
 
 ---
@@ -50,7 +48,7 @@ meridian-app/
 │   │   │   ├── interviews/     # Interview-Verwaltung (Auth-geschützt)
 │   │   │   ├── process-steps/  # Prozessschritt-API
 │   │   │   └── use-cases/      # Use-Case-API
-│   │   ├── dashboard/          # Berater-Oberfläche (Auth-geschützt)
+│   │   ├── dashboard/          # Admin-Oberfläche (Auth-geschützt)
 │   │   └── interview/[token]/  # Mitarbeiter-Oberfläche (Token-only)
 │   ├── components/             # React-Komponenten
 │   │   └── ui/                 # shadcn/ui (nie neu implementieren)
@@ -76,9 +74,9 @@ meridian-app/
 ├── tests/                      # Playwright E2E-Tests
 └── .claude/                    # Claude-Code-Workflow-Infrastruktur
     ├── rules/                  # Coding-Standards (auto-applied nach Dateipfad)
-    ├── skills/                 # Invocable Workflows (/write-spec, /qa, /deploy ...)
-    ├── agents/                 # Sub-Agent-Konfigurationen
-    └── commands/               # Custom Commands (/build, /retro, /eval-interview)
+    ├── skills/                 # Domain-Rollen: führen Arbeit direkt aus (/write-spec, /backend, /eval-interview ...)
+    ├── agents/                 # Sub-Agent-Konfigurationen (Architect, Coder, Reviewer, Verifier ...)
+    └── commands/               # Pipeline-Orchestratoren: delegieren an Sub-Agents (/build, /quick, /cleanup ...)
 ```
 
 Die Domain-Ordnerstruktur unter `features/` (fünf Unterordner statt flache Liste) ist in [ADR-004](docs/adr/ADR-004-feature-tracking-v2.md) begründet. Jede Feature-Spec liegt im Ordner der zugehörigen Domain.
@@ -152,7 +150,7 @@ Jede Skill liest `features/INDEX.md` zu Beginn und aktualisiert Status und Felde
 
 Meridian führt strukturierte Interviews mit Mitarbeitern, um implizites Prozesswissen zu erheben. Der KI-Agent identifiziert Prozessschritte und erfasst deren Attribute gezielt — das Ergebnis fließt in eine nachgelagerte Pipeline: Extraktion, Prozessanreicherung und Use-Case-Generierung mit ROI-Berechnung.
 
-Mitarbeiter brauchen keinen Account. Der Berater legt das Interview an und schickt dem Mitarbeiter einen Token-Link mit 30 Tagen Laufzeit.
+Mitarbeiter brauchen keinen Account. Der Admin legt das Interview an und schickt dem Mitarbeiter einen Token-Link mit 30 Tagen Laufzeit.
 
 ### Interview-Methodik
 
