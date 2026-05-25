@@ -26,7 +26,7 @@ export default async function ProcessStepsPage() {
         const admin = getSupabaseAdmin()
         const { data } = await admin
           .from('process_steps')
-          .select('*')
+          .select('*, interviews(department, employee_name, employee_role, status)')
           .eq('workspace_id', workspaceId)
           .order('created_at', { ascending: false })
           .limit(200)

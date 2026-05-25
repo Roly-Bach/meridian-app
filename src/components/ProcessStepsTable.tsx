@@ -1,16 +1,23 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Separator } from '@/components/ui/separator'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { ChevronDown, ChevronRight, Info } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ProcessStep {
@@ -28,6 +35,12 @@ interface ProcessStep {
   media_breaks: number
   source_quote: string | null
   created_at: string
+  interviews: {
+    department: string
+    employee_name: string
+    employee_role: string | null
+    status: string
+  } | null
 }
 
 type EditableNumberField = 'frequency_per_month' | 'duration_minutes' | 'error_rate_percent' | 'media_breaks'
@@ -40,6 +53,11 @@ export function ProcessStepsTable({ initialSteps }: Props) {
   const [steps, setSteps] = useState<ProcessStep[]>(initialSteps)
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
   const [draftValue, setDraftValue] = useState<string>('')
+  const [openSections, setOpenSections] = useState<Set<string>>(() => {
+    // Open first department by default
+    const departments = [...new Set(initialSteps.map(s => s.interviews?.department ?? 'Unbekannt'))]
+    return new Set(departments.slice(0, 1))
+  })
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function patchStep(id: string, data: Partial<ProcessStep>) {
@@ -77,16 +95,14 @@ export function ProcessStepsTable({ initialSteps }: Props) {
       if (parsedValue !== null && isNaN(parsedValue as number)) return
     }
 
-    // Optimistic update
     setSteps((prev) =>
       prev.map((s) => (s.id === step.id ? { ...s, [field]: parsedValue } : s))
     )
 
     try {
       const updated = await patchStep(step.id, { [field]: parsedValue })
-      setSteps((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+      setSteps((prev) => prev.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)))
     } catch (err) {
-      // Revert on error
       setSteps((prev) => prev.map((s) => (s.id === step.id ? step : s)))
       toast.error(err instanceof Error ? err.message : 'Update fehlgeschlagen')
     }
@@ -97,19 +113,26 @@ export function ProcessStepsTable({ initialSteps }: Props) {
     setSteps((prev) => prev.map((s) => (s.id === step.id ? { ...s, rule_based: newVal } : s)))
     try {
       const updated = await patchStep(step.id, { rule_based: newVal })
-      setSteps((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+      setSteps((prev) => prev.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)))
     } catch (err) {
       setSteps((prev) => prev.map((s) => (s.id === step.id ? step : s)))
       toast.error(err instanceof Error ? err.message : 'Update fehlgeschlagen')
     }
   }
 
+  function toggleSection(dept: string) {
+    setOpenSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(dept)) next.delete(dept)
+      else next.add(dept)
+      return next
+    })
+  }
+
   if (steps.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-[14px] text-[#6B7280]">
-          Kein Interview abgeschlossen.
-        </p>
+        <p className="text-[14px] text-[#6B7280]">Kein Interview abgeschlossen.</p>
         <p className="text-[12px] text-[#6B7280] mt-1">
           Schließe ein Interview ab, um Prozessschritte zu generieren.
         </p>
@@ -117,153 +140,260 @@ export function ProcessStepsTable({ initialSteps }: Props) {
     )
   }
 
+  // Group by department
+  const grouped = steps.reduce<Record<string, ProcessStep[]>>((acc, step) => {
+    const dept = step.interviews?.department ?? 'Unbekannt'
+    if (!acc[dept]) acc[dept] = []
+    acc[dept].push(step)
+    return acc
+  }, {})
+
+  const departments = Object.keys(grouped).sort()
+
+  // Summary stats
+  const totalSteps = steps.length
+  const totalDepts = departments.length
+  const uniqueInterviews = new Set(steps.map(s => s.interview_id)).size
+  const ruleBasedCount = steps.filter(s => s.rule_based).length
+  const ruleBasedPct = totalSteps > 0 ? Math.round((ruleBasedCount / totalSteps) * 100) : 0
+
   return (
-    <div className="rounded-[6px] border border-[#E5E5E5] overflow-hidden bg-white">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-[#F9FAFB] hover:bg-[#F9FAFB]">
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[200px]">Titel</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[120px]">Rolle</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[100px]">Häuf./Mo.</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[90px]">Dauer (Min)</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[180px]">Datenquellen</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[90px]">Regelbasiert</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[90px]">Fehler %</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#6B7280] w-[90px]">Medienbrüche</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {steps.map((step) => (
-            <TableRow key={step.id} className="hover:bg-[#FAFAFA]">
-              {/* Title — read-only */}
-              <TableCell className="text-[13px] font-medium text-[#111111] py-3">
-                <div title={step.source_quote ?? undefined}>
-                  {step.title}
-                  {step.role && (
-                    <span className="block text-[11px] text-[#6B7280] font-normal mt-0.5">
-                      {step.role}
-                    </span>
-                  )}
-                </div>
-              </TableCell>
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Summary Stats */}
+        <div className="grid grid-cols-4 gap-3">
+          <StatCard label="Prozessschritte" value={String(totalSteps)} />
+          <StatCard label="Abteilungen" value={String(totalDepts)} />
+          <StatCard label="Interviews" value={String(uniqueInterviews)} />
+          <StatCard label="Automatisierbar" value={`${ruleBasedPct}%`} sub={`${ruleBasedCount} regelbasiert`} />
+        </div>
 
-              {/* Role — read-only (shown in title cell) */}
-              <TableCell className="text-[13px] text-[#6B7280] py-3">
-                {step.role ?? <span className="text-[#D1D5DB]">—</span>}
-              </TableCell>
+        {/* Department sections */}
+        <div className="space-y-3">
+          {departments.map((dept) => {
+            const deptSteps = grouped[dept]
+            const deptInterviews = new Set(deptSteps.map(s => s.interview_id)).size
+            const isOpen = openSections.has(dept)
 
-              {/* frequency_per_month */}
-              <EditableNumberCell
-                step={step}
-                field="frequency_per_month"
-                value={step.frequency_per_month}
-                editingCell={editingCell}
-                draftValue={draftValue}
-                inputRef={inputRef}
-                onStartEdit={startEdit}
-                onDraftChange={setDraftValue}
-                onCommit={commitEdit}
-                onCancel={() => setEditingCell(null)}
-              />
+            return (
+              <Collapsible key={dept} open={isOpen} onOpenChange={() => toggleSection(dept)}>
+                <CollapsibleTrigger className="w-full">
+                  <div className="flex items-center justify-between px-4 py-3 bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] hover:bg-[#F3F4F6] transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      {isOpen
+                        ? <ChevronDown className="w-4 h-4 text-[#6B7280]" />
+                        : <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+                      }
+                      <span className="text-[14px] font-semibold text-[#111111]">{dept}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[12px] text-[#6B7280]">
+                      <span>{deptSteps.length} Schritt{deptSteps.length !== 1 ? 'e' : ''}</span>
+                      <span className="text-[#D1D5DB]">·</span>
+                      <span>{deptInterviews} Interview{deptInterviews !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
 
-              {/* duration_minutes */}
-              <EditableNumberCell
-                step={step}
-                field="duration_minutes"
-                value={step.duration_minutes}
-                editingCell={editingCell}
-                draftValue={draftValue}
-                inputRef={inputRef}
-                onStartEdit={startEdit}
-                onDraftChange={setDraftValue}
-                onCommit={commitEdit}
-                onCancel={() => setEditingCell(null)}
-              />
-
-              {/* data_sources */}
-              <TableCell
-                className="text-[13px] text-[#111111] py-3 cursor-pointer"
-                onClick={() =>
-                  startEdit(step.id, 'data_sources', step.data_sources.join(', '))
-                }
-              >
-                {editingCell?.id === step.id && editingCell.field === 'data_sources' ? (
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={draftValue}
-                    onChange={(e) => setDraftValue(e.target.value)}
-                    onBlur={() => commitEdit(step, 'data_sources')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitEdit(step, 'data_sources')
-                      if (e.key === 'Escape') setEditingCell(null)
-                    }}
-                    className="w-full border border-[#E040FB] rounded-[4px] px-2 py-0.5 text-[13px] outline-none bg-white"
-                    placeholder="SAP, Excel, ..."
-                    autoFocus
-                  />
-                ) : step.data_sources.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {step.data_sources.map((src) => (
-                      <span
-                        key={src}
-                        className="inline-block bg-[#F3E5FF] text-[#7C3AED] text-[11px] px-1.5 py-0.5 rounded-[3px]"
-                      >
-                        {src}
-                      </span>
+                <CollapsibleContent>
+                  <div className="mt-2 space-y-2">
+                    {deptSteps.map((step) => (
+                      <StepCard
+                        key={step.id}
+                        step={step}
+                        editingCell={editingCell}
+                        draftValue={draftValue}
+                        inputRef={inputRef}
+                        onStartEdit={startEdit}
+                        onDraftChange={setDraftValue}
+                        onCommit={commitEdit}
+                        onCancel={() => setEditingCell(null)}
+                        onToggleRuleBased={toggleRuleBased}
+                      />
                     ))}
                   </div>
-                ) : (
-                  <span className="text-[#D1D5DB] text-[12px]">Klicken zum Bearbeiten</span>
-                )}
-              </TableCell>
-
-              {/* rule_based */}
-              <TableCell className="py-3">
-                <Switch
-                  checked={step.rule_based}
-                  onCheckedChange={() => toggleRuleBased(step)}
-                  className="data-[state=checked]:bg-[#E040FB]"
-                />
-              </TableCell>
-
-              {/* error_rate_percent */}
-              <EditableNumberCell
-                step={step}
-                field="error_rate_percent"
-                value={step.error_rate_percent}
-                editingCell={editingCell}
-                draftValue={draftValue}
-                inputRef={inputRef}
-                onStartEdit={startEdit}
-                onDraftChange={setDraftValue}
-                onCommit={commitEdit}
-                onCancel={() => setEditingCell(null)}
-                suffix="%"
-              />
-
-              {/* media_breaks */}
-              <EditableNumberCell
-                step={step}
-                field="media_breaks"
-                value={step.media_breaks}
-                editingCell={editingCell}
-                draftValue={draftValue}
-                inputRef={inputRef}
-                onStartEdit={startEdit}
-                onDraftChange={setDraftValue}
-                onCommit={commitEdit}
-                onCancel={() => setEditingCell(null)}
-              />
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )
+          })}
+        </div>
+      </div>
+    </TooltipProvider>
   )
 }
 
-interface EditableNumberCellProps {
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <Card className="border-[#E5E5E5] shadow-none">
+      <CardContent className="px-4 py-3">
+        <p className="text-[11px] text-[#6B7280] font-medium uppercase tracking-wide">{label}</p>
+        <p className="text-[22px] font-semibold text-[#111111] mt-0.5 leading-none">{value}</p>
+        {sub && <p className="text-[11px] text-[#9CA3AF] mt-1">{sub}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface StepCardProps {
+  step: ProcessStep
+  editingCell: { id: string; field: string } | null
+  draftValue: string
+  inputRef: React.RefObject<HTMLInputElement | null>
+  onStartEdit: (id: string, field: string, current: string) => void
+  onDraftChange: (val: string) => void
+  onCommit: (step: ProcessStep, field: EditableNumberField | 'data_sources') => void
+  onCancel: () => void
+  onToggleRuleBased: (step: ProcessStep) => void
+}
+
+function StepCard({
+  step, editingCell, draftValue, inputRef,
+  onStartEdit, onDraftChange, onCommit, onCancel, onToggleRuleBased,
+}: StepCardProps) {
+  return (
+    <Card className="border-[#E5E5E5] shadow-none bg-white hover:bg-[#FAFAFA] transition-colors">
+      <CardContent className="px-4 py-3">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[14px] font-medium text-[#111111] leading-snug truncate">
+              {step.title}
+            </span>
+            {step.source_quote && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[280px] text-[12px]">
+                  {step.source_quote}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {step.role && (
+              <Badge variant="secondary" className="text-[11px] px-1.5 py-0.5 bg-[#F3F4F6] text-[#4B5563] border-0 font-normal">
+                {step.role}
+              </Badge>
+            )}
+            {step.rule_based && (
+              <Badge className="text-[11px] px-1.5 py-0.5 bg-[#F3E5FF] text-[#7C3AED] border-0 font-normal hover:bg-[#F3E5FF]">
+                Regelbasiert
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Description */}
+        {step.description && (
+          <p className="text-[12px] text-[#6B7280] line-clamp-2 mb-2 leading-relaxed">
+            {step.description}
+          </p>
+        )}
+
+        <Separator className="my-2 bg-[#F3F4F6]" />
+
+        {/* Metrics + controls */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* frequency_per_month */}
+            <MetricChip
+              icon="📅"
+              label="×/Mo"
+              step={step}
+              field="frequency_per_month"
+              value={step.frequency_per_month}
+              editingCell={editingCell}
+              draftValue={draftValue}
+              inputRef={inputRef}
+              onStartEdit={onStartEdit}
+              onDraftChange={onDraftChange}
+              onCommit={onCommit}
+              onCancel={onCancel}
+            />
+
+            {/* duration_minutes */}
+            <MetricChip
+              icon="⏱"
+              label=" Min"
+              step={step}
+              field="duration_minutes"
+              value={step.duration_minutes}
+              editingCell={editingCell}
+              draftValue={draftValue}
+              inputRef={inputRef}
+              onStartEdit={onStartEdit}
+              onDraftChange={onDraftChange}
+              onCommit={onCommit}
+              onCancel={onCancel}
+            />
+
+            {/* error_rate_percent */}
+            <MetricChip
+              icon="⚠"
+              label="%"
+              step={step}
+              field="error_rate_percent"
+              value={step.error_rate_percent}
+              editingCell={editingCell}
+              draftValue={draftValue}
+              inputRef={inputRef}
+              onStartEdit={onStartEdit}
+              onDraftChange={onDraftChange}
+              onCommit={onCommit}
+              onCancel={onCancel}
+            />
+
+            {/* media_breaks */}
+            <MetricChip
+              icon="🔗"
+              label=" Brüche"
+              step={step}
+              field="media_breaks"
+              value={step.media_breaks}
+              editingCell={editingCell}
+              draftValue={draftValue}
+              inputRef={inputRef}
+              onStartEdit={onStartEdit}
+              onDraftChange={onDraftChange}
+              onCommit={onCommit}
+              onCancel={onCancel}
+            />
+
+            {/* data_sources */}
+            <DataSourcesChip
+              step={step}
+              editingCell={editingCell}
+              draftValue={draftValue}
+              inputRef={inputRef}
+              onStartEdit={onStartEdit}
+              onDraftChange={onDraftChange}
+              onCommit={onCommit}
+              onCancel={onCancel}
+            />
+          </div>
+
+          {/* rule_based toggle + employee name */}
+          <div className="flex items-center gap-3 shrink-0">
+            {step.interviews?.employee_name && (
+              <span className="text-[11px] text-[#9CA3AF]">
+                {step.interviews.employee_name}
+              </span>
+            )}
+            <Switch
+              checked={step.rule_based}
+              onCheckedChange={() => onToggleRuleBased(step)}
+              className="data-[state=checked]:bg-[#E040FB]"
+            />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+interface MetricChipProps {
+  icon: string
+  label: string
   step: ProcessStep
   field: EditableNumberField
   value: number | null
@@ -274,20 +404,20 @@ interface EditableNumberCellProps {
   onDraftChange: (val: string) => void
   onCommit: (step: ProcessStep, field: EditableNumberField) => void
   onCancel: () => void
-  suffix?: string
 }
 
-function EditableNumberCell({
-  step, field, value, editingCell, draftValue, inputRef,
-  onStartEdit, onDraftChange, onCommit, onCancel, suffix,
-}: EditableNumberCellProps) {
+function MetricChip({
+  icon, label, step, field, value, editingCell, draftValue, inputRef,
+  onStartEdit, onDraftChange, onCommit, onCancel,
+}: MetricChipProps) {
   const isEditing = editingCell?.id === step.id && editingCell.field === field
 
   return (
-    <TableCell
-      className="text-[13px] text-[#111111] py-3 cursor-pointer"
+    <div
+      className="flex items-center gap-1 cursor-pointer group"
       onClick={() => onStartEdit(step.id, field, value != null ? String(value) : '')}
     >
+      <span className="text-[12px]">{icon}</span>
       {isEditing ? (
         <input
           ref={inputRef}
@@ -301,24 +431,93 @@ function EditableNumberCell({
             if (e.key === 'Enter') onCommit(step, field)
             if (e.key === 'Escape') onCancel()
           }}
-          className="w-16 border border-[#E040FB] rounded-[4px] px-2 py-0.5 text-[13px] outline-none bg-white"
+          className="w-14 border border-[#E040FB] rounded-[4px] px-1.5 py-0.5 text-[12px] outline-none bg-white"
           autoFocus
+          onClick={(e) => e.stopPropagation()}
         />
-      ) : value != null ? (
-        <span>{value}{suffix}</span>
       ) : (
-        <span className="text-[#D1D5DB] text-[12px]">—</span>
+        <span className="text-[12px] text-[#374151] group-hover:text-[#111111]">
+          {value != null
+            ? <>{value}{label}</>
+            : <span className="text-[#D1D5DB]">—</span>
+          }
+        </span>
       )}
-    </TableCell>
+    </div>
+  )
+}
+
+interface DataSourcesChipProps {
+  step: ProcessStep
+  editingCell: { id: string; field: string } | null
+  draftValue: string
+  inputRef: React.RefObject<HTMLInputElement | null>
+  onStartEdit: (id: string, field: string, current: string) => void
+  onDraftChange: (val: string) => void
+  onCommit: (step: ProcessStep, field: 'data_sources') => void
+  onCancel: () => void
+}
+
+function DataSourcesChip({
+  step, editingCell, draftValue, inputRef,
+  onStartEdit, onDraftChange, onCommit, onCancel,
+}: DataSourcesChipProps) {
+  const isEditing = editingCell?.id === step.id && editingCell.field === 'data_sources'
+
+  return (
+    <div
+      className="cursor-pointer"
+      onClick={() => onStartEdit(step.id, 'data_sources', step.data_sources.join(', '))}
+    >
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={draftValue}
+          onChange={(e) => onDraftChange(e.target.value)}
+          onBlur={() => onCommit(step, 'data_sources')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onCommit(step, 'data_sources')
+            if (e.key === 'Escape') onCancel()
+          }}
+          className="border border-[#E040FB] rounded-[4px] px-2 py-0.5 text-[12px] outline-none bg-white w-40"
+          placeholder="SAP, Excel, ..."
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : step.data_sources.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {step.data_sources.map((src) => (
+            <span
+              key={src}
+              className="inline-block bg-[#F3E5FF] text-[#7C3AED] text-[11px] px-1.5 py-0.5 rounded-[3px]"
+            >
+              {src}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <span className="text-[#D1D5DB] text-[11px]">+ Datenquellen</span>
+      )}
+    </div>
   )
 }
 
 export function ProcessStepsTableSkeleton() {
   return (
-    <div className="rounded-[6px] border border-[#E5E5E5] overflow-hidden bg-white">
-      <div className="p-4 space-y-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full rounded-[4px]" />
+    <div className="space-y-6">
+      <div className="grid grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 rounded-[6px]" />
+        ))}
+      </div>
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-11 w-full rounded-[6px]" />
+            <Skeleton className="h-20 w-full rounded-[6px]" />
+            <Skeleton className="h-20 w-full rounded-[6px]" />
+          </div>
         ))}
       </div>
     </div>
