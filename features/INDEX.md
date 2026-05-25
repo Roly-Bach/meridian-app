@@ -38,6 +38,15 @@
 
 ## Next Available ID: PROJ-18
 
+## Known Issues
+
+> Bugs und technische Schulden, die kein eigenes Feature rechtfertigen. Vor dem nächsten Deploy prüfen ob noch offen.
+
+| ID | Severity | Beschreibung | Entdeckt in | Fix-Aufwand |
+|----|----------|-------------|-------------|-------------|
+| BUG-E2E-1 | Low | 16 E2E-Tests schlagen mit Timeout fehl (`input[placeholder="z.B. Mahr GmbH"]` nicht gefunden) — betrifft Signup-Flow in PROJ-1/3/6/11. Pre-existing, blockiert keinen Deploy, aber verhindert sauberes E2E-Gate. | PROJ-17 Deploy | S |
+| BUG-17-L2 | Low | `/reconnect` gibt 409 statt 500 zurück wenn Supabase turns-Query fehlschlägt. Client erhält "Cold-Start verwenden" obwohl ein DB-Fehler vorliegt. Tritt nur bei Supabase-Ausfall auf. | PROJ-17 QA | S |
+
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
 
