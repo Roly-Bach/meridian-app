@@ -27,6 +27,17 @@ type Props = {
   onCreated: (interview: Interview) => void
 }
 
+const DEPARTMENTS = [
+  'Einkauf',
+  'Vertrieb',
+  'Finance',
+  'HR',
+  'IT',
+  'Operations',
+  'Marketing',
+  'Sonstiges',
+]
+
 const EMPTY_FORM = { employee_name: '', employee_role: '', department: '', focus_topics: '', max_duration_minutes: 30 }
 
 export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
@@ -150,13 +161,20 @@ export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
               <Label className="text-[14px] text-[#111111]">
                 Abteilung <span className="text-[#E040FB]">*</span>
               </Label>
-              <Input
+              <Select
                 value={form.department}
-                onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
-                placeholder="z.B. Qualitätssicherung"
-                className="rounded-[4px] text-[14px] border-[#E5E5E5]"
+                onValueChange={(val) => setForm((f) => ({ ...f, department: val }))}
                 disabled={loading}
-              />
+              >
+                <SelectTrigger className="rounded-[4px] text-[14px] border-[#E5E5E5]">
+                  <SelectValue placeholder="Abteilung wählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENTS.map((dept) => (
+                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

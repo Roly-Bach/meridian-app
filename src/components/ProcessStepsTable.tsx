@@ -53,11 +53,7 @@ export function ProcessStepsTable({ initialSteps }: Props) {
   const [steps, setSteps] = useState<ProcessStep[]>(initialSteps)
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
   const [draftValue, setDraftValue] = useState<string>('')
-  const [openSections, setOpenSections] = useState<Set<string>>(() => {
-    // Open first department by default
-    const departments = [...new Set(initialSteps.map(s => s.interviews?.department ?? 'Unbekannt'))]
-    return new Set(departments.slice(0, 1))
-  })
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function patchStep(id: string, data: Partial<ProcessStep>) {
