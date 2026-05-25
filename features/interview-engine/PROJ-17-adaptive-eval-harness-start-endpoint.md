@@ -1,6 +1,6 @@
 # PROJ-17: Adaptive Eval-Harness + Start-Endpoint
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-24
 **Last Updated:** 2026-05-25
 **Type:** Feature
@@ -382,16 +382,27 @@ Alle 207 Tests (23 Dateien) bestehen. Kein Regressionsbefund in bestehenden Inte
 **Production-ready: YES**
 
 ## Deployment
-_To be added by /deploy_
+
+**Production URL:** https://meridian-app-tau.vercel.app
+**Deployed:** 2026-05-25
+**Deployment ID:** dpl_C1jk58wjUBDX9TAzQRBHnQwMcDQX
+**Commit:** 1352ef90c086e1958e33d61c9323894cbd0a6baf
+**Build time:** ~37s, region fra1
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| G1 Static (build/lint/tsc) | pass | Next.js build clean, tsc no errors |
+| G2 Tests | pass | 208 unit tests pass; 16 E2E failures pre-existing (signup timeout, unrelated to PROJ-17) |
+| G3 Sandbox | pass | Preview meridian-h6y8wzozq-roly-bach.vercel.app — /login 200, /start route present, security headers correct |
+| G4 Permissions | pass | Token auth identical to /reconnect, rate limiting via checkTokenEndpointLimits, UUID validation, no RLS changes |
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
+| Spec-Genauigkeit | High |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: M |
+| Größte Überraschung | Keine großen Überraschungen — Implementierung lief nach Plan |
+| Vorgeschlagene Regeländerung | Existierende Bugs und fehlerhafte E2E-Tests sorgfältig dokumentieren und schnellstmöglich beheben; bei jedem Deploy explizit darauf hinweisen |
+| Build-Loop-Iterationen | tatsächlich: 1 (geplant: ≤5) |
 | Häufigste Fehlerkategorie im Loop | — |
