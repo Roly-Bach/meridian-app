@@ -10,6 +10,9 @@
 - **Deployment:** Vercel
 - **Validation:** Zod + react-hook-form
 - **State:** React useState / Context API
+- **AI SDK:** Vercel AI SDK v6 (`ai`, `@ai-sdk/anthropic`, `@ai-sdk/google`)
+- **Rate Limiting:** Upstash Redis + `@upstash/ratelimit`
+- **PDF:** `@react-pdf/renderer`
 
 ## Project Structure
 
@@ -62,7 +65,7 @@ All features tracked in `features/INDEX.md`. Every skill reads it at start and u
 ```bash
 npm run dev          # Development server (localhost:3000)
 npm run build        # Production build
-npm run lint         # ESLint
+npm run lint         # TypeScript type check (tsc --noEmit)
 npm run start        # Production server
 npm test             # Vitest unit/integration tests
 npm run test:e2e     # Playwright E2E tests

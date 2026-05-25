@@ -10,16 +10,7 @@ Meridian erhebt implizites Prozesswissen von Mitarbeitern durch KI-geführte Int
 
 ## Core Features (Roadmap)
 
-| Priority | Feature | Status |
-|----------|---------|--------|
-| P0 (MVP) | Auth + Workspace | Planned |
-| P0 (MVP) | Interview Engine Backend | Planned |
-| P0 (MVP) | Interview UI | Planned |
-| P0 (MVP) | Extraktions-Agent + Wissensbasis | Planned |
-| P0 (MVP) | Prozessschritt-Anreicherung | Planned |
-| P0 (MVP) | Use Case Identifikation | Planned |
-| P1 | Interview PDF Report | Planned |
-| P1 | LLM Observability & Tracing | Planned |
+Siehe `features/INDEX.md` für vollständigen Feature-Status inkl. Typ, Domain, Appetite und Bugs.
 
 ## Success Metrics
 - Interview vollständig abschließbar (Start → wrap_up → Abschluss)
@@ -31,7 +22,7 @@ Meridian erhebt implizites Prozesswissen von Mitarbeitern durch KI-geführte Int
 ## Constraints
 - Solo-Developer MVP, kein fixes Deadline-Datum
 - Backend: Supabase (PostgreSQL + pgvector + Auth)
-- KI-Stack: Claude claude-opus-4-5 (Agent Core + Extraktion), ElevenLabs Scribe v2 Realtime (Voice/STT), text-embedding-3-small (Embeddings)
+- KI-Stack: Provider-agnostisch via `INTERVIEW_MODEL` env var (Anthropic / Google, Default: `google/gemini-3.1-flash-lite`), ElevenLabs Scribe v2 Realtime (Voice/STT), text-embedding-3-small (Embeddings)
 - Deployment: Vercel
 - Desktop-only für MVP — kein Mobile
 - Design system: siehe `docs/design-system.md` (Meridian Pink #E040FB, Linear-ähnlich)
