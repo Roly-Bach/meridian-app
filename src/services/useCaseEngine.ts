@@ -7,6 +7,21 @@ export const SCORE_HIGH_THRESHOLD = 5000   // Q1 / priority high
 export const SCORE_MEDIUM_THRESHOLD = 1000 // Q2 / priority medium
 export const EFFORT_FACTORS = { low: 1, medium: 2, high: 3 } as const
 
+// ── Use Case Cluster (derived from effort + type, no DB field needed) ─────────
+export type UseCaseCluster = 'no_regret_foundation' | 'near_term_mvp' | 'strategic_bet'
+
+export const CLUSTER_META: Record<UseCaseCluster, { label: string; description: string; order: number }> = {
+  no_regret_foundation: { label: 'No-regret Foundation', description: 'Sofort starten — Aufwand niedrig, Nutzen sicher', order: 0 },
+  near_term_mvp:        { label: 'Near-term Business MVP', description: 'Klarer ROI, bewährte Technologie — fokussierte MVPs vorbereiten', order: 1 },
+  strategic_bet:        { label: 'Strategic Bets', description: 'Hohes Differenzierungspotenzial — Scope sorgfältig definieren', order: 2 },
+}
+
+export function getCluster(uc: { effort: string | null; type: string }): UseCaseCluster {
+  if (uc.effort === 'low') return 'no_regret_foundation'
+  if (uc.effort === 'high' || uc.type === 'decision_support') return 'strategic_bet'
+  return 'near_term_mvp'
+}
+
 const DOC_SOURCES = ['e-mail', 'email', 'pdf', 'word']
 const SEARCH_KEYWORDS = ['suchen', 'nachschlagen', 'klären', 'prüfen', 'finden', 'recherchieren']
 

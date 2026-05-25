@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { UseCaseCard } from './UseCaseCard'
+import { getCluster, CLUSTER_META, type UseCaseCluster } from '@/services/useCaseEngine'
 
 interface UseCase {
   id: string
@@ -118,14 +119,41 @@ export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalR
         </div>
       )}
 
-      {/* Cards Grid */}
-      {!generating && useCases.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          {useCases.map((uc) => (
-            <UseCaseCard key={uc.id} useCase={uc} />
-          ))}
-        </div>
-      )}
+      {/* Clustered Sections */}
+      {!generating && useCases.length > 0 && (() => {
+        const grouped = new Map<UseCaseCluster, typeof useCases>()
+        for (const uc of useCases) {
+          const cluster = getCluster(uc)
+          if (!grouped.has(cluster)) grouped.set(cluster, [])
+          grouped.get(cluster)!.push(uc)
+        }
+        const clusterOrder: UseCaseCluster[] = ['no_regret_foundation', 'near_term_mvp', 'strategic_bet']
+        return (
+          <div className="space-y-10">
+            {clusterOrder.map((cluster) => {
+              const items = grouped.get(cluster)
+              if (!items || items.length === 0) return null
+              const meta = CLUSTER_META[cluster]
+              return (
+                <div key={cluster}>
+                  <div className="flex items-baseline gap-3 mb-4">
+                    <h2 className="text-[15px] font-semibold text-[#111111]">{meta.label}</h2>
+                    <span className="text-[12px] text-[#6B7280]">{meta.description}</span>
+                    <span className="ml-auto text-[11px] font-medium text-[#9C27B0] bg-[#F3E5FF] rounded-full px-2 py-0.5">
+                      {items.length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    {items.map((uc) => (
+                      <UseCaseCard key={uc.id} useCase={uc} />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
     </div>
   )
 }
