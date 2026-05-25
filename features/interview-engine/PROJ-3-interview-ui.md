@@ -103,7 +103,7 @@
 ## Out of Scope
 
 - Voice-Input / Whisper (→ PROJ-7)
-- Delete / Archivieren von Interviews
+- ~~Delete / Archivieren von Interviews~~ → implementiert 2026-05-25
 - Interview-Detail-Seite (Transkript-Ansicht für Berater)
 - Read-only Transkript für abgeschlossene Interviews
 - Pagination der Interview-Liste (MVP: alle laden)
@@ -229,6 +229,23 @@ GET /api/interview/[token]
 - `src/app/dashboard/page.tsx` — Placeholder ersetzt durch `<InterviewsClient />`
 - `src/app/dashboard/layout.tsx` — `SidebarNav` eingebunden
 - `src/app/interview/[token]/page.tsx` — Neue Chat-Seite (kein Auth, kein Sidebar)
+
+### Nachträgliche Erweiterung: Interview löschen (2026-05-25)
+
+**Neue Dateien:**
+
+| Datei | Zweck |
+|---|---|
+| `src/app/api/interviews/[id]/route.ts` | `DELETE /api/interviews/[id]` — prüft Workspace-Zugehörigkeit, löscht Interview; alle Kindtabellen via `ON DELETE CASCADE` |
+| `src/components/interviews/DeleteInterviewButton.tsx` | Button mit `AlertDialog`-Bestätigung (Name + Daten-Hinweis), roter Hover-State |
+
+**Geänderte Dateien:**
+
+| Datei | Änderung |
+|---|---|
+| `InterviewRow.tsx` | `onDeleted`-Prop ergänzt; `DeleteInterviewButton` in Aktionsspalte eingefügt |
+| `InterviewsTable.tsx` | `onDeleted`-Prop durchgereicht an `InterviewRow` |
+| `InterviewsClient.tsx` | `handleDeleted` filtert gelöschtes Interview aus lokalem State |
 
 ### Abweichungen vom Tech Design
 

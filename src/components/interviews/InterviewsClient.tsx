@@ -33,6 +33,10 @@ export function InterviewsClient() {
     setInterviews((prev) => [interview, ...prev])
   }
 
+  function handleDeleted(id: string) {
+    setInterviews((prev) => prev.filter((i) => i.id !== id))
+  }
+
   return (
     <div className="max-w-[960px] mx-auto px-8 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -52,7 +56,7 @@ export function InterviewsClient() {
         <EmptyState onNew={() => setDialogOpen(true)} />
       ) : (
         <div className="bg-white rounded-[6px] border border-[#E5E5E5] overflow-hidden">
-          <InterviewsTable interviews={interviews} loading={loading} />
+          <InterviewsTable interviews={interviews} loading={loading} onDeleted={handleDeleted} />
         </div>
       )}
 

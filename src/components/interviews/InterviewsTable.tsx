@@ -6,9 +6,11 @@ const HEADERS = ['Mitarbeiter', 'Rolle', 'Abteilung', 'Status', 'Erstellt', 'Akt
 export function InterviewsTable({
   interviews,
   loading,
+  onDeleted,
 }: {
   interviews: Interview[]
   loading: boolean
+  onDeleted: (id: string) => void
 }) {
   return (
     <table className="w-full">
@@ -37,7 +39,7 @@ export function InterviewsTable({
               </tr>
             ))
           : interviews.map((interview) => (
-              <InterviewRow key={interview.id} interview={interview} />
+              <InterviewRow key={interview.id} interview={interview} onDeleted={onDeleted} />
             ))}
       </tbody>
     </table>

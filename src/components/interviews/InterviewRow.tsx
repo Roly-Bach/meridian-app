@@ -1,6 +1,7 @@
 import { StatusBadge } from './StatusBadge'
 import { CopyLinkButton } from './CopyLinkButton'
 import { DownloadPdfButton } from './DownloadPdfButton'
+import { DeleteInterviewButton } from './DeleteInterviewButton'
 
 export type Interview = {
   id: string
@@ -15,7 +16,13 @@ export type Interview = {
   created_at: string
 }
 
-export function InterviewRow({ interview }: { interview: Interview }) {
+export function InterviewRow({
+  interview,
+  onDeleted,
+}: {
+  interview: Interview
+  onDeleted: (id: string) => void
+}) {
   return (
     <tr className="border-b border-[#E5E5E5] hover:bg-[#F7F7F7] transition-colors">
       <td className="px-4 py-3 text-[14px] text-[#111111] font-medium">
@@ -42,6 +49,11 @@ export function InterviewRow({ interview }: { interview: Interview }) {
               employeeName={interview.employee_name}
             />
           )}
+          <DeleteInterviewButton
+            interviewId={interview.id}
+            employeeName={interview.employee_name}
+            onDeleted={onDeleted}
+          />
         </div>
       </td>
     </tr>
