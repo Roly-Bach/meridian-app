@@ -3,9 +3,11 @@
 import { createClient } from '@/lib/supabase-server'
 
 export async function signup({
+  workspace_name,
   email,
   password,
 }: {
+  workspace_name: string
   email: string
   password: string
 }) {
@@ -24,6 +26,7 @@ export async function signup({
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: { data: { workspace_name } },
   })
 
   if (error) {
