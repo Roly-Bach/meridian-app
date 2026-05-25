@@ -449,12 +449,15 @@ Agent ruft `register_step`/`record_slot` auf und sendet danach keine Text-Antwor
 
 **BUG-5 (High) — Vertriebler `default`-Response ist die Selbstvorstellung**
 `personas/vertriebler.ts` hat `responses['default']` = Einleitung "Hi, ich bin Sandra...". Da der Selector keinen Keyword-Match findet, wird dieser Response immer wieder gesendet, was einen Boot-Loop erzeugt. Fix: `default`-Response aller Personas muss eine neutrale Aussage sein, die das Interview vorwärtsbewegt (z.B. ein Prozessbeschreibungs-Response). → Persona-Datei ändern.
+**→ Strukturell gefixt durch PROJ-17:** Der Keyword-Selector-Mechanismus wurde vollständig ersetzt. Die neuen Persona-Dateien (`src/services/__evals__/interview/personas/`) verwenden kein `responses`-Objekt mehr — Claude Code antwortet adaptiv auf Basis des `processKnowledge`-Schemas.
 
 **BUG-6 (Medium) — Selector hat kein Gedächtnis, ob ein Slot bereits beantwortet wurde**
 Wenn der Agent eine Frage zum selben Slot erneut stellt (auch leicht umformuliert), gibt der Selector denselben Response zurück, statt zu eskalieren oder weiterzugehen. Mehrfach-Antworten auf dieselbe Frage verbrennen Turns ohne neue Information. Fix: Selector könnte einen lokalen Set "already answered" tracken und bei erneutem Match auf `default` switchen. → Runner-Code-Änderung (Rücksprache nötig per Handoff-Regeln).
+**→ Strukturell gefixt durch PROJ-17:** Kein Selector mehr vorhanden. Claude Code als Persona interpretiert Fragen kontextuell und gibt keine Slot-keyed Duplikat-Antworten zurück.
 
 **Einschätzung:**
 BUG-4 und BUG-5 sind die Ursache für alle drei Fail-Verdicts. BUG-4 (Prompt-Fix) und BUG-5 (Persona-Fix) wären die prioritären Iterationen vor einem Re-Run. PROJ-8-Status bleibt "Deployed" — die Infrastruktur ist korrekt, die Qualitätsschwellen sind jedoch nicht erreicht. Empfehlung: Prompt-Tuning-Session + Persona-Fix vor Re-Run.
+**Update 2026-05-25 (PROJ-17):** BUG-5 und BUG-6 sind durch die Ablösung des Keyword-Selectors strukturell gefixt. Der neue Eval-Harness-Ansatz (adaptive Claude-Code-Persona) ist in PROJ-17 dokumentiert.
 
 ## Deployment
 

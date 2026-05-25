@@ -1,0 +1,190 @@
+# Eval-Interview Skill
+
+## Zweck
+Führt einen vollständigen Eval-Lauf des Interview-Agenten mit einer synthetischen Persona durch.
+Claude Code übernimmt die Persona und antwortet inline auf Agent-Turns — kein separater API-Call, kein Tester-Modell.
+
+## Voraussetzungen
+- Dev-Server läuft: `npm run dev` auf `localhost:3000`
+- Supabase MCP ist verbunden (seit 2026-05-22 Standard)
+- Kein `TEST_INTERVIEW_TOKEN` o.ä. nötig — der Skill legt alles selbst an
+
+## Aufruf
+```
+/eval-interview <persona>
+```
+`<persona>` = `buchhalter` | `vertriebler` | `it-support`
+
+---
+
+## Schritt-für-Schritt-Ablauf
+
+### Schritt 1: Persona lesen
+
+Lese die Persona-Datei mit dem Read-Tool:
+- `buchhalter` → `src/services/__evals__/interview/personas/buchhalter.ts`
+- `vertriebler` → `src/services/__evals__/interview/personas/vertriebler.ts`
+- `it-support`  → `src/services/__evals__/interview/personas/it-support.ts`
+
+Extrahiere aus der Datei:
+- `identity.name`, `identity.role`, `identity.department`
+- `processKnowledge.processes[].name` (für `focus_topics`)
+- `processKnowledge` vollständig (für Persona-Antworten im Loop)
+- `style` (für Antwortton und Verbosity)
+
+### Schritt 2: Interview-Record anlegen
+
+Erstelle einen neuen Interview-Record via Supabase MCP (`execute_sql` oder `apply_migration` — NICHT `insert` ohne Schema-Kenntnis). Nutze die `interviews`-Tabelle mit folgendem expliziten Feld-Mapping:
+
+```sql
+INSERT INTO interviews (
+  workspace_id,
+  employee_name,
+  employee_role,
+  department,
+  focus_topics,
+  status,
+  access_token,
+  token_expires_at,
+  max_duration_minutes
+) VALUES (
+  '<workspace_id>',           -- aus der ersten Workspace-Zeile in der DB holen
+  '<identity.name>',
+  '<identity.role>',
+  '<identity.department>',
+  ARRAY['<process_1_name>', '<process_2_name>'],  -- aus processKnowledge.processes[].name
+  'created',
+  gen_random_uuid(),
+  NOW() + INTERVAL '7 days',
+  30
+)
+RETURNING id, access_token;
+```
+
+Hole die Workspace-ID vorher:
+```sql
+SELECT id FROM workspaces LIMIT 1;
+```
+
+Merke dir `interview.id` und `interview.access_token` (= Token) aus dem RETURNING-Ergebnis.
+
+### Schritt 3: Interview starten
+
+```bash
+curl -s -X POST http://localhost:3000/api/interview/<token>/start \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Das ist der erste Agent-Turn (`[Turn 1] Agent`). Speichere den gesamten Response-Text als `agentText`.
+
+Falls curl Connection-Refused meldet: brich ab und teile dem Nutzer mit, dass `npm run dev` gestartet werden muss.
+
+### Schritt 4: Eval-Loop (max. 20 Turns)
+
+Führe folgende Schleife durch:
+
+```
+Für jeden Turn N = 1..20:
+
+  a) Generiere Persona-Antwort:
+     - Lies agentText des letzten Agent-Turns
+     - Beantworte als Persona basierend auf processKnowledge
+     - Halte dich STRIKT an processKnowledge — erfinde keine Fakten
+     - Wenn die Frage zu etwas führt, das nicht im processKnowledge steht:
+       antworte ehrlich ("Da müsste ich nachsehen." / "Dazu habe ich gerade keine genauen Zahlen.")
+     - Beachte style.verbosity und style.tendencies für den Antwort-Charakter
+     - Eröffne das Gespräch NIE selbst — antworte nur auf Agent-Turns
+     - Protokolliere: [Turn N] Persona (<name>): "<antwortText>"
+
+  b) Sende Persona-Antwort an den Agenten:
+     curl -s -X POST http://localhost:3000/api/interview/<token>/chat \
+       -H "Content-Type: application/json" \
+       -d '{"user_input": "<personaAntwort>"}'
+
+  c) Protokolliere Agent-Antwort: [Turn N+1] Agent: "<agentText>"
+
+  d) Prüfe Abbruchbedingungen:
+     - Wenn der Agent-Response leer ist oder nur Tool-Calls enthält (kein sichtbarer Text):
+       Protokolliere: [Turn N+1] Agent: silent — tool-only
+       Brich den Loop ab.
+     - Wenn die Agent-Antwort Anzeichen für einen register_step-Tool-Call enthält
+       (z.B. im Debug-Output oder am Verhalten erkennbar):
+       Protokolliere: [PASS] register_step erkannt in Turn N+1
+       Brich den Loop ab (Pass-Kriterium erfüllt).
+     - Wenn interview.status = 'completed' (prüfen via SQL nach jedem Turn):
+       Protokolliere: [PASS] Interview abgeschlossen in Turn N+1
+       Brich den Loop ab.
+```
+
+### Schritt 5: Transcript schreiben
+
+Stelle sicher, dass das Verzeichnis `docs/evals/interview/` existiert (anlegen falls nicht vorhanden).
+
+Schreibe den Transcript nach `docs/evals/interview/YYYY-MM-DD-<persona>.md`:
+
+```markdown
+---
+interview_model: <Wert von INTERVIEW_MODEL env, oder "default" wenn nicht gesetzt>
+eval_date: YYYY-MM-DD
+persona: <persona-name>
+interview_id: <id>
+---
+
+[Turn 1] Agent: "<opener>"
+[Turn 1] Persona (<name>): "<antwort>"
+[Turn 2] Agent: "<frage>"
+[Turn 2] Persona (<name>): "<antwort>"
+...
+[PASS / FAIL] <Abschluss-Label mit Begründung>
+```
+
+### Schritt 6: Interview-Record bleibt in DB
+
+**Kein Cleanup.** Der Record bleibt in der Datenbank, damit:
+- Die personalisierte Begrüßung in der App-UI überprüft werden kann
+- Extraktion, Prozessschritt-Anreicherung und Use-Case-Engine auf echten Eval-Daten getestet werden können
+
+### Schritt 7: Abschluss-Output
+
+Gib folgenden strukturierten Hinweis aus:
+
+```
+✅ Eval-Lauf abgeschlossen — <PASS/FAIL>
+Transcript: docs/evals/interview/YYYY-MM-DD-<persona>.md
+Interview-ID: <id>
+
+Interview in der App einsehen:
+  http://localhost:3000/interview/<token>
+
+Nächste Schritte (manuelle Pipeline-Tests):
+  → Extraktion triggern:   POST http://localhost:3000/api/interviews/<id>/reextract
+  → Prozessschritte prüfen: SELECT * FROM process_steps WHERE interview_id = '<id>';
+  → Use Cases prüfen:       SELECT * FROM use_cases WHERE process_step_id IN (
+                              SELECT id FROM process_steps WHERE interview_id = '<id>'
+                            );
+```
+
+---
+
+## Pass-Kriterien (qualitative Review)
+
+Ein Eval-Lauf gilt als **PASS** wenn:
+1. Der erste Turn im Transcript ist `[Turn 1] Agent:` — nicht `[Turn 1] Persona`
+2. Kein Persona-Text wiederholt sich in zwei aufeinanderfolgenden Turns identisch
+3. Persona-Antworten gehen kontextuell auf die jeweilige Agent-Frage ein (visuell prüfen)
+4. Der Loop erreicht mindestens einen `register_step`-Call — oder es liegt ein dokumentierter silent-tool-only-Treffer vor
+
+Ein Eval-Lauf gilt als **FAIL** wenn:
+- Der Agent eröffnet nicht (erste Antwort leer oder fehlt)
+- Der Agent wiederholt dieselbe Frage 3× hintereinander
+- Der Loop erreicht Turn 20 ohne register_step und ohne silent-tool-only
+
+---
+
+## Anti-Halluzinations-Regel
+
+Claude Code MUSS sich beim Spielen der Persona strikt an `processKnowledge` halten:
+- Slot-Werte (Frequenz, Dauer, Fehlerrate) nur nennen wenn sie in `processKnowledge` stehen
+- Bei unbekannten Werten: „Da habe ich gerade keine genaue Zahl" oder „Das weiß ich nicht auswendig"
+- Niemals Prozesse, Tools oder Pain Points erfinden, die nicht in der Persona-Datei stehen

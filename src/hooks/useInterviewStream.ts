@@ -72,7 +72,13 @@ export function useInterviewStream(token: string) {
     [streamRequest, token]
   )
 
+  const start = useCallback(
+    (onChunk: (text: string) => void) =>
+      streamRequest(`/api/interview/${token}/start`, {}, onChunk),
+    [streamRequest, token]
+  )
+
   const clearError = useCallback(() => setError(null), [])
 
-  return { isStreaming, error, sendMessage, reconnect, clearError }
+  return { isStreaming, error, sendMessage, reconnect, start, clearError }
 }

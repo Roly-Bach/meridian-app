@@ -33,7 +33,7 @@ export function ChatInterface({ token, employeeName, existingTurns, status, onCo
   const [messages, setMessages] = useState<Message[]>(() => turnsToMessages(existingTurns))
   const [showReconnectBanner, setShowReconnectBanner] = useState(() => existingTurns.length > 0)
   const reconnectBannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const { isStreaming, error, sendMessage, reconnect, clearError } = useInterviewStream(token)
+  const { isStreaming, error, sendMessage, reconnect, start, clearError } = useInterviewStream(token)
 
   // Auto-dismiss reconnect banner after 5s
   useEffect(() => {
@@ -44,10 +44,11 @@ export function ChatInterface({ token, employeeName, existingTurns, status, onCo
     }
   }, [showReconnectBanner])
 
-  // Auto-greet: on first open (no turns) OR on reconnect (existing turns + active).
-  // Both cases stream via the reconnect endpoint (no DB write).
+  // Auto-greet: cold start (no turns) → /start, returning employee → /reconnect.
+  // Neither writes the greeting as a turn in the DB.
   useEffect(() => {
-    if (status === undefined) return
+    const isColdStart = status === 'created' && existingTurns.length === 0
+    const greetFn = isColdStart ? start : reconnect
 
     const agentMsgId = `greet-${Date.now()}`
     setMessages((prev) => [
@@ -55,7 +56,7 @@ export function ChatInterface({ token, employeeName, existingTurns, status, onCo
       { id: agentMsgId, role: 'agent', content: '', isStreaming: true },
     ])
 
-    reconnect((chunk) => {
+    greetFn((chunk) => {
       setMessages((prev) =>
         prev.map((m) => (m.id === agentMsgId ? { ...m, content: m.content + chunk } : m))
       )

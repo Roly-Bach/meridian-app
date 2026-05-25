@@ -75,7 +75,7 @@ describe('POST /api/interview/[token]/reconnect', () => {
     expect(json.error).toContain('nicht mehr gültig')
   })
 
-  it('accepts status: created (initial greeting)', async () => {
+  it('returns 409 for cold-start (no turns) — must use /start', async () => {
     const interview = {
       id: 'iv-new',
       employee_name: 'Anna',
@@ -94,7 +94,7 @@ describe('POST /api/interview/[token]/reconnect', () => {
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [] }, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       })
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
@@ -103,7 +103,42 @@ describe('POST /api/interview/[token]/reconnect', () => {
       })
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(409)
+    const json = await res.json()
+    expect(json.error).toContain('/start')
+  })
+
+  it('returns 500 when turns DB query fails', async () => {
+    const interview = {
+      id: 'iv-dberr',
+      employee_name: 'Hans',
+      employee_role: null,
+      department: 'IT',
+      focus_topics: null,
+      status: 'active',
+      token_expires_at: FUTURE_EXPIRY,
+    }
+    mockAdminFrom
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: interview, error: null }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: null, error: new Error('DB unreachable') }),
+      })
+
+    const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+    expect(res.status).toBe(500)
+    const json = await res.json()
+    expect(json.error).toBeTruthy()
   })
 
   it('returns 429 with German error message and Retry-After header when rate limit exceeded', async () => {

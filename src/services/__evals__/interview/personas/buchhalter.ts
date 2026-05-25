@@ -1,27 +1,53 @@
-// Persona: Buchhalter — detailliert, strukturiert, zahlenlastig
-export interface Persona {
-  name: string
-  role: string
-  department: string
-  description: string
-  responses: Record<string, string>
-}
+import type { Persona } from './types'
 
 export const buchhalter: Persona = {
-  name: 'Andreas Meier',
-  role: 'Buchhalter',
-  department: 'Finanzbuchhaltung',
-  description: 'Detailliert, antwortet vollständig, kennt genaue Zahlen',
-  responses: {
-    default: 'Ich bin Andreas Meier, Buchhalter in der Finanzbuchhaltung. Ich kümmere mich hauptsächlich um Debitoren, Kreditoren und den Monatsabschluss.',
-    process_question: 'Ein typischer Prozess ist die Rechnungsprüfung. Ich bekomme per Mail eine Rechnung, öffne sie, prüfe ob Lieferant, Betrag und Leistungszeitraum stimmen, buche sie dann in SAP, und lege sie ab.',
-    frequency: 'Das mache ich etwa 80 bis 100 Mal im Monat, je nach Lieferantenstruktur.',
-    duration: 'Eine Rechnung brauche ich im Normalfall 10 bis 15 Minuten. Wenn Rückfragen nötig sind, kann das auf 30 Minuten anschwellen.',
-    rule_based: 'Ja, das läuft immer gleich ab. Wir haben eine feste Prüfmatrix und bei Beträgen über 5000 Euro brauchen wir eine Zweit-Freigabe.',
-    data_sources: 'Ich arbeite mit SAP FI, unserem Dokumentenmanagementsystem DocuWare, und manchmal Excel für Ausnahmen.',
-    error_rate: 'Ich schätze mal so 5 von 100 Rechnungen haben irgendwelche Diskrepanzen — fehlende Kostenstelle, falscher MwSt-Satz, oder der Betrag stimmt nicht mit dem Auftrag überein.',
-    media_breaks: 'Ja, ich wechsle zwischen SAP, DocuWare und dem Mail-Client hin und her. Das sind ungefähr 4 bis 5 Wechsel pro Rechnung.',
-    bottleneck: 'Das Nervigste ist wenn Rechnungen ohne Bestellreferenz kommen. Dann muss ich manuell in drei Systemen suchen, wer bestellt hat und ob ein Auftrag vorliegt. Das kostet mich leicht eine Stunde pro Woche.',
-    wrap_up: 'Das stimmt so, was Sie zusammengefasst haben. Ach ja, wir haben auch einen manuellen Mahnprozess der noch sehr zeitaufwändig ist, den haben wir noch nicht erwähnt.',
+  identity: {
+    name: 'Andreas Meier',
+    role: 'Buchhalter',
+    department: 'Finanzbuchhaltung',
+    yearsExperience: 12,
+  },
+  description: 'Detailliert, strukturiert, zahlenlastig. Antwortet vollständig und kennt genaue Zahlen.',
+  style: {
+    verbosity: 'detailed',
+    tone: 'formal',
+    tendencies: [
+      'nennt konkrete Zahlen (Mengen, Prozentwerte, Zeitangaben)',
+      'strukturiert Antworten in klaren Schritten',
+      'erwähnt Ausnahmefälle und Regelgrenzen proaktiv',
+    ],
+  },
+  processKnowledge: {
+    processes: [
+      {
+        name: 'Rechnungsprüfung',
+        description:
+          'Eingehende Rechnung per E-Mail empfangen, Lieferant / Betrag / Leistungszeitraum prüfen, in SAP FI buchen, in DocuWare ablegen. Bei Beträgen über 5.000 EUR ist eine Zweit-Freigabe erforderlich.',
+        tools: ['SAP FI', 'DocuWare', 'E-Mail-Client'],
+        pain_points: [
+          'Rechnungen ohne Bestellreferenz: manuell in drei Systemen nach Auftraggeber suchen — kostet ca. 1 Stunde pro Woche',
+          'Diskrepanzen bei ca. 5 von 100 Rechnungen: fehlende Kostenstelle, falscher MwSt-Satz oder Betragsdifferenz',
+        ],
+        frequency: '80–100 Rechnungen pro Monat',
+      },
+      {
+        name: 'Monatsabschluss',
+        description:
+          'Abstimmung aller offenen Posten, Buchung von Rückstellungen, Übergabe an Controlling.',
+        tools: ['SAP FI', 'Excel'],
+        pain_points: [
+          'Zeitdruck am Monatsende — 2–3 Tage intensive Arbeit',
+          'Ausnahmen müssen manuell in Excel nachgepflegt werden',
+        ],
+        frequency: 'Einmal pro Monat, dauert 2–3 Tage',
+      },
+    ],
+    tools: [
+      { name: 'SAP FI', purpose: 'Buchhaltungssystem für Buchungen und Reporting', satisfaction: 'medium' },
+      { name: 'DocuWare', purpose: 'Dokumentenmanagement für Rechnungsablage', satisfaction: 'medium' },
+      { name: 'Excel', purpose: 'Ausnahmen und Ad-hoc-Auswertungen', satisfaction: 'low' },
+    ],
+    additionalContext:
+      'Monatlicher Mahnprozess ist ebenfalls vorhanden und zeitaufwändig, wurde im Interview aber noch nicht aktiv angesprochen.',
   },
 }

@@ -66,6 +66,24 @@ describe('useInterviewStream', () => {
     )
   })
 
+  it('start: calls /start endpoint with empty body', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeStreamResponse(['Guten Tag']))
+
+    const { result } = renderHook(() => useInterviewStream('tok-xyz'))
+
+    await act(async () => {
+      await result.current.start(() => {})
+    })
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/interview/tok-xyz/start',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+    )
+  })
+
   it('error: sets error state on non-200 response', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       makeErrorResponse({ error: 'Interview not found' }, 404)

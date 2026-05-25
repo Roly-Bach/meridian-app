@@ -11,10 +11,11 @@ type InterviewRow = Database['public']['Tables']['interviews']['Row']
 type StateRow = Database['public']['Tables']['interview_state']['Row']
 type TurnRow = Database['public']['Tables']['turns']['Row']
 
-// ─── POST /api/interview/[token]/reconnect ────────────────────────────────────
+// ─── POST /api/interview/[token]/start ────────────────────────────────────────
 // Public endpoint — authenticated via token only.
-// Called when a returning employee opens an active interview.
-// Streams an adaptive greeting. NOT saved as a turn in the DB.
+// Called when an employee opens an interview for the first time (cold start).
+// Returns 409 if turns already exist — use /reconnect in that case.
+// Streams a personalized greeting. NOT saved as a turn in the DB.
 
 export async function POST(
   req: Request,
@@ -54,7 +55,7 @@ export async function POST(
   const rateLimitResponse = await checkTokenEndpointLimits(token, ip)
   if (rateLimitResponse) return rateLimitResponse
 
-  const [{ data: rawState }, { data: rawTurns, error: turnsError }] = await Promise.all([
+  const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
     supabase
       .from('interview_state')
       .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker')
@@ -67,31 +68,18 @@ export async function POST(
       .order('turn_number', { ascending: true }),
   ])
 
-  if (turnsError) {
-    return NextResponse.json({ error: 'Interner Fehler beim Laden des Gesprächs.' }, { status: 500 })
-  }
-
   const state = rawState as (Partial<StateRow> & { step_tracker?: unknown }) | null
   const existingTurns = (rawTurns as TurnRow[]) ?? []
   const stepTracker: StepEntry[] = (state?.step_tracker as StepEntry[] | null) ?? []
 
-  if (existingTurns.length === 0) {
+  if (existingTurns.length > 0) {
     return NextResponse.json(
-      { error: 'Kein bisheriges Gespräch — bitte /start für den ersten Aufruf verwenden.' },
+      { error: 'Gespräch bereits gestartet — bitte /reconnect verwenden.' },
       { status: 409 }
     )
   }
 
-  let timerMinutes = 0
-  if (existingTurns.length > 0) {
-    const firstTurnTime = new Date(existingTurns[0].created_at).getTime()
-    timerMinutes = Math.floor((Date.now() - firstTurnTime) / 60000)
-  }
-
-  const history: TurnMessage[] = existingTurns.flatMap((t) => [
-    { role: 'user' as const, content: t.user_input },
-    { role: 'assistant' as const, content: t.agent_response },
-  ])
+  const history: TurnMessage[] = []
 
   const stream = createInterviewStream({
     context: {
@@ -102,7 +90,7 @@ export async function POST(
       department: interview.department,
       focusTopics: interview.focus_topics,
       phase: (state?.phase ?? 'intro') as Phase,
-      timerMinutes,
+      timerMinutes: 0,
       topicsCovered: state?.topics_covered ?? [],
       topicsOpen: state?.topics_open ?? [],
       extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
@@ -110,8 +98,7 @@ export async function POST(
       stepTracker,
     },
     history,
-    isReconnect: true,
-    // Reconnect greeting is not saved as a turn
+    isStart: true,
   })
 
   return stream.toTextStreamResponse()

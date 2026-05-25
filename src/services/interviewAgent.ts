@@ -505,6 +505,7 @@ export interface AgentStreamOptions {
   context: InterviewContext
   history: TurnMessage[]
   isReconnect?: boolean
+  isStart?: boolean
   onFinish?: (text: string) => Promise<void>
 }
 
@@ -518,6 +519,14 @@ export function createInterviewStream(opts: AgentStreamOptions) {
           role: 'user' as const,
           content:
             '[SYSTEM: Der Mitarbeiter hat die Verbindung wiederhergestellt. Begrüße ihn adaptiv — beziehe dich kurz auf das bisherige Gespräch und lade ihn ein weiterzumachen.]',
+        },
+      ]
+    : opts.isStart
+    ? [
+        {
+          role: 'user' as const,
+          content:
+            '[SYSTEM: Starte das Interview. Begrüße den Mitarbeiter jetzt und beginne die Intro-Phase.]',
         },
       ]
     : opts.history.map((t) => ({ role: t.role, content: t.content }))

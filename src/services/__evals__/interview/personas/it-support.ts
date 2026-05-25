@@ -1,33 +1,53 @@
-// Persona: IT-Support — wortkarg, kurze Antworten, technisch präzise
-export interface Persona {
-  name: string
-  role: string
-  department: string
-  description: string
-  responses: Record<string, string>
-}
+import type { Persona } from './types'
 
 export const itSupport: Persona = {
-  name: 'Michael Braun',
-  role: 'IT-Support-Techniker',
-  department: 'IT',
-  description: 'Wortkarg, kurze Antworten, braucht Laddering-Proben',
-  responses: {
-    default: 'IT-Support. Tickets bearbeiten, Hardware reparieren.',
-    process_question: 'Ticket kommt rein, ich löse es, schließe es.',
-    frequency: 'Viele.',
-    duration: 'Kommt drauf an.',
-    rule_based: 'Meistens schon.',
-    data_sources: 'Jira. Manchmal Remote Desktop.',
-    error_rate: 'Wenig.',
-    media_breaks: 'Manchmal.',
-    bottleneck: 'Genehmigungen. Dauert zu lang.',
-    wrap_up: 'Passt.',
-    // Laddering-Antworten (nach Probe)
-    frequency_probe: 'So 15 bis 20 Tickets pro Tag.',
-    duration_probe: 'Einfache Sachen 10 Minuten. Hardware-Tausch eine Stunde.',
-    rule_based_probe: 'Ja, wir haben ein Lösungsbuch. Aber manche Probleme sind immer anders.',
-    media_breaks_probe: 'Ich wechsle zwischen Jira, Remote Desktop und dem internen Wiki. Drei Mal pro Ticket.',
-    bottleneck_probe: 'Software-Freigaben müssen durch den IT-Leiter. Das dauert manchmal drei Tage obwohl es dringend ist.',
+  identity: {
+    name: 'Michael Braun',
+    role: 'IT-Support-Techniker',
+    department: 'IT',
+    yearsExperience: 5,
+  },
+  description:
+    'Wortkarg, kurze Antworten. Gibt erst bei direkter Nachfrage konkrete Details — Laddering ist notwendig.',
+  style: {
+    verbosity: 'concise',
+    tone: 'informal',
+    tendencies: [
+      'antwortet in Halbsätzen oder Ein-Wort-Antworten, kein Fließtext',
+      'gibt konkrete Zahlen nur wenn direkt nach Beispielen oder Häufigkeiten gefragt',
+      'weicht aus mit "Kommt drauf an" wenn unsicher, ohne weitere Erklärung',
+    ],
+  },
+  processKnowledge: {
+    processes: [
+      {
+        name: 'Ticket-Bearbeitung',
+        description:
+          'Ticket aus Jira annehmen, Problem per Remote Desktop oder vor Ort diagnostizieren, Lösung im Wiki nachschlagen oder selbst erarbeiten, Problem beheben, Ticket mit Dokumentation schließen.',
+        tools: ['Jira', 'Remote Desktop', 'internes Wiki (Lösungsbuch)'],
+        pain_points: [
+          'Software-Freigaben müssen durch den IT-Leiter — dauert bis zu 3 Tage obwohl oft dringend',
+          'Manche Probleme weichen vom Lösungsbuch ab und erfordern eigene Recherche',
+        ],
+        frequency: '15–20 Tickets pro Tag',
+      },
+      {
+        name: 'Hardware-Tausch',
+        description:
+          'Defektes Gerät beim Nutzer einsammeln, Ersatzgerät aus dem Lager holen, konfigurieren (Imaging-Tool), Daten übertragen, Nutzer einweisen.',
+        tools: ['Asset-Management-System', 'Imaging-Tool'],
+        pain_points: [
+          'Lagerverwaltung ungenau — Teile sind im System als vorhanden markiert, aber physisch nicht auffindbar',
+        ],
+        frequency: '3–5 Hardware-Tausch-Vorgänge pro Woche',
+      },
+    ],
+    tools: [
+      { name: 'Jira', purpose: 'Ticketsystem für alle eingehenden Support-Anfragen', satisfaction: 'high' },
+      { name: 'Remote Desktop', purpose: 'Fernzugriff auf Nutzer-Rechner für Software-Probleme', satisfaction: 'medium' },
+      { name: 'Wiki / Lösungsbuch', purpose: 'Dokumentierte Lösungswege für häufige Probleme', satisfaction: 'medium' },
+    ],
+    additionalContext:
+      'Wechselt beim Bearbeiten eines Tickets im Schnitt ca. 3× zwischen Jira, Remote Desktop und Wiki.',
   },
 }
