@@ -41,7 +41,7 @@ export function InterviewRow({
         {new Date(interview.created_at).toLocaleDateString('de-DE')}
       </td>
       <td className="px-4 py-3">
-        <div className="flex flex-col gap-1 items-end">
+        <div className="flex flex-col gap-1 items-start">
           <CopyLinkButton token={interview.access_token} />
           {interview.status === 'completed' && (
             <DownloadPdfButton
