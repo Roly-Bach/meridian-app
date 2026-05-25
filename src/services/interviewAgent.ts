@@ -1,5 +1,5 @@
 import { resolveModel } from '@/lib/llm-provider'
-import { streamText, tool, stepCountIs } from 'ai'
+import { streamText, tool } from 'ai'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { RawExtraction } from './extraction'
@@ -222,7 +222,7 @@ Ziel: Interview geordnet abschließen.
 - transition_phase: Aufrufen beim Phasenwechsel. Nicht im Text erwähnen.
 - update_topics: Nach jedem Turn mit aktualisierten Listen aufrufen.
 - complete_interview: Nur in wrap_up nach dem abschließenden Dank.
-- Tools IMMER am Ende der Antwort aufrufen — nie vor dem Text, nie mitten im Text.
+- PFLICHT: Generiere in JEDER Antwort zuerst mindestens einen vollständigen Satz sichtbaren Text, dann rufe Tools auf. Eine Antwort ohne Text vor den Tool-Calls ist ein Fehler.
 
 ## Gesprächsregeln
 - Pro Antwort GENAU EINE Frage stellen — nie zwei gleichzeitig.
@@ -517,16 +517,14 @@ export function createInterviewStream(opts: AgentStreamOptions) {
         ...opts.history.map((t) => ({ role: t.role, content: t.content })),
         {
           role: 'user' as const,
-          content:
-            '[SYSTEM: Der Mitarbeiter hat die Verbindung wiederhergestellt. Begrüße ihn adaptiv — beziehe dich kurz auf das bisherige Gespräch und lade ihn ein weiterzumachen.]',
+          content: 'Ich bin wieder da, können wir weitermachen?',
         },
       ]
     : opts.isStart
     ? [
         {
           role: 'user' as const,
-          content:
-            '[SYSTEM: Starte das Interview. Begrüße den Mitarbeiter jetzt und beginne die Intro-Phase.]',
+          content: 'Bitte starte das Interview.',
         },
       ]
     : opts.history.map((t) => ({ role: t.role, content: t.content }))
@@ -536,10 +534,15 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     system: buildSystemPrompt(opts.context),
     messages,
     tools: buildTools(opts.context.interviewId, opts.context.workspaceId),
-    // Single LLM step: model generates text + calls tools in one response.
-    // stepCountIs(1) prevents a second LLM call that would re-generate similar
-    // text after tool results, which caused visible text duplication in the UI.
-    stopWhen: stepCountIs(1),
+    // Stop after step 1 if it produced text — prevents duplicate text in step 2.
+    // Allow step 2 only when step 1 was tool-only (model called tools without text),
+    // so the model can generate a visible response after processing the tool results.
+    // Hard cap at 2 steps regardless.
+    stopWhen: ({ steps }) => {
+      if (steps.length === 0) return false
+      const last = steps[steps.length - 1]
+      return last.text.trim().length > 0 || steps.length >= 2
+    },
     onFinish: opts.onFinish
       ? async ({ text }) => {
           await opts.onFinish!(text)
