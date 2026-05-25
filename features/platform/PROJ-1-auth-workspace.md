@@ -344,6 +344,8 @@ Umgebungshinweis: Mobile Safari (WebKit) nicht installiert — `npx playwright i
 
 **Testergebnis (Chromium):** 14 passed, 1 skipped (fixme) — alle aktiven Tests grün.
 
+**BUG-E2E-1 BEHOBEN (2026-05-25):** `workspace_name`-Feld (`placeholder="z.B. Mahr GmbH"`) in Signup-Formular ergänzt. Playwright-Tests hatten dieses Input-Element gesucht und per Timeout gefehlt. Fix: `workspace_name` als Pflichtfeld in `signup/page.tsx` und `signup/actions.ts` integriert, wird als `user_metadata.workspace_name` an Supabase übergeben.
+
 **Offene Bugs:** BUG-004 (LOW) — fragile Freitext-Erkennung für doppelte E-Mail in `signup/actions.ts`. Kein Blocker.
 
 ### Produktionsbereitschaft

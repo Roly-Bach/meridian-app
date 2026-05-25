@@ -44,6 +44,7 @@
 
 | ID | Severity | Beschreibung | Entdeckt in | Fix-Aufwand |
 |----|----------|-------------|-------------|-------------|
+| — | — | Keine offenen Issues | — | — |
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
