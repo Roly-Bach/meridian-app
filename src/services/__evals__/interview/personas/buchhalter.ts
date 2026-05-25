@@ -7,14 +7,15 @@ export const buchhalter: Persona = {
     department: 'Finanzbuchhaltung',
     yearsExperience: 12,
   },
-  description: 'Detailliert, strukturiert, zahlenlastig. Antwortet vollständig und kennt genaue Zahlen.',
+  description: 'Detailliert und strukturiert. Steigt bei Prozessfragen narrativ ein — konkrete Zahlen erst auf Nachfrage.',
   style: {
     verbosity: 'detailed',
     tone: 'formal',
     tendencies: [
-      'nennt konkrete Zahlen (Mengen, Prozentwerte, Zeitangaben)',
+      'steigt bei Prozessfragen narrativ ein ("Ich fange damit an, die Rechnung zu prüfen...") — konkrete Zahlen (Mengen, Zeitangaben, Prozentwerte) erst nennen wenn direkt danach gefragt',
       'strukturiert Antworten in klaren Schritten',
       'erwähnt Ausnahmefälle und Regelgrenzen proaktiv',
+      'nennt unaufgefordert Informationen, die direkt relevant sind — das ist menschliches Gesprächsverhalten',
     ],
   },
   processKnowledge: {
