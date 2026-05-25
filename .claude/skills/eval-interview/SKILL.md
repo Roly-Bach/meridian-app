@@ -1,3 +1,10 @@
+---
+name: eval-interview
+description: Führt einen vollständigen Eval-Lauf des Interview-Agenten mit einer synthetischen Persona durch.
+argument-hint: "<persona: buchhalter | vertriebler | it-support>"
+user-invocable: true
+---
+
 # Eval-Interview Skill
 
 ## Zweck
@@ -34,7 +41,7 @@ Extrahiere aus der Datei:
 
 ### Schritt 2: Interview-Record anlegen
 
-Erstelle einen neuen Interview-Record via Supabase MCP (`execute_sql` oder `apply_migration` — NICHT `insert` ohne Schema-Kenntnis). Nutze die `interviews`-Tabelle mit folgendem expliziten Feld-Mapping:
+Erstelle einen neuen Interview-Record via Supabase MCP. Nutze die `interviews`-Tabelle mit folgendem expliziten Feld-Mapping:
 
 ```sql
 INSERT INTO interviews (
@@ -66,12 +73,30 @@ Hole die Workspace-ID vorher:
 SELECT id FROM workspaces LIMIT 1;
 ```
 
+**WICHTIG: Danach sofort die `interview_state`-Row anlegen** (der SQL-INSERT umgeht den API-Endpoint der sie normalerweise erstellt):
+
+```sql
+INSERT INTO interview_state (
+  interview_id,
+  phase,
+  timer_minutes,
+  topics_covered,
+  topics_open
+) VALUES (
+  '<interview.id>',
+  'intro',
+  0,
+  ARRAY[]::text[],
+  ARRAY[]::text[]
+);
+```
+
 Merke dir `interview.id` und `interview.access_token` (= Token) aus dem RETURNING-Ergebnis.
 
 ### Schritt 3: Interview starten
 
 ```bash
-curl -s -X POST http://localhost:3000/api/interview/<token>/start \
+curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/start \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -79,10 +104,12 @@ curl -s -X POST http://localhost:3000/api/interview/<token>/start \
 Das ist der erste Agent-Turn (`[Turn 1] Agent`). Speichere den gesamten Response-Text als `agentText`.
 
 Falls curl Connection-Refused meldet: brich ab und teile dem Nutzer mit, dass `npm run dev` gestartet werden muss.
+Falls die Antwort leer ist: Protokolliere als BUG und breche ab.
 
 ### Schritt 4: Eval-Loop (max. 20 Turns)
 
-Führe folgende Schleife durch:
+Ziel: Das Interview vollständig durchführen — von intro über process_loop bis wrap_up und complete_interview.
+**Kein vorzeitiger Abbruch bei register_step oder anderen Tool-Calls** — das Interview soll bis zum natürlichen Ende laufen.
 
 ```
 Für jeden Turn N = 1..20:
@@ -98,23 +125,26 @@ Für jeden Turn N = 1..20:
      - Protokolliere: [Turn N] Persona (<name>): "<antwortText>"
 
   b) Sende Persona-Antwort an den Agenten:
-     curl -s -X POST http://localhost:3000/api/interview/<token>/chat \
+     curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/chat \
        -H "Content-Type: application/json" \
        -d '{"user_input": "<personaAntwort>"}'
 
   c) Protokolliere Agent-Antwort: [Turn N+1] Agent: "<agentText>"
 
-  d) Prüfe Abbruchbedingungen:
-     - Wenn der Agent-Response leer ist oder nur Tool-Calls enthält (kein sichtbarer Text):
-       Protokolliere: [Turn N+1] Agent: silent — tool-only
-       Brich den Loop ab.
-     - Wenn die Agent-Antwort Anzeichen für einen register_step-Tool-Call enthält
-       (z.B. im Debug-Output oder am Verhalten erkennbar):
-       Protokolliere: [PASS] register_step erkannt in Turn N+1
-       Brich den Loop ab (Pass-Kriterium erfüllt).
-     - Wenn interview.status = 'completed' (prüfen via SQL nach jedem Turn):
-       Protokolliere: [PASS] Interview abgeschlossen in Turn N+1
-       Brich den Loop ab.
+  d) Prüfe Abbruchbedingungen — NUR diese drei:
+     1. Agent-Response leer (kein sichtbarer Text):
+        Protokolliere: [Turn N+1] Agent: leer — möglicher BUG
+        Brich den Loop ab.
+     2. Agent wiederholt dieselbe Frage 3× identisch:
+        Protokolliere: [FAIL] Agent in Endlosschleife bei Turn N+1
+        Brich den Loop ab.
+     3. interview.status = 'completed' (prüfen via SQL nach jedem Turn):
+        Protokolliere: [PASS] Interview abgeschlossen in Turn N+1
+        Brich den Loop ab.
+
+  e) Prüfe interview.status nach jedem Turn via SQL:
+     SELECT status FROM interviews WHERE id = '<interview.id>';
+     Wenn 'completed': Abbruchbedingung 3 aus d).
 ```
 
 ### Schritt 5: Transcript schreiben
@@ -129,6 +159,7 @@ interview_model: <Wert von INTERVIEW_MODEL env, oder "default" wenn nicht gesetz
 eval_date: YYYY-MM-DD
 persona: <persona-name>
 interview_id: <id>
+turns_total: <N>
 ---
 
 [Turn 1] Agent: "<opener>"
@@ -137,6 +168,12 @@ interview_id: <id>
 [Turn 2] Persona (<name>): "<antwort>"
 ...
 [PASS / FAIL] <Abschluss-Label mit Begründung>
+
+## Slot-Filling-Stand (aus interview_state.step_tracker)
+<step_tracker JSON oder Tabelle>
+
+## Befunde
+<Liste aller beobachteten Auffälligkeiten, Bugs, oder positiven Verhalten>
 ```
 
 ### Schritt 6: Interview-Record bleibt in DB
@@ -150,7 +187,7 @@ interview_id: <id>
 Gib folgenden strukturierten Hinweis aus:
 
 ```
-✅ Eval-Lauf abgeschlossen — <PASS/FAIL>
+Eval-Lauf abgeschlossen — <PASS/FAIL>
 Transcript: docs/evals/interview/YYYY-MM-DD-<persona>.md
 Interview-ID: <id>
 
@@ -167,18 +204,26 @@ Nächste Schritte (manuelle Pipeline-Tests):
 
 ---
 
-## Pass-Kriterien (qualitative Review)
+## Pass-Kriterien
 
 Ein Eval-Lauf gilt als **PASS** wenn:
 1. Der erste Turn im Transcript ist `[Turn 1] Agent:` — nicht `[Turn 1] Persona`
 2. Kein Persona-Text wiederholt sich in zwei aufeinanderfolgenden Turns identisch
 3. Persona-Antworten gehen kontextuell auf die jeweilige Agent-Frage ein (visuell prüfen)
-4. Der Loop erreicht mindestens einen `register_step`-Call — oder es liegt ein dokumentierter silent-tool-only-Treffer vor
+4. Der Agent registriert mindestens 2 Prozessschritte via `register_step`
+5. Für mindestens 1 Schritt sind alle 3 Pflicht-Slots gefüllt (`frequency_per_month`, `duration_minutes`, `rule_based`)
+6. Das Interview erreicht `status = 'completed'` (complete_interview wird aufgerufen)
 
 Ein Eval-Lauf gilt als **FAIL** wenn:
 - Der Agent eröffnet nicht (erste Antwort leer oder fehlt)
 - Der Agent wiederholt dieselbe Frage 3× hintereinander
-- Der Loop erreicht Turn 20 ohne register_step und ohne silent-tool-only
+- Turn 20 erreicht ohne `status = 'completed'`
+- Kein einziger `register_step`-Call über den gesamten Lauf
+
+**Partial PASS** (dokumentieren, kein Abbruch-Fehler):
+- Weniger als 2 Schritte registriert, aber Interview abgeschlossen
+- Nicht alle Pflicht-Slots gefüllt, aber Interview abgeschlossen
+- Turn 20 erreicht mit mindestens 1 register_step-Call
 
 ---
 
