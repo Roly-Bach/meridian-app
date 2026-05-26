@@ -1,6 +1,6 @@
 # ADR-006: Interview-Engine — Technische Schulden & Eval-Findings 2026-05-26
 
-**Status:** Proposed (2026-05-26, erweitert 2026-05-26)
+**Status:** Accepted (2026-05-26) — Implementiert 2026-05-26, erweitert 2026-05-26
 **Author:** lyas53
 **Repository:** Roly-Bach/meridian-app
 **Auslöser:** Validierungs-Eval nach ADR-005-Umsetzung — `docs/evals/interview/2026-05-25-buchhalter-andy-meyer.md`
@@ -57,7 +57,7 @@ Michael sagt explizit: "Regelbasiert — halb halb. Wiki-Fälle ja, Rest nein." 
 **1 — Prompt Caching fehlt**
 `buildSystemPrompt()` wird jeden Turn vollständig neu aufgebaut und gesendet (`src/services/interviewAgent.ts:127`). Statischer Anteil (Gesprächsführungsregeln, Tool-Instruktionen, Phasenmodell, Verbotslisten): ~70 % des Prompts, identisch über alle Turns. Dynamischer Anteil (timerMinutes, stepTracker, extractionsLog): ~30 %, Turn-spezifisch. Token-Kosten statischer Anteil: ~1500–2000 Token pro Turn.
 
-Anthropic AI SDK v6: `cache_control: { type: 'ephemeral' }` auf System-Messages unterstützt. Gemini: Context Caching API existiert, aber nicht nativ im AI SDK abstrahiert — erfordert `CachedContent`-Objekt + Referenz via `providerOptions`, eigenes TTL-Management.
+Anthropic AI SDK v6: `cache_control: { type: 'ephemeral' }` auf System-Messages unterstützt. Gemini: Implicit Caching ist für alle Gemini 2.5+-Modelle inkl. `gemini-3.1-flash-lite` automatisch aktiv für Prefixe > 1024 Tokens — kein API-Setup nötig, 90 % Rabatt auf gecachte Token. Explizites Caching via `cachedContent` blockiert durch Vercel AI SDK Bug #3333.
 
 **2 — Extraktion blockiert Response-Abschluss**
 `extractAndEmbed()` in `onFinish` awaited (`route.ts:173`). Vercel-Function bleibt offen bis Extraktion + Embedding abgeschlossen. Jina-Embedding: ~300–500 ms zusätzlich pro Turn. Mitarbeiter sieht "Agent schreibt…" obwohl Text längst fertig ist. `enrichProcessSteps` und Clustering laufen bereits fire-and-forget — Extraktion ist inkonsistent dazu.
@@ -205,15 +205,15 @@ Adressiert: Befund 4.
 
 - **Anthropic:** `cache_control: { type: 'ephemeral' }` als Trennmarker zwischen statischem und dynamischem Block. Unterstützt von AI SDK v6 via `providerOptions`. Erwartete Ersparnis: ~60–70 % der Input-Tokens ab Turn 2. Status: sauber implementierbar, keine bekannten Bugs.
 
-- **Gemini 2.5 Flash / 3.x Flash (Non-Lite):** Implizites Caching automatisch aktiv für Prefixe mit > 1.024 Tokens. Kein API-Setup nötig. Bestätigt für `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-3.5-flash`. Explizites Caching via `cachedContent` in `@ai-sdk/google` vorhanden, aber **Vercel AI SDK Bug #3333** blockiert die Kombination mit `system_instruction` + `tools` — genau die Kombination die wir nutzen.
+- **Gemini 2.5+ (inkl. `gemini-3.1-flash-lite`, `gemini-3.5-flash`):** Implicit Caching automatisch aktiv für Prefixe > 1024 Tokens. Kein API-Setup nötig, **90 % Rabatt auf gecachte Token**. Bestätigt für alle Gemini-Modelle ab 2.5-Generation laut offizieller Google-Dokumentation (Stand 2026-05-26). Explizites Caching via `cachedContent` vorhanden, aber **Vercel AI SDK Bug #3333** blockiert die Kombination mit `system_instruction` + `tools` — für uns nicht relevant, da Implicit Caching ausreicht.
 
-- **`gemini-3.1-flash-lite` (aktuelles Standardmodell):** Lite-Varianten sind in der offiziellen Google-Caching-Dokumentation nicht aufgeführt. Implicit Caching: **nicht bestätigt**. Explizites Caching: nicht dokumentiert. → Caching-Effekt für das aktuelle Standardmodell unklar.
+  > **Korrektur 2026-05-26:** Der ursprüngliche Vorbehalt "Lite-Varianten nicht bestätigt" war falsch. Die Google-Dokumentation listet explizit alle Gemini 2.5+-Modelle inklusive Flash-Lite-Varianten als Implicit-Caching-fähig.
 
 - **Nebius AI / Fireworks AI (PROJ-9-Plan, Kimi K2.6 / DeepSeek V4 Pro):** Kein Caching-Support erwartet — OpenAI-kompatible API ohne eigene Caching-Abstraktion.
 
 **Phasenabhängiges Laden:** Anstatt alle fünf Methodik-Sektionen immer einzubinden, wird nur die aktive Phase geladen. In `quantify_step` werden `intro`-, `explore_step`-, `bottleneck_probe`-, `coverage_check`- und `wrap_up`-Sektionen ausgeblendet (~500 Tokens weniger Rauschen). Dieser Gewinn gilt unabhängig vom Provider und unabhängig davon ob Caching greift.
 
-**Konsequenz:** Die Strukturtrennung statisch/dynamisch wird implementiert (Tokenersparnis durch phasenabhängiges Laden). Das `cache_control`-Marking wird für Anthropic-Modelle aktiviert. Für Gemini: Caching wird erst implementiert wenn Bug #3333 im Vercel AI SDK behoben ist oder das Standardmodell auf eine bestätigte Non-Lite-Variante wechselt (PROJ-9).
+**Konsequenz:** Die Strukturtrennung statisch/dynamisch wird implementiert (Tokenersparnis durch phasenabhängiges Laden). Das `cache_control`-Marking wird für Anthropic-Modelle aktiviert. Für Gemini (`gemini-3.1-flash-lite` und neuere): Implicit Caching greift automatisch sobald der statische Prefix > 1024 Tokens und zwischen Turns identisch bleibt — was D11 (statisch/dynamisch Split) direkt gewährleistet. Kein zusätzlicher Code erforderlich.
 
 Adressiert: Befund 1.
 
@@ -297,7 +297,7 @@ Adressiert: Befund J (P2).
 - Extraktion entkoppelt vom Response-Stream — wahrgenommene Latenz nach Agent-Text sinkt um ~300–500 ms.
 - Agent kann zwei Tool-Calls in einem Turn ausführen — natürlichere Gesprächsführung, weniger Turns.
 - Wissensbank nicht mehr durch Eval- oder Mehrfach-Interview-Duplikate verrauscht.
-- Prompt Caching (Anthropic): ~60–70 % Token-Ersparnis auf statischen Anteil ab Turn 2. Für Gemini: erst nach Vercel AI SDK Bug-Fix #3333 oder Modellwechsel zu Non-Lite-Variante (PROJ-9).
+- Prompt Caching (Anthropic): ~60–70 % Token-Ersparnis auf statischen Anteil ab Turn 2. Gemini: Implicit Caching aktiv für alle Gemini 2.5+-Modelle inkl. `gemini-3.1-flash-lite` — 90 % Rabatt auf gecachte Token, kein Setup erforderlich.
 - Phasenabhängiges Laden: ~500 Tokens weniger Rauschen pro Turn durch Ausblenden inaktiver Methodik-Sektionen — gilt für alle Provider sofort.
 - D15: Du-Anrede funktioniert auch bei Personas mit deutschem Nachnamen — keine Regression beim Wechsel der Persona-Kategorie.
 - D16: Spontan genannte Prozesse in der Abschlussantwort gehen nicht verloren (vgl. IT-Support: "Software-Freigaben" wurde nicht aufgenommen).
@@ -311,8 +311,8 @@ Adressiert: Befund J (P2).
 
 **Offene Fragen:**
 - D13: Soll `existing_count` im Use-Case-Engine-Scoring berücksichtigt werden (häufig genannter Prozess = höhere Konfidenz)? Kein MVP-Scope, als Extension vorgemerkt.
-- Knowledge-Informed Interviewing: Agent lädt vor Interviewstart eine Zusammenfassung des vorhandenen Workspace-Wissens (gleiche Rolle/Abteilung) und stellt gezieltere Fragen. Separates Feature-Spec erforderlich (PROJ-18 vorgemerkt).
-- D11 Gemini-Caching: aktivieren sobald Vercel AI SDK Bug #3333 behoben oder Standardmodell auf `gemini-2.5-flash` / Non-Lite-Variante gewechselt (abhängig von PROJ-9).
+- Knowledge-Informed Interviewing: Agent lädt vor Interviewstart eine Zusammenfassung des vorhandenen Workspace-Wissens (gleiche Rolle/Abteilung) und stellt gezieltere Fragen. Separates Feature-Spec erforderlich (PROJ-19 vorgemerkt).
+- D11 Gemini-Caching: kein Handlungsbedarf. Implicit Caching für `gemini-3.1-flash-lite` bestätigt und via D11-Strukturtrennung aktiv. Explizites Caching bleibt durch Bug #3333 blockiert, ist aber nicht notwendig.
 
 **Folgeentscheidungen:**
 - System-Prompt-Änderungen (D1–D7) müssen mit neuem Eval-Lauf (gleiche Buchhalter-Persona) verifiziert werden.
@@ -336,7 +336,7 @@ Adressiert: Befund J (P2).
 | D10 | process_step aus formatExtractionsLog | `src/services/interviewAgent.ts:107–110` | S |
 | D11 | Prompt-Struktur statisch/dynamisch + phasenabhängiges Laden | `src/services/interviewAgent.ts` (buildSystemPrompt) | M |
 | D11b | Anthropic cache_control (erst nach D11-Refactor) | `src/services/interviewAgent.ts` (streamText call) | S |
-| D11c | Gemini Caching | abhängig von Vercel AI SDK Bug #3333 + PROJ-9 | blockiert |
+| D11c | Gemini Implicit Caching | via D11-Strukturtrennung aktiv (kein Code erforderlich) | — |
 | D12 | Voice-Token Refresh | `src/hooks/useVoiceInput.ts` | M |
 | D13 | Workspace-Deduplication | `src/services/extraction.ts` + DB-Migration | M |
 | D14 | Clustering-Threshold als Env-Var | `src/services/processClustering.ts` + `.env.local.example` | S |
