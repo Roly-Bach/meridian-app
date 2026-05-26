@@ -125,6 +125,31 @@ Das Interview ist der Kern-Use-Case. Qualität, Latenz und Kosten des LLM haben 
 | kimi-k2.6 | ? | Manuell testen: Phase-Transition Tool Calls |
 | deepseek-v4-pro | ? | Manuell testen: JSON-Schema Compliance |
 
+### Evaluations-Benchmarks für Interview-Engine-Qualität (Artificial Analysis, Mai 2026)
+
+Quelle: https://artificialanalysis.ai/evaluations
+
+Beim Modellvergleich für die Interview-Engine sind folgende Benchmarks aussagekräftig:
+
+**Primär (direkter Transfer auf Interview-Kontext):**
+
+| Benchmark | Was er misst | Relevanz für Interview-Engine |
+|-----------|-------------|-------------------------------|
+| `τ²-Bench Telecom` | Multi-Turn-Dialog zwischen Agent und Nutzer zur Zielerreichung (Kundensupport-Simulation) | Stärkste Analogie: Agent muss Wissensextraktion durch natürliche Konversation erreichen |
+| `IFBench` | Präzise Befolgung von Anweisungen (58 verifiable constraints) | Direkt relevant: Interview-Agent hat komplexes System-Prompt mit Phasenlogik, Fragestrategien, Abbruchbedingungen |
+
+**Sekundär (mittelbar relevant):**
+
+| Benchmark | Was er misst | Relevanz für Interview-Engine |
+|-----------|-------------|-------------------------------|
+| `APEX-Agents-AA` | Agenten in Professional-Service-Umgebungen, Langzeithorizont, Toolnutzung | Mehrphasiger Ablauf + Tool Calls (save_knowledge_object, phase transitions) |
+| `AA-LCR` | Informationsextraktion aus 10k–100k Token Dokumenten | Gesprächsgedächtnis über langen Transcript, frühere Aussagen korrekt referenzieren |
+| `AA-Omniscience` | Faktentreue und Halluzinierungsrate in wirtschaftlichen Kontexten | Wissensobjekt-Extraktion: kein Erfinden von Prozessschritten die nicht genannt wurden |
+
+**Nicht geeignet:** MATH-500, AIME, SciCode, LiveCodeBench, GPQA Diamond, MMLU-Pro — zu weit vom Konversationsagenten-Kontext entfernt.
+
+**Nutzungshinweis:** Diese Benchmarks eignen sich als Vorfilter beim Modellwechsel (z.B. Kimi K2.6 vs. Alternativen). Sie ersetzen nicht die eigenen Evals (`src/services/__evals__/`) — die bleiben die einzige verlässliche Quelle für Interview-Engine-Qualität auf Meridian-spezifischen Szenarien.
+
 ### Provider-Benchmarks (Artificial Analysis, Mai 2026)
 
 | Modell | Provider | TTFT | Speed | Preis (blended) |

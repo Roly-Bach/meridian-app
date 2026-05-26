@@ -332,6 +332,53 @@ The feature itself is functionally complete and all 29 acceptance criteria pass.
 
 BUG-002 (MEDIUM) does not block MVP since Anthropic is the only intended provider.
 
+## Implementation Notes (2026-05-25 — ADR-005: Gesprächsführung & Eval-Qualität)
+
+Ref: `docs/adr/ADR-005-interview-design-optimierung.md`, Commit `7e8ccf4`
+
+Alle Änderungen in `src/services/interviewAgent.ts` (System-Prompt):
+
+- Du-Anrede als Standard (kein Sie), kein Agenten-Name im Greeting
+- Kein Greeting-Repeat ab Turn 2 (Few-Shot-Constraint)
+- Aktive Prozessauswahl durch Agenten mit Begründungssatz
+- Wrap-up-Puffer vor `coverage_check` (Gesprächssignal vor Tool-Call)
+- Stundensatz wird nicht abgefragt (kommt aus Workspace-Konfiguration)
+- `rule_based`-Klassifikation: explizite Definition im Prompt
+- Verbotsliste für Floskeln und Meta-Kommentare
+- `stopWhen` auf 2 Steps erhöht (war 1)
+- `complete_interview` nur in `wrap_up`, kein leerer Stream
+
+## Implementation Notes (2026-05-26 — ADR-006: Technische Schulden & Eval-Findings)
+
+Ref: `docs/adr/ADR-006-interview-engine-technische-schulden-eval-findings.md`, Commits `50e0838`, `25a7412`
+
+### System-Prompt-Änderungen (D1–D7, D15–D17)
+
+- **D1**: `complete_interview` erst nach Mitarbeiter-Antwort auf Abschlussfrage — nie im selben Turn
+- **D2**: Negativbeispiel für Turn-2-Greeting (Few-Shot)
+- **D3**: Spannenangaben → Agent fragt nach Mittelwert
+- **D4**: Slot-Audit vor `complete_interview` (Pflicht-Slots prüfen, gesammelt nachfragen)
+- **D5**: Begründungssatz bei aktiver Prozessauswahl
+- **D6**: Übergangsmuster in Verbotsliste ergänzt
+- **D7**: Narrativität verschärft — quantitative Werte nur auf explizite Nachfrage
+- **D15**: Du/Herr-Negativbeispiel (`Kein "Herr Braun", kein Sie` + generisches Beispiel im Static-Block)
+- **D16**: `rule_based` halb-halb-Handling (`"für bekannte Fälle ja" → true`)
+- **D17**: Neuer Prozess in Abschlussantwort — Agent bietet einmalig Aufnahme an
+
+### Technische Änderungen
+
+- **D8** (`route.ts`): `extractAndEmbed()` fire-and-forget — nicht mehr awaited in `onFinish`
+- **D9/D15** (`interviewAgent.ts`): `stopWhen` auf 4 Steps mit `steps.some()` — erlaubt `register_step` + `record_slot` + Tool-only steps vor Text
+- **D10** (`interviewAgent.ts`): `process_step`-Branch aus `formatExtractionsLog()` entfernt
+- **D11** (`interviewAgent.ts`): `buildSystemPrompt()` aufgeteilt in `buildStaticPrompt(phase)` + `buildDynamicContext(ctx)`. Phasenabhängiges Laden: nur aktive Methodik-Sektion eingebunden (~500 Token weniger). Gemini Implicit Caching greift automatisch auf statischen Prefix (>1024 Tokens). Anthropic: `cache_control`-Marker in `createInterviewStream` gesetzt
+- **D12** (`useVoiceInput.ts`): TTL-Tracking für ElevenLabs Session-Token + Auto-Refresh 60s vor Ablauf
+- **D13** (`extraction.ts` + Migration): Workspace-Level Dedup nach Interview-Abschluss — `deduplicateKnowledgeObjects()` als fire-and-forget. Migration: `knowledge_objects` erhält `existing_count` (int4, default 1) und `last_seen_at` (timestamptz)
+- **D14** (`processClustering.ts`): `CLUSTERING_THRESHOLD` als Env-Var (Default 0.85)
+
+### Token-Usage-Logging (temporär, Caching-Verifikation)
+
+`[token-usage]`-Log in `onFinish` (`interviewAgent.ts`): `inputTokens`, `outputTokens`, `cacheReadTokens` (Anthropic), `cacheCreationTokens`. Dient dem Nachweis des Implicit Caching-Effekts ohne PROJ-13. Entfernen sobald Caching bestätigt oder PROJ-13 deployed.
+
 ## Deployment
 
 **Deployed:** 2026-05-20
