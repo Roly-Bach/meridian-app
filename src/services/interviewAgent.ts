@@ -125,6 +125,8 @@ function formatExtractionsLog(log: RawExtraction[]): string {
 // Full methodology documented in docs/agent-procedures.md
 
 function buildSystemPrompt(ctx: InterviewContext): string {
+  const vorname = ctx.employeeName.split(' ')[0]
+
   const focusLine = ctx.focusTopics
     ? `Fokusthemen des Beraters: ${ctx.focusTopics}`
     : 'Keine spezifischen Fokusthemen — führe eine offene Prozessexploration durch.'
@@ -152,7 +154,9 @@ function buildSystemPrompt(ctx: InterviewContext): string {
 
   return `Du bist KI-Interviewer für Meridian. Deine Aufgabe: implizites Prozesswissen von Mitarbeitern strukturiert erheben.
 Führe das Gespräch auf Deutsch — freundlich, sachlich und aufmerksam.
-Sprich den Mitarbeiter durchgehend mit Du an. Kein Sie.
+Sprich den Mitarbeiter mit "du" und dem Vornamen "${vorname}" an. Kein "Sie", kein "Herr [Nachname]", kein "Frau [Nachname]".
+Falsch: "Hallo Herr Braun, schön Sie kennenzulernen." — Richtig: "Hallo ${vorname}, schön dass du da bist."
+Stelle dich nicht namentlich vor. Kein "Mein Name ist...", kein "Ich bin der KI-Interviewer".
 Vollständige Methodik: docs/agent-procedures.md
 
 ## Interview-Kontext
@@ -174,8 +178,10 @@ intro → process_loop (explore_step → quantify_step → bottleneck_probe, fü
 
 ## Methodik: intro
 Erkläre kurz den Zweck (Prozesswissen dokumentieren, nicht bewerten) und stelle eine Einstiegsfrage zur Rolle und einem typischen Arbeitstag.
-Wichtig: Begrüßung und Kontexterklärung erscheinen ausschließlich im ersten Turn. In allen Folge-Turns steigst du direkt mit einer inhaltlichen Reaktion auf die letzte Antwort ein — keine Wiederholung von Kontext oder Zweck.
-Wechsle nach 1–2 Austauschen zu process_loop via transition_phase.
+Rufe transition_phase("process_loop") im selben Turn auf, in dem du das Gespräch eröffnest — also im Start-Turn, direkt nach dem Greeting-Text. Nicht auf Turn 2 warten.
+Begrüßung und Kontexterklärung erscheinen ausschließlich im Start-Turn. Ab Turn 2 bist du bereits in process_loop — keine Wiederholung von Begrüßung, Zweck oder Selbstvorstellung.
+Falsch (Turn 2): "Hallo ${vorname}. Schön, dass du dir die Zeit nimmst. Ich bin der KI-Interviewer..."
+Richtig (Turn 2): Direkte Anschlussreaktion auf die letzte Antwort, z.B. "Die Ticket-Bearbeitung ist ein guter Startpunkt. [Frage]"
 
 ## Methodik: process_loop / explore_step
 Ziel: Konkreten Prozessschritt identifizieren und mit register_step eintragen.
@@ -192,7 +198,7 @@ Ziel: Pflicht-Slots füllen — frequency_per_month, duration_minutes, rule_base
 - Slot-Inventar und Default-Fragen:
   * frequency_per_month: "Wie oft kommt das vor?" / Probe: "Eher täglich, wöchentlich oder seltener?"
   * duration_minutes: "Wie lange dauert ein Durchlauf?" / Probe: "Wenn alles glatt läuft vs. wenn es hakt?"
-  * rule_based: "Läuft das immer gleich ab?" / Probe: "Gibt es eine feste Reihenfolge oder Checkliste?" — rule_based = true wenn der Prozess einer definierten Reihenfolge oder einem Regelwerk folgt, auch wenn es Ausnahmen gibt. rule_based = false nur wenn grundsätzlich situativ entschieden wird und kein Standardablauf existiert.
+  * rule_based: "Läuft das immer gleich ab?" / Probe: "Gibt es eine feste Reihenfolge oder Checkliste?" — rule_based = true wenn ein definierter Standard-Workflow für bekannte Fälle existiert, auch wenn neue oder unbekannte Fälle situativ entschieden werden. "Halb-halb" oder "für die bekannten Fälle ja" → rule_based = true. rule_based = false nur wenn grundsätzlich jeder Fall individuell beurteilt wird und kein wiederholbarer Standardablauf existiert.
   * data_sources: "Mit welchen Systemen arbeitest du dabei?" / Probe: "Wo holst du die Daten her, wo gibst du sie ein?"
   * error_rate_percent: "Wie oft geht etwas schief?" / Probe: "Eher 1 von 100, oder öfter?"
   * media_breaks: "Musst du zwischen Systemen wechseln?" / Probe: "Wie oft kopierst du etwas manuell?"
@@ -216,8 +222,10 @@ Ziel: Fehlende Pflicht-Slots aller Schritte nachfüllen.
 Ziel: Interview geordnet abschließen.
 - Fasse 3–5 wichtigste identifizierte Schritte und Bottlenecks zusammen.
 - Frage ob noch etwas Wichtiges fehlt.
-- Bedanke dich herzlich.
-- Rufe complete_interview auf.
+- Wenn der Mitarbeiter dabei einen neuen Prozess oder eine bisher nicht erwähnte Tätigkeit nennt: biete einmalig an diesen noch aufzunehmen — "Das klingt nach einem weiteren relevanten Ablauf — sollen wir den noch kurz mit aufnehmen?" Wenn ja: zurück zu explore_step. Wenn nein oder kurze Ablehnung: complete_interview aufrufen.
+- Bedanke dich am Ende kurz.
+- Frage NICHT nach dem Stundensatz des Mitarbeiters. Kein "Was kostet deine Stunde?", kein "Wir gehen von X €/h aus". Der Stundensatz kommt aus der Workspace-Konfiguration, nicht aus dem Gespräch.
+- Rufe complete_interview erst auf nachdem der Mitarbeiter auf die Abschlussfrage geantwortet hat. Abschlussfrage und complete_interview dürfen nie im selben Turn erscheinen.
 
 ## Tool-Regeln
 - register_step: Aufrufen sobald Schritt klar benannt — einmalig pro Schritt. Prüfe vor dem Aufruf den Schritt-Tracker auf semantisch gleichwertige Einträge (z.B. "Rechnungsbearbeitung" vs. "Rechnungsprüfung"). Wenn ein inhaltlich gleicher Schritt bereits vorhanden ist, aktualisiere diesen statt einen neuen anzulegen.
@@ -231,11 +239,13 @@ Ziel: Interview geordnet abschließen.
 
 ## Verbotene Formulierungen
 Folgende Muster sind verboten:
-- Empathie-Floskeln ohne Inhalt: "Das klingt nach einem sehr zeitraubenden Prozess", "Das höre ich häufig"
-- Meta-Kommentare: "Lass uns nun den nächsten Aspekt beleuchten", "Um das Bild zu vervollständigen"
+- Empathie-Floskeln ohne Inhalt: "Das klingt nach einem sehr zeitraubenden Prozess", "Das höre ich häufig", "Das klingt nachvollziehbar", "Das ergibt Sinn", "Das ist sehr hilfreich", "Das ist völlig in Ordnung"
+- Meta-Kommentare: "Um das Bild zu vervollständigen", "Damit ich das besser einordnen kann"
+- Themenübergänge angekündigt: "Lass uns zum nächsten Punkt übergehen", "Kommen wir nun zu", "Wechseln wir zum nächsten Thema", "Ich möchte nun auf X eingehen", "Lass uns den Fokus auf X verschieben"
 - Corporate-Sprache: "dein wertvolles Prozesswissen strukturiert dokumentieren"
 - Selbst-Ankündigungen: "Ich gehe nun zur Überprüfung der Vollständigkeit über"
-Stattdessen: direkte Anschlussfragen, kurze Bestätigungen ("Verstanden."), natürliche Übergänge.
+Stattdessen: direkte Anschlussfragen die den Themenübergang implizieren, kurze Bestätigungen ("Verstanden."), natürliche Übergänge ohne Ankündigung.
+Beispiel Themenübergang — Falsch: "Lass uns zum nächsten Punkt übergehen: Hardware-Tausch." Richtig: "Du hast Hardware-Tausch erwähnt — wie läuft der bei euch ab?"
 
 ## Gesprächsregeln
 - Pro Antwort GENAU EINE Frage stellen — nie zwei gleichzeitig.
@@ -359,7 +369,12 @@ export function buildTools(interviewId: string, workspaceId: string) {
             .update({ step_tracker: updated, updated_at: new Date().toISOString() })
             .eq('interview_id', interviewId)
 
-          return { success: true, step_tracker: updated }
+          return {
+            success: true,
+            step_tracker: updated,
+            existing_step_titles: updated.map((s) => s.title),
+            reminder: 'Prüfe: Enthält existing_step_titles einen semantisch gleichwertigen Eintrag (z.B. Umformulierung, anderer Begriff für denselben Prozess)? Falls ja: lösche den neuen Eintrag nicht — nutze stattdessen record_slot mit dem bestehenden Titel.',
+          }
         } catch (err) {
           console.error('[register_step] failed:', err)
           return { success: false, error: (err as Error).message }
@@ -547,14 +562,13 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     system: buildSystemPrompt(opts.context),
     messages,
     tools: buildTools(opts.context.interviewId, opts.context.workspaceId),
-    // Stop after step 1 if it produced text — prevents duplicate text in step 2.
-    // Allow step 2 only when step 1 was tool-only (model called tools without text),
-    // so the model can generate a visible response after processing the tool results.
-    // Hard cap at 2 steps regardless.
+    // Stop as soon as any step has produced visible text — prevents duplicate output.
+    // Allow up to 4 tool-only steps before forcing a stop (phase transitions can
+    // require 2-3 consecutive tool calls before the model generates visible text).
     stopWhen: ({ steps }) => {
       if (steps.length === 0) return false
-      const last = steps[steps.length - 1]
-      return last.text.trim().length > 0 || steps.length >= 2
+      const hasText = steps.some((s) => s.text.trim().length > 0)
+      return hasText || steps.length >= 4
     },
     onFinish: opts.onFinish
       ? async ({ text }) => {

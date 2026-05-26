@@ -1,9 +1,10 @@
 # ADR-006: Interview-Engine — Technische Schulden & Eval-Findings 2026-05-26
 
-**Status:** Proposed (2026-05-26)
+**Status:** Proposed (2026-05-26, erweitert 2026-05-26)
 **Author:** lyas53
 **Repository:** Roly-Bach/meridian-app
 **Auslöser:** Validierungs-Eval nach ADR-005-Umsetzung — `docs/evals/interview/2026-05-25-buchhalter-andy-meyer.md`
+**Erweitert durch:** IT-Support-Eval — `docs/evals/interview/2026-05-26-it-support.md`
 **Referenz-Baseline:** `docs/evals/interview/2026-05-25-buchhalter.md` (Eval vor ADR-005, Auslöser für ADR-005)
 **Supersedes:** Ergänzt ADR-005 (2026-05-25), ersetzt ihn nicht
 
@@ -41,6 +42,15 @@ Turn 9 Andy Meyer: *"Lass uns den Fokus kurz auf den zweiten Bereich verschieben
 
 **G (P3) — D9/ADR-005: Narrativität zu schwach**
 Persona liefert in Turn 2–3 weiterhin vollständig strukturierte Antworten mit allen Slot-Werten. D9 enthält die Ausnahme "unaufgefordertes Nennen bleibt erlaubt" — diese hebelt die Constraint für quantitative Werte komplett aus.
+
+**H (P1) — Du-Instruction überschrieben durch "Herr"-Kontext** *(IT-Support-Eval 2026-05-26)*
+ADR-005 D1 ("Du als Standard") greift nicht wenn die Persona mit Nachnamen + "Herr" adressiert werden kann. Im buchhalter-andy-meyer-Lauf (Vorname: Andy) war D1 korrekt. Im IT-Support-Lauf (Michael Braun) nutzt der Agent durchgehend "Sie" + "Herr Braun" — Turn 1: "Hallo Herr Braun", Turn 2: "Schön Sie kennenzulernen", alle Folge-Turns. Das Modell inferiert aus dem Nachnamen einen formalen Gesprächskontext und überschreibt die System-Prompt-Anweisung "Kein Sie." Die Anweisung ist zu abstrakt formuliert und enthält kein Negativbeispiel für den Herr/Frau-Fall.
+
+**I (P1) — Neuer Prozess in Abschlussantwort nicht aufgenommen** *(IT-Support-Eval 2026-05-26)*
+In Turn 14 antwortet Michael auf die Abschlussfrage mit: "Software-Freigaben. Das nervt. Muss immer zum IT-Leiter, dauert bis 3 Tage." — ein expliziter Prozess mit Pain-Point-Signal. Der Agent schließt das Interview sofort ab ohne nachzufragen ob dieser Prozess noch aufgenommen werden soll. Abgrenzung zu Befund A: Befund A regelt den Sequenz-Bug (complete_interview im selben Turn wie die Abschlussfrage). Befund I ist inhaltlich: auch nach korrekter Sequenz würde der Agent eine neue Prozessnennung in der Abschlussantwort nicht als Explorations-Signal erkennen.
+
+**J (P2) — rule_based-Klassifikation bei gemischter Regelbasierung** *(IT-Support-Eval 2026-05-26)*
+Michael sagt explizit: "Regelbasiert — halb halb. Wiki-Fälle ja, Rest nein." — ein gemischter Prozess mit Standard-Workflow für bekannte Fälle und situativer Entscheidung bei neuen Fällen. Der Agent klassifiziert `rule_based = false`. ADR-005 D8 lautet: "rule_based=true wenn der Prozess einer definierten Reihenfolge folgt — auch wenn es Ausnahmen gibt." Die Instruction deckt den "halb-halb"-Fall nicht explizit ab; das Modell bewertet den situativen Anteil stärker als den regelbasierten Anteil.
 
 ### Befunde Codebase-Analyse (technisch)
 
@@ -241,6 +251,43 @@ Adressiert: Befund 6.
 
 Adressiert: Befund 7.
 
+### D15 — Du-Anrede: Expliziter Vorname + Herr/Frau-Verbot
+
+Die System-Prompt-Anweisung zu Anrede wird um expliziten Vornamen-Anker und Negativbeispiel erweitert:
+
+> Sprich den Mitarbeiter mit dem Vornamen und "du" an — unabhängig davon ob der vollständige Name im Profil steht. Verwende nie "Sie", nie "Herr [Nachname]", nie "Frau [Nachname]".
+>
+> Falsch: "Hallo Herr Braun, schön Sie kennenzulernen."
+> Richtig: "Hallo Michael, schön dass du dir die Zeit nimmst."
+
+Der Vorname wird aus `employee_name` extrahiert (erster Token bei Leerzeichen-Split). Falls kein Vorname isolierbar: Anrede ohne Namen ("Hallo, schön dass du da bist.").
+
+Adressiert: Befund H (P1).
+
+### D16 — Abschlussantwort: Neuer Prozess als Explorations-Signal
+
+Wenn der Mitarbeiter in der Antwort auf die Abschlussfrage ("Gibt es noch etwas Wichtiges?") einen neuen Prozess, eine neue Tätigkeit oder einen Pain Point mit klarem Prozesscharakter nennt, fragt der Agent einmalig nach ob dieser noch aufgenommen werden soll — vor `complete_interview`.
+
+System-Prompt-Anweisung (wrap_up-Sektion):
+
+> Wenn der Mitarbeiter auf die Abschlussfrage mit einem neuen Prozess oder einer bisher nicht erwähnten Tätigkeit antwortet, biete einmalig an diesen aufzunehmen: "Das klingt nach einem weiteren relevanten Ablauf — sollen wir den noch kurz mit aufnehmen?" Wenn ja: zurück zu explore_step. Wenn nein oder kurze Ablehnung: complete_interview aufrufen.
+
+Abgrenzung zu D1 (complete_interview-Sequenz): D1 stellt sicher, dass complete_interview nach der Abschlussantwort kommt, nicht gleichzeitig. D16 regelt was passiert wenn die Abschlussantwort inhaltlich einen neuen Prozess enthält.
+
+Adressiert: Befund I (P1).
+
+### D17 — rule_based: Gemischte Regelbasierung = true
+
+Die rule_based-Instruction wird um den "halb-halb"-Fall erweitert:
+
+> `rule_based = true` wenn ein definierter Standard-Workflow für bekannte Fälle existiert — auch wenn unbekannte oder neue Fälle situativ entschieden werden. Der situative Anteil schließt Regelbasierung nicht aus, solange ein Standardablauf als Baseline vorhanden ist.
+>
+> `rule_based = false` nur wenn grundsätzlich jeder Fall individuell beurteilt wird und kein wiederholbarer Standardablauf existiert.
+>
+> Formulierung "halb-halb" → `rule_based = true` (Standard-Workflow vorhanden, Ausnahmen existieren).
+
+Adressiert: Befund J (P2).
+
 ---
 
 ## Consequences
@@ -252,6 +299,9 @@ Adressiert: Befund 7.
 - Wissensbank nicht mehr durch Eval- oder Mehrfach-Interview-Duplikate verrauscht.
 - Prompt Caching (Anthropic): ~60–70 % Token-Ersparnis auf statischen Anteil ab Turn 2. Für Gemini: erst nach Vercel AI SDK Bug-Fix #3333 oder Modellwechsel zu Non-Lite-Variante (PROJ-9).
 - Phasenabhängiges Laden: ~500 Tokens weniger Rauschen pro Turn durch Ausblenden inaktiver Methodik-Sektionen — gilt für alle Provider sofort.
+- D15: Du-Anrede funktioniert auch bei Personas mit deutschem Nachnamen — keine Regression beim Wechsel der Persona-Kategorie.
+- D16: Spontan genannte Prozesse in der Abschlussantwort gehen nicht verloren (vgl. IT-Support: "Software-Freigaben" wurde nicht aufgenommen).
+- D17: rule_based-Klassifikation korrekt für gemischte Workflows — Use-Case-Engine bekommt zuverlässigere Heuristik-Basis.
 
 **Negativ:**
 - D8 (fire-and-forget): `extractions_log` im Folge-Turn kann theoretisch einen Turn hinter dem tatsächlichen Stand sein. Akzeptabel, da der Agent den Log als Kontext-Hint nutzt, nicht als Steuersignal.
@@ -290,5 +340,8 @@ Adressiert: Befund 7.
 | D12 | Voice-Token Refresh | `src/hooks/useVoiceInput.ts` | M |
 | D13 | Workspace-Deduplication | `src/services/extraction.ts` + DB-Migration | M |
 | D14 | Clustering-Threshold als Env-Var | `src/services/processClustering.ts` + `.env.local.example` | S |
+| D15 | Du-Anrede: Vorname + Herr/Frau-Verbot | System-Prompt (interviewAgent.ts) | S |
+| D16 | Abschlussantwort: Neuer Prozess als Explorations-Signal | System-Prompt (wrap_up-Sektion) | S |
+| D17 | rule_based halb-halb = true | System-Prompt (quantify_step-Instruktion) | S |
 
-D1–D10 und D14: keine Schema-Migration. D11–D13: etwas mehr Aufwand, D13 erfordert Supabase-Migration.
+D1–D10 und D14–D17: keine Schema-Migration. D11–D13: etwas mehr Aufwand, D13 erfordert Supabase-Migration.
