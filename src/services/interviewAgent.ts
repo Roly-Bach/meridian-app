@@ -602,13 +602,20 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     onFinish: opts.onFinish
       ? async ({ text, usage, providerMetadata }) => {
           const anthropicMeta = (providerMetadata as Record<string, unknown> | undefined)?.anthropic as Record<string, unknown> | undefined
-          console.log('[token-usage] turn', {
+          const usageData = {
             model: modelString,
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             cacheReadTokens: anthropicMeta?.cacheReadInputTokens ?? null,
             cacheCreationTokens: anthropicMeta?.cacheCreationInputTokens ?? null,
-          })
+          }
+          console.log('[token-usage] turn', usageData)
+          if (process.env.NODE_ENV === 'development') {
+            try {
+              const fs = await import('fs')
+              fs.writeFileSync('.eval-last-usage.json', JSON.stringify(usageData))
+            } catch { /* non-blocking */ }
+          }
           await opts.onFinish!(text)
         }
       : undefined,

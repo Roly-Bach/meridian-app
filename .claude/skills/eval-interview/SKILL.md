@@ -103,6 +103,8 @@ curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/start
 
 Das ist der erste Agent-Turn (`[Turn 1] Agent`). Speichere den gesamten Response-Text als `agentText`.
 
+Danach: Lese `.eval-last-usage.json` mit dem Read-Tool — speichere als `startUsage`.
+
 Falls curl Connection-Refused meldet: brich ab und teile dem Nutzer mit, dass `npm run dev` gestartet werden muss.
 Falls die Antwort leer ist: Protokolliere als BUG und breche ab.
 
@@ -129,7 +131,14 @@ Für jeden Turn N = 1..20:
        -H "Content-Type: application/json" \
        -d '{"user_input": "<personaAntwort>"}'
 
-  c) Protokolliere Agent-Antwort: [Turn N+1] Agent: "<agentText>"
+     Danach: Lese `.eval-last-usage.json` mit dem Read-Tool.
+     Extrahiere: inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens.
+     Falls die Datei nicht existiert oder nicht lesbar: lastUsage = null.
+
+  c) Protokolliere Agent-Antwort:
+     [Turn N+1] Agent: "<agentText>"
+     [Turn N+1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens>
+     (bei lastUsage = null: "[Turn N+1] tokens: n/a")
 
   d) Prüfe Abbruchbedingungen — NUR diese drei:
      1. Agent-Response leer (kein sichtbarer Text):
@@ -163,11 +172,23 @@ turns_total: <N>
 ---
 
 [Turn 1] Agent: "<opener>"
+[Turn 1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens>
 [Turn 1] Persona (<name>): "<antwort>"
 [Turn 2] Agent: "<frage>"
+[Turn 2] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens>
 [Turn 2] Persona (<name>): "<antwort>"
 ...
 [PASS / FAIL] <Abschluss-Label mit Begründung>
+
+## Token-Usage-Zusammenfassung
+| Turn | inputTokens | outputTokens | cacheRead | cacheCreate |
+|------|-------------|--------------|-----------|-------------|
+| 1    | <n>         | <n>          | <n/null>  | <n/null>    |
+| 2    | <n>         | <n>          | <n/null>  | <n/null>    |
+| ...  |             |              |           |             |
+| **Σ** | **<summe>** | **<summe>** | **<summe>** | **<summe>** |
+
+Caching-Effekt: Turn-1-inputTokens vs. Turn-2-inputTokens (Δ in %, erwarteter Abfall ~60–70% bei Anthropic).
 
 ## Slot-Filling-Stand (aus interview_state.step_tracker)
 <step_tracker JSON oder Tabelle>
