@@ -171,3 +171,7 @@ Die folgenden Operationen erfordern zwingend User-Approval **vor** der Ausführu
 | Skip von Pre-Commit-Hooks (`--no-verify`) | Umgeht Qualitäts-Gates |
 
 **Hard Rule:** Eine Skill, die eine dieser Operationen ausführen will, muss vorher per Tool (`AskUserQuestion` oder explizite Bestätigungsabfrage) eine Freigabe einholen. Eine einmalige Freigabe gilt nur für den aktuellen Aufruf, nicht für nachfolgende gleichartige Aufrufe.
+
+### Vor jedem Deploy: Test-Status prüfen
+<!-- source: PROJ-17 (2026-05-26) — empfohlen aus Post-Mortem: bekannte Bugs sichtbar machen -->
+Falls E2E-Tests bekannte Failures haben: Diese explizit im Deploy-Commit oder Deploy-Kommentar nennen. Nicht still ignorieren. `/qa` vor `/deploy` ausführen wenn Tests in unbekanntem Zustand.
