@@ -209,6 +209,7 @@ export interface Database {
           source_quote: string | null
           step_type: 'action' | 'decision'
           condition_text: string | null
+          substeps: Json | null
           embedding: number[] | null
           created_at: string
         }
@@ -229,6 +230,7 @@ export interface Database {
           source_quote?: string | null
           step_type?: 'action' | 'decision'
           condition_text?: string | null
+          substeps?: Json | null
           embedding?: number[] | null
           created_at?: string
         }
@@ -246,6 +248,7 @@ export interface Database {
           source_quote?: string | null
           step_type?: 'action' | 'decision'
           condition_text?: string | null
+          substeps?: Json | null
           embedding?: number[] | null
         }
         Relationships: [

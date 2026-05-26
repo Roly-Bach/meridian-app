@@ -30,6 +30,16 @@ import {
 import { ChevronDown, ChevronRight, Info, ExternalLink, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
+interface SubStep {
+  id: string
+  title: string
+  step_type: 'action' | 'decision'
+  condition_text?: string | null
+  branch_yes?: string | null
+  branch_no?: string | null
+  order: number
+}
+
 interface ProcessCluster {
   id: string
   canonical_title: string
@@ -60,6 +70,7 @@ interface ProcessStep {
   source_quote: string | null
   step_type: 'action' | 'decision'
   condition_text: string | null
+  substeps: SubStep[] | null
   created_at: string
   interviews: {
     department: string
@@ -201,6 +212,11 @@ export function ProcessStepsTable({ initialSteps }: Props) {
   const ruleBasedCount = steps.filter(s => s.rule_based).length
   const ruleBasedPct = totalSteps > 0 ? Math.round((ruleBasedCount / totalSteps) * 100) : 0
 
+  const interviewStepCounts = steps.reduce<Record<string, number>>((acc, s) => {
+    acc[s.interview_id] = (acc[s.interview_id] ?? 0) + 1
+    return acc
+  }, {})
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -246,6 +262,7 @@ export function ProcessStepsTable({ initialSteps }: Props) {
                       <DeptClusterCard
                         key={clusterKey}
                         groupSteps={clusterMap[clusterKey]}
+                        interviewStepCounts={interviewStepCounts}
                         onOpenGroup={openGroup}
                       />
                     ))}
@@ -288,10 +305,11 @@ export function ProcessStepsTable({ initialSteps }: Props) {
 
 interface DeptClusterCardProps {
   groupSteps: ProcessStep[]
+  interviewStepCounts: Record<string, number>
   onOpenGroup: (groupSteps: ProcessStep[]) => void
 }
 
-function DeptClusterCard({ groupSteps, onOpenGroup }: DeptClusterCardProps) {
+function DeptClusterCard({ groupSteps, interviewStepCounts, onOpenGroup }: DeptClusterCardProps) {
   const representative = groupSteps[0]
   const cluster = representative.process_clusters
   const title = cluster?.canonical_title ?? representative.title
@@ -312,6 +330,9 @@ function DeptClusterCard({ groupSteps, onOpenGroup }: DeptClusterCardProps) {
   const mergedMediaBreaks = avg(groupSteps.map(s => s.media_breaks))
   const mergedDataSources = [...new Set(groupSteps.flatMap(s => s.data_sources))]
   const isRuleBased = groupSteps.filter(s => s.rule_based).length >= groupSteps.length / 2
+  const flowStepCount = Math.max(
+    ...groupSteps.map(s => interviewStepCounts[s.interview_id] ?? 1)
+  )
 
   return (
     <Card className="border-[#E5E5E5] shadow-none bg-white hover:bg-[#FAFAFA] transition-colors">
@@ -356,6 +377,9 @@ function DeptClusterCard({ groupSteps, onOpenGroup }: DeptClusterCardProps) {
         <Separator className="my-2 bg-[#F3F4F6]" />
 
         <div className="flex items-center gap-4 flex-wrap">
+          <span className="flex items-center gap-1 text-[12px] text-[#374151]">
+            <span>📋</span>{flowStepCount} Schritt{flowStepCount !== 1 ? 'e' : ''}
+          </span>
           {mergedFrequency != null && (
             <span className="flex items-center gap-1 text-[12px] text-[#374151]">
               <span>📅</span>{mergedFrequency}×/Mo
@@ -420,6 +444,33 @@ function ClusterDetailSheet({ groupSteps, flowSteps, onEditStep }: ClusterDetail
     dept: s.interviews?.department ?? '—',
   }))
 
+  // Substep state — auto-generate on mount if not yet cached
+  const [substeps, setSubsteps] = useState<SubStep[] | null>(representative.substeps ?? null)
+  const [substepsLoading, setSubstepsLoading] = useState(false)
+  const [substepsError, setSubstepsError] = useState<string | null>(null)
+
+  const generateSubsteps = async () => {
+    setSubstepsLoading(true)
+    setSubstepsError(null)
+    try {
+      const res = await fetch(`/api/process-steps/${representative.id}/substeps`, { method: 'POST' })
+      if (!res.ok) throw new Error('Generierung fehlgeschlagen')
+      const data = await res.json() as { substeps: SubStep[] }
+      setSubsteps(data.substeps)
+    } catch {
+      setSubstepsError('Prozess-Ablauf konnte nicht generiert werden.')
+    } finally {
+      setSubstepsLoading(false)
+    }
+  }
+
+  // Auto-trigger on first open if no substeps cached
+  const hasTriggered = useRef(false)
+  if (!hasTriggered.current && !substeps && !substepsLoading) {
+    hasTriggered.current = true
+    generateSubsteps()
+  }
+
   return (
     <>
       <SheetHeader className="mb-5">
@@ -459,7 +510,54 @@ function ClusterDetailSheet({ groupSteps, flowSteps, onEditStep }: ClusterDetail
 
         <Separator className="bg-[#F3F4F6]" />
 
-        {/* Prozess-Flow */}
+        {/* Prozess-Ablauf */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide">
+              Prozess-Ablauf
+            </p>
+            {substeps && (
+              <button
+                onClick={generateSubsteps}
+                disabled={substepsLoading}
+                className="text-[11px] text-[#9CA3AF] hover:text-[#E040FB] transition-colors disabled:opacity-40"
+              >
+                Neu generieren
+              </button>
+            )}
+          </div>
+
+          {substepsLoading && (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full rounded-[6px]" />
+              <Skeleton className="h-4 w-6 mx-auto rounded" />
+              <Skeleton className="h-12 w-full rounded-[6px]" />
+              <Skeleton className="h-4 w-6 mx-auto rounded" />
+              <Skeleton className="h-16 w-full rounded-[6px]" />
+            </div>
+          )}
+
+          {!substepsLoading && substepsError && (
+            <div className="text-[12px] text-[#EF4444] bg-[#FEF2F2] border border-[#FCA5A5] rounded-[6px] px-3 py-2.5">
+              {substepsError}
+              <button onClick={generateSubsteps} className="ml-2 underline">Wiederholen</button>
+            </div>
+          )}
+
+          {!substepsLoading && !substepsError && substeps && substeps.length > 0 && (
+            <SubStepFlowView substeps={substeps} />
+          )}
+
+          {!substepsLoading && !substepsError && substeps === null && (
+            <div className="text-[12px] text-[#6B7280] text-center py-4">
+              Kein Ablauf verfügbar.
+            </div>
+          )}
+        </div>
+
+        <Separator className="bg-[#F3F4F6]" />
+
+        {/* Aufgenommene Schritte (interview-level, collapsible) */}
         <div>
           <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-3">
             Aufgenommene Schritte
@@ -468,6 +566,64 @@ function ClusterDetailSheet({ groupSteps, flowSteps, onEditStep }: ClusterDetail
         </div>
       </div>
     </>
+  )
+}
+
+// ——— SubStep Flow View ———
+
+function SubStepFlowView({ substeps }: { substeps: SubStep[] }) {
+  const sorted = [...substeps].sort((a, b) => a.order - b.order)
+
+  return (
+    <div className="flex flex-col items-center">
+      {sorted.map((step, idx) => (
+        <div key={step.id} className="w-full flex flex-col items-center">
+          {step.step_type === 'decision' ? (
+            <SubStepDecisionNode step={step} />
+          ) : (
+            <SubStepActionNode step={step} />
+          )}
+          {idx < sorted.length - 1 && <FlowArrow />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SubStepActionNode({ step }: { step: SubStep }) {
+  return (
+    <div className="w-full border-2 border-[#3B82F6] bg-white rounded-[6px] px-3 py-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[13px] font-medium text-[#111111] leading-snug">{step.title}</span>
+        <Badge className="text-[10px] px-1.5 py-0.5 bg-[#EFF6FF] text-[#2563EB] border-0 font-medium shrink-0 hover:bg-[#EFF6FF]">
+          Aktion
+        </Badge>
+      </div>
+    </div>
+  )
+}
+
+function SubStepDecisionNode({ step }: { step: SubStep }) {
+  const text = step.condition_text ?? step.title
+
+  return (
+    <div className="w-full flex flex-col items-center">
+      <div className="relative flex items-center justify-center" style={{ width: '180px', height: '90px' }}>
+        <div
+          className="absolute border-2 border-[#F59E0B] bg-[#FFFBEB]"
+          style={{ width: '90px', height: '90px', transform: 'rotate(45deg)', borderRadius: '4px' }}
+        />
+        <div className="relative z-10 px-4 text-center" style={{ maxWidth: '160px' }}>
+          <p className="text-[10px] font-medium text-[#92400E] leading-tight line-clamp-3">{text}</p>
+        </div>
+      </div>
+      {(step.branch_yes || step.branch_no) && (
+        <div className="flex gap-6 text-[10px] text-[#6B7280] mt-1">
+          {step.branch_yes && <span className="text-[#16A34A]">✓ {step.branch_yes}</span>}
+          {step.branch_no && <span className="text-[#DC2626]">✗ {step.branch_no}</span>}
+        </div>
+      )}
+    </div>
   )
 }
 
