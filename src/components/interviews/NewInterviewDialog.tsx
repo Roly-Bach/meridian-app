@@ -18,7 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Check, Copy, Loader2 } from 'lucide-react'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import { Check, ChevronDown, Copy, Loader2 } from 'lucide-react'
 import type { Interview } from './InterviewRow'
 
 type Props = {
@@ -38,6 +51,17 @@ const DEPARTMENTS = [
   'Sonstiges',
 ]
 
+const ROLES_BY_DEPARTMENT: Record<string, string[]> = {
+  'Einkauf':    ['Einkäufer', 'Einkaufsleiter', 'Lieferantenmanager', 'Sachbearbeiter Einkauf'],
+  'Vertrieb':   ['Vertriebsmitarbeiter', 'Key Account Manager', 'Vertriebsleiter', 'Inside Sales'],
+  'Finance':    ['Buchhalter', 'Controller', 'Finanzanalyst', 'Kreditorenbuchhalter', 'Finance Manager'],
+  'HR':         ['HR Manager', 'Recruiter', 'HR Business Partner', 'Personalleiter', 'Sachbearbeiter Personal'],
+  'IT':         ['Developer', 'DevOps Engineer', 'IT-Leiter', 'Systemadministrator', 'Product Manager', 'IT-Support'],
+  'Operations': ['Operations Manager', 'Produktionsleiter', 'Logistikleiter', 'Prozessmanager', 'Schichtleiter'],
+  'Marketing':  ['Marketing Manager', 'Content Manager', 'Marketing-Leiter', 'SEO Specialist', 'Brand Manager'],
+  'Sonstiges':  [],
+}
+
 const EMPTY_FORM = { employee_name: '', employee_role: '', department: '', focus_topics: '', max_duration_minutes: 30 }
 
 export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
@@ -48,6 +72,7 @@ export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
   const [createdInterview, setCreatedInterview] = useState<Interview | null>(null)
   const [copied, setCopied] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [roleOpen, setRoleOpen] = useState(false)
 
   const isValid = form.employee_name.trim() && form.employee_role.trim() && form.department.trim()
 
@@ -120,6 +145,8 @@ export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
     }
   }
 
+  const roleOptions = form.department ? (ROLES_BY_DEPARTMENT[form.department] ?? []) : []
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[480px] bg-white rounded-[6px]">
@@ -146,24 +173,11 @@ export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
 
             <div className="space-y-1.5">
               <Label className="text-[14px] text-[#111111]">
-                Rolle <span className="text-[#E040FB]">*</span>
-              </Label>
-              <Input
-                value={form.employee_role}
-                onChange={(e) => setForm((f) => ({ ...f, employee_role: e.target.value }))}
-                placeholder="z.B. Produktionsleiter"
-                className="rounded-[4px] text-[14px] border-[#E5E5E5]"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-[14px] text-[#111111]">
                 Abteilung <span className="text-[#E040FB]">*</span>
               </Label>
               <Select
                 value={form.department}
-                onValueChange={(val) => setForm((f) => ({ ...f, department: val }))}
+                onValueChange={(val) => setForm((f) => ({ ...f, department: val, employee_role: '' }))}
                 disabled={loading}
               >
                 <SelectTrigger className="rounded-[4px] text-[14px] border-[#E5E5E5]">
@@ -175,6 +189,62 @@ export function NewInterviewDialog({ open, onOpenChange, onCreated }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[14px] text-[#111111]">
+                Rolle <span className="text-[#E040FB]">*</span>
+              </Label>
+              <Popover open={roleOpen && !loading && !!form.department} onOpenChange={setRoleOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || !form.department}
+                    className="w-full justify-between rounded-[4px] text-[14px] border-[#E5E5E5] font-normal text-left"
+                  >
+                    <span className={form.employee_role ? 'text-[#111111]' : 'text-[#9CA3AF]'}>
+                      {form.employee_role || (form.department ? 'Rolle eingeben oder wählen' : 'Erst Abteilung wählen')}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-[#6B7280]" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[432px] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Rolle eingeben…"
+                      value={form.employee_role}
+                      onValueChange={(val) => setForm((f) => ({ ...f, employee_role: val }))}
+                    />
+                    <CommandList>
+                      {roleOptions.length === 0 ? (
+                        <CommandEmpty>Keine Vorschläge — freie Eingabe möglich.</CommandEmpty>
+                      ) : (
+                        <>
+                          <CommandEmpty>Keine Übereinstimmung — freie Eingabe möglich.</CommandEmpty>
+                          <CommandGroup>
+                            {roleOptions.map((role) => (
+                              <CommandItem
+                                key={role}
+                                value={role}
+                                onSelect={(val) => {
+                                  setForm((f) => ({ ...f, employee_role: val }))
+                                  setRoleOpen(false)
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${form.employee_role === role ? 'opacity-100' : 'opacity-0'}`}
+                                />
+                                {role}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-1.5">

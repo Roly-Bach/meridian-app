@@ -36,7 +36,12 @@
 
 ### Interview-Erstellung (Dialog)
 
-- [ ] Dialog enthält fünf Felder: `employee_name` (required), `employee_role` (required), `department` (required), `focus_topics` (optional, Textarea), `max_duration_minutes` (required, Select)
+- [ ] Dialog enthält fünf Felder in dieser Reihenfolge: `employee_name` (required), `department` (required), `employee_role` (required), `focus_topics` (optional, Textarea), `max_duration_minutes` (required, Select)
+- [ ] `department` erscheint **vor** `employee_role` — Abteilung bestimmt die Rollenvorschläge
+- [ ] `employee_role` ist eine Combobox (Popover + Command): zeigt abteilungsspezifische Vorschläge, erlaubt aber auch freie Texteingabe
+- [ ] `employee_role`-Combobox ist disabled wenn `department` noch nicht gewählt — Placeholder "Erst Abteilung wählen"
+- [ ] Bei Abteilungswechsel wird `employee_role` zurückgesetzt
+- [ ] Rollenvorschläge sind hardcoded pro Abteilung (Einkauf, Vertrieb, Finance, HR, IT, Operations, Marketing — Sonstiges hat keine Vorschläge)
 - [ ] `max_duration_minutes`-Feld ist ein Dropdown mit zwei Optionen: "30 Minuten (Standard)" und "10 Minuten (Test)" — Default: 30
 - [ ] Alle Pflichtfelder haben Client-seitige Validierung — Submit-Button bleibt disabled bis alle Pflichtfelder gefüllt sind
 - [ ] Submit schickt `POST /api/interviews`, zeigt Loading-State am Button
@@ -84,6 +89,8 @@
 |---|---|
 | Berater öffnet Dashboard ohne Interviews | Leerer Zustand mit CTA "Erstes Interview anlegen" |
 | Berater schließt Dialog während POST noch läuft | Loading-State bleibt, Dialog nicht schließbar während Submit aktiv |
+| Berater wählt Abteilung, wählt Rolle, ändert Abteilung | Rollenfeld wird geleert — Vorschläge wechseln zur neuen Abteilung |
+| Berater tippt Rolle die nicht in Vorschlagsliste ist | Freitext-Eingabe wird akzeptiert — Submit möglich wenn nicht leer |
 | Mitarbeiter doppelklickt Send-Button | Zweiter Klick wird ignoriert (Button disabled während Streaming) |
 | Mitarbeiter sendet leere Nachricht (nur Whitespace) | Client-seitige Validierung verhindert Submit |
 | SSE-Verbindung bricht während Streaming ab | Toast-Fehler, Input wird wieder aktiv, Agent-Antwort bleibt ggf. unvollständig im Chat |
