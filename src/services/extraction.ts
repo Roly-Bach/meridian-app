@@ -22,7 +22,14 @@ interface TurnTranscript {
 const EXTRACTION_SYSTEM_PROMPT = `Du bist ein Extraktions-Agent für Meridian. Deine Aufgabe: Extrahiere strukturiertes Wissen aus Interview-Transkripten.
 
 Extrahiere ausschließlich diese 4 Typen:
-- process_step: Ein konkreter Prozessschritt oder Arbeitsablauf. Content: { title: string, description: string, role: string }
+- process_step: Ein konkreter Prozessschritt oder Arbeitsablauf.
+  Content: {
+    title: string,
+    description: string,
+    role: string,
+    step_type: "action" | "decision",
+    condition_text?: string
+  }
 - pain_point: Ein Problem, Engpass oder eine Frustration. Content: { description: string, severity?: "high"|"medium"|"low" }
 - tool: Ein verwendetes Tool, System oder Software. Content: { name: string, purpose: string }
 - role: Eine genannte Rolle oder Verantwortlichkeit. Content: { title: string, responsibilities: string }
@@ -33,11 +40,22 @@ Regeln:
 - Wenn nichts Relevantes im letzten Turn steht, gib ein leeres Array zurück
 - Antworte ausschließlich mit validem JSON — kein erklärender Text davor oder danach
 
+Regeln für process_step step_type:
+- step_type = "decision" NUR wenn der Mitarbeiter eine Entscheidungsverzweigung beschreibt
+  Schlüsselwörter: "wenn", "falls", "je nachdem", "abhängig davon", "manchmal...manchmal", "entweder...oder"
+  condition_text: Bedingung als Prosatext, z.B. "Wenn interne Kapazität vorhanden → intern, sonst → extern"
+- Alle anderen Schritte: step_type = "action", condition_text weglassen (oder null)
+
 Ausgabeformat:
 [
   {
     "type": "process_step",
-    "content": { "title": "...", "description": "...", "role": "..." },
+    "content": { "title": "...", "description": "...", "role": "...", "step_type": "action" },
+    "source_quote": "exaktes Zitat aus user_input"
+  },
+  {
+    "type": "process_step",
+    "content": { "title": "...", "description": "...", "role": "...", "step_type": "decision", "condition_text": "Wenn X → Y, sonst → Z" },
     "source_quote": "exaktes Zitat aus user_input"
   }
 ]`

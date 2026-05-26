@@ -207,6 +207,8 @@ export interface Database {
           error_rate_percent: number | null
           media_breaks: number
           source_quote: string | null
+          step_type: 'action' | 'decision'
+          condition_text: string | null
           embedding: number[] | null
           created_at: string
         }
@@ -225,6 +227,8 @@ export interface Database {
           error_rate_percent?: number | null
           media_breaks?: number
           source_quote?: string | null
+          step_type?: 'action' | 'decision'
+          condition_text?: string | null
           embedding?: number[] | null
           created_at?: string
         }
@@ -240,6 +244,8 @@ export interface Database {
           error_rate_percent?: number | null
           media_breaks?: number
           source_quote?: string | null
+          step_type?: 'action' | 'decision'
+          condition_text?: string | null
           embedding?: number[] | null
         }
         Relationships: [

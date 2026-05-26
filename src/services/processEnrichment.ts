@@ -13,6 +13,8 @@ interface LLMProcessStep {
   description: string | null
   role: string | null
   source_quote: string | null
+  step_type: 'action' | 'decision' | null
+  condition_text: string | null
   attributes: {
     frequency_per_month: EnrichedAttribute<number>
     duration_minutes: EnrichedAttribute<number>
@@ -38,6 +40,11 @@ Attribute:
 - error_rate_percent (integer 0-100): Nur wenn Fehlerrate/Probleme mit Häufigkeit explizit erwähnt
 - media_breaks (integer): Nur wenn Systemwechsel explizit beschrieben
 
+Zusätzlich: Schritt-Typ bestimmen
+- step_type = "decision" wenn der Schritt eine Entscheidungsverzweigung beschreibt ("wenn X dann Y sonst Z", "je nachdem ob", "abhängig davon")
+- condition_text: Bedingung als Prosatext, z.B. "Wenn interne Kapazität vorhanden → intern, sonst → extern"
+- Alle anderen Schritte: step_type = "action", condition_text = null
+
 Ausgabeformat — nur valides JSON, kein Text davor oder danach:
 [
   {
@@ -46,6 +53,8 @@ Ausgabeformat — nur valides JSON, kein Text davor oder danach:
     "description": "Beschreibung oder null",
     "role": "Rolle oder null",
     "source_quote": "Originalzitat aus dem Interview",
+    "step_type": "action",
+    "condition_text": null,
     "attributes": {
       "frequency_per_month": { "value": 4, "evidence_quote": "jeden Montag" },
       "duration_minutes": { "value": null, "evidence_quote": null },
@@ -152,6 +161,8 @@ export async function enrichProcessSteps({
       description: step.description ?? null,
       role: step.role ?? null,
       source_quote: step.source_quote ?? null,
+      step_type: step.step_type === 'decision' ? 'decision' : 'action',
+      condition_text: step.step_type === 'decision' ? (step.condition_text ?? null) : null,
       embedding,
       frequency_per_month: applyGroundingGuard(step.attributes?.frequency_per_month ?? { value: null, evidence_quote: null }),
       duration_minutes: applyGroundingGuard(step.attributes?.duration_minutes ?? { value: null, evidence_quote: null }),

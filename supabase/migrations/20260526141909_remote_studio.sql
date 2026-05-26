@@ -1,0 +1,2 @@
+-- Migration applied directly via Supabase Studio on 2026-05-26.
+-- Pulled to sync local migration history.

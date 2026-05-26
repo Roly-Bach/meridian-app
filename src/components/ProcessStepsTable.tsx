@@ -58,6 +58,8 @@ interface ProcessStep {
   error_rate_percent: number | null
   media_breaks: number
   source_quote: string | null
+  step_type: 'action' | 'decision'
+  condition_text: string | null
   created_at: string
   interviews: {
     department: string
@@ -390,14 +392,17 @@ interface ClusterDetailSheetProps {
 }
 
 function ClusterDetailSheet({ groupSteps, onEditStep }: ClusterDetailSheetProps) {
-  const [openSteps, setOpenSteps] = useState<Set<string>>(new Set())
   const representative = groupSteps[0]
   const cluster = representative.process_clusters
   const title = cluster?.canonical_title ?? representative.title
   const dept = representative.interviews?.department
 
   const clusteringReason = cluster?.canonical_description
-    ?? (representative.cluster_id ? 'Semantisch ähnliche Prozesse (AI-Clustering)' : 'Titel-Übereinstimmung')
+    ?? (representative.cluster_id
+      ? 'Semantisch ähnliche Prozesse (AI-Clustering)'
+      : groupSteps.length === 1
+        ? 'Einzelner aufgenommener Schritt'
+        : 'Titel-Übereinstimmung')
 
   const participants = groupSteps.map(s => ({
     step: s,
@@ -405,15 +410,6 @@ function ClusterDetailSheet({ groupSteps, onEditStep }: ClusterDetailSheetProps)
     role: s.interviews?.employee_role ?? null,
     dept: s.interviews?.department ?? '—',
   }))
-
-  function toggleStep(id: string) {
-    setOpenSteps(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
 
   return (
     <>
@@ -454,71 +450,206 @@ function ClusterDetailSheet({ groupSteps, onEditStep }: ClusterDetailSheetProps)
 
         <Separator className="bg-[#F3F4F6]" />
 
-        {/* Schritte */}
+        {/* Prozess-Flow */}
         <div>
-          <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-2">
+          <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-3">
             Aufgenommene Schritte
           </p>
-          <div className="space-y-2">
-            {groupSteps.map((step) => {
-              const isOpen = openSteps.has(step.id)
-              return (
-                <Collapsible key={step.id} open={isOpen} onOpenChange={() => toggleStep(step.id)}>
-                  <CollapsibleTrigger className="w-full">
-                    <div className="flex items-center justify-between px-3 py-2.5 bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] hover:bg-[#F3F4F6] transition-colors cursor-pointer">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {isOpen
-                          ? <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
-                          : <ChevronRight className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
-                        }
-                        <span className="text-[13px] font-medium text-[#111111] truncate">{step.title}</span>
-                      </div>
-                      <span className="text-[11px] text-[#9CA3AF] shrink-0 ml-2">
-                        {step.interviews?.employee_name}
-                      </span>
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="mt-1 px-3 py-3 border border-t-0 border-[#E5E5E5] rounded-b-[6px] space-y-3">
-                      {step.source_quote && (
-                        <div className="bg-[#F9FAFB] rounded-[4px] px-2.5 py-2">
-                          <p className="text-[11px] text-[#9CA3AF] mb-0.5">Originalzitat</p>
-                          <p className="text-[12px] text-[#4B5563] italic">„{step.source_quote}"</p>
-                        </div>
-                      )}
-                      {step.description && (
-                        <p className="text-[12px] text-[#6B7280] leading-relaxed">{step.description}</p>
-                      )}
-                      <div className="flex items-center gap-3 flex-wrap text-[12px] text-[#374151]">
-                        {step.frequency_per_month != null && <span>📅 {step.frequency_per_month}×/Mo</span>}
-                        {step.duration_minutes != null && <span>⏱ {step.duration_minutes} Min</span>}
-                        {step.error_rate_percent != null && <span>⚠ {step.error_rate_percent}%</span>}
-                        {step.media_breaks != null && <span>🔗 {step.media_breaks} Brüche</span>}
-                      </div>
-                      {step.data_sources.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {step.data_sources.map(src => (
-                            <span key={src} className="bg-[#F3E5FF] text-[#7C3AED] text-[11px] px-1.5 py-0.5 rounded-[3px]">
-                              {src}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <button
-                        onClick={() => onEditStep(step)}
-                        className="text-[12px] text-[#E040FB] hover:text-[#AA00FF] font-medium transition-colors"
-                      >
-                        Bearbeiten →
-                      </button>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              )
-            })}
-          </div>
+          <ProcessFlowView groupSteps={groupSteps} onEditStep={onEditStep} />
         </div>
       </div>
     </>
+  )
+}
+
+// ——— Process Flow View ———
+
+interface ProcessFlowViewProps {
+  groupSteps: ProcessStep[]
+  onEditStep: (step: ProcessStep) => void
+}
+
+function ProcessFlowView({ groupSteps, onEditStep }: ProcessFlowViewProps) {
+  // Group steps by interview participant, sort each group by created_at
+  const byParticipant = groupSteps.reduce<Record<string, ProcessStep[]>>((acc, step) => {
+    const key = step.interview_id
+    if (!acc[key]) acc[key] = []
+    acc[key].push(step)
+    return acc
+  }, {})
+
+  const participantIds = Object.keys(byParticipant)
+  const [primaryId] = participantIds
+  const primarySteps = [...(byParticipant[primaryId] ?? [])].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  )
+  const otherParticipantIds = participantIds.slice(1)
+
+  const [showOthers, setShowOthers] = useState(false)
+
+  return (
+    <div>
+      {/* Primary flow */}
+      <div className="flex flex-col items-center">
+        {primarySteps.map((step, idx) => (
+          <div key={step.id} className="w-full flex flex-col items-center">
+            {step.step_type === 'decision' ? (
+              <DecisionNode step={step} onEdit={onEditStep} />
+            ) : (
+              <ActionNode step={step} onEdit={onEditStep} />
+            )}
+            {idx < primarySteps.length - 1 && <FlowArrow />}
+          </div>
+        ))}
+      </div>
+
+      {/* Other participants (cluster) */}
+      {otherParticipantIds.length > 0 && (
+        <div className="mt-4">
+          <button
+            onClick={() => setShowOthers(v => !v)}
+            className="flex items-center gap-1.5 text-[12px] text-[#6B7280] hover:text-[#111111] transition-colors mb-2"
+          >
+            {showOthers
+              ? <ChevronDown className="w-3.5 h-3.5" />
+              : <ChevronRight className="w-3.5 h-3.5" />
+            }
+            Weitere Interviews ({otherParticipantIds.length})
+          </button>
+          {showOthers && (
+            <div className="space-y-4 pl-2 border-l-2 border-[#F3F4F6]">
+              {otherParticipantIds.map((pid) => {
+                const pSteps = [...(byParticipant[pid] ?? [])].sort(
+                  (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                )
+                const pName = pSteps[0]?.interviews?.employee_name ?? '—'
+                return (
+                  <div key={pid}>
+                    <p className="text-[11px] text-[#9CA3AF] mb-2">{pName}</p>
+                    <div className="flex flex-col items-center">
+                      {pSteps.map((step, idx) => (
+                        <div key={step.id} className="w-full flex flex-col items-center">
+                          {step.step_type === 'decision' ? (
+                            <DecisionNode step={step} onEdit={onEditStep} />
+                          ) : (
+                            <ActionNode step={step} onEdit={onEditStep} />
+                          )}
+                          {idx < pSteps.length - 1 && <FlowArrow />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FlowArrow() {
+  return (
+    <div className="flex flex-col items-center my-0.5">
+      <div className="w-px h-4 bg-[#D1D5DB]" />
+      <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-[#D1D5DB]" />
+    </div>
+  )
+}
+
+interface NodeProps {
+  step: ProcessStep
+  onEdit: (step: ProcessStep) => void
+}
+
+function ActionNode({ step, onEdit }: NodeProps) {
+  const hasMetrics = step.frequency_per_month != null || step.duration_minutes != null ||
+    step.error_rate_percent != null || step.media_breaks != null || step.data_sources.length > 0
+
+  return (
+    <div className="w-full border-2 border-[#3B82F6] bg-white rounded-[6px] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 px-3 py-2.5">
+        <div className="min-w-0">
+          <span className="text-[13px] font-medium text-[#111111] leading-snug">{step.title}</span>
+          {step.interviews?.employee_name && (
+            <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+              {step.interviews.employee_name}
+              {step.interviews.department ? ` · ${step.interviews.department}` : ''}
+            </p>
+          )}
+        </div>
+        <Badge className="text-[10px] px-1.5 py-0.5 bg-[#EFF6FF] text-[#2563EB] border-0 font-medium shrink-0 hover:bg-[#EFF6FF]">
+          Aktion
+        </Badge>
+      </div>
+
+      {/* Metrics + edit */}
+      {(hasMetrics || step.source_quote) && (
+        <div className="border-t border-[#E5E5E5] px-3 py-2 bg-[#F9FAFB] space-y-1.5">
+          {step.source_quote && (
+            <p className="text-[11px] text-[#6B7280] italic line-clamp-2">„{step.source_quote}"</p>
+          )}
+          <div className="flex items-center gap-3 flex-wrap text-[11px] text-[#374151]">
+            {step.frequency_per_month != null && <span>📅 {step.frequency_per_month}×/Mo</span>}
+            {step.duration_minutes != null && <span>⏱ {step.duration_minutes} Min</span>}
+            {step.error_rate_percent != null && <span>⚠ {step.error_rate_percent}%</span>}
+            {step.media_breaks != null && step.media_breaks > 0 && <span>🔗 {step.media_breaks}</span>}
+            {step.data_sources.map(src => (
+              <span key={src} className="bg-[#F3E5FF] text-[#7C3AED] px-1.5 py-0.5 rounded-[3px]">{src}</span>
+            ))}
+          </div>
+          <button
+            onClick={() => onEdit(step)}
+            className="text-[11px] text-[#E040FB] hover:text-[#AA00FF] font-medium transition-colors"
+          >
+            Bearbeiten →
+          </button>
+        </div>
+      )}
+      {!hasMetrics && !step.source_quote && (
+        <div className="border-t border-[#E5E5E5] px-3 py-1.5 bg-[#F9FAFB] flex justify-end">
+          <button
+            onClick={() => onEdit(step)}
+            className="text-[11px] text-[#E040FB] hover:text-[#AA00FF] font-medium transition-colors"
+          >
+            Bearbeiten →
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DecisionNode({ step, onEdit }: NodeProps) {
+  const text = step.condition_text ?? step.title
+
+  return (
+    <div className="w-full flex flex-col items-center">
+      {/* Diamond shape */}
+      <div className="relative flex items-center justify-center" style={{ width: '180px', height: '90px' }}>
+        <div
+          className="absolute border-2 border-[#F59E0B] bg-[#FFFBEB]"
+          style={{
+            width: '90px',
+            height: '90px',
+            transform: 'rotate(45deg)',
+            borderRadius: '4px',
+          }}
+        />
+        <div className="relative z-10 px-4 text-center" style={{ maxWidth: '160px' }}>
+          <p className="text-[10px] font-medium text-[#92400E] leading-tight line-clamp-3">{text}</p>
+        </div>
+      </div>
+      {/* Edit link below diamond */}
+      <button
+        onClick={() => onEdit(step)}
+        className="mt-1 text-[11px] text-[#E040FB] hover:text-[#AA00FF] font-medium transition-colors"
+      >
+        Bearbeiten →
+      </button>
+    </div>
   )
 }
 
