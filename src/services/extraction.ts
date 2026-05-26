@@ -2,6 +2,7 @@ import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { generateEmbedding } from './embeddings'
 import { resolveModel } from '@/lib/llm-provider'
+import { cosineSim } from './processClustering'
 
 export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool' | 'role'
 
@@ -121,4 +122,71 @@ export async function extractAndEmbed({
     }
   }
   return inserted
+}
+
+// D13/ADR-006: Workspace-level deduplication of process_step knowledge objects.
+// Run async after interview completion. Merges objects with cosine similarity > 0.92
+// and the same role into the older entry; increments existing_count on the survivor.
+const DEDUP_THRESHOLD = 0.92
+
+export async function deduplicateKnowledgeObjects(workspaceId: string): Promise<void> {
+  const supabase = getSupabaseAdmin()
+
+  const { data: objects, error } = await supabase
+    .from('knowledge_objects')
+    .select('id, content, embedding, existing_count')
+    .eq('workspace_id', workspaceId)
+    .eq('type', 'process_step')
+    .not('embedding', 'is', null)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('[dedup] fetch failed:', error.message)
+    return
+  }
+  if (!objects || objects.length < 2) return
+
+  type KORow = { id: string; content: Record<string, unknown>; embedding: number[]; existing_count: number }
+  const rows = objects as unknown as KORow[]
+
+  const toDelete = new Set<string>()
+  const countUpdates = new Map<string, number>()
+
+  for (let i = 0; i < rows.length; i++) {
+    if (toDelete.has(rows[i].id)) continue
+    const roleI = rows[i].content?.role as string | undefined
+
+    for (let j = i + 1; j < rows.length; j++) {
+      if (toDelete.has(rows[j].id)) continue
+      const roleJ = rows[j].content?.role as string | undefined
+
+      if (roleI !== roleJ) continue
+
+      const sim = cosineSim(rows[i].embedding, rows[j].embedding)
+      if (sim < DEDUP_THRESHOLD) continue
+
+      toDelete.add(rows[j].id)
+      const merged = (countUpdates.get(rows[i].id) ?? rows[i].existing_count) + rows[j].existing_count
+      countUpdates.set(rows[i].id, merged)
+    }
+  }
+
+  if (toDelete.size === 0) return
+
+  // Update existing_count + last_seen_at on survivors
+  for (const [id, existing_count] of countUpdates) {
+    const { error: upErr } = await supabase
+      .from('knowledge_objects')
+      .update({ existing_count, last_seen_at: new Date().toISOString() })
+      .eq('id', id)
+    if (upErr) console.error('[dedup] update failed:', upErr.message)
+  }
+
+  // Delete duplicate objects
+  const { error: delErr } = await supabase
+    .from('knowledge_objects')
+    .delete()
+    .in('id', [...toDelete])
+  if (delErr) console.error('[dedup] delete failed:', delErr.message)
+  else console.info(`[dedup] removed ${toDelete.size} duplicate(s) in workspace ${workspaceId}`)
 }

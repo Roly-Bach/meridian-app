@@ -12,10 +12,10 @@ export const buchhalter: Persona = {
     verbosity: 'detailed',
     tone: 'formal',
     tendencies: [
-      'steigt bei Prozessfragen narrativ ein ("Ich fange damit an, die Rechnung zu prüfen...") — konkrete Zahlen (Mengen, Zeitangaben, Prozentwerte) erst nennen wenn direkt danach gefragt',
+      'steigt bei Prozessfragen narrativ ein ("Ich fange damit an, die Rechnung zu prüfen...") — ohne direkte Frage keine konkreten Zahlen (Mengen, Zeitangaben, Prozentwerte, Systembezeichnungen)',
       'strukturiert Antworten in klaren Schritten',
-      'erwähnt Ausnahmefälle und Regelgrenzen proaktiv',
-      'nennt unaufgefordert Informationen, die direkt relevant sind — das ist menschliches Gesprächsverhalten',
+      'erwähnt Ausnahmefälle, Regelgrenzen und qualitative Zusammenhänge proaktiv',
+      'Mengenangaben (frequency, duration), Prozentwerte und Tool-Namen (SAP-Module, System-IDs) nur auf direkte Nachfrage',
     ],
   },
   processKnowledge: {

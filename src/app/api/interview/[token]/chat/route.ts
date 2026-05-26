@@ -8,7 +8,7 @@ import {
   type TurnMessage,
   type StepEntry,
 } from '@/services/interviewAgent'
-import { extractAndEmbed, type RawExtraction } from '@/services/extraction'
+import { extractAndEmbed, deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
 import { enrichProcessSteps } from '@/services/processEnrichment'
 import { clusterProcessSteps } from '@/services/processClustering'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
@@ -164,51 +164,63 @@ export async function POST(
       }).select('id').single()
       if (turnError) console.error('[onFinish] turns insert failed:', turnError.message)
 
-      // Await extraction so knowledge_objects are in DB before potential enrichment
-      let newExtractions: RawExtraction[] = []
-      if (newTurn?.id) {
-        const transcript = [
-          ...existingTurns.map(t => ({ user_input: t.user_input, agent_response: t.agent_response })),
-          { user_input, agent_response: agentText },
-        ]
-        newExtractions = await extractAndEmbed({
-          interviewId: interview.id,
-          workspaceId: interview.workspace_id,
-          turnId: newTurn.id,
-          transcript,
-        })
-      }
-
+      // Update state immediately (no extraction result needed for state update)
       const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
-      const updatedLog = [...currentLog, ...newExtractions]
 
       const { error: stateError } = await supabase
         .from('interview_state')
         .update({
           timer_minutes: timerMinutes,
           updated_at: new Date().toISOString(),
-          extractions_log: updatedLog as unknown as import('@/lib/database.types').Json,
+          extractions_log: currentLog as unknown as import('@/lib/database.types').Json,
         })
         .eq('interview_id', interview.id)
       if (stateError) console.error('[onFinish] state update failed:', stateError.message)
 
-      // If the interview was completed this turn, enrich process steps now that
-      // all knowledge_objects for this turn are committed to the DB
-      const { data: currentInterview } = await supabase
-        .from('interviews')
-        .select('status')
-        .eq('id', interview.id)
-        .single()
-
-      if (currentInterview?.status === 'completed') {
-        await enrichProcessSteps({
-          interviewId: interview.id,
-          workspaceId: interview.workspace_id,
-        })
-        // Fire-and-forget — clustering runs after enrichment, not on the critical path
+      // Post-completion tasks: enrichment, clustering, dedup.
+      // enrichProcessSteps reads knowledge_objects → must run AFTER extractAndEmbed commits them.
+      const runPostCompletionTasks = async () => {
+        const { data: ci } = await supabase
+          .from('interviews').select('status').eq('id', interview.id).single()
+        if (ci?.status !== 'completed') return
+        await enrichProcessSteps({ interviewId: interview.id, workspaceId: interview.workspace_id })
         clusterProcessSteps(interview.workspace_id).catch((err) =>
           console.error('[chat] clusterProcessSteps failed:', err)
         )
+        deduplicateKnowledgeObjects(interview.workspace_id).catch((err) =>
+          console.error('[chat] deduplicateKnowledgeObjects failed:', err)
+        )
+      }
+
+      // Fire-and-forget extraction — decoupled from response stream (D8/ADR-006).
+      // extractions_log in subsequent turns may lag one turn; acceptable since the
+      // agent uses the log as a context hint, not a control signal.
+      // Post-completion tasks are chained inside .then() so enrichProcessSteps only
+      // runs after all knowledge_objects for this turn are committed.
+      if (newTurn?.id) {
+        const transcript = [
+          ...existingTurns.map(t => ({ user_input: t.user_input, agent_response: t.agent_response })),
+          { user_input, agent_response: agentText },
+        ]
+        extractAndEmbed({
+          interviewId: interview.id,
+          workspaceId: interview.workspace_id,
+          turnId: newTurn.id,
+          transcript,
+        }).then(async (newExtractions) => {
+          if (newExtractions.length > 0) {
+            const updatedLog = [...currentLog, ...newExtractions]
+            const { error } = await supabase
+              .from('interview_state')
+              .update({ extractions_log: updatedLog as unknown as import('@/lib/database.types').Json, updated_at: new Date().toISOString() })
+              .eq('interview_id', interview.id)
+            if (error) console.error('[onFinish] extractions_log update failed:', error.message)
+          }
+          await runPostCompletionTasks()
+        }).catch((err) => console.error('[onFinish] extractAndEmbed failed:', err))
+      } else {
+        // No turn ID (turn insert failed) — still run completion tasks if needed.
+        await runPostCompletionTasks()
       }
     },
   })

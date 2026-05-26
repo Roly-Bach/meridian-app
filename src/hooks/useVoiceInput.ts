@@ -68,13 +68,23 @@ export function useVoiceInput({
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Keep a stable ref to onCommitted to avoid stale closure in WS handler
   const onCommittedRef = useRef(onCommitted)
   useEffect(() => {
     onCommittedRef.current = onCommitted
   }, [onCommitted])
 
+  const clearRefreshTimer = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+  }, [])
+
   const cleanup = useCallback(() => {
+    clearRefreshTimer()
+
     // Close WS
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.close()
@@ -92,12 +102,92 @@ export function useVoiceInput({
     }
 
     setPartialText('')
-  }, [])
+  }, [clearRefreshTimer])
 
   const stop = useCallback(() => {
     cleanup()
     setState('idle')
   }, [cleanup])
+
+  // openWebSocket is extracted so it can be called on initial start and on token refresh.
+  // The audio pipeline (AudioContext + microphone) remains open across a refresh.
+  const openWebSocketRef = useRef<((sessionToken: string) => void) | null>(null)
+
+  const openWebSocket = useCallback((sessionToken: string) => {
+    // Close existing WS without touching the audio pipeline
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close()
+    }
+    wsRef.current = null
+    clearRefreshTimer()
+
+    const wsUrl = new URL('wss://api.elevenlabs.io/v1/speech-to-text/realtime')
+    wsUrl.searchParams.set('token', sessionToken)
+    wsUrl.searchParams.set('model_id', 'scribe_v2_realtime')
+    wsUrl.searchParams.set('commit_strategy', 'vad')
+    wsUrl.searchParams.set('vad_silence_threshold_secs', '1.5')
+    wsUrl.searchParams.set('audio_format', 'pcm_16000')
+    const ws = new WebSocket(wsUrl.toString())
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      setState('listening')
+      // ElevenLabs session tokens expire after 900s. Refresh 60s before expiry.
+      refreshTimerRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/interview/${token}/voice-token`, { method: 'POST' })
+          if (!res.ok) throw new Error(`voice-token ${res.status}`)
+          const json = (await res.json()) as { sessionToken: string }
+          if (openWebSocketRef.current) openWebSocketRef.current(json.sessionToken)
+        } catch {
+          toast.error('Sprachaufnahme unterbrochen — bitte neu starten')
+          setState('error')
+        }
+      }, 840_000)
+    }
+
+    ws.onmessage = (event: MessageEvent) => {
+      let msg: { message_type?: string; text?: string }
+      try {
+        msg = JSON.parse(event.data as string) as typeof msg
+      } catch {
+        return
+      }
+
+      if (msg.message_type === 'partial_transcript') {
+        setPartialText(msg.text ?? '')
+      } else if (msg.message_type === 'committed_transcript') {
+        setPartialText('')
+        const trimmed = (msg.text ?? '').trim()
+        if (trimmed) {
+          onCommittedRef.current(trimmed)
+        }
+        // Auto-stop after commit — one answer per mic activation
+        cleanup()
+        setState('idle')
+      }
+    }
+
+    let closedByError = false
+
+    ws.onerror = () => {
+      closedByError = true
+      setState('error')
+      toast.error('Sprachaufnahme unterbrochen')
+    }
+
+    ws.onclose = () => {
+      cleanup()
+      if (!closedByError) {
+        setState('idle')
+      }
+    }
+  }, [token, cleanup, clearRefreshTimer])
+
+  // Keep ref current so the refresh timer callback always calls the latest version
+  useEffect(() => {
+    openWebSocketRef.current = openWebSocket
+  }, [openWebSocket])
 
   const start = useCallback(async () => {
     if (disabled) return
@@ -189,56 +279,8 @@ export function useVoiceInput({
     }
 
     // ── 4. Open WebSocket ──────────────────────────────────────────────────
-    const wsUrl = new URL('wss://api.elevenlabs.io/v1/speech-to-text/realtime')
-    wsUrl.searchParams.set('token', sessionToken)
-    wsUrl.searchParams.set('model_id', 'scribe_v2_realtime')
-    wsUrl.searchParams.set('commit_strategy', 'vad')
-    wsUrl.searchParams.set('vad_silence_threshold_secs', '1.5')
-    wsUrl.searchParams.set('audio_format', 'pcm_16000')
-    const ws = new WebSocket(wsUrl.toString())
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      setState('listening')
-    }
-
-    ws.onmessage = (event: MessageEvent) => {
-      let msg: { message_type?: string; text?: string }
-      try {
-        msg = JSON.parse(event.data as string) as typeof msg
-      } catch {
-        return
-      }
-
-      if (msg.message_type === 'partial_transcript') {
-        setPartialText(msg.text ?? '')
-      } else if (msg.message_type === 'committed_transcript') {
-        setPartialText('')
-        const trimmed = (msg.text ?? '').trim()
-        if (trimmed) {
-          onCommittedRef.current(trimmed)
-        }
-        // Auto-stop after commit — one answer per mic activation
-        cleanup()
-        setState('idle')
-      }
-    }
-
-    let closedByError = false
-
-    ws.onerror = () => {
-      closedByError = true
-      setState('error')
-      toast.error('Sprachaufnahme unterbrochen')
-    }
-
-    ws.onclose = () => {
-      cleanup()
-      if (!closedByError) {
-        setState('idle')
-      }
-    }
-  }, [token, disabled, state, cleanup])
+    openWebSocket(sessionToken)
+  }, [token, disabled, state, cleanup, openWebSocket])
 
   // Stop recording when disabled becomes true mid-session (e.g. agent is streaming).
   // Uses a ref so the effect dependency only tracks the disabled flag, not the full stop fn.

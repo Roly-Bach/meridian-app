@@ -296,6 +296,8 @@ export interface Database {
           source_quote: string | null
           turn_id: string | null
           embedding: number[] | null
+          existing_count: number
+          last_seen_at: string
           created_at: string
         }
         Insert: {
@@ -307,12 +309,16 @@ export interface Database {
           source_quote?: string | null
           turn_id?: string | null
           embedding?: unknown
+          existing_count?: number
+          last_seen_at?: string
           created_at?: string
         }
         Update: {
           content?: Record<string, unknown>
           source_quote?: string | null
           embedding?: unknown
+          existing_count?: number
+          last_seen_at?: string
         }
         Relationships: []
       }
