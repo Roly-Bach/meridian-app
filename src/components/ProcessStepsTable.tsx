@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useState, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -76,27 +75,12 @@ interface Props {
 }
 
 export function ProcessStepsTable({ initialSteps }: Props) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-
   const [steps, setSteps] = useState<ProcessStep[]>(initialSteps)
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
   const [draftValue, setDraftValue] = useState<string>('')
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
   const [sheetStep, setSheetStep] = useState<ProcessStep | null>(null)
-  const [viewMode, setViewMode] = useState<'grouped' | 'einzeln'>(
-    searchParams.get('view') === 'einzeln' ? 'einzeln' : 'grouped'
-  )
   const inputRef = useRef<HTMLInputElement>(null)
-
-  function setView(mode: 'grouped' | 'einzeln') {
-    setViewMode(mode)
-    const params = new URLSearchParams(searchParams.toString())
-    if (mode === 'grouped') params.delete('view')
-    else params.set('view', mode)
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-  }
 
   async function patchStep(id: string, data: Partial<ProcessStep>) {
     const res = await fetch(`/api/process-steps/${id}`, {
@@ -186,46 +170,21 @@ export function ProcessStepsTable({ initialSteps }: Props) {
 
   // ── Derived data ─────────────────────────────────────────────────────────────
 
-  const groupedByDept = steps.reduce<Record<string, ProcessStep[]>>((acc, step) => {
+  const groupedByDeptCluster = steps.reduce<Record<string, Record<string, ProcessStep[]>>>((acc, step) => {
     const dept = step.interviews?.department ?? 'Unbekannt'
-    if (!acc[dept]) acc[dept] = []
-    acc[dept].push(step)
+    const clusterKey = step.cluster_id ?? step.title.toLowerCase().trim()
+    if (!acc[dept]) acc[dept] = {}
+    if (!acc[dept][clusterKey]) acc[dept][clusterKey] = []
+    acc[dept][clusterKey].push(step)
     return acc
   }, {})
-  const departments = Object.keys(groupedByDept).sort()
-
-  // Group by cluster: clustered steps share a section, unclustered appear solo
-  const groupedByCluster = steps.reduce<Record<string, ProcessStep[]>>((acc, step) => {
-    const key = step.cluster_id ?? `solo-${step.id}`
-    if (!acc[key]) acc[key] = []
-    acc[key].push(step)
-    return acc
-  }, {})
-  // Sort: multi-participant clusters first, then solo
-  const clusterKeys = Object.keys(groupedByCluster).sort((a, b) => {
-    const lenA = groupedByCluster[a].length
-    const lenB = groupedByCluster[b].length
-    return lenB - lenA
-  })
+  const departments = Object.keys(groupedByDeptCluster).sort()
 
   const totalSteps = steps.length
   const totalDepts = departments.length
   const uniqueInterviews = new Set(steps.map(s => s.interview_id)).size
   const ruleBasedCount = steps.filter(s => s.rule_based).length
   const ruleBasedPct = totalSteps > 0 ? Math.round((ruleBasedCount / totalSteps) * 100) : 0
-  const clusteredCount = clusterKeys.filter(k => groupedByCluster[k].length > 1).length
-
-  const stepCardProps = {
-    editingCell,
-    draftValue,
-    inputRef,
-    onStartEdit: startEdit,
-    onDraftChange: setDraftValue,
-    onCommit: commitEdit,
-    onCancel: () => setEditingCell(null),
-    onToggleRuleBased: toggleRuleBased,
-    onOpenSheet: openSheet,
-  }
 
   return (
     <TooltipProvider>
@@ -238,115 +197,49 @@ export function ProcessStepsTable({ initialSteps }: Props) {
           <StatCard label="Automatisierbar" value={`${ruleBasedPct}%`} sub={`${ruleBasedCount} regelbasiert`} />
         </div>
 
-        {/* View toggle */}
-        <div className="flex items-center justify-between">
-          <p className="text-[12px] text-[#9CA3AF]">
-            {viewMode === 'grouped'
-              ? `${clusteredCount} Prozess${clusteredCount !== 1 ? 'e' : ''} mit mehreren Beteiligten`
-              : `${totalSteps} Einzelschritte`
-            }
-          </p>
-          <div className="flex items-center border border-[#E5E5E5] rounded-[6px] overflow-hidden text-[12px]">
-            <button
-              onClick={() => setView('grouped')}
-              className={`px-3 py-1.5 transition-colors ${viewMode === 'grouped' ? 'bg-[#111111] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'}`}
-            >
-              Gruppiert
-            </button>
-            <button
-              onClick={() => setView('einzeln')}
-              className={`px-3 py-1.5 transition-colors ${viewMode === 'einzeln' ? 'bg-[#111111] text-white' : 'bg-white text-[#6B7280] hover:bg-[#F9FAFB]'}`}
-            >
-              Einzeln
-            </button>
-          </div>
+        {/* Dept + Cluster view */}
+        <div className="space-y-3">
+          {departments.map((dept) => {
+            const clusterMap = groupedByDeptCluster[dept]
+            const deptClusterKeys = Object.keys(clusterMap).sort((a, b) => clusterMap[b].length - clusterMap[a].length)
+            const deptInterviews = new Set(
+              deptClusterKeys.flatMap(k => clusterMap[k].map(s => s.interview_id))
+            ).size
+            const isOpen = openSections.has(dept)
+
+            return (
+              <Collapsible key={dept} open={isOpen} onOpenChange={() => toggleSection(dept)}>
+                <CollapsibleTrigger className="w-full">
+                  <div className="flex items-center justify-between px-4 py-3 bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] hover:bg-[#F3F4F6] transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      {isOpen
+                        ? <ChevronDown className="w-4 h-4 text-[#6B7280]" />
+                        : <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+                      }
+                      <span className="text-[14px] font-semibold text-[#111111]">{dept}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[12px] text-[#6B7280]">
+                      <span>{deptClusterKeys.length} Prozess{deptClusterKeys.length !== 1 ? 'e' : ''}</span>
+                      <span className="text-[#D1D5DB]">·</span>
+                      <span>{deptInterviews} Interview{deptInterviews !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="mt-2 space-y-2">
+                    {deptClusterKeys.map((clusterKey) => (
+                      <DeptClusterCard
+                        key={clusterKey}
+                        groupSteps={clusterMap[clusterKey]}
+                        onOpenSheet={openSheet}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )
+          })}
         </div>
-
-        {/* Grouped view */}
-        {viewMode === 'grouped' && (
-          <div className="space-y-3">
-            {clusterKeys.map((key) => {
-              const clusterSteps = groupedByCluster[key]
-              const representative = clusterSteps[0]
-              const cluster = representative.process_clusters
-              const isMulti = clusterSteps.length > 1
-              const sectionLabel = cluster?.canonical_title ?? representative.title
-              const isOpen = openSections.has(key)
-
-              return (
-                <Collapsible key={key} open={isOpen} onOpenChange={() => toggleSection(key)}>
-                  <CollapsibleTrigger className="w-full">
-                    <div className="flex items-center justify-between px-4 py-3 bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] hover:bg-[#F3F4F6] transition-colors cursor-pointer">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {isOpen
-                          ? <ChevronDown className="w-4 h-4 text-[#6B7280] shrink-0" />
-                          : <ChevronRight className="w-4 h-4 text-[#6B7280] shrink-0" />
-                        }
-                        <span className="text-[14px] font-semibold text-[#111111] truncate">{sectionLabel}</span>
-                        {isMulti && (
-                          <Badge className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 bg-[#F3E5FF] text-[#7C3AED] border-0 font-normal hover:bg-[#F3E5FF] shrink-0">
-                            <Users className="w-3 h-3" />
-                            {clusterSteps.length} Personen
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-[12px] text-[#6B7280] shrink-0">
-                        {cluster?.participants.map(p => p.employee_name).slice(0, 3).join(', ')}
-                        {(cluster?.participant_count ?? 1) > 3 && ` +${(cluster?.participant_count ?? 1) - 3}`}
-                      </div>
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="mt-2 space-y-2">
-                      {clusterSteps.map((step) => (
-                        <StepCard key={step.id} step={step} {...stepCardProps} />
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Einzeln view — original department grouping */}
-        {viewMode === 'einzeln' && (
-          <div className="space-y-3">
-            {departments.map((dept) => {
-              const deptSteps = groupedByDept[dept]
-              const deptInterviews = new Set(deptSteps.map(s => s.interview_id)).size
-              const isOpen = openSections.has(dept)
-
-              return (
-                <Collapsible key={dept} open={isOpen} onOpenChange={() => toggleSection(dept)}>
-                  <CollapsibleTrigger className="w-full">
-                    <div className="flex items-center justify-between px-4 py-3 bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] hover:bg-[#F3F4F6] transition-colors cursor-pointer">
-                      <div className="flex items-center gap-2">
-                        {isOpen
-                          ? <ChevronDown className="w-4 h-4 text-[#6B7280]" />
-                          : <ChevronRight className="w-4 h-4 text-[#6B7280]" />
-                        }
-                        <span className="text-[14px] font-semibold text-[#111111]">{dept}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-[12px] text-[#6B7280]">
-                        <span>{deptSteps.length} Schritt{deptSteps.length !== 1 ? 'e' : ''}</span>
-                        <span className="text-[#D1D5DB]">·</span>
-                        <span>{deptInterviews} Interview{deptInterviews !== 1 ? 's' : ''}</span>
-                      </div>
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="mt-2 space-y-2">
-                      {deptSteps.map((step) => (
-                        <StepCard key={step.id} step={step} {...stepCardProps} />
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              )
-            })}
-          </div>
-        )}
       </div>
 
       {/* Detail Sheet */}
@@ -362,6 +255,114 @@ export function ProcessStepsTable({ initialSteps }: Props) {
         </SheetContent>
       </Sheet>
     </TooltipProvider>
+  )
+}
+
+interface DeptClusterCardProps {
+  groupSteps: ProcessStep[]
+  onOpenSheet: (step: ProcessStep) => void
+}
+
+function DeptClusterCard({ groupSteps, onOpenSheet }: DeptClusterCardProps) {
+  const representative = groupSteps[0]
+  const cluster = representative.process_clusters
+  const title = cluster?.canonical_title ?? representative.title
+  const isMulti = groupSteps.length > 1
+
+  const participantNames = [...new Set(
+    groupSteps.map(s => s.interviews?.employee_name).filter((n): n is string => !!n)
+  )]
+
+  function avg(arr: (number | null)[]): number | null {
+    const vals = arr.filter((v): v is number => v !== null)
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null
+  }
+
+  const mergedFrequency = avg(groupSteps.map(s => s.frequency_per_month))
+  const mergedDuration = avg(groupSteps.map(s => s.duration_minutes))
+  const mergedErrorRate = avg(groupSteps.map(s => s.error_rate_percent))
+  const mergedMediaBreaks = avg(groupSteps.map(s => s.media_breaks))
+  const mergedDataSources = [...new Set(groupSteps.flatMap(s => s.data_sources))]
+  const isRuleBased = groupSteps.filter(s => s.rule_based).length >= groupSteps.length / 2
+
+  return (
+    <Card className="border-[#E5E5E5] shadow-none bg-white hover:bg-[#FAFAFA] transition-colors">
+      <CardContent className="px-4 py-3">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => onOpenSheet(representative)}
+              className="text-[14px] font-medium text-[#111111] leading-snug truncate text-left hover:text-[#E040FB] transition-colors cursor-pointer"
+            >
+              {title}
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isRuleBased && (
+              <Badge className="text-[11px] px-1.5 py-0.5 bg-[#F3E5FF] text-[#7C3AED] border-0 font-normal hover:bg-[#F3E5FF]">
+                Regelbasiert
+              </Badge>
+            )}
+            <Badge
+              className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 border-0 font-normal ${isMulti ? 'bg-[#EFF6FF] text-[#2563EB] hover:bg-[#EFF6FF]' : 'bg-[#F3F4F6] text-[#6B7280] hover:bg-[#F3F4F6]'}`}
+            >
+              {isMulti && <Users className="w-3 h-3" />}
+              {groupSteps.length} Interview{groupSteps.length !== 1 ? 's' : ''}
+            </Badge>
+            <button
+              onClick={() => onOpenSheet(representative)}
+              className="text-[#9CA3AF] hover:text-[#E040FB] transition-colors"
+              title="Detail anzeigen"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {participantNames.length > 0 && (
+          <p className="text-[12px] text-[#6B7280] mb-2">
+            {participantNames.join(' · ')}
+          </p>
+        )}
+
+        <Separator className="my-2 bg-[#F3F4F6]" />
+
+        <div className="flex items-center gap-4 flex-wrap">
+          {mergedFrequency != null && (
+            <span className="flex items-center gap-1 text-[12px] text-[#374151]">
+              <span>📅</span>{mergedFrequency}×/Mo
+            </span>
+          )}
+          {mergedDuration != null && (
+            <span className="flex items-center gap-1 text-[12px] text-[#374151]">
+              <span>⏱</span>{mergedDuration} Min
+            </span>
+          )}
+          {mergedErrorRate != null && (
+            <span className="flex items-center gap-1 text-[12px] text-[#374151]">
+              <span>⚠</span>{mergedErrorRate}%
+            </span>
+          )}
+          {mergedMediaBreaks != null && (
+            <span className="flex items-center gap-1 text-[12px] text-[#374151]">
+              <span>🔗</span>{mergedMediaBreaks} Brüche
+            </span>
+          )}
+          {mergedDataSources.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {mergedDataSources.map((src) => (
+                <span
+                  key={src}
+                  className="inline-block bg-[#F3E5FF] text-[#7C3AED] text-[11px] px-1.5 py-0.5 rounded-[3px]"
+                >
+                  {src}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
