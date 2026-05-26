@@ -79,6 +79,7 @@ export function ProcessStepsTable({ initialSteps }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
   const [draftValue, setDraftValue] = useState<string>('')
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
+  const [sheetGroup, setSheetGroup] = useState<ProcessStep[] | null>(null)
   const [sheetStep, setSheetStep] = useState<ProcessStep | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -148,12 +149,17 @@ export function ProcessStepsTable({ initialSteps }: Props) {
     })
   }
 
+  function openGroup(groupSteps: ProcessStep[]) {
+    setSheetGroup(groupSteps)
+  }
+
   function openSheet(step: ProcessStep) {
     setSheetStep(step)
   }
 
   function handleSheetSaved(updated: ProcessStep) {
     setSteps((prev) => prev.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)))
+    setSheetGroup((prev) => prev ? prev.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)) : null)
     setSheetStep((prev) => prev ? { ...updated, interviews: prev.interviews } : null)
   }
 
@@ -172,7 +178,7 @@ export function ProcessStepsTable({ initialSteps }: Props) {
 
   const groupedByDeptCluster = steps.reduce<Record<string, Record<string, ProcessStep[]>>>((acc, step) => {
     const dept = step.interviews?.department ?? 'Unbekannt'
-    const clusterKey = step.cluster_id ?? step.title.toLowerCase().trim()
+    const clusterKey = step.cluster_id ?? `solo-${step.id}`
     if (!acc[dept]) acc[dept] = {}
     if (!acc[dept][clusterKey]) acc[dept][clusterKey] = []
     acc[dept][clusterKey].push(step)
@@ -231,7 +237,7 @@ export function ProcessStepsTable({ initialSteps }: Props) {
                       <DeptClusterCard
                         key={clusterKey}
                         groupSteps={clusterMap[clusterKey]}
-                        onOpenSheet={openSheet}
+                        onOpenGroup={openGroup}
                       />
                     ))}
                   </div>
@@ -242,7 +248,19 @@ export function ProcessStepsTable({ initialSteps }: Props) {
         </div>
       </div>
 
-      {/* Detail Sheet */}
+      {/* Cluster Detail Sheet */}
+      <Sheet open={!!sheetGroup} onOpenChange={(open) => { if (!open) setSheetGroup(null) }}>
+        <SheetContent className="w-[520px] sm:max-w-[520px] overflow-y-auto">
+          {sheetGroup && (
+            <ClusterDetailSheet
+              groupSteps={sheetGroup}
+              onEditStep={openSheet}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Step Edit Sheet (nested) */}
       <Sheet open={!!sheetStep} onOpenChange={(open) => { if (!open) setSheetStep(null) }}>
         <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
           {sheetStep && (
@@ -260,10 +278,10 @@ export function ProcessStepsTable({ initialSteps }: Props) {
 
 interface DeptClusterCardProps {
   groupSteps: ProcessStep[]
-  onOpenSheet: (step: ProcessStep) => void
+  onOpenGroup: (groupSteps: ProcessStep[]) => void
 }
 
-function DeptClusterCard({ groupSteps, onOpenSheet }: DeptClusterCardProps) {
+function DeptClusterCard({ groupSteps, onOpenGroup }: DeptClusterCardProps) {
   const representative = groupSteps[0]
   const cluster = representative.process_clusters
   const title = cluster?.canonical_title ?? representative.title
@@ -291,7 +309,7 @@ function DeptClusterCard({ groupSteps, onOpenSheet }: DeptClusterCardProps) {
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="flex items-center gap-2 min-w-0">
             <button
-              onClick={() => onOpenSheet(representative)}
+              onClick={() => onOpenGroup(groupSteps)}
               className="text-[14px] font-medium text-[#111111] leading-snug truncate text-left hover:text-[#E040FB] transition-colors cursor-pointer"
             >
               {title}
@@ -310,7 +328,7 @@ function DeptClusterCard({ groupSteps, onOpenSheet }: DeptClusterCardProps) {
               {groupSteps.length} Interview{groupSteps.length !== 1 ? 's' : ''}
             </Badge>
             <button
-              onClick={() => onOpenSheet(representative)}
+              onClick={() => onOpenGroup(groupSteps)}
               className="text-[#9CA3AF] hover:text-[#E040FB] transition-colors"
               title="Detail anzeigen"
             >
@@ -363,6 +381,144 @@ function DeptClusterCard({ groupSteps, onOpenSheet }: DeptClusterCardProps) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+interface ClusterDetailSheetProps {
+  groupSteps: ProcessStep[]
+  onEditStep: (step: ProcessStep) => void
+}
+
+function ClusterDetailSheet({ groupSteps, onEditStep }: ClusterDetailSheetProps) {
+  const [openSteps, setOpenSteps] = useState<Set<string>>(new Set())
+  const representative = groupSteps[0]
+  const cluster = representative.process_clusters
+  const title = cluster?.canonical_title ?? representative.title
+  const dept = representative.interviews?.department
+
+  const clusteringReason = cluster?.canonical_description
+    ?? (representative.cluster_id ? 'Semantisch ähnliche Prozesse (AI-Clustering)' : 'Titel-Übereinstimmung')
+
+  const participants = groupSteps.map(s => ({
+    step: s,
+    name: s.interviews?.employee_name ?? '—',
+    role: s.interviews?.employee_role ?? null,
+    dept: s.interviews?.department ?? '—',
+  }))
+
+  function toggleStep(id: string) {
+    setOpenSteps(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <>
+      <SheetHeader className="mb-5">
+        <SheetTitle className="text-[18px] font-semibold text-[#111111] leading-snug pr-6">
+          {title}
+        </SheetTitle>
+        {dept && <p className="text-[12px] text-[#6B7280] mt-0.5">{dept}</p>}
+      </SheetHeader>
+
+      <div className="space-y-5">
+        {/* Warum geclustert */}
+        <div>
+          <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-1.5">Warum zusammengefasst</p>
+          <div className="bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] px-3 py-2.5">
+            <p className="text-[13px] text-[#4B5563]">{clusteringReason}</p>
+          </div>
+        </div>
+
+        <Separator className="bg-[#F3F4F6]" />
+
+        {/* Interviews */}
+        <div>
+          <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-2">
+            Interviews ({groupSteps.length})
+          </p>
+          <div className="space-y-1.5">
+            {participants.map(({ step, name, role, dept: d }) => (
+              <div key={step.id} className="flex items-center gap-2 text-[13px]">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#E040FB] shrink-0" />
+                <span className="text-[#111111] font-medium">{name}</span>
+                {role && <span className="text-[#9CA3AF]">· {role}</span>}
+                <span className="text-[#9CA3AF]">· {d}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Separator className="bg-[#F3F4F6]" />
+
+        {/* Schritte */}
+        <div>
+          <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-2">
+            Aufgenommene Schritte
+          </p>
+          <div className="space-y-2">
+            {groupSteps.map((step) => {
+              const isOpen = openSteps.has(step.id)
+              return (
+                <Collapsible key={step.id} open={isOpen} onOpenChange={() => toggleStep(step.id)}>
+                  <CollapsibleTrigger className="w-full">
+                    <div className="flex items-center justify-between px-3 py-2.5 bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] hover:bg-[#F3F4F6] transition-colors cursor-pointer">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {isOpen
+                          ? <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
+                          : <ChevronRight className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
+                        }
+                        <span className="text-[13px] font-medium text-[#111111] truncate">{step.title}</span>
+                      </div>
+                      <span className="text-[11px] text-[#9CA3AF] shrink-0 ml-2">
+                        {step.interviews?.employee_name}
+                      </span>
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="mt-1 px-3 py-3 border border-t-0 border-[#E5E5E5] rounded-b-[6px] space-y-3">
+                      {step.source_quote && (
+                        <div className="bg-[#F9FAFB] rounded-[4px] px-2.5 py-2">
+                          <p className="text-[11px] text-[#9CA3AF] mb-0.5">Originalzitat</p>
+                          <p className="text-[12px] text-[#4B5563] italic">„{step.source_quote}"</p>
+                        </div>
+                      )}
+                      {step.description && (
+                        <p className="text-[12px] text-[#6B7280] leading-relaxed">{step.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 flex-wrap text-[12px] text-[#374151]">
+                        {step.frequency_per_month != null && <span>📅 {step.frequency_per_month}×/Mo</span>}
+                        {step.duration_minutes != null && <span>⏱ {step.duration_minutes} Min</span>}
+                        {step.error_rate_percent != null && <span>⚠ {step.error_rate_percent}%</span>}
+                        {step.media_breaks != null && <span>🔗 {step.media_breaks} Brüche</span>}
+                      </div>
+                      {step.data_sources.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {step.data_sources.map(src => (
+                            <span key={src} className="bg-[#F3E5FF] text-[#7C3AED] text-[11px] px-1.5 py-0.5 rounded-[3px]">
+                              {src}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => onEditStep(step)}
+                        className="text-[12px] text-[#E040FB] hover:text-[#AA00FF] font-medium transition-colors"
+                      >
+                        Bearbeiten →
+                      </button>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 

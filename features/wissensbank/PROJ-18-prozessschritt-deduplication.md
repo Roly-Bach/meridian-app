@@ -15,7 +15,9 @@ Mehrere Mitarbeiter beschreiben denselben Prozess (z.B. Nachkalkulation) → der
 
 ## Solution
 
-Semantisches Clustering via pgvector: Nach jedem Interview-Abschluss werden neue `process_steps` anhand ihrer Embedding-Vektoren mit bestehenden Clustern verglichen. Ähnliche Schritte (Cosinus-Ähnlichkeit ≥ 0.85) werden einem Cluster zugeordnet. Im UI erscheint pro Cluster eine Sektion mit "N Personen"-Badge.
+Semantisches Clustering via pgvector: Nach jedem Interview-Abschluss werden neue `process_steps` anhand ihrer Embedding-Vektoren mit bestehenden Clustern verglichen. Ähnliche Schritte (Cosinus-Ähnlichkeit ≥ `CLUSTER_SIMILARITY_THRESHOLD`) werden einem Cluster zugeordnet.
+
+**Wichtig:** Clustering basiert ausschließlich auf semantischer Ähnlichkeit (Embeddings). Titel-Matching im UI ist kein Clustering-Ersatz — gleiche oder ähnliche Wörter im Titel rechtfertigen keine Zusammenfassung. Ungeclusterte Steps (`cluster_id = null`) erscheinen immer als individuelle Karten.
 
 ## Schema Changes
 
@@ -47,11 +49,23 @@ Semantisches Clustering via pgvector: Nach jedem Interview-Abschluss werden neue
 
 ### UI
 
-**`src/components/ProcessStepsTable.tsx`** — Toggle "Gruppiert / Einzeln":
-- **Gruppiert** (default): Sektionen nach `cluster_id`. Header zeigt `canonical_title` + Badge "N Personen". Mehrfach-Cluster erscheinen zuerst.
-- **Einzeln**: Bestehende Ansicht (Gruppierung nach Abteilung), unverändert.
+**`src/components/ProcessStepsTable.tsx`** — Feste Abteilungs+Cluster Ansicht (kein Toggle):
+- Primäre Gruppierung: Abteilung (alphabetisch)
+- Sekundäre Gruppierung: `cluster_id` — Steps mit gleichem `cluster_id` → eine Karte
+- Steps ohne `cluster_id` → jeder Step bekommt eigene Karte (kein Title-Fallback-Matching)
+- Cluster-Karte zeigt: `canonical_title`, Badge "N Interviews" (blau wenn >1), Teilnehmernamen, gemittelte Metriken, Data Sources Union
+
+**Cluster Detail Sheet** (Klick auf Karte):
+- Titel: `canonical_title` oder Step-Titel
+- Sektion "Warum geclustert": `canonical_description` wenn vorhanden, sonst "Semantisch ähnliche Prozesse (AI-Clustering)"
+- Sektion "Interviews (N)": Liste aller Teilnehmer (Name, Rolle, Abteilung)
+- Sektion "Schritte": alle Steps des Clusters aufklappbar, pro Step: Titel, employee_name, Metriken, description, source_quote, data_sources, Button "Bearbeiten" → öffnet ProcessStepSheet
 
 **`src/app/dashboard/process-steps/page.tsx`** — Query mit `process_clusters(...)` JOIN.
+
+### Clustering-Threshold
+
+`CLUSTER_SIMILARITY_THRESHOLD=0.85` ist der Default. Bei Bedarf auf 0.80 reduzieren wenn semantisch eindeutig ähnliche Prozesse nicht geclustert werden. Threshold-Änderung erfordert Backfill (`clusterProcessSteps()` manuell ausführen).
 
 ## Configuration
 
@@ -75,6 +89,7 @@ CLUSTER_SIMILARITY_THRESHOLD=0.85  # Cosinus-Ähnlichkeit für Cluster-Zuordnung
 - Teilprozess-Hierarchie (Sub-Steps eines Oberprozesses)
 - Manuelles Merge/Split von Clustern
 - Cluster-Confidence-Score im UI
+- Title-basiertes Fallback-Matching im UI (explizit ausgeschlossen — nur Embedding-Clustering)
 
 ## QA Test Results
 
