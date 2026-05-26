@@ -81,7 +81,7 @@ export function ProcessStepsTable({ initialSteps }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
   const [draftValue, setDraftValue] = useState<string>('')
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
-  const [sheetGroup, setSheetGroup] = useState<ProcessStep[] | null>(null)
+  const [sheetGroup, setSheetGroup] = useState<{ clusterSteps: ProcessStep[]; flowSteps: ProcessStep[] } | null>(null)
   const [sheetStep, setSheetStep] = useState<ProcessStep | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -152,7 +152,11 @@ export function ProcessStepsTable({ initialSteps }: Props) {
   }
 
   function openGroup(groupSteps: ProcessStep[]) {
-    setSheetGroup(groupSteps)
+    const interviewIds = new Set(groupSteps.map(s => s.interview_id))
+    const flowSteps = steps
+      .filter(s => interviewIds.has(s.interview_id))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    setSheetGroup({ clusterSteps: groupSteps, flowSteps })
   }
 
   function openSheet(step: ProcessStep) {
@@ -161,7 +165,10 @@ export function ProcessStepsTable({ initialSteps }: Props) {
 
   function handleSheetSaved(updated: ProcessStep) {
     setSteps((prev) => prev.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)))
-    setSheetGroup((prev) => prev ? prev.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)) : null)
+    setSheetGroup((prev) => prev ? {
+      clusterSteps: prev.clusterSteps.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)),
+      flowSteps: prev.flowSteps.map((s) => (s.id === updated.id ? { ...updated, interviews: s.interviews } : s)),
+    } : null)
     setSheetStep((prev) => prev ? { ...updated, interviews: prev.interviews } : null)
   }
 
@@ -255,7 +262,8 @@ export function ProcessStepsTable({ initialSteps }: Props) {
         <SheetContent className="w-[520px] sm:max-w-[520px] overflow-y-auto">
           {sheetGroup && (
             <ClusterDetailSheet
-              groupSteps={sheetGroup}
+              groupSteps={sheetGroup.clusterSteps}
+              flowSteps={sheetGroup.flowSteps}
               onEditStep={openSheet}
             />
           )}
@@ -388,10 +396,11 @@ function DeptClusterCard({ groupSteps, onOpenGroup }: DeptClusterCardProps) {
 
 interface ClusterDetailSheetProps {
   groupSteps: ProcessStep[]
+  flowSteps: ProcessStep[]
   onEditStep: (step: ProcessStep) => void
 }
 
-function ClusterDetailSheet({ groupSteps, onEditStep }: ClusterDetailSheetProps) {
+function ClusterDetailSheet({ groupSteps, flowSteps, onEditStep }: ClusterDetailSheetProps) {
   const representative = groupSteps[0]
   const cluster = representative.process_clusters
   const title = cluster?.canonical_title ?? representative.title
@@ -455,7 +464,7 @@ function ClusterDetailSheet({ groupSteps, onEditStep }: ClusterDetailSheetProps)
           <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-3">
             Aufgenommene Schritte
           </p>
-          <ProcessFlowView groupSteps={groupSteps} onEditStep={onEditStep} />
+          <ProcessFlowView groupSteps={groupSteps} flowSteps={flowSteps} onEditStep={onEditStep} />
         </div>
       </div>
     </>
@@ -466,12 +475,14 @@ function ClusterDetailSheet({ groupSteps, onEditStep }: ClusterDetailSheetProps)
 
 interface ProcessFlowViewProps {
   groupSteps: ProcessStep[]
+  flowSteps: ProcessStep[]
   onEditStep: (step: ProcessStep) => void
 }
 
-function ProcessFlowView({ groupSteps, onEditStep }: ProcessFlowViewProps) {
-  // Group steps by interview participant, sort each group by created_at
-  const byParticipant = groupSteps.reduce<Record<string, ProcessStep[]>>((acc, step) => {
+function ProcessFlowView({ groupSteps, flowSteps, onEditStep }: ProcessFlowViewProps) {
+  const clusterIds = new Set(groupSteps.map(s => s.id))
+  // Group ALL interview steps by participant, sort each group by created_at
+  const byParticipant = flowSteps.reduce<Record<string, ProcessStep[]>>((acc, step) => {
     const key = step.interview_id
     if (!acc[key]) acc[key] = []
     acc[key].push(step)
@@ -494,9 +505,9 @@ function ProcessFlowView({ groupSteps, onEditStep }: ProcessFlowViewProps) {
         {primarySteps.map((step, idx) => (
           <div key={step.id} className="w-full flex flex-col items-center">
             {step.step_type === 'decision' ? (
-              <DecisionNode step={step} onEdit={onEditStep} />
+              <DecisionNode step={step} onEdit={onEditStep} highlighted={clusterIds.has(step.id)} />
             ) : (
-              <ActionNode step={step} onEdit={onEditStep} />
+              <ActionNode step={step} onEdit={onEditStep} highlighted={clusterIds.has(step.id)} />
             )}
             {idx < primarySteps.length - 1 && <FlowArrow />}
           </div>
@@ -530,9 +541,9 @@ function ProcessFlowView({ groupSteps, onEditStep }: ProcessFlowViewProps) {
                       {pSteps.map((step, idx) => (
                         <div key={step.id} className="w-full flex flex-col items-center">
                           {step.step_type === 'decision' ? (
-                            <DecisionNode step={step} onEdit={onEditStep} />
+                            <DecisionNode step={step} onEdit={onEditStep} highlighted={clusterIds.has(step.id)} />
                           ) : (
-                            <ActionNode step={step} onEdit={onEditStep} />
+                            <ActionNode step={step} onEdit={onEditStep} highlighted={clusterIds.has(step.id)} />
                           )}
                           {idx < pSteps.length - 1 && <FlowArrow />}
                         </div>
@@ -561,14 +572,15 @@ function FlowArrow() {
 interface NodeProps {
   step: ProcessStep
   onEdit: (step: ProcessStep) => void
+  highlighted?: boolean
 }
 
-function ActionNode({ step, onEdit }: NodeProps) {
+function ActionNode({ step, onEdit, highlighted }: NodeProps) {
   const hasMetrics = step.frequency_per_month != null || step.duration_minutes != null ||
     step.error_rate_percent != null || step.media_breaks != null || step.data_sources.length > 0
 
   return (
-    <div className="w-full border-2 border-[#3B82F6] bg-white rounded-[6px] overflow-hidden">
+    <div className={`w-full border-2 ${highlighted ? 'border-[#E040FB] bg-[#FDF4FF]' : 'border-[#3B82F6] bg-white'} rounded-[6px] overflow-hidden`}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2 px-3 py-2.5">
         <div className="min-w-0">
@@ -622,7 +634,7 @@ function ActionNode({ step, onEdit }: NodeProps) {
   )
 }
 
-function DecisionNode({ step, onEdit }: NodeProps) {
+function DecisionNode({ step, onEdit, highlighted }: NodeProps) {
   const text = step.condition_text ?? step.title
 
   return (
@@ -630,7 +642,7 @@ function DecisionNode({ step, onEdit }: NodeProps) {
       {/* Diamond shape */}
       <div className="relative flex items-center justify-center" style={{ width: '180px', height: '90px' }}>
         <div
-          className="absolute border-2 border-[#F59E0B] bg-[#FFFBEB]"
+          className={`absolute border-2 ${highlighted ? 'border-[#E040FB] bg-[#FDF4FF]' : 'border-[#F59E0B] bg-[#FFFBEB]'}`}
           style={{
             width: '90px',
             height: '90px',
