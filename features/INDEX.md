@@ -33,7 +33,7 @@
 | PROJ-15 | CSP Hardening | Feature | Platform | — | Blocked | [spec](platform/PROJ-15-csp-hardening.md) | P1 | — | — |
 | PROJ-16 | Supabase Hardening + Dependency Hygiene | Feature | Platform | — | Planned | [spec](platform/PROJ-16-supabase-hardening.md) | P1 | — | — |
 | PROJ-17 | Adaptive Eval-Harness + Start-Endpoint | Feature | Interview Engine | — | Deployed | [spec](interview-engine/PROJ-17-adaptive-eval-harness-start-endpoint.md) | P1 | M | 0:0:2 |
-| PROJ-18 | Prozessschritt-Deduplication | Feature | Wissensbank | PROJ-5 | Approved | [spec](wissensbank/PROJ-18-prozessschritt-deduplication.md) | P1 | M | 0:0:2 |
+| PROJ-18 | Prozessschritt-Deduplication | Feature | Wissensbank | PROJ-5 | Deployed | [spec](wissensbank/PROJ-18-prozessschritt-deduplication.md) | P1 | M | 0:0:2 |
 
 <!-- Add features above this line -->
 

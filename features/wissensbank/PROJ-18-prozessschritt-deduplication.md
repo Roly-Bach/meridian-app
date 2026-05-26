@@ -5,7 +5,7 @@
 - **Type:** Feature
 - **Domain:** Wissensbank
 - **Extends:** PROJ-5
-- **Status:** Approved
+- **Status:** Deployed
 - **Priority:** P1
 - **Appetite:** M
 
@@ -114,3 +114,23 @@ CLUSTER_SIMILARITY_THRESHOLD=0.85  # Cosinus-Ähnlichkeit für Cluster-Zuordnung
 - ✅ No XSS vectors in React rendering
 
 ### Production-Ready: YES
+
+## Deployment
+
+- **Production URL:** https://meridian-app.vercel.app
+- **Deployed:** 2026-05-26
+- **G1 (Static):** pass — build, lint, tsc clean
+- **G2 (Tests):** pass — 216/216 unit, 6/6 E2E
+- **G3 (Sandbox):** pass — auto-deploy via git push to main
+- **G4 (Permissions):** pass — RLS verified, no new LLM endpoints
+
+## Post-Mortem
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | Medium — Migration-Repair-Schritt fehlte in Spec |
+| Appetite vs. tatsächlich | geschätzt: M (3-5d) / tatsächlich: M |
+| Größte Überraschung | Supabase Migration History Mismatch — `supabase migration repair` nötig weil frühere Migrationen direkt applied worden waren |
+| Vorgeschlagene Regeländerung | Spec-Template: Migrations-Sektion um "migration repair"-Warnung erweitern falls remote DB divergiert |
+| Build-Loop-Iterationen | tatsächlich: 1 (direkt grün) |
+| Häufigste Fehlerkategorie | Tool-Call (supabase CLI auth) |
