@@ -109,21 +109,113 @@ Das Interview ist der Kern-Use-Case. Qualität, Latenz und Kosten des LLM haben 
 
 ## Recherche-Notizen
 
-### Empfehlung (Stand Mai 2026, nach Provider-Analyse)
+### Empfehlung (Stand Mai 2026, nach Benchmark-Auswertung)
 
-| Task | Modell | Provider | Preis | Begründung |
+#### Interview-Agent (Echtzeit, Tool Use)
+
+| Prio | Modell | Provider | Preis | Begründung |
 |------|--------|----------|-------|------------|
-| Interview-Agent (Echtzeit) | Kimi K2.6 | Nebius | $1.30/1M | EU-konform, TTFT ~2.85s, Intelligence Score 54 |
-| Extraktion / Anreicherung (async) | DeepSeek V4 Pro | Nebius | $1.90/1M | EU-konform, Latenz unkritisch, starkes Reasoning |
-| Fallback Interview-Agent | Kimi K2.6 | Fireworks | $0.70/1M | Bei Skalierung oder falls Nebius-Latenz unakzeptabel |
-| Fallback Async | DeepSeek V4 Pro | Fireworks | $0.80/1M | Bei Skalierung |
+| #1 | Kimi K2.6 (Reasoning) | Nebius | $0.70/1M | τ²=95.9%, IFBench=76%, LCR=70% — ausgewogenstes Profil, EU-konform |
+| #2 | DeepSeek V4 Flash (Max) | Nebius | $0.06/1M | τ²=95%, IFBench=79.2% (bester Wert aller Modelle), 12× günstiger als Kimi — Risiko: LCR=63% (schwächster, lange Interviews) und Omniscience=−23 (halluziniert bei Wissenslücken) |
+| #3 | Gemini 3.5 Flash | Google AI | $1.31/1M | τ²=95.3%, IFBench=76%, APEX=47.1%, Omniscience=+23 — rundeste Bilanz inkl. Halluzinierungsvermeidung, teuerste Option |
+
+#### Extraktion / Anreicherung (async)
+
+> ⚠️ Änderung zur Vorversion: DeepSeek V4 Pro (Omniscience=−10) wird nicht mehr empfohlen — halluziniert mehr als er korrekt beantwortet.
+
+| Prio | Modell | Provider | Preis | Begründung |
+|------|--------|----------|-------|------------|
+| #1 | Gemini 3.5 Flash | Google AI | $1.31/1M | Omniscience=+23 (beste erschwingliche Option), kein Halluzinierungsrisiko bei Prozessschritt-Extraktion |
+| #2 | Claude Sonnet 4.6 | Anthropic | ~$3/1M | Omniscience=+12, LCR=70.7% (bester LCR unter Kandidaten), bereits integriert — kein neuer Provider nötig |
+| #3 | Claude Opus 4.7 | Anthropic | ~$15/1M | Omniscience=+26 (Bestwert aller Modelle), für bulk async zu teuer; sinnvoll nur wenn Extraktionsqualität kritisch |
+
+#### Fallbacks
+
+| Task | Modell | Provider | Preis | Bedingung |
+|------|--------|----------|-------|-----------|
+| Interview-Agent | Kimi K2.6 | Fireworks | $0.70/1M | Bei Skalierung oder falls Nebius-Latenz unakzeptabel |
+| Extraktion | Gemini 3.5 Flash | Google AI | ~$0.60/1M | Kein Fallback nötig — bereits günstigster Primärkandidat |
+
+### Benchmark-Auswertung (Mai 2026, Quelle: artificialanalysis.ai)
+
+#### τ²-Bench Telecom (Konversationsagent-Qualität, höher = besser)
+
+| Modell | Score |
+|--------|-------|
+| DeepSeek V4 Pro (Max) | 96.2% |
+| Kimi K2.6 (Reasoning) | 95.9% |
+| Gemini 3.5 Flash | 95.3% |
+| DeepSeek V4 Flash (Max) | 95.0% |
+| GPT-5.5 (xhigh) | 93.9% |
+| Kimi K2.6 | 93.9% |
+| Claude Opus 4.7 (max) | 88.6% |
+| GPT-5.5 (low) | 83.9% |
+| Claude Sonnet 4.6 (max) | 75.7% |
+| Claude 4.5 Haiku | 32.5% |
+| Gemini 3.1 Flash-Lite Preview | 31.3% |
+
+#### IFBench (Instruction Following, höher = besser)
+
+| Modell | Score |
+|--------|-------|
+| DeepSeek V4 Flash (Max) | 79.2% |
+| Gemini 3.1 Flash-Lite Preview | 77.2% |
+| DeepSeek V4 Pro (Max) | 76.5% |
+| Gemini 3.5 Flash | 76.3% |
+| Kimi K2.6 | 76.0% |
+| GPT-5.5 (xhigh) | 75.9% |
+| GPT-5.5 (low) | 64.4% |
+| Claude Opus 4.7 (max) | 58.6% |
+| Claude Sonnet 4.6 (max) | 56.6% |
+| Claude 4.5 Haiku | 54.3% |
+
+#### APEX-Agents-AA (Langzeit-Agentic Tasks, höher = besser)
+
+| Modell | Score |
+|--------|-------|
+| Gemini 3.5 Flash | 47.1% |
+| GPT-5.5 (xhigh) | 37.7% |
+| Claude Opus 4.6 (max) | 33.0% |
+| Claude Sonnet 4.6 (max) | 28.0% |
+| DeepSeek V4 Pro (Max) | 24.3% |
+| Gemini 3.1 Flash-Lite Preview | 12.2% |
+
+#### AA-LCR (Long Context Reasoning, höher = besser)
+
+| Modell | Score |
+|--------|-------|
+| GPT-5.5 (xhigh) | 74.3% |
+| GPT-5.5 (low) | 72.0% |
+| Claude Sonnet 4.6 (max) | 70.7% |
+| Claude 4.5 Haiku | 70.3% |
+| Claude Opus 4.7 (max) | 70.3% |
+| Kimi K2.6 | 69.7% |
+| Gemini 3.5 Flash | 69.3% |
+| DeepSeek V4 Pro (Max) | 66.3% |
+| Gemini 3.1 Flash-Lite Preview | 65.3% |
+| DeepSeek V4 Flash (Max) | 63.0% |
+
+#### AA-Omniscience Index (Halluzinierungsvermeidung, Skala −100 bis +100, höher = besser)
+
+| Modell | Score |
+|--------|-------|
+| Claude Opus 4.7 (max) | +26 |
+| Gemini 3.5 Flash | +23 |
+| GPT-5.5 (xhigh) | +20 |
+| GPT-5.5 (low) | +15 |
+| Claude Sonnet 4.6 (max) | +12 |
+| Claude 4.5 Haiku | −4 |
+| DeepSeek V4 Pro (Max) | −10 |
+| Gemini 3.1 Flash-Lite Preview | −16 |
+| DeepSeek V4 Flash (Max) | −23 |
 
 ### Offene Tool-Use-Validierung (vor Implementierung zu prüfen)
 
 | Modell | Tool Use zuverlässig? | Quelle |
 |--------|----------------------|--------|
 | kimi-k2.6 | ? | Manuell testen: Phase-Transition Tool Calls |
-| deepseek-v4-pro | ? | Manuell testen: JSON-Schema Compliance |
+| deepseek-v4-flash | ? | Manuell testen: Phase-Transition Tool Calls + Verhalten bei langen Interviews (LCR-Schwäche) |
+| gemini-3.5-flash | ? | Manuell testen: JSON-Schema Compliance bei Extraktion |
 
 ### Evaluations-Benchmarks für Interview-Engine-Qualität (Artificial Analysis, Mai 2026)
 

@@ -95,10 +95,14 @@ Merke dir `interview.id` und `interview.access_token` (= Token) aus dem RETURNIN
 
 ### Schritt 3: Interview starten
 
+**CURL-FORMAT-REGELN (bindend für alle curl-Aufrufe in diesem Skill):**
+- Flags in genau dieser Reihenfolge am Anfang: `curl -s -N --no-buffer -X POST`
+- URL beginnt immer mit `http://localhost:3000/api/`
+- `-H` und `-d` kommen direkt nach der URL, auf derselben Zeile, kein Backslash-Zeilenumbruch
+- Kein `2>&1` und keine Shell-Redirects — das bricht das Permission-Matching
+
 ```bash
-curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/start \
-  -H "Content-Type: application/json" \
-  -d '{}'
+curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/start -H "Content-Type: application/json" -d '{}'
 ```
 
 Das ist der erste Agent-Turn (`[Turn 1] Agent`). Speichere den gesamten Response-Text als `agentText`.
@@ -126,10 +130,8 @@ Für jeden Turn N = 1..20:
      - Eröffne das Gespräch NIE selbst — antworte nur auf Agent-Turns
      - Protokolliere: [Turn N] Persona (<name>): "<antwortText>"
 
-  b) Sende Persona-Antwort an den Agenten:
-     curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/chat \
-       -H "Content-Type: application/json" \
-       -d '{"user_input": "<personaAntwort>"}'
+  b) Sende Persona-Antwort an den Agenten (KEIN 2>&1):
+     curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/chat -H "Content-Type: application/json" -d '{"user_input": "<personaAntwort>"}'
 
      Danach: Lese `.eval-last-usage.json` mit dem Read-Tool.
      Extrahiere: inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens.
