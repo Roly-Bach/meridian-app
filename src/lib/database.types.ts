@@ -156,11 +156,47 @@ export interface Database {
         }
         Relationships: []
       }
+      process_clusters: {
+        Row: {
+          id: string
+          workspace_id: string
+          canonical_title: string
+          canonical_description: string | null
+          participant_count: number
+          participants: Json
+          representative_embedding: number[] | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          canonical_title: string
+          canonical_description?: string | null
+          participant_count?: number
+          participants?: Json
+          representative_embedding?: number[] | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          canonical_title?: string
+          canonical_description?: string | null
+          participant_count?: number
+          participants?: Json
+          representative_embedding?: number[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'process_clusters_workspace_id_fkey'; columns: ['workspace_id']; referencedRelation: 'workspaces'; referencedColumns: ['id'] }
+        ]
+      }
       process_steps: {
         Row: {
           id: string
           interview_id: string
           workspace_id: string
+          cluster_id: string | null
           title: string
           description: string | null
           role: string | null
@@ -171,12 +207,14 @@ export interface Database {
           error_rate_percent: number | null
           media_breaks: number
           source_quote: string | null
+          embedding: number[] | null
           created_at: string
         }
         Insert: {
           id?: string
           interview_id: string
           workspace_id: string
+          cluster_id?: string | null
           title: string
           description?: string | null
           role?: string | null
@@ -187,9 +225,11 @@ export interface Database {
           error_rate_percent?: number | null
           media_breaks?: number
           source_quote?: string | null
+          embedding?: number[] | null
           created_at?: string
         }
         Update: {
+          cluster_id?: string | null
           title?: string
           description?: string | null
           role?: string | null
@@ -200,8 +240,11 @@ export interface Database {
           error_rate_percent?: number | null
           media_breaks?: number
           source_quote?: string | null
+          embedding?: number[] | null
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: 'process_steps_cluster_id_fkey'; columns: ['cluster_id']; referencedRelation: 'process_clusters'; referencedColumns: ['id'] }
+        ]
       }
       use_cases: {
         Row: {

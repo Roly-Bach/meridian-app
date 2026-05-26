@@ -2,7 +2,7 @@
 
 ## Status: Deployed
 **Created:** 2026-05-20
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-05-25
 **Type:** Feature
 **Domain:** Wissensbank
 **Extends:** —
@@ -12,11 +12,13 @@
 ## Dependencies
 - Requires: PROJ-1 (Auth + Workspace) — Auth, workspace_id, RLS
 - Requires: PROJ-4 (Extraktions-Agent + Wissensbasis) — `knowledge_objects` mit type `process_step` als Input
+- Requires: PROJ-3 (Interview UI) — `interviews.department` muss aus vordefinierter Dropdown-Liste kommen (kein Freitext), sonst entstehen Duplikat-Gruppen
 
 ## User Stories
 - Als Berater bekomme ich nach Interview-Abschluss automatisch angereicherte Prozessschritte — ohne manuell etwas zu triggern.
-- Als Berater sehe ich alle Prozessschritte in einer Tabelle mit quantitativen Attributen (Häufigkeit, Dauer, Datenquellen, etc.).
-- Als Berater kann ich nicht ableitbare oder falsche Attributwerte direkt in der Tabelle inline bearbeiten und speichern.
+- Als Berater sehe ich alle Prozessschritte gruppiert nach Abteilung mit Übersicht wie viele Schritte und Interviews pro Abteilung existieren.
+- Als Berater kann ich auf eine Prozesskarte klicken und den Prozessschritt vollständig im Detail nachvollziehen (Description, Originalzitat, alle Attribute).
+- Als Berater kann ich nicht ableitbare oder falsche Attributwerte direkt in der Karte oder im Detail-Sheet bearbeiten und speichern.
 - Als Backend kann ich per `GET /api/process-steps?workspace_id=xxx` alle Prozessschritte eines Workspaces abrufen (Grundlage für PROJ-6).
 - Als Berater erkenne ich sofort welche Attribute aus dem Interview ableitbar waren (befüllt) und welche manuell ergänzt werden müssen (leer).
 
@@ -46,14 +48,30 @@
 - [ ] Alle Endpoints: Auth-Session + Workspace-Zugehörigkeit erforderlich
 - [ ] Zod-Validierung auf PATCH: `frequency_per_month ≥ 0`, `duration_minutes ≥ 0`, `error_rate_percent` 0–100, `media_breaks ≥ 0`
 
-### UI — Prozessschritt-Tabelle
-- [ ] Seite `/dashboard/process-steps` zeigt alle Prozessschritte des Workspaces
-- [ ] Tabellen-Spalten: Titel, Rolle, Häufigkeit/Monat, Dauer (Min), Datenquellen, Regelbasiert, Fehlerrate %, Medienbrüche
-- [ ] Leere Zellen (null) klar sichtbar unterscheidbar von Zellen mit Wert "0"
-- [ ] Jede Zelle inline editierbar — Klick öffnet Input/Select in der Zelle
-  - `frequency_per_month`, `duration_minutes`, `error_rate_percent`, `media_breaks` → number input
-  - `data_sources` → text input (kommagetrennt, wird zu array)
-  - `rule_based` → toggle/checkbox
+### UI — Prozessschritt-Übersicht
+
+#### Summary Stats Bar
+- [ ] Seite `/dashboard/process-steps` zeigt 4 Kacheln: Gesamtanzahl Schritte · Anzahl Abteilungen · Anzahl Interviews · Automatisierbar %
+
+#### Gruppierung nach Abteilung
+- [ ] Prozessschritte werden nach `interviews.department` gruppiert
+- [ ] Pro Abteilung: aufklappbarer Abschnitt mit Schritt-Count und Interview-Count im Header
+- [ ] Alle Abteilungen defaultmäßig collapsed
+- [ ] Abteilungsname kommt aus vordefinierter Liste (kein Freitext) — Dropdown beim Interview-Erstellen (siehe PROJ-3 Abhängigkeit)
+- [ ] Vordefinierte Abteilungsliste: Einkauf, Vertrieb, Finance, HR, IT, Operations, Marketing, Sonstiges
+
+#### Prozesskarte (Card pro Schritt)
+- [ ] Jeder Schritt als Card: Titel · Rolle-Badge · Regelbasiert-Badge · Description (max 2 Zeilen, truncated)
+- [ ] Metric-Chips: Häufigkeit/Mo · Dauer Min · Fehler% · Medienbrüche — alle click-to-edit inline
+- [ ] Datenquellen als Tags — click-to-edit
+- [ ] Mitarbeitername (aus `interviews.employee_name`) sichtbar auf Card
+- [ ] source_quote als Tooltip auf Info-Icon
+- [ ] Leere Werte (null) klar unterscheidbar von Wert "0"
+- [ ] Switch für `rule_based` direkt auf Card
+
+#### Detail-Sheet (Klick auf Card)
+- [ ] Klick auf Prozesskarte öffnet Sheet (Slide-in von rechts)
+- [ ] Sheet zeigt: vollständige Description · source_quote als Volltext · alle Attribute editierbar
 - [ ] Speichern via `PATCH` bei Blur/Enter — optimistic update, Fehler-Toast bei API-Fehler
 - [ ] Loading Skeleton während Anreicherung läuft (nach Interview-Abschluss)
 - [ ] Leerer Zustand: "Kein Interview abgeschlossen. Schließe ein Interview ab, um Prozessschritte zu generieren."

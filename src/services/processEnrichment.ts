@@ -85,7 +85,7 @@ export async function enrichProcessSteps({
   // ── Fetch process_step knowledge objects ─────────────────────────────────────
   const { data: knowledgeObjects } = await supabase
     .from('knowledge_objects')
-    .select('id, content, source_quote')
+    .select('id, content, source_quote, embedding')
     .eq('interview_id', interviewId)
     .eq('type', 'process_step')
 
@@ -131,12 +131,19 @@ export async function enrichProcessSteps({
     return
   }
 
+  // Build embedding lookup: knowledge_object_id → embedding
+  const embeddingByKoId = new Map<string, number[] | null>(
+    (knowledgeObjects ?? []).map((ko) => [ko.id, ko.embedding as number[] | null])
+  )
+
   // ── Insert with grounding guard ──────────────────────────────────────────────
   for (const step of enriched) {
     if (!step.title) {
       console.error('[processEnrichment] Skipping step without title:', step)
       continue
     }
+
+    const embedding = embeddingByKoId.get(step.knowledge_object_id) ?? null
 
     const { error } = await supabase.from('process_steps').insert({
       interview_id: interviewId,
@@ -145,6 +152,7 @@ export async function enrichProcessSteps({
       description: step.description ?? null,
       role: step.role ?? null,
       source_quote: step.source_quote ?? null,
+      embedding,
       frequency_per_month: applyGroundingGuard(step.attributes?.frequency_per_month ?? { value: null, evidence_quote: null }),
       duration_minutes: applyGroundingGuard(step.attributes?.duration_minutes ?? { value: null, evidence_quote: null }),
       data_sources: applyGroundingGuard(step.attributes?.data_sources ?? { value: null, evidence_quote: null }) ?? [],

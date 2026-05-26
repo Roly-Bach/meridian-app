@@ -10,6 +10,7 @@ import {
 } from '@/services/interviewAgent'
 import { extractAndEmbed, type RawExtraction } from '@/services/extraction'
 import { enrichProcessSteps } from '@/services/processEnrichment'
+import { clusterProcessSteps } from '@/services/processClustering'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
 
@@ -204,6 +205,10 @@ export async function POST(
           interviewId: interview.id,
           workspaceId: interview.workspace_id,
         })
+        // Fire-and-forget — clustering runs after enrichment, not on the critical path
+        clusterProcessSteps(interview.workspace_id).catch((err) =>
+          console.error('[chat] clusterProcessSteps failed:', err)
+        )
       }
     },
   })
