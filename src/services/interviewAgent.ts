@@ -600,7 +600,15 @@ export function createInterviewStream(opts: AgentStreamOptions) {
       return hasText || steps.length >= 4
     },
     onFinish: opts.onFinish
-      ? async ({ text }) => {
+      ? async ({ text, usage, providerMetadata }) => {
+          const anthropicMeta = (providerMetadata as Record<string, unknown> | undefined)?.anthropic as Record<string, unknown> | undefined
+          console.log('[token-usage] turn', {
+            model: modelString,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadTokens: anthropicMeta?.cacheReadInputTokens ?? null,
+            cacheCreationTokens: anthropicMeta?.cacheCreationInputTokens ?? null,
+          })
           await opts.onFinish!(text)
         }
       : undefined,
