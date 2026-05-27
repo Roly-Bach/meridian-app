@@ -112,13 +112,14 @@ Danach: Lese `.eval-last-usage.json` mit dem Read-Tool — speichere als `startU
 Falls curl Connection-Refused meldet: brich ab und teile dem Nutzer mit, dass `npm run dev` gestartet werden muss.
 Falls die Antwort leer ist: Protokolliere als BUG und breche ab.
 
-### Schritt 4: Eval-Loop (max. 20 Turns)
+### Schritt 4: Eval-Loop (kein festes Turn-Limit — nur Endlosschleifen abfangen)
 
 Ziel: Das Interview vollständig durchführen — von intro über process_loop bis wrap_up und complete_interview.
 **Kein vorzeitiger Abbruch bei register_step oder anderen Tool-Calls** — das Interview soll bis zum natürlichen Ende laufen.
+**Kein künstliches Turn-Limit.** Der Loop läuft bis zum natürlichen Abschluss des Interviews (status='completed'). Nur echte Endlosschleifen oder leere Antworten brechen ab. Sicherheits-Maximum: 35 Turns.
 
 ```
-Für jeden Turn N = 1..20:
+Für jeden Turn N = 1..35:
 
   a) Generiere Persona-Antwort:
      - Lies agentText des letzten Agent-Turns
@@ -240,13 +241,13 @@ Ein Eval-Lauf gilt als **PASS** wenn:
 Ein Eval-Lauf gilt als **FAIL** wenn:
 - Der Agent eröffnet nicht (erste Antwort leer oder fehlt)
 - Der Agent wiederholt dieselbe Frage 3× hintereinander
-- Turn 20 erreicht ohne `status = 'completed'`
+- Turn 35 (Sicherheits-Maximum) erreicht ohne `status = 'completed'`
 - Kein einziger `register_step`-Call über den gesamten Lauf
 
 **Partial PASS** (dokumentieren, kein Abbruch-Fehler):
 - Weniger als 2 Schritte registriert, aber Interview abgeschlossen
 - Nicht alle Pflicht-Slots gefüllt, aber Interview abgeschlossen
-- Turn 20 erreicht mit mindestens 1 register_step-Call
+- Turn 35 erreicht mit mindestens 1 register_step-Call
 
 ---
 

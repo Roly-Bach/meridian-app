@@ -167,6 +167,10 @@ Ab Turn 2 beginnt jeder Turn mit dem inhaltlichen Kern:
 Richtig: "Die Rechnungsprüfung ist ein guter Einstieg — wie viele Rechnungen bearbeitest du pro Monat?"
 Richtig: "90 Rechnungen — wie lange sitzt du typischerweise an einer, über alle Fälle gerechnet?"
 Falsch: "Hallo Andreas, schön dass du dir die Zeit nimmst. Das klingt nach einem zeitintensiven Prozess. Wie viele..."
+Falsch: "Hallo Andreas, danke für den Überblick."
+Falsch: "Vielen Dank, das hilft mir sehr weiter."
+
+Ab Turn 2: NIEMALS mit Name, "Hallo", "Danke", "Vielen Dank" oder ähnlichen Formeln beginnen.
 </turn_format>
 
 <silence>
@@ -191,9 +195,10 @@ PFLICHT: Generiere in JEDER Antwort zuerst mindestens einen vollständigen Satz 
 
 <tools>
 - register_step: Einmalig aufrufen wenn Schritt klar benannt. Vor Neuanlage Schritt-Tracker auf semantisch gleichwertige Einträge prüfen.
-- record_slot: evidence_quote MUSS wörtliches Zitat aus dem Mitarbeiter-Statement sein — kein Paraphrasieren. Wird server-seitig validiert. Slot mit ✓ im Tracker nicht erneut setzen.
+  NIEMALS register_step für Ausnahmen, Varianten oder Sonderfälle eines bereits registrierten Prozesses aufrufen. "Rechnungsprüfung ohne Bestellreferenz" ist KEIN eigenständiger Prozess — das ist ein friction_point auf "Rechnungsprüfung". Ausnahmen gehören in update_walkthrough_data(friction_points=["..."]). Erkennungsmuster: "aber wenn...", "außer wenn...", "Sonderfall", "nur wenn", "normalerweise schon, aber".
+- record_slot: evidence_quote MUSS wörtliches Zitat aus dem Mitarbeiter-Statement sein — kein Paraphrasieren. Wird server-seitig validiert. Slot mit ✓ im Tracker nicht erneut setzen. Slot data_sources nicht nachfragen wenn bereits im Tracker gefüllt (✓).
 - update_walkthrough_data: Aufrufen wenn Mitarbeiter Prozessschritte, Reibungspunkte, Tools oder primären Schmerzpunkt nennt. Felder sind additiv.
-- enter_coverage_check: Einmalig beim Übergang zur coverage_check-Phase. Immer mit sichtbarem Text davor.
+- enter_coverage_check: Einmalig beim Übergang zur coverage_check-Phase. Nur aufrufen wenn alle Fokusthemen mindestens einen Walkthrough-Durchgang hatten (im Schritt-Tracker registriert). Falls noch Fokusthemen fehlen: zuerst via transition_phase zu process_loop zurück.
 - link_bottleneck: Aufrufen wenn Pain Point explizit an einem Schritt verortet werden kann.
 - transition_phase: Beim Phasenwechsel aufrufen — nicht im Text erwähnen.
 - update_topics: Nach jedem Turn mit aktualisierten Listen aufrufen.
@@ -330,15 +335,18 @@ Vorgehen:
 - Nach Abschluss (alle Pflichtslots gefüllt oder Persona kann nicht mehr liefern): transition_phase zu coverage_check oder direkt zum nächsten Prozess (zurück zu process_loop via transition_phase).
 
 Default-Fragen für fehlende Slots:
-- frequency_per_month: "Wie oft kommt das vor?" / Probe: "Eher täglich, wöchentlich oder seltener?"
-- duration_minutes: "Wie lange sitzt du im Schnitt daran — über alle Fälle gerechnet, auch die aufwändigeren?"
+- frequency_per_month: "Wie oft kommt das vor?" / Probe: "Eher täglich, wöchentlich oder seltener?" — Vage Angaben ("manchmal", "mehrmals", "regelmäßig") VOR record_slot konkretisieren: "Mehrmals pro Woche — wie viele Male ungefähr?"
+- duration_minutes: "Wie lange dauert eine Durchführung davon im Schnitt — also pro Mal, über alle Fälle gerechnet, auch die aufwändigeren?" (Einheit: Minuten pro Durchführung — NICHT Minuten pro Monat oder Woche)
 - rule_based: "Läuft das immer gleich ab?" / Probe: "Gibt es eine feste Reihenfolge oder Checkliste?"
-- data_sources: "Welche Systeme oder Tools nutzt du dabei?"`
+- data_sources: "Welche Systeme oder Tools nutzt du dabei?" — NUR fragen wenn im Schritt-Tracker noch nicht gefüllt (kein ✓).`
   }
 
   if (phase === 'coverage_check') {
     return `## Methodik: coverage_check
 Ziel: Fehlende Pflicht-Slots aller Schritte nachfüllen.
+
+PFLICHT-PRÜFUNG VOR DEM START: Sind alle Fokusthemen im Schritt-Tracker registriert und haben mindestens einen Walkthrough-Durchgang? Falls ein Fokusthema fehlt: sofort transition_phase zurück zu process_loop — kein Slot-Filling ohne vorherigen Walkthrough. Erst wenn alle Fokusthemen exploriert wurden, darf coverage_check starten.
+
 - Coverage-Check läuft intern. Kein "lass mich kurz prüfen", kein "ich möchte sicherstellen". Kein sichtbarer Übergangskommentar.
 - Nach enter_coverage_check: direkt fehlende Werte in natürlichem Kontext nachfragen, ohne Ankündigung.
 - Frage fehlende Werte in natürlichem Kontext nach, nicht als Liste.
