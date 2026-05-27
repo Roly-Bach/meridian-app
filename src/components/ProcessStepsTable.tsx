@@ -19,7 +19,7 @@ import {
 import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronRight, ExternalLink, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, Users } from 'lucide-react'
 
 interface SubStep {
   id: string
@@ -381,6 +381,9 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
           <div className="bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] px-3 py-2.5">
             <p className="text-[13px] text-[#4B5563]">{clusteringReason}</p>
           </div>
+          {representative.description && (
+            <p className="text-[12px] text-[#6B7280] mt-2 leading-relaxed">{representative.description}</p>
+          )}
         </div>
 
         <Separator className="bg-[#F3F4F6]" />
@@ -404,6 +407,18 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
 
         <Separator className="bg-[#F3F4F6]" />
 
+        {/* Metriken */}
+        <MetrikenSection step={representative} />
+
+        {representative.source_quote && (
+          <>
+            <Separator className="bg-[#F3F4F6]" />
+            <SourceQuoteSection quote={representative.source_quote} />
+          </>
+        )}
+
+        <Separator className="bg-[#F3F4F6]" />
+
         {/* Prozess-Ablauf */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -414,8 +429,9 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
               <button
                 onClick={generateSubsteps}
                 disabled={substepsLoading}
-                className="text-[11px] text-[#9CA3AF] hover:text-[#E040FB] transition-colors disabled:opacity-40"
+                className="flex items-center gap-1 text-[11px] text-[#9CA3AF] hover:text-[#E040FB] transition-colors disabled:opacity-40"
               >
+                {substepsLoading && <Loader2 className="w-3 h-3 animate-spin" />}
                 Neu generieren
               </button>
             )}
@@ -451,6 +467,73 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
 
       </div>
     </>
+  )
+}
+
+// ——— Metriken Section ———
+
+function MetrikenSection({ step }: { step: ProcessStep }) {
+  const metrics = [
+    step.frequency_per_month != null && { label: '📅 Häufigkeit', value: `${step.frequency_per_month}×/Mo` },
+    step.duration_minutes != null && { label: '⏱ Dauer', value: `${step.duration_minutes} Min` },
+    step.error_rate_percent != null && { label: '⚠ Fehlerrate', value: `${step.error_rate_percent}%` },
+    step.media_breaks != null && step.media_breaks > 0 && { label: '🔗 Medienbrüche', value: `${step.media_breaks}` },
+  ].filter(Boolean) as { label: string; value: string }[]
+
+  const hasContent = metrics.length > 0 || step.rule_based || step.data_sources.length > 0
+  if (!hasContent) return null
+
+  return (
+    <div>
+      <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-2">Metriken</p>
+      {metrics.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          {metrics.map(({ label, value }) => (
+            <div key={label} className="bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] px-3 py-2">
+              <p className="text-[10px] text-[#9CA3AF] mb-0.5">{label}</p>
+              <p className="text-[13px] font-medium text-[#111111]">{value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5 mt-1">
+        {step.rule_based && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F3E8FF] text-[#9333EA]">
+            Regelbasiert
+          </span>
+        )}
+        {step.data_sources.map(ds => (
+          <span key={ds} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#EDE9FE] text-[#7C3AED]">
+            {ds}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ——— Source Quote Section ———
+
+function SourceQuoteSection({ quote }: { quote: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = quote.length > 180
+  const display = isLong && !expanded ? quote.slice(0, 180) + '…' : quote
+
+  return (
+    <div>
+      <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-1.5">Interview-Zitat</p>
+      <div className="bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] px-3 py-2.5">
+        <p className="text-[12px] text-[#4B5563] italic leading-relaxed">&ldquo;{display}&rdquo;</p>
+        {isLong && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="text-[11px] text-[#9CA3AF] hover:text-[#E040FB] mt-1.5 transition-colors"
+          >
+            {expanded ? 'Weniger' : 'Mehr anzeigen'}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
