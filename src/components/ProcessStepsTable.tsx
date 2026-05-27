@@ -456,7 +456,7 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
           )}
 
           {!substepsLoading && !substepsError && substeps && substeps.length > 0 && (
-            <SubStepFlowView substeps={substeps} parentSourceQuote={representative.source_quote ?? null} />
+            <SubStepFlowView substeps={substeps} />
           )}
 
           {!substepsLoading && !substepsError && substeps === null && (
@@ -540,7 +540,7 @@ function SourceQuoteSection({ quote }: { quote: string }) {
 
 // ——— SubStep Flow View ———
 
-function SubStepFlowView({ substeps, parentSourceQuote }: { substeps: SubStep[]; parentSourceQuote: string | null }) {
+function SubStepFlowView({ substeps }: { substeps: SubStep[] }) {
   const sorted = [...substeps].sort((a, b) => a.order - b.order)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -552,23 +552,20 @@ function SubStepFlowView({ substeps, parentSourceQuote }: { substeps: SubStep[];
     <div className="flex flex-col items-center">
       {sorted.map((step, idx) => {
         const isSelected = selectedId === step.id
-        const quote = step.source_text ?? parentSourceQuote
+        const hasQuote = !!step.source_text
         return (
           <div key={step.id} className="w-full flex flex-col items-center">
             {step.step_type === 'decision' ? (
-              <SubStepDecisionNode step={step} selected={isSelected} hasQuote={!!quote} onToggle={() => toggleStep(step.id)} />
+              <SubStepDecisionNode step={step} selected={isSelected} hasQuote={hasQuote} onToggle={() => toggleStep(step.id)} />
             ) : (
-              <SubStepActionNode step={step} selected={isSelected} hasQuote={!!quote} onToggle={() => toggleStep(step.id)} />
+              <SubStepActionNode step={step} selected={isSelected} hasQuote={hasQuote} onToggle={() => toggleStep(step.id)} />
             )}
-            {isSelected && quote && (
+            {isSelected && step.source_text && (
               <div className="w-full mt-1.5 mb-0.5 bg-[#FAFAFA] border border-[#E5E5E5] rounded-[6px] px-3 py-2.5">
                 <div className="flex items-start gap-2">
                   <Quote className="w-3 h-3 text-[#9CA3AF] shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-[#4B5563] italic leading-relaxed">{step.source_text ? `"${step.source_text}"` : `"${quote}"`}</p>
+                  <p className="text-[11px] text-[#4B5563] italic leading-relaxed">&ldquo;{step.source_text}&rdquo;</p>
                 </div>
-                {!step.source_text && parentSourceQuote && (
-                  <p className="text-[10px] text-[#9CA3AF] mt-1 ml-5">Gesamtes Interview-Zitat des Prozessschritts</p>
-                )}
               </div>
             )}
             {idx < sorted.length - 1 && <FlowArrow />}
