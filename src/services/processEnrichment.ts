@@ -209,6 +209,19 @@ interface TrackerDescriptionOutput {
   condition_text: string | null
 }
 
+function extractBestQuote(step: StepEntry): string | null {
+  const slotQuotes = [
+    step.slots.frequency_per_month?.quote,
+    step.slots.duration_minutes?.quote,
+    step.slots.rule_based?.quote,
+    step.slots.data_sources?.quote,
+    step.slots.error_rate_percent?.quote,
+    step.slots.media_breaks?.quote,
+  ].filter((q): q is string => !!q && q.trim().length > 10)
+
+  return step.pain_point_primary ?? slotQuotes[0] ?? null
+}
+
 // Creates process_steps from interview_state.step_tracker (authoritative agent source).
 // Quantitative slots come directly from step_tracker (no LLM). LLM generates only
 // description + source_quote grounded in the transcript.
@@ -304,7 +317,7 @@ export async function createProcessStepsFromTracker({
       title,
       description,
       role: step.role ?? null,
-      source_quote: desc?.source_quote ?? null,
+      source_quote: extractBestQuote(step),
       step_type: desc?.step_type === 'decision' ? 'decision' : 'action',
       condition_text: desc?.step_type === 'decision' ? (desc.condition_text ?? null) : null,
       embedding: embedding as number[],
