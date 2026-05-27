@@ -476,7 +476,7 @@ ${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologyS
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
-export function buildTools(interviewId: string, workspaceId: string) {
+export function buildTools(interviewId: string, workspaceId: string, currentUserInput?: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getSupabaseAdmin() as any
 
@@ -624,6 +624,8 @@ export function buildTools(interviewId: string, workspaceId: string) {
         if (!evidence_quote || evidence_quote.trim().length < 3) {
           return { success: false, error: 'evidence_quote fehlt oder zu kurz. Zitiere wörtlich aus der Mitarbeiter-Antwort.' }
         }
+        // Use verbatim user turn text as quote — LLM evidence_quote is fallback only
+        const verbatimQuote = currentUserInput?.trim() || evidence_quote
 
         try {
           const { data: stateRow } = await supabase
@@ -648,7 +650,7 @@ export function buildTools(interviewId: string, workspaceId: string) {
               ...updated[stepIndex].slots,
               [slot]: {
                 value,
-                quote: evidence_quote,
+                quote: verbatimQuote,
                 ...(confidence !== undefined ? { confidence } : {}),
                 ...(qualifier !== undefined ? { qualifier } : {}),
               },
@@ -822,6 +824,7 @@ export function buildTools(interviewId: string, workspaceId: string) {
 export interface AgentStreamOptions {
   context: InterviewContext
   history: TurnMessage[]
+  userInput?: string
   isReconnect?: boolean
   isStart?: boolean
   onFinish?: (text: string) => Promise<void>
@@ -879,7 +882,7 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     system: systemPrompt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: messages as any,
-    tools: buildTools(opts.context.interviewId, opts.context.workspaceId),
+    tools: buildTools(opts.context.interviewId, opts.context.workspaceId, opts.userInput),
     // Stop as soon as any step has produced visible text — prevents duplicate output.
     // Allow up to 4 tool-only steps before forcing a stop (phase transitions can
     // require 2-3 consecutive tool calls before the model generates visible text).

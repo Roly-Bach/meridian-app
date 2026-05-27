@@ -153,6 +153,7 @@ export async function POST(
       missingSlotsForCoverageCheck,
     },
     history,
+    userInput: user_input,
     onFinish: async (agentText) => {
       if (!agentText) return
 
