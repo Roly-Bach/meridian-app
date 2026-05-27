@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { enrichProcessSteps } from '@/services/processEnrichment'
+import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 import { checkUserLimitProcessSteps } from '@/lib/ratelimit'
 
 const GenerateSchema = z.object({
@@ -58,8 +58,8 @@ export async function POST(req: Request) {
   const rateLimitResponse = await checkUserLimitProcessSteps(user.id)
   if (rateLimitResponse) return rateLimitResponse
 
-  // Run enrichment (blocking for direct API call — fire-and-forget from agent)
-  await enrichProcessSteps({
+  // Run process step creation from tracker (blocking for direct API call)
+  await createProcessStepsFromTracker({
     interviewId: interview_id,
     workspaceId: interview.workspace_id,
   })

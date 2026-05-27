@@ -9,7 +9,7 @@ import {
   type StepEntry,
 } from '@/services/interviewAgent'
 import { extractAndEmbed, deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
-import { enrichProcessSteps } from '@/services/processEnrichment'
+import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 import { clusterProcessSteps } from '@/services/processClustering'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
@@ -177,13 +177,24 @@ export async function POST(
         .eq('interview_id', interview.id)
       if (stateError) console.error('[onFinish] state update failed:', stateError.message)
 
-      // Post-completion tasks: enrichment, clustering, dedup.
-      // enrichProcessSteps reads knowledge_objects → must run AFTER extractAndEmbed commits them.
+      // Failsafe: model sometimes prints [complete_interview] as text instead of
+      // executing the tool. Detect this and set status server-side so the pipeline runs.
+      const agentWroteFarewell = agentText.includes('[complete_interview]')
+      const ensureCompletedIfFarewell = async () => {
+        if (!agentWroteFarewell) return
+        const { data: ci } = await supabase.from('interviews').select('status').eq('id', interview.id).single()
+        if (ci?.status === 'completed') return
+        await supabase.from('interviews').update({ status: 'completed', extractions_pending: true }).eq('id', interview.id)
+        await supabase.from('interview_state').update({ phase: 'wrap_up', updated_at: new Date().toISOString() }).eq('interview_id', interview.id)
+        console.log('[onFinish] failsafe: set status=completed via text-pattern detection')
+      }
+
+      // Post-completion tasks: process_steps from tracker, clustering, dedup.
       const runPostCompletionTasks = async () => {
         const { data: ci } = await supabase
           .from('interviews').select('status').eq('id', interview.id).single()
         if (ci?.status !== 'completed') return
-        await enrichProcessSteps({ interviewId: interview.id, workspaceId: interview.workspace_id })
+        await createProcessStepsFromTracker({ interviewId: interview.id, workspaceId: interview.workspace_id })
         clusterProcessSteps(interview.workspace_id).catch((err) =>
           console.error('[chat] clusterProcessSteps failed:', err)
         )
@@ -216,10 +227,12 @@ export async function POST(
               .eq('interview_id', interview.id)
             if (error) console.error('[onFinish] extractions_log update failed:', error.message)
           }
+          await ensureCompletedIfFarewell()
           await runPostCompletionTasks()
         }).catch((err) => console.error('[onFinish] extractAndEmbed failed:', err))
       } else {
         // No turn ID (turn insert failed) — still run completion tasks if needed.
+        await ensureCompletedIfFarewell()
         await runPostCompletionTasks()
       }
     },

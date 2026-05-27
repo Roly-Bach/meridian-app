@@ -9,6 +9,8 @@
 **Appetite:** —
 **Bugs:** 0:0:4 (alle Low, alle behoben)
 
+> **Pipeline-Update 2026-05-27:** Schritt [3] auf `createProcessStepsFromTracker()` umgestellt. Slot-Werte kommen jetzt direkt aus `interview_state.step_tracker` (authoritative), LLM generiert nur noch description + source_quote. Failsafe: `ensureCompletedIfFarewell` setzt `status=completed` wenn Modell `[complete_interview]` als Text statt Tool-Call ausgibt.
+
 > Konsolidiert: PROJ-4 (Extraktion), PROJ-5 (Anreicherung), PROJ-14 (Embedding-Modell), PROJ-18 (Clustering/Deduplication)
 
 ## Dependencies
@@ -192,3 +194,39 @@ Threshold-Änderung erfordert Backfill via `clusterProcessSteps()`.
 
 **Deployed:** 2026-05-26 (PROJ-18 war letztes Modul — alle Phasen live)  
 **Production URL:** https://meridian-app.vercel.app
+
+---
+
+## QA Test Results — 2026-05-27
+
+**Getestete Änderungen:** `createProcessStepsFromTracker` (processEnrichment.ts), `ensureCompletedIfFarewell` failsafe (chat/route.ts), reextract + process-steps/generate Route-Updates.
+
+### Automated Tests
+| Suite | Ergebnis |
+|-------|---------|
+| Vitest Unit (231 Tests) | ✅ 231/231 passed |
+| E2E Playwright | ⚠️ 12 failed (pre-existing Signup-Redirect-Fehler, unrelated zu diesen Änderungen — verifiziert via git stash) |
+
+### Unit Tests neu geschrieben
+`createProcessStepsFromTracker` — 8 neue Tests in `src/services/processEnrichment.test.ts`:
+- Idempotency Guard ✅
+- Exploring-Filter ✅
+- Leerer step_tracker ✅
+- Slot-Werte direkt aus Tracker (kein LLM-Rounding) ✅
+- LLM-Fallback bei Fehler ✅
+- LLM-Fallback bei Non-Array-Response ✅
+- Markdown-Code-Fence-Stripping ✅
+- step_type=decision + condition_text ✅
+
+### Security Audit
+- `ensureCompletedIfFarewell`: Pattern-Match auf LLM-Output (kein User-Input), idempotent → kein Risiko
+- `createProcessStepsFromTracker`: LLM-Response in try/catch, Idempotency-Guard, admin client → kein Risiko
+- reextract delete: UUID-validiert + Workspace-Ownership-Check davor → kein unbefugtes Delete
+
+**Keine Security-Findings.**
+
+### Bugs
+Keine neuen Bugs in diesen Änderungen gefunden.
+
+**Bugs gesamt: 0:0:0** (neue Änderungen)  
+**Production-Ready: YES**

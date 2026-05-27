@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { extractAndEmbed } from '@/services/extraction'
-import { enrichProcessSteps } from '@/services/processEnrichment'
+import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 
 // ─── POST /api/interviews/[id]/reextract ──────────────────────────────────────
 // Auth: Supabase session (Berater only — checks workspace ownership)
@@ -88,14 +88,16 @@ export async function POST(
     }
   }
 
-  // ── Re-run enrichment ────────────────────────────────────────────────────────
+  // ── Re-create process_steps from tracker ────────────────────────────────────
+  // Delete existing first so idempotency guard doesn't block re-creation.
   try {
-    await enrichProcessSteps({
+    await supabase.from('process_steps').delete().eq('interview_id', interviewId)
+    await createProcessStepsFromTracker({
       interviewId,
       workspaceId: interview.workspace_id,
     })
   } catch (err) {
-    console.error('[reextract] enrichProcessSteps failed:', err)
+    console.error('[reextract] createProcessStepsFromTracker failed:', err)
   }
 
   // ── Count results ────────────────────────────────────────────────────────────

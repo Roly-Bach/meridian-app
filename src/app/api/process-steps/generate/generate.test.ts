@@ -21,7 +21,7 @@ vi.mock('@/lib/supabase-server', () => ({
 }))
 
 vi.mock('@/services/processEnrichment', () => ({
-  enrichProcessSteps: vi.fn().mockResolvedValue(undefined),
+  createProcessStepsFromTracker: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/ratelimit', () => ({
@@ -29,7 +29,7 @@ vi.mock('@/lib/ratelimit', () => ({
 }))
 
 import { POST } from './route'
-import { enrichProcessSteps } from '@/services/processEnrichment'
+import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 
 const INTERVIEW_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5'
 const WORKSPACE_ID = 'b2c3d4e5-f6a7-4b8c-9d0e-f1a2b3c4d5e6'
@@ -128,7 +128,7 @@ describe('POST /api/process-steps/generate', () => {
     const json = await res.json()
     expect(json.count).toBe(1)
     expect(json.process_steps[0].title).toBe('Rechnungen prüfen')
-    expect(enrichProcessSteps).toHaveBeenCalledWith({
+    expect(createProcessStepsFromTracker).toHaveBeenCalledWith({
       interviewId: INTERVIEW_ID,
       workspaceId: WORKSPACE_ID,
     })
