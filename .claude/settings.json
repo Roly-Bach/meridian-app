@@ -31,8 +31,8 @@
       "Bash(lsof:*)",
       "Bash(kill:*)",
       "Bash(mkdir:*)",
-      "Bash(curl -s -N --no-buffer -X POST http://localhost:3000/api:*)",
-      "Bash(curl -s -X GET http://localhost:3000/api:*)",
+      "Bash(curl -s -N --no-buffer -X POST *)",
+      "Bash(curl -s -X GET *)",
       "WebFetch(domain:localhost)",
       "WebFetch(domain:127.0.0.1)"
     ]

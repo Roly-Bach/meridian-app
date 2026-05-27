@@ -134,12 +134,12 @@ Für jeden Turn N = 1..20:
      curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/chat -H "Content-Type: application/json" -d '{"user_input": "<personaAntwort>"}'
 
      Danach: Lese `.eval-last-usage.json` mit dem Read-Tool.
-     Extrahiere: inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens.
+     Extrahiere: inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, googleCachedTokens.
      Falls die Datei nicht existiert oder nicht lesbar: lastUsage = null.
 
   c) Protokolliere Agent-Antwort:
      [Turn N+1] Agent: "<agentText>"
-     [Turn N+1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens>
+     [Turn N+1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens> googleCached=<googleCachedTokens>
      (bei lastUsage = null: "[Turn N+1] tokens: n/a")
 
   d) Prüfe Abbruchbedingungen — NUR diese drei:
@@ -174,23 +174,23 @@ turns_total: <N>
 ---
 
 [Turn 1] Agent: "<opener>"
-[Turn 1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens>
+[Turn 1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens> googleCached=<googleCachedTokens>
 [Turn 1] Persona (<name>): "<antwort>"
 [Turn 2] Agent: "<frage>"
-[Turn 2] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens>
+[Turn 2] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens> googleCached=<googleCachedTokens>
 [Turn 2] Persona (<name>): "<antwort>"
 ...
 [PASS / FAIL] <Abschluss-Label mit Begründung>
 
 ## Token-Usage-Zusammenfassung
-| Turn | inputTokens | outputTokens | cacheRead | cacheCreate |
-|------|-------------|--------------|-----------|-------------|
-| 1    | <n>         | <n>          | <n/null>  | <n/null>    |
-| 2    | <n>         | <n>          | <n/null>  | <n/null>    |
-| ...  |             |              |           |             |
-| **Σ** | **<summe>** | **<summe>** | **<summe>** | **<summe>** |
+| Turn | inputTokens | outputTokens | cacheRead | cacheCreate | googleCached |
+|------|-------------|--------------|-----------|-------------|--------------|
+| 1    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     |
+| 2    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     |
+| ...  |             |              |           |             |              |
+| **Σ** | **<summe>** | **<summe>** | **<summe>** | **<summe>** | **<summe>** |
 
-Caching-Effekt: Turn-1-inputTokens vs. Turn-2-inputTokens (Δ in %, erwarteter Abfall ~60–70% bei Anthropic).
+Caching-Effekt: Turn-1-inputTokens vs. Turn-2-inputTokens (Δ in %, erwarteter Abfall ~60–70% bei Anthropic). Bei Gemini: googleCached > 0 zeigt implizites Caching an.
 
 ## Slot-Filling-Stand (aus interview_state.step_tracker)
 <step_tracker JSON oder Tabelle>
