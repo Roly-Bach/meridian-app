@@ -906,17 +906,17 @@ export function createInterviewStream(opts: AgentStreamOptions) {
       ? async ({ text, usage, providerMetadata }) => {
           const meta = providerMetadata as Record<string, unknown> | undefined
           const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
-          const googleMeta = meta?.google as Record<string, unknown> | undefined
-          // googleCachedTokens: @ai-sdk/google does not yet expose cachedContentTokenCount
-          // via providerMetadata (open issue: vercel/ai#3212, vercel/ai#11513).
-          // The field stays null until the SDK surfaces it. ADR-010 tracks this.
+          // usage.inputTokenDetails is populated by both @ai-sdk/anthropic and @ai-sdk/google.
+          // For Gemini: cachedContentTokenCount → inputTokens.cacheRead → inputTokenDetails.cacheReadTokens.
+          // providerMetadata.google.cachedContentTokenCount is never set by the SDK (ADR-010).
+          const details = usage.inputTokenDetails as Record<string, unknown> | undefined
           const usageData = {
             model: modelString,
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
-            cacheReadTokens: anthropicMeta?.cacheReadInputTokens ?? null,
-            cacheCreationTokens: anthropicMeta?.cacheCreationInputTokens ?? null,
-            googleCachedTokens: googleMeta?.cachedContentTokenCount ?? null,
+            cacheReadTokens: (details?.cacheReadTokens as number | undefined) ?? null,
+            cacheCreationTokens: (details?.cacheWriteTokens as number | undefined) ?? (anthropicMeta?.cacheCreationInputTokens as number | undefined) ?? null,
+            googleCachedTokens: (details?.cacheReadTokens as number | undefined) ?? null,
           }
           console.log('[token-usage] turn', usageData)
           if (process.env.NODE_ENV === 'development') {

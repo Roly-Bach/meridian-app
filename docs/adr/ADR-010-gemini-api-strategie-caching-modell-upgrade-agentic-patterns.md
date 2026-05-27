@@ -138,19 +138,22 @@ ADR-009 vollständig implementiert. Direkte Auswirkungen auf ADR-010:
 
 ---
 
-## Amendment 2026-05-27 — googleCached immer null: Ursache identifiziert
+## Amendment 2026-05-27 — googleCached immer null: Ursache identifiziert und behoben
 
-**Befund:** Alle Eval-Läufe (buchhalter.md, buchhalter-1.md, buchhalter-2.md) zeigen `googleCachedTokens: null` in `.eval-last-usage.json`.
+**Befund:** Alle Eval-Läufe (buchhalter.md bis buchhalter-3.md) zeigen `googleCachedTokens: null` in `.eval-last-usage.json`.
 
-**Root Cause:** `@ai-sdk/google` liefert `cachedContentTokenCount` aktuell nicht via `providerMetadata`. Bekannte offene Issues:
-- [vercel/ai#3212](https://github.com/vercel/ai/issues/3212): Gemini Context Caching Support
-- [vercel/ai#11513](https://github.com/vercel/ai/issues/11513): Implicit caching with tools
-- [langchain-ai/langchain-google#989](https://github.com/langchain-ai/langchain-google/issues/989): Missing cached_content_token_count
+**Root Cause (präzisiert):** `@ai-sdk/google` liefert `cachedContentTokenCount` nicht via `providerMetadata.google`, sondern via den normalisierten `usage.inputTokenDetails.cacheReadTokens`-Pfad. Der ursprüngliche Code las `googleMeta?.cachedContentTokenCount` — dieser Pfad ist im SDK nie befüllt.
 
-Das implizite Caching ist technisch aktiv (Voraussetzung D2 erfüllt: stabiler System-Prompt), aber der Wert wird nicht vom SDK nach außen exponiert. Die Feldbezeichnung `googleMeta?.cachedContentTokenCount` ist korrekt laut Gemini REST API-Schema — das Problem liegt im SDK-Layer.
+Technischer Pfad:
+```
+Gemini API: usageMetadata.cachedContentTokenCount
+  → @ai-sdk/google: convertGoogleGenerativeAIUsage() → inputTokens.cacheRead
+  → ai SDK core: toLanguageModelUsage() → usage.inputTokenDetails.cacheReadTokens
+  → onFinish callback: usage.inputTokenDetails.cacheReadTokens  ✓
+```
 
-**Maßnahme:** Code bleibt unverändert. Kommentar in `interviewAgent.ts` dokumentiert die Ursache. `googleCachedTokens` wird weiterhin als null geloggt bis das SDK-Issue behoben ist.
+**Fix (2026-05-27):** `interviewAgent.ts` liest jetzt `usage.inputTokenDetails?.cacheReadTokens` für alle Provider (Gemini und Anthropic unified). Dieser Pfad wird vom AI SDK für beide Provider befüllt. `cacheCreationTokens` nutzt `inputTokenDetails.cacheWriteTokens` mit Fallback auf `anthropicMeta.cacheCreationInputTokens` (Anthropic-spezifisch, da `cacheWrite` im Anthropic-Converter nicht gesetzt wird).
 
-**D3 (Modell-Vergleich) weiterhin möglich:** Token-Kosten lassen sich über `inputTokens + outputTokens` absolut vergleichen, auch ohne Caching-Nachweis. Der Vergleich misst Qualität und Kosten korrekt — nur der Caching-Effekt ist nicht isoliert quantifizierbar.
+**D1 verifizierbar:** Nach dem Fix zeigt `googleCachedTokens > 0` ab Turn 2 implizites Caching an (sofern System-Prompt-Threshold erreicht). Nächster Eval-Lauf liefert den ersten messbaren Caching-Nachweis.
 
-**Nächster Check:** Wenn `@ai-sdk/google` ein Update liefert, das `cachedContentTokenCount` exponiert: Eval-Lauf wiederholen und D1 verifizieren.
+**D3 (Modell-Vergleich):** Token-Kosten weiterhin über `inputTokens + outputTokens` absolut vergleichbar. Zusätzlich jetzt Caching-Effekt isolierbar via `googleCachedTokens`.
