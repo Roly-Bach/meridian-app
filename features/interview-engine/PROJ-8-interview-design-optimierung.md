@@ -505,6 +505,24 @@ Migration `20260524121453_proj8_step_tracker` (adds `interview_state.step_tracke
 Vercel reports `state: READY`, `readyState: READY` at 2026-05-24 ~14:42 (CET). The production aliases respond — direct anonymous `curl` returns 401 because the Vercel team has deployment protection enabled on this project; authenticated browser access works via the Vercel SSO bypass.
 
 
+## ADR-009 Implementation (2026-05-27)
+
+ADR-009 umgesetzt (D1–D6, 2026-05-27). Eval-Verifikation pending.
+
+**D1 — READ_ONLY_STATE in `buildDynamicContext`:** In `walkthrough_step` erscheinen im Kontext nur bereits gefüllte Slots und Walkthrough-Daten. Leere Felder werden nicht eingespeist, um Observable-Goal-Pull zu vermeiden. In allen anderen Phasen bleibt der volle Schritt-Tracker sichtbar.
+
+**D2 — Phasenblock aus `buildStaticPrompt` in `buildDynamicContext` verschoben:** `buildStaticPrompt()` ist jetzt parameterlos und invariant (nur: Persona, turn_format, silence, tools — kein `<examples>`-Block mehr). Alle 6 Phasenmethodik-Blöcke sind in der neuen Funktion `buildPhaseMethodology(phase)` und werden pro Turn in `buildDynamicContext` injiziert. Provider-Branching in `createInterviewStream` vereinheitlicht: beide Pfade nutzen static in system + dynamic im letzten User-Turn; Fallback auf system wenn messages leer.
+
+**D3 — Tool-Beschreibung `record_slot` phasenabhängig:** Description explizit: walkthrough_step nur bei spontaner Nennung, slot_completion/coverage_check aktiv nachfragen.
+
+**D4 — Anti-Anker-Constraint im `<silence>`-Block:** Explizites Verbot von Zahlenvorschlägen des Agenten mit Falsch/Richtig-Beispielen.
+
+**D5 — Exception-Klassifikation in walkthrough_step-Methodik:** Explizite Regel: Ausnahmen/Sonderfälle sind friction_points auf dem aktuellen Prozess, kein register_step-Kandidat. Mit Falsch/Richtig-Beispiel.
+
+**D6 — Few-Shot-Beispiele als `WALKTHROUGH_EXAMPLES`-Konstante:** 4 annotierte Beispiele im `<EXAMPLE phase="walkthrough_step">`-Format (ADR D6), nur in walkthrough_step am Ende des dynamischen Kontexts injiziert. EXAMPLE 1 zeigt explizit den `update_walkthrough_data`-Aufruf für Exception-Klassifikation (D5). Der alte `<examples>`-Block (Beispiele 1–6) wurde aus `buildStaticPrompt` entfernt — D2 + D6 compliant. Inhalte sind redundant mit WALKTHROUGH_EXAMPLES, `<silence>`-Antiankerpflicht und `buildPhaseMethodology`-Sektionen.
+
+**D1 — Bewusste Abweichung (dokumentiert):** walkthrough_step zeigt gefüllte Slots via READ_ONLY_STATE statt vollständigem Ausblenden. Architect-Empfehlung (ADR-009 Alternative B), begründet durch Doppel-Frage-Risiko. ADR markiert das als offene Frage "nach Eval-Verifikation entscheiden".
+
 ## ADR-008 Follow-up (2026-05-27)
 
 Eval-Lauf `docs/evals/interview/2026-05-26-buchhalter-2.md` hat gezeigt, dass PROJ-8 Metadaten erhebt, aber keinen Prozessablauf. ADR-008 (accepted 2026-05-27) adressiert das:

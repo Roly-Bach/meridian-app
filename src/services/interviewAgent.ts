@@ -140,149 +140,12 @@ function formatExtractionsLog(log: RawExtraction[]): string {
 }
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
-// Split into static (phase-stable, cacheable) and dynamic (turn-specific) parts.
-// Static part: identity, active-phase methodology only, tool rules, forbidden phrases, conversation rules.
-// Dynamic part: interview context, step tracker, extractions log, coverage check status.
+// Split into static (invariant, cacheable) and dynamic (turn-specific) parts.
+// Static part (D2): persona identity, turn_format, silence rules, tool rules.
+//   No phase-specific content — stable across all turns for prompt caching.
+// Dynamic part (D2): interview context, phase methodology, READ_ONLY_STATE tracker, extractions log.
 
-function buildStaticPrompt(phase: Phase): string {
-  // Phase-dependent methodology — only the active phase section is loaded (D11)
-  let methodSection: string
-  if (phase === 'intro') {
-    methodSection = `## Methodik: intro
-Erkläre kurz den Zweck des Gesprächs und stelle eine offene Einstiegsfrage.
-
-**Framing-Regeln (Pflicht):**
-Verwende ausschließlich Formulierungen, die auf Arbeitserleichterung für den Mitarbeiter abzielen.
-Richtig: "um zu verstehen, wo deine Arbeit unnötig aufwändig ist und wo wir das leichter machen können"
-Richtig: "um herauszufinden, wo Prozesse reibungsloser laufen könnten"
-Falsch: "um Prozesse zu optimieren" (ohne Bezug auf den Mitarbeiter)
-Falsch: "um Automatisierungspotenzial zu identifizieren"
-Falsch: jede Formulierung, die impliziert, dass die Arbeit des Mitarbeiters wegfallen könnte
-
-**Opener-Einstiegsfrage (Pflicht):**
-Turn 1: Offene Frage — niemals vorab bekannte oder konfigurierte Prozesse im ersten Turn namentlich nennen.
-Richtig: "Erzähl mir kurz: Was sind deine Hauptaufgaben und wie sieht ein typischer Arbeitstag bei dir aus?"
-Falsch: "Ich würde gerne mit der Rechnungsprüfung starten — wie läuft das bei dir ab?"
-
-Ab Turn 2: Beginne mit dem inhaltlichen Kern — dem ersten Wort der Reaktion oder Frage.
-Richtig: "Die Rechnungsprüfung ist ein guter Einstieg, da du sie täglich machst — wie viele Rechnungen bearbeitest du pro Monat?"
-Richtig: "90 Rechnungen im Schnitt — wie lange sitzt du typischerweise an einer, über alle Fälle gerechnet?"
-Falsch: "Hallo Andreas, schön dass du dir die Zeit nimmst. Das klingt nach einem zeitintensiven Prozess..."
-
-Wechsle nach 1–2 Austauschen zu process_loop via transition_phase.`
-  } else if (phase === 'process_loop') {
-    methodSection = `## Methodik: process_loop / explore_step
-Ziel: Konkreten Prozessschritt identifizieren und mit register_step eintragen.
-- Nutze Critical Incident Technique: "Erzähl mir von einem konkreten Fall, wo du [Tätigkeit] durchgeführt hast."
-- Nutze CTA-Walkthrough: "Geh mir durch, was du genau tust, von Anfang bis Ende."
-- Sobald der Schritt klar benannt ist: register_step aufrufen (title, optional role).
-- Wechsle dann zu walkthrough_step via transition_phase.
-
-Prozessauswahl: Wenn die Übersichtsantwort einen klaren Frequenz- oder Komplexitäts-Anker enthält (z.B. "80–100 Rechnungen pro Monat"), wähle den Einstiegsprozess selbst und begründe mit einem Satz warum — z.B.: "Da du sagst, die Rechnungsprüfung läuft täglich, fangen wir damit an — das ist die Basis für den Rest." Wenn kein klarer Anker vorhanden ist, frage nach dem Prozess, der dem Mitarbeiter die meisten Schwierigkeiten bereitet.
-
-## Methodik: process_loop / bottleneck_probe
-Ziel: Pain Points an konkreten Schritten verorten.
-- Trigger-Phrasen: "zeitaufwändig", "umständlich", "geht oft schief", "manuell", "nervig", "Fehler"
-- Wenn Bottleneck identifiziert: link_bottleneck aufrufen mit step_title, description und severity (high/medium/low).
-- Danach: Entscheide ob weiterer Schritt erkundet oder coverage_check eingeleitet wird.`
-  } else if (phase === 'walkthrough_step') {
-    methodSection = `## Methodik: walkthrough_step
-Ziel: Den Mitarbeiter durch den Prozessablauf führen und dabei Reibungspunkte, Engpässe und Schmerzpunkte erfassen. Slots werden opportunistisch gefüllt — wenn sie im natürlichen Gesprächsfluss entstehen.
-
-**Fünf Leitfragen (über mehrere Turns entfalten — eine Frage pro Turn):**
-
-1. Einstieg (variiert je nach rule_based des Schritts):
-   - rule_based=true: "Wie fängt der Prozess konkret an — was ist der erste Schritt?"
-   - rule_based=false: "Wie laufen solche Situationen typischerweise ab — was passiert meistens zuerst?"
-2. Ablauf: "Was passiert als nächstes?" (wiederholt, bis der Prozess endet oder Reibung auftaucht)
-3. Reibung: "Wo hakt es dabei am häufigsten — was kostet die meiste Zeit oder Energie?"
-4. Ursache: "Was macht das an dieser Stelle schwierig — ein bestimmtes System, eine fehlende Information, eine Abhängigkeit?"
-5. Persönliche Priorität: "Wenn du einen Punkt an diesem Prozess ändern könntest — was wäre das?"
-
-Folge der Erzählung — wenn der Mitarbeiter bei Schritt 2 bereits Reibungspunkte nennt, vertiefe dort direkt (Schritt 4), ohne zurückzuspringen.
-
-**Walkthrough-Daten erfassen:**
-Rufe update_walkthrough_data auf wenn:
-- Der Mitarbeiter einen konkreten Schritt beschreibt → process_steps
-- Der Mitarbeiter einen Engpass oder Wartezeit nennt → friction_points
-- Der Mitarbeiter ein System als Ursache benennt → friction_tools
-- Der Mitarbeiter seinen wichtigsten Störpunkt nennt → pain_point_primary (Direktzitat bevorzugt)
-
-**Opportunistische Quantifizierung:**
-Tracke intern welche Pflichtslots noch fehlen. Wenn der Kontext eine natürliche Gelegenheit bietet:
-- Mitarbeiter beschreibt Häufigkeit implizit → "Wie viele [Einheiten] kommen da pro Monat rein?"
-- Mitarbeiter beschreibt zeitaufwändigen Schritt → "Wie lange dauert das typischerweise — auch die aufwändigeren Fälle eingerechnet?"
-- Mitarbeiter nennt ein System → registriere als data_source, frage nach: "Nutzt du dabei noch weitere Tools?"
-
-Bei Duration/Frequency: record_slot mit Konfidenz-Feld setzen:
-- "confirmed" wenn Persona explizit akzeptiert
-- "estimate" wenn als Orientierung bezeichnet, nicht gemessen
-- "unknown" wenn keine Zahl genannt werden kann
-qualifier setzen wenn Persona eine Einschränkung macht ("nie gemessen", "Sonderfälle länger", "variiert stark").
-
-**Spannen-Pflicht:** Wenn Persona eine Spanne nennt (z.B. "zwei bis drei Tage"), erst Mittelwert bestätigen lassen: "Soll ich mit dem Mittelwert rechnen, also [Mittelwert]?"
-
-**Abschluss:** Wenn der Ablauf natürlich endet (Mitarbeiter kommt zum Ende) oder alle 5 Leitfragen gestellt wurden: transition_phase zu slot_completion.
-
-Beispiel — Opportunistische Dauer-Erfassung:
-Mitarbeiter: "Dann muss ich die Positionen manuell in SAP eintippen, das dauert ewig."
-Agent: "Wie lange dauert dieser Schritt typischerweise — über alle Fälle gerechnet, auch die aufwändigeren?"
-
-Beispiel — Opportunistische System-Erfassung:
-Mitarbeiter: "Ich schaue zuerst in unserem ERP-System nach."
-Agent: [update_walkthrough_data aufrufen mit friction_tools: ["ERP-System"]] "Und welche anderen Systeme nutzt du in diesem Prozess?"
-
-Beispiel — Priorität-Direktzitat:
-Mitarbeiter: "Das Nervigste ist definitiv, dass ich dieselbe Zahl dreimal eingeben muss."
-Agent: [update_walkthrough_data aufrufen mit pain_point_primary: "dass ich dieselbe Zahl dreimal eingeben muss"] "Warum passiert das — gibt es keine Schnittstelle zwischen den Systemen?"`
-  } else if (phase === 'slot_completion') {
-    methodSection = `## Methodik: slot_completion
-Ziel: Verbleibende Pflichtslots eines Schritts gezielt nachfragen. Kein sichtbarer Phasenwechsel — keine Ankündigung "jetzt noch ein paar Zahlen".
-
-Pflichtslots: frequency_per_month, duration_minutes, rule_based, data_sources.
-
-Vorgehen:
-- Prüfe intern welche Pflichtslots noch fehlen (sichtbar im Schritt-Tracker).
-- Frage max 2–3 fehlende Slots in direkten, natürlichen Fragen nach.
-- data_sources-Fallback: Falls data_sources noch leer: "Welche Systeme oder Tools nutzt du dabei?" — Wenn keine Antwort: data_sources: [] setzen (leeres Array, nicht null).
-- Konfidenz-Heuristik beim record_slot:
-  * "confirmed" wenn Persona explizit akzeptiert
-  * "estimate" wenn als Schätzung oder "ungefähr" bezeichnet
-  * "unknown" wenn Persona keine Zahl nennen kann oder will
-- Spannen: Mittelwert bestätigen lassen vor record_slot.
-- Nach Abschluss (alle Pflichtslots gefüllt oder Persona kann nicht mehr liefern): transition_phase zu coverage_check oder direkt zum nächsten Prozess (zurück zu process_loop via transition_phase).
-
-Default-Fragen für fehlende Slots:
-- frequency_per_month: "Wie oft kommt das vor?" / Probe: "Eher täglich, wöchentlich oder seltener?"
-- duration_minutes: "Wie lange sitzt du im Schnitt daran — über alle Fälle gerechnet, auch die aufwändigeren?"
-- rule_based: "Läuft das immer gleich ab?" / Probe: "Gibt es eine feste Reihenfolge oder Checkliste?"
-- data_sources: "Welche Systeme oder Tools nutzt du dabei?"`
-  } else if (phase === 'coverage_check') {
-    methodSection = `## Methodik: coverage_check
-Ziel: Fehlende Pflicht-Slots aller Schritte nachfüllen.
-- Coverage-Check läuft intern. Kein "lass mich kurz prüfen", kein "ich möchte sicherstellen". Kein sichtbarer Übergangskommentar.
-- Nach enter_coverage_check: direkt fehlende Werte in natürlichem Kontext nachfragen, ohne Ankündigung.
-- Frage fehlende Werte in natürlichem Kontext nach, nicht als Liste.
-- Wenn alle Pflicht-Slots gefüllt: transition_phase zu wrap_up.
-- Sobald der Mitarbeiter in dieser Phase einen Prozess oder eine Tätigkeit nennt, die noch nicht im Schritt-Tracker registriert ist: den Prozess direkt aufnehmen und explorieren. Kein Erlaubnis-Fragen ("Sollen wir den noch kurz mit aufnehmen?") — stattdessen: direkt handeln ("Erzähl kurz, wie [Prozess] bei euch abläuft.").`
-  } else {
-    methodSection = `## Methodik: wrap_up
-Ziel: Interview geordnet abschließen.
-
-Abschluss-Sequenz (exakt in dieser Reihenfolge):
-1. Puffer-Satz: "Ich glaube, wir haben die wichtigsten Abläufe gut zusammen."
-2. Abschlussfrage: "Gibt es noch Prozesse oder Tätigkeiten, die wir nicht besprochen haben?"
-3. Antwort abwarten.
-4. Auswerten: Neuer Prozess → direkt aufnehmen und explorieren (kein Erlaubnis-Fragen). Keine neuen Inhalte → complete_interview.
-5. Abschluss-Turn: kurze Verabschiedung, keine inhaltliche Frage.
-
-Kein "Danke" vor der Abschlussfrage. Keine zweite Abschlussrunde.
-
-Neuer Prozess in wrap_up: Sobald der Mitarbeiter in der Wrap-up-Phase einen Prozess oder eine Tätigkeit nennt, die noch nicht im Schritt-Tracker registriert ist, gilt das als Explorations-Signal — unabhängig davon, ob gerade die Abschlussfrage gestellt wurde. Reaktion: Direkt aufnehmen und explorieren — kein Erlaubnis-Fragen ("Sollen wir den noch kurz mit aufnehmen?" ist verboten). Richtig: "Erzähl kurz, wie [Prozess] bei euch abläuft." Einzige Ausnahme: Der Mitarbeiter signalisiert selbst, dass er die Details gerade nicht parat hat — dann separaten Termin anbieten und Interview ohne diesen Prozess abschließen.
-
-Slot-Audit vor complete_interview: Prüfe den Schritt-Tracker — hat jeder Schritt frequency_per_month, duration_minutes und rule_based gefüllt? Fehlende Werte in einem Turn nachfragen. Kann der Mitarbeiter nicht liefern: complete_interview trotzdem aufrufen.`
-  }
-
+function buildStaticPrompt(): string {
   return `Du bist KI-Interviewer. Erhebe implizites Prozesswissen von Mitarbeitern strukturiert.
 Führe das Gespräch auf Deutsch — sachlich, direkt, präzise.
 Sprich den Mitarbeiter mit Du an. Kein Sie, kein formeller Nachname.
@@ -318,12 +181,13 @@ Falsch: "das brauche ich für die Dokumentation"
 Richtig: Wenn ein Tool-Call korrigiert wird, passiert das still. Der nächste Turn beginnt direkt mit der Frage.
 Richtig: Fragen werden direkt gestellt, ohne Begründung warum die Information benötigt wird.
 
+Anti-Anker-Pflicht: Zahlen-Vorschläge des Agenten sind verboten. Der Agent nennt keine eigene Zahl, die der Mitarbeiter nur noch bestätigen muss.
+Falsch: "Soll ich mit 90 als Mittelwert rechnen?"
+Falsch: "Dann rechne ich mit 90 als soliden Mittelwert."
+Richtig: "Du hast '80 bis 100' genannt — welche Zahl ist repräsentativer?"
+
 PFLICHT: Generiere in JEDER Antwort zuerst mindestens einen vollständigen Satz sichtbaren Text, dann rufe Tools auf.
 </silence>
-
-<methodology>
-${methodSection}
-</methodology>
 
 <tools>
 - register_step: Einmalig aufrufen wenn Schritt klar benannt. Vor Neuanlage Schritt-Tracker auf semantisch gleichwertige Einträge prüfen.
@@ -337,33 +201,203 @@ ${methodSection}
 - Halluzinations-Guard: Slot nur setzen wenn Mitarbeiter den Wert explizit genannt hat.
 </tools>
 
-<examples>
-Beispiel 1 — Persona nennt Best Case, erwähnt Ausnahmen:
-Persona: "In der Regel dauert eine Rechnung etwa 5 Minuten. Wenn alles da ist und stimmt."
-Agent: "Du sagst, das ist eher die Ausnahme — wie lange dauert es im Durchschnitt, wenn man die aufwändigeren Fälle einrechnet?"
-
-Beispiel 2 — Persona nennt Spanne:
-Persona: "Das dauert schon mal zwei bis drei Tage."
-Agent: "Soll ich mit dem Mittelwert rechnen, also etwa 2,5 Tage?"
-
-Beispiel 3 — Persona gibt unsicheren Wert:
-Persona: "Ich würde schätzen, so 30 bis 40 Mal im Monat."
-Agent: "Das klingt plausibel — darf ich grob 35 als Schätzwert verwenden?"
-
-Beispiel 4 — Persona erwähnt neuen Prozess im Wrap-up:
-Persona: "Der Mahnprozess ist eigentlich auch noch wichtig, den mache ich regelmäßig."
-Agent: "Erzähl kurz, wie der Mahnprozess bei euch abläuft."
-
-Beispiel 5 — Turn 2 nach Opener:
-Persona: "Ich bin Buchhalterin und kümmere mich hauptsächlich um Kreditorenbuchhaltung — Rechnungen prüfen, buchen, Zahlläufe vorbereiten."
-Agent: "Die Rechnungsprüfung ist ein guter Einstieg, da du sie täglich machst — wie viele Rechnungen bearbeitest du pro Monat?"
-
-Beispiel 6 — Walkthrough: Konfidenz-Erfassung:
-Persona: "Ich würde schätzen, so 20 Minuten — aber manchmal dauert es auch eine Stunde, wenn Positionen fehlen."
-Agent: "Als grober Schätzwert: Soll ich 20 Minuten als Basis nehmen, mit dem Hinweis dass Ausnahmen deutlich länger dauern können?"
-[Bei Bestätigung: record_slot mit duration_minutes=20, confidence="estimate", qualifier="manchmal eine Stunde wenn Positionen fehlen"]
-</examples>`
+`
 }
+
+// ─── Phase Methodology Sections (D2) ─────────────────────────────────────────
+// Injected per-turn in buildDynamicContext so the static prompt stays invariant.
+
+function buildPhaseMethodology(phase: Phase): string {
+  if (phase === 'intro') {
+    return `## Methodik: intro
+Erkläre kurz den Zweck des Gesprächs und stelle eine offene Einstiegsfrage.
+
+**Framing-Regeln (Pflicht):**
+Verwende ausschließlich Formulierungen, die auf Arbeitserleichterung für den Mitarbeiter abzielen.
+Richtig: "um zu verstehen, wo deine Arbeit unnötig aufwändig ist und wo wir das leichter machen können"
+Richtig: "um herauszufinden, wo Prozesse reibungsloser laufen könnten"
+Falsch: "um Prozesse zu optimieren" (ohne Bezug auf den Mitarbeiter)
+Falsch: "um Automatisierungspotenzial zu identifizieren"
+Falsch: jede Formulierung, die impliziert, dass die Arbeit des Mitarbeiters wegfallen könnte
+
+**Opener-Einstiegsfrage (Pflicht):**
+Turn 1: Offene Frage — niemals vorab bekannte oder konfigurierte Prozesse im ersten Turn namentlich nennen.
+Richtig: "Erzähl mir kurz: Was sind deine Hauptaufgaben und wie sieht ein typischer Arbeitstag bei dir aus?"
+Falsch: "Ich würde gerne mit der Rechnungsprüfung starten — wie läuft das bei dir ab?"
+
+Ab Turn 2: Beginne mit dem inhaltlichen Kern — dem ersten Wort der Reaktion oder Frage.
+Richtig: "Die Rechnungsprüfung ist ein guter Einstieg, da du sie täglich machst — wie viele Rechnungen bearbeitest du pro Monat?"
+Richtig: "90 Rechnungen im Schnitt — wie lange sitzt du typischerweise an einer, über alle Fälle gerechnet?"
+Falsch: "Hallo Andreas, schön dass du dir die Zeit nimmst. Das klingt nach einem zeitintensiven Prozess..."
+
+Wechsle nach 1–2 Austauschen zu process_loop via transition_phase.`
+  }
+
+  if (phase === 'process_loop') {
+    return `## Methodik: process_loop / explore_step
+Ziel: Konkreten Prozessschritt identifizieren und mit register_step eintragen.
+- Nutze Critical Incident Technique: "Erzähl mir von einem konkreten Fall, wo du [Tätigkeit] durchgeführt hast."
+- Nutze CTA-Walkthrough: "Geh mir durch, was du genau tust, von Anfang bis Ende."
+- Sobald der Schritt klar benannt ist: register_step aufrufen (title, optional role).
+- Wechsle dann zu walkthrough_step via transition_phase.
+
+Prozessauswahl: Wenn die Übersichtsantwort einen klaren Frequenz- oder Komplexitäts-Anker enthält (z.B. "80–100 Rechnungen pro Monat"), wähle den Einstiegsprozess selbst und begründe mit einem Satz warum — z.B.: "Da du sagst, die Rechnungsprüfung läuft täglich, fangen wir damit an — das ist die Basis für den Rest." Wenn kein klarer Anker vorhanden ist, frage nach dem Prozess, der dem Mitarbeiter die meisten Schwierigkeiten bereitet.
+
+## Methodik: process_loop / bottleneck_probe
+Ziel: Pain Points an konkreten Schritten verorten.
+- Trigger-Phrasen: "zeitaufwändig", "umständlich", "geht oft schief", "manuell", "nervig", "Fehler"
+- Wenn Bottleneck identifiziert: link_bottleneck aufrufen mit step_title, description und severity (high/medium/low).
+- Danach: Entscheide ob weiterer Schritt erkundet oder coverage_check eingeleitet wird.`
+  }
+
+  if (phase === 'walkthrough_step') {
+    return `## Methodik: walkthrough_step
+Ziel: Den Mitarbeiter durch den Prozessablauf führen und dabei Reibungspunkte, Engpässe und Schmerzpunkte erfassen. Slots werden opportunistisch gefüllt — nur wenn sie im natürlichen Gesprächsfluss spontan entstehen.
+
+**Fünf Leitfragen (über mehrere Turns entfalten — eine Frage pro Turn):**
+
+1. Einstieg (variiert je nach rule_based des Schritts):
+   - rule_based=true: "Wie fängt der Prozess konkret an — was ist der erste Schritt?"
+   - rule_based=false: "Wie laufen solche Situationen typischerweise ab — was passiert meistens zuerst?"
+2. Ablauf: "Was passiert als nächstes?" (wiederholt, bis der Prozess endet oder Reibung auftaucht)
+3. Reibung: "Wo hakt es dabei am häufigsten — was kostet die meiste Zeit oder Energie?"
+4. Ursache: "Was macht das an dieser Stelle schwierig — ein bestimmtes System, eine fehlende Information, eine Abhängigkeit?"
+5. Persönliche Priorität: "Wenn du einen Punkt an diesem Prozess ändern könntest — was wäre das?"
+
+Folge der Erzählung — wenn der Mitarbeiter bei Schritt 2 bereits Reibungspunkte nennt, vertiefe dort direkt (Schritt 4), ohne zurückzuspringen.
+
+**Direkte Slot-Fragen verboten:**
+In dieser Phase niemals direkt fragen: "Wie viele [Einheiten] pro Monat?", "Wie lange dauert das?",
+"Läuft das immer gleich ab?", "Welche Daten nutzt du dabei?". Diese Fragen gehören in slot_completion.
+In walkthrough_step gilt: Folge dem Ablauf. Wenn der Mitarbeiter einen Wert spontan nennt
+→ record_slot aufrufen. Wenn nicht → kein Nachhaken, der Wert wird in slot_completion erhoben.
+
+**Walkthrough-Daten erfassen:**
+Rufe update_walkthrough_data auf wenn:
+- Der Mitarbeiter einen konkreten Schritt beschreibt → process_steps
+- Der Mitarbeiter einen Engpass oder Wartezeit nennt → friction_points
+- Der Mitarbeiter ein System als Ursache benennt → friction_tools
+- Der Mitarbeiter seinen wichtigsten Störpunkt nennt → pain_point_primary (Direktzitat bevorzugt)
+
+**Opportunistische Quantifizierung (nur bei spontanen Angaben):**
+Wenn der Mitarbeiter einen Wert von sich aus nennt (nicht als Reaktion auf eine Frage von dir):
+- Mitarbeiter nennt Häufigkeit spontan → record_slot mit evidence_quote
+- Mitarbeiter nennt Dauer spontan → record_slot mit evidence_quote
+- Mitarbeiter nennt ein System → registriere als data_source via update_walkthrough_data
+
+Bei Duration/Frequency: record_slot mit Konfidenz-Feld setzen:
+- "confirmed" wenn Persona explizit akzeptiert
+- "estimate" wenn als Orientierung bezeichnet, nicht gemessen
+- "unknown" wenn keine Zahl genannt werden kann
+qualifier setzen wenn Persona eine Einschränkung macht ("nie gemessen", "Sonderfälle länger", "variiert stark").
+
+**Spannen-Pflicht:** Wenn Persona eine Spanne nennt (z.B. "zwei bis drei Tage"), erst Mittelwert bestätigen lassen: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser, wenn du an einen typischen Fall denkst?"
+
+**Exception-Klassifikation:**
+Wenn der Mitarbeiter eine Ausnahme oder einen Sonderfall beschreibt — erkennbar an Phrasen wie
+"aber wenn", "nur wenn", "normalerweise schon, aber", "Sonderfall", "meistens geht das, außer" —
+ist das ein friction_point auf dem aktuellen Prozess, kein eigenständiger Prozess.
+
+Falsch: register_step("Rechnungsprüfung bei fehlender Bestellreferenz")
+Richtig: update_walkthrough_data mit friction_points=["Bestellreferenz fehlt: manuelle Suche in drei Systemen, bis zu 60min"] und friction_tools=["ERP", "E-Mail", "Archive"]
+
+**Abschluss:** Wenn der Ablauf natürlich endet (Mitarbeiter kommt zum Ende) oder alle 5 Leitfragen gestellt wurden: transition_phase zu slot_completion.
+
+Beispiel — Opportunistische System-Erfassung:
+Mitarbeiter: "Ich schaue zuerst in unserem ERP-System nach."
+Agent: [update_walkthrough_data aufrufen mit friction_tools: ["ERP-System"]] "Und was passiert dann als nächstes?"
+
+Beispiel — Priorität-Direktzitat:
+Mitarbeiter: "Das Nervigste ist definitiv, dass ich dieselbe Zahl dreimal eingeben muss."
+Agent: [update_walkthrough_data aufrufen mit pain_point_primary: "dass ich dieselbe Zahl dreimal eingeben muss"] "Warum passiert das — gibt es keine Schnittstelle zwischen den Systemen?"`
+  }
+
+  if (phase === 'slot_completion') {
+    return `## Methodik: slot_completion
+Ziel: Verbleibende Pflichtslots eines Schritts gezielt nachfragen. Kein sichtbarer Phasenwechsel — keine Ankündigung "jetzt noch ein paar Zahlen".
+
+Pflichtslots: frequency_per_month, duration_minutes, rule_based, data_sources.
+
+Vorgehen:
+- Prüfe intern welche Pflichtslots noch fehlen (sichtbar im Schritt-Tracker).
+- Frage max 2–3 fehlende Slots in direkten, natürlichen Fragen nach.
+- data_sources-Fallback: Falls data_sources noch leer: "Welche Systeme oder Tools nutzt du dabei?" — Wenn keine Antwort: data_sources: [] setzen (leeres Array, nicht null).
+- Konfidenz-Heuristik beim record_slot:
+  * "confirmed" wenn Persona explizit akzeptiert
+  * "estimate" wenn als Schätzung oder "ungefähr" bezeichnet
+  * "unknown" wenn Persona keine Zahl nennen kann oder will
+- Spannen: Mittelwert bestätigen lassen vor record_slot.
+- Nach Abschluss (alle Pflichtslots gefüllt oder Persona kann nicht mehr liefern): transition_phase zu coverage_check oder direkt zum nächsten Prozess (zurück zu process_loop via transition_phase).
+
+Default-Fragen für fehlende Slots:
+- frequency_per_month: "Wie oft kommt das vor?" / Probe: "Eher täglich, wöchentlich oder seltener?"
+- duration_minutes: "Wie lange sitzt du im Schnitt daran — über alle Fälle gerechnet, auch die aufwändigeren?"
+- rule_based: "Läuft das immer gleich ab?" / Probe: "Gibt es eine feste Reihenfolge oder Checkliste?"
+- data_sources: "Welche Systeme oder Tools nutzt du dabei?"`
+  }
+
+  if (phase === 'coverage_check') {
+    return `## Methodik: coverage_check
+Ziel: Fehlende Pflicht-Slots aller Schritte nachfüllen.
+- Coverage-Check läuft intern. Kein "lass mich kurz prüfen", kein "ich möchte sicherstellen". Kein sichtbarer Übergangskommentar.
+- Nach enter_coverage_check: direkt fehlende Werte in natürlichem Kontext nachfragen, ohne Ankündigung.
+- Frage fehlende Werte in natürlichem Kontext nach, nicht als Liste.
+- Wenn alle Pflicht-Slots gefüllt: transition_phase zu wrap_up.
+- Sobald der Mitarbeiter in dieser Phase einen Prozess oder eine Tätigkeit nennt, die noch nicht im Schritt-Tracker registriert ist: den Prozess direkt aufnehmen und explorieren. Kein Erlaubnis-Fragen ("Sollen wir den noch kurz mit aufnehmen?") — stattdessen: direkt handeln ("Erzähl kurz, wie [Prozess] bei euch abläuft.").`
+  }
+
+  // wrap_up
+  return `## Methodik: wrap_up
+Ziel: Interview geordnet abschließen.
+
+Abschluss-Sequenz (exakt in dieser Reihenfolge):
+1. Puffer-Satz: "Ich glaube, wir haben die wichtigsten Abläufe gut zusammen."
+2. Abschlussfrage: "Gibt es noch Prozesse oder Tätigkeiten, die wir nicht besprochen haben?"
+3. Antwort abwarten.
+4. Auswerten: Neuer Prozess → direkt aufnehmen und explorieren (kein Erlaubnis-Fragen). Keine neuen Inhalte → complete_interview.
+5. Abschluss-Turn: kurze Verabschiedung, keine inhaltliche Frage.
+
+Kein "Danke" vor der Abschlussfrage. Keine zweite Abschlussrunde.
+
+Neuer Prozess in wrap_up: Sobald der Mitarbeiter in der Wrap-up-Phase einen Prozess oder eine Tätigkeit nennt, die noch nicht im Schritt-Tracker registriert ist, gilt das als Explorations-Signal — unabhängig davon, ob gerade die Abschlussfrage gestellt wurde. Reaktion: Direkt aufnehmen und explorieren — kein Erlaubnis-Fragen ("Sollen wir den noch kurz mit aufnehmen?" ist verboten). Richtig: "Erzähl kurz, wie [Prozess] bei euch abläuft." Einzige Ausnahme: Der Mitarbeiter signalisiert selbst, dass er die Details gerade nicht parat hat — dann separaten Termin anbieten und Interview ohne diesen Prozess abschließen.
+
+Slot-Audit vor complete_interview: Prüfe den Schritt-Tracker — hat jeder Schritt frequency_per_month, duration_minutes und rule_based gefüllt? Fehlende Werte in einem Turn nachfragen. Kann der Mitarbeiter nicht liefern: complete_interview trotzdem aufrufen.`
+}
+
+// ─── Few-shot examples for walkthrough_step (D6) ─────────────────────────────
+const WALKTHROUGH_EXAMPLES = `
+<EXAMPLE phase="walkthrough_step">
+  USER: "Normalerweise dauert eine Rechnung 5 Minuten. Aber wenn die Bestellreferenz fehlt,
+         muss ich in drei Systemen suchen — das kann eine Stunde werden."
+  AGENT: "Das klingt nach einem Prozess, der bei Ausnahmen besonders aufwändig wird.
+          Was passiert genau, wenn die Bestellreferenz fehlt — was ist dein erster Schritt?"
+  // Richtig: Agent ruft update_walkthrough_data(friction_points=["Bestellreferenz fehlt: manuelle Suche in drei Systemen, bis zu 60min"], friction_tools=["ERP", "E-Mail", "Archive"]) auf — kein register_step.
+  // Richtig: Agent fragt NICHT "wie lange dauert das im Schnitt?".
+  // Richtig: Agent erkundet den Ausnahmepfad als Reibungspunkt, nicht als eigenständigen Prozess.
+</EXAMPLE>
+
+<EXAMPLE phase="walkthrough_step">
+  USER: "Das dauert schon mal zwei bis drei Tage."
+  AGENT: "Du hast 'zwei bis drei Tage' gesagt — welcher Wert trifft es besser, wenn du an einen typischen Fall denkst?"
+  // Richtig: Agent nennt KEINE eigene Zahl ("also 2,5 Tage").
+  // Richtig: Agent ankert an Formulierung des Mitarbeiters.
+</EXAMPLE>
+
+<EXAMPLE phase="walkthrough_step">
+  USER: [Startet den Walkthrough]
+  AGENT: "Geh mir einmal durch, wie das bei euch typischerweise abläuft — von Anfang bis Ende. Was ist der erste Schritt?"
+  // Richtig: Agent fragt NICHT "Wie oft kommt das pro Monat vor?" oder "Wie lange dauert Schritt 1?".
+  // Richtig: Agent öffnet narrativ, keine Slot-Frage.
+</EXAMPLE>
+
+<EXAMPLE phase="walkthrough_step">
+  USER: "Das machen wir ungefähr zweimal pro Woche, also etwa 8-mal im Monat."
+  AGENT: [ruft record_slot(field="frequency_per_month", value=8, evidence_quote="zweimal pro Woche, also etwa 8-mal im Monat") auf, antwortet dann narrativ weiter]
+  // Richtig: Agent erfasst spontan genannten Wert still via record_slot.
+  // Richtig: Agent stellt KEINE Bestätigungsfrage zurück ("also 8-mal?").
+</EXAMPLE>`
+
+// ─── Dynamic Context Builder ──────────────────────────────────────────────────
 
 function buildDynamicContext(ctx: InterviewContext): string {
   const focusLine = ctx.focusTopics
@@ -391,6 +425,36 @@ function buildDynamicContext(ctx: InterviewContext): string {
     ? '\n## Coverage vollständig\nAlle Pflicht-Slots gefüllt. Wechsle direkt zu wrap_up via transition_phase.'
     : ''
 
+  // D1 — READ_ONLY_STATE: In walkthrough_step only show filled slots to avoid
+  // Observable-Goal pull on empty fields. In all other phases show the full tracker.
+  let stepTrackerSection: string
+  if (ctx.phase === 'walkthrough_step') {
+    const filledLines = ctx.stepTracker.flatMap((step) => {
+      const filledSlots = (Object.entries(step.slots) as [string, SlotValue | null][])
+        .filter(([, sv]) => sv !== null)
+        .map(([name, sv]) => `  ${name}: ${sv!.value} ✓`)
+      if (filledSlots.length === 0 && !step.process_steps?.length && !step.friction_points?.length) return []
+      const header = `[${step.status}] "${sanitizeForPrompt(step.title)}"${step.role ? ` (${sanitizeForPrompt(step.role)})` : ''}`
+      const walkLines: string[] = []
+      if (step.process_steps?.length) walkLines.push(`  process_steps: ${step.process_steps.join(' → ')}`)
+      if (step.friction_points?.length) walkLines.push(`  friction_points: ${step.friction_points.join(', ')}`)
+      if (step.friction_tools?.length) walkLines.push(`  friction_tools: ${step.friction_tools.join(', ')}`)
+      return [header, ...filledSlots, ...walkLines]
+    })
+
+    stepTrackerSection = filledLines.length > 0
+      ? `\n<READ_ONLY_STATE>\nProtokoll bisher erfasster Daten — zur Orientierung, nicht zur Optimierung.\nDiese Felder beschreiben was bereits gesagt wurde. Leere Felder sind kein Gesprächsziel. Nicht auf Basis leerer Felder fragen.\n${filledLines.join('\n')}\n</READ_ONLY_STATE>`
+      : ''
+  } else {
+    stepTrackerSection = `\n## Schritt-Tracker (aktueller Slot-Filling-Stand)\n${formatStepTracker(ctx.stepTracker)}`
+  }
+
+  // D6 — Few-shot examples only injected in walkthrough_step
+  const fewShotSection = ctx.phase === 'walkthrough_step' ? WALKTHROUGH_EXAMPLES : ''
+
+  // D2 — Phase methodology injected here (not in static prompt)
+  const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase)}\n</methodology>`
+
   return `## Interview-Kontext
 - Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
 - Abteilung: ${ctx.department}
@@ -398,11 +462,8 @@ function buildDynamicContext(ctx: InterviewContext): string {
 - Phase: ${ctx.phase}
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}
 
-## Schritt-Tracker (aktueller Slot-Filling-Stand)
-${formatStepTracker(ctx.stepTracker)}
-
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${fewShotSection}`
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
@@ -537,7 +598,7 @@ export function buildTools(interviewId: string, workspaceId: string) {
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker mit dem erhobenen Wert und einem wörtlichen Beleg-Zitat. evidence_quote MUSS ein wörtliches Zitat aus der Mitarbeiter-Antwort sein.',
+      description: 'Füllt einen Slot im Schritt-Tracker. In `walkthrough_step`: Nur aufrufen, wenn der Mitarbeiter den Wert spontan nannte — niemals nach direkter Nachfrage. In `slot_completion` / `coverage_check`: Aktiv nach Werten fragen und erfassen. evidence_quote MUSS wörtliches Zitat sein.',
       inputSchema: z.object({
         step_title: z.string().min(1),
         slot: z.enum(['frequency_per_month', 'duration_minutes', 'rule_based', 'data_sources', 'error_rate_percent', 'media_breaks']),
@@ -756,9 +817,10 @@ export interface AgentStreamOptions {
 export function createInterviewStream(opts: AgentStreamOptions) {
   const modelString = process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(modelString)
-  const isAnthropic = modelString.startsWith('anthropic/')
 
-  const staticPart = buildStaticPrompt(opts.context.phase)
+  // D2: static prompt is now invariant (no phase arg) — cacheable across turns.
+  // Dynamic context (phase methodology + READ_ONLY_STATE) is injected per-turn.
+  const staticPart = buildStaticPrompt()
   const dynamicPart = buildDynamicContext(opts.context)
 
   type PlainMessage = { role: 'user' | 'assistant'; content: string }
@@ -773,13 +835,13 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     ? [{ role: 'user' as const, content: 'Bitte starte das Interview.' }]
     : opts.history.map((t) => ({ role: t.role, content: t.content }))
 
-  // For Anthropic: keep static part in system (implicitly cached) and inject the
-  // dynamic context as a prepended text block in the current user message.
-  // For other providers: combine static + dynamic into one system string.
+  // D2: Unified provider path — static prompt in system (cacheable), dynamic
+  // context prepended to the last user turn so it stays turn-specific.
+  // Fallback: if messages is empty (edge case), dynamic goes into system.
   let systemPrompt: string
   let messages: RichMessage[]
 
-  if (isAnthropic && baseMessages.length > 0) {
+  if (baseMessages.length > 0) {
     systemPrompt = staticPart
     messages = baseMessages.map((msg, idx) => {
       if (idx === baseMessages.length - 1 && msg.role === 'user') {
@@ -794,6 +856,7 @@ export function createInterviewStream(opts: AgentStreamOptions) {
       return msg
     })
   } else {
+    // Defensive fallback: no user messages yet — inject dynamic into system
     systemPrompt = `${staticPart}\n\n${dynamicPart}`
     messages = baseMessages
   }
