@@ -121,9 +121,9 @@ export async function POST(
     timerMinutes = Math.floor((Date.now() - firstTurnTime) / 60000)
   }
 
-  // ── Compute missing slots for coverage_check phase ──────────────────────────
+  // ── Compute missing slots for coverage_check and slot_completion phases ─────
   const missingSlotsForCoverageCheck =
-    currentPhase === 'coverage_check'
+    currentPhase === 'coverage_check' || currentPhase === 'slot_completion'
       ? computeMissingMandatorySlots(stepTracker)
       : undefined
 

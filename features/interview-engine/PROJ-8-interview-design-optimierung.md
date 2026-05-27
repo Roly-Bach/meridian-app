@@ -505,6 +505,19 @@ Migration `20260524121453_proj8_step_tracker` (adds `interview_state.step_tracke
 Vercel reports `state: READY`, `readyState: READY` at 2026-05-24 ~14:42 (CET). The production aliases respond — direct anonymous `curl` returns 401 because the Vercel team has deployment protection enabled on this project; authenticated browser access works via the Vercel SSO bypass.
 
 
+## ADR-008 Follow-up (2026-05-27)
+
+Eval-Lauf `docs/evals/interview/2026-05-26-buchhalter-2.md` hat gezeigt, dass PROJ-8 Metadaten erhebt, aber keinen Prozessablauf. ADR-008 (accepted 2026-05-27) adressiert das:
+
+- `walkthrough_step` als neue Hauptphase ersetzt `quantify_step` — Agent führt den Mitarbeiter durch 5 Leitfragen (Einstieg, Ablauf, Reibung, Ursache, Priorität) und quantifiziert opportunistisch
+- `slot_completion` als schlanke Nachphase für verbleibende Pflichtslots
+- Neue `StepEntry`-Felder: `process_steps`, `friction_points`, `friction_tools`, `pain_point_primary`
+- `SlotValue` um `confidence` + `qualifier` erweitert (Slot-Konfidenz für ROI-Darstellung)
+- `data_sources` Pflichtslot (war optional)
+- Opener-/Silence-/Lead-Constraints (D4–D7): kein "Meridian", Framing auf Arbeitserleichterung, Coverage-Check intern, Agent führt statt Erlaubnis zu fragen
+
+Implementierungsdetails: [ADR-008](../../docs/adr/ADR-008-interview-engine-prozessablauf-slot-konfidenz-interviewer-disziplin.md)
+
 ## Post-Mortem
 | Aspekt | Bewertung |
 |--------|-----------|

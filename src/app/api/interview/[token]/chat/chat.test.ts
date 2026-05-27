@@ -206,7 +206,7 @@ describe('POST /api/interview/[token]/chat', () => {
       {
         title: 'Rechnung prüfen',
         role: null,
-        status: 'quantifying',
+        status: 'walkthrough',
         slots: {
           frequency_per_month: { value: 20, quote: '20 mal im Monat' },
           duration_minutes: null,
@@ -274,7 +274,7 @@ describe('POST /api/interview/[token]/chat', () => {
       {
         title: 'Wareneingang buchen',
         role: null,
-        status: 'quantifying',
+        status: 'walkthrough',
         slots: {
           frequency_per_month: { value: 10, quote: 'zehnmal' },
           duration_minutes: null,
@@ -329,6 +329,76 @@ describe('POST /api/interview/[token]/chat', () => {
           missingSlotsForCoverageCheck: expect.arrayContaining([
             expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'duration_minutes' }),
             expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'rule_based' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'data_sources' }),
+          ]),
+        }),
+      })
+    )
+  })
+
+  it('injects missing slots into context when phase is slot_completion', async () => {
+    const { createInterviewStream } = await import('@/services/interviewAgent')
+
+    const stepTracker = [
+      {
+        title: 'Wareneingang buchen',
+        role: null,
+        status: 'walkthrough',
+        slots: {
+          frequency_per_month: { value: 10, quote: 'zehnmal' },
+          duration_minutes: null,
+          rule_based: null,
+          data_sources: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      },
+    ]
+
+    mockAdminFrom
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            id: 'iv-sc',
+            workspace_id: 'ws-3',
+            employee_name: 'Eva',
+            employee_role: null,
+            department: 'Einkauf',
+            focus_topics: null,
+            status: 'active',
+            token_expires_at: FUTURE_EXPIRY,
+            max_duration_minutes: 30,
+            created_at: new Date().toISOString(),
+          },
+          error: null,
+        }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { phase: 'slot_completion', timer_minutes: 15, topics_covered: [], topics_open: [], step_tracker: stepTracker },
+          error: null,
+        }),
+      })
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+
+    await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
+
+    expect(createInterviewStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          phase: 'slot_completion',
+          missingSlotsForCoverageCheck: expect.arrayContaining([
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'duration_minutes' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'rule_based' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'data_sources' }),
           ]),
         }),
       })

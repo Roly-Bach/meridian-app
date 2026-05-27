@@ -28,6 +28,10 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
       error_rate_percent: null,
       media_breaks: null,
     },
+    process_steps: [],
+    friction_points: [],
+    friction_tools: [],
+    pain_point_primary: null,
     ...overrides,
   }
 }
@@ -38,7 +42,7 @@ function makeFilledStep(overrides: Partial<StepEntry> = {}): StepEntry {
       frequency_per_month: { value: 20, quote: 'etwa 20 mal im Monat' },
       duration_minutes: { value: 15, quote: 'dauert so 15 Minuten' },
       rule_based: { value: true, quote: 'immer gleich, ja' },
-      data_sources: null,
+      data_sources: { value: ['SAP'], quote: 'SAP nutze ich dabei' },
       error_rate_percent: null,
       media_breaks: null,
     },
@@ -49,10 +53,10 @@ function makeFilledStep(overrides: Partial<StepEntry> = {}): StepEntry {
 // ─── computeMissingMandatorySlots ─────────────────────────────────────────────
 
 describe('computeMissingMandatorySlots', () => {
-  it('returns all 3 mandatory slots when step has no filled slots', () => {
+  it('returns all 4 mandatory slots when step has no filled slots', () => {
     const steps: StepEntry[] = [makeStep()]
     const missing = computeMissingMandatorySlots(steps)
-    expect(missing).toHaveLength(3)
+    expect(missing).toHaveLength(4)
     expect(missing.map((m) => m.slot)).toEqual(expect.arrayContaining([...MANDATORY_SLOTS]))
     expect(missing.every((m) => m.step_title === 'Rechnungseingang buchen')).toBe(true)
   })
@@ -77,8 +81,8 @@ describe('computeMissingMandatorySlots', () => {
       }),
     ]
     const missing = computeMissingMandatorySlots(steps)
-    expect(missing).toHaveLength(1)
-    expect(missing[0].slot).toBe('duration_minutes')
+    expect(missing).toHaveLength(2)
+    expect(missing.map((m) => m.slot)).toEqual(expect.arrayContaining(['duration_minutes', 'data_sources']))
   })
 
   it('aggregates missing slots across multiple steps', () => {
@@ -87,7 +91,7 @@ describe('computeMissingMandatorySlots', () => {
       makeFilledStep({ title: 'Schritt B' }),
     ]
     const missing = computeMissingMandatorySlots(steps)
-    expect(missing).toHaveLength(3)
+    expect(missing).toHaveLength(4)
     expect(missing.every((m) => m.step_title === 'Schritt A')).toBe(true)
   })
 
@@ -125,6 +129,29 @@ describe('Tool Handlers', () => {
       expect(result.step_tracker[0].title).toBe('Rechnungseingang')
       expect(result.step_tracker[0].status).toBe('exploring')
       expect(result.step_tracker[0].slots.frequency_per_month).toBeNull()
+    })
+
+    it('initializes walkthrough fields as empty arrays and null', async () => {
+      mockAdminFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
+        })
+        .mockReturnValueOnce({
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        })
+
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang', role: undefined })
+
+      expect(result.success).toBe(true)
+      expect(result.step_tracker[0].process_steps).toEqual([])
+      expect(result.step_tracker[0].friction_points).toEqual([])
+      expect(result.step_tracker[0].friction_tools).toEqual([])
+      expect(result.step_tracker[0].pain_point_primary).toBeNull()
     })
 
     it('deduplicates case-insensitively and returns deduplicated flag', async () => {
@@ -195,6 +222,48 @@ describe('Tool Handlers', () => {
           slots: {
             frequency_per_month: { value: 20, quote: 'etwa 20 mal' },
             duration_minutes: { value: 15, quote: '15 Minuten' },
+            rule_based: { value: true, quote: 'immer gleich, ja' },
+            data_sources: null,
+            error_rate_percent: null,
+            media_breaks: null,
+          },
+        }),
+      ]
+
+      let capturedUpdate: unknown
+      mockAdminFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
+        })
+        .mockReturnValueOnce({
+          update: vi.fn().mockImplementation((data: unknown) => {
+            capturedUpdate = data
+            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
+          }),
+        })
+
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (tools.record_slot as any).execute({
+        step_title: 'Rechnungseingang',
+        slot: 'data_sources',
+        value: ['SAP'],
+        evidence_quote: 'SAP nutze ich dabei',
+      })
+
+      const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
+      expect(updated[0].status).toBe('done')
+    })
+
+    it('does not set status to done when data_sources (mandatory) is still missing', async () => {
+      const tracker = [
+        makeStep({
+          title: 'Rechnungseingang',
+          slots: {
+            frequency_per_month: { value: 20, quote: 'etwa 20 mal' },
+            duration_minutes: { value: 15, quote: '15 Minuten' },
             rule_based: null,
             data_sources: null,
             error_rate_percent: null,
@@ -227,7 +296,7 @@ describe('Tool Handlers', () => {
       })
 
       const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
-      expect(updated[0].status).toBe('done')
+      expect(updated[0].status).not.toBe('done')
     })
   })
 
@@ -253,7 +322,7 @@ describe('Tool Handlers', () => {
 
       expect(result.success).toBe(true)
       expect(result.phase).toBe('coverage_check')
-      expect(result.missing_mandatory_slots).toHaveLength(3)
+      expect(result.missing_mandatory_slots).toHaveLength(4)
       expect(result.all_covered).toBe(false)
     })
 
@@ -277,6 +346,95 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(true)
       expect(result.all_covered).toBe(true)
       expect(result.missing_mandatory_slots).toHaveLength(0)
+    })
+  })
+
+  // ── update_walkthrough_data ─────────────────────────────────────────────────
+
+  describe('update_walkthrough_data', () => {
+    it('additively merges process_steps from a second call without replacing existing ones', async () => {
+      const tracker = [
+        makeStep({
+          title: 'Rechnungseingang',
+          process_steps: ['Rechnung öffnen', 'Datum prüfen'],
+          friction_points: [],
+          friction_tools: [],
+        }),
+      ]
+
+      let capturedUpdate: unknown
+      mockAdminFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
+        })
+        .mockReturnValueOnce({
+          update: vi.fn().mockImplementation((data: unknown) => {
+            capturedUpdate = data
+            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
+          }),
+        })
+
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.update_walkthrough_data as any).execute({
+        step_title: 'Rechnungseingang',
+        process_steps: ['Betrag kontrollieren'],
+      })
+
+      expect(result.success).toBe(true)
+      const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
+      expect(updated[0].process_steps).toEqual([
+        'Rechnung öffnen',
+        'Datum prüfen',
+        'Betrag kontrollieren',
+      ])
+    })
+
+    it('returns success false when step is not found', async () => {
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
+      })
+
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.update_walkthrough_data as any).execute({
+        step_title: 'Nicht vorhanden',
+        process_steps: ['Irgendwas'],
+      })
+
+      expect(result.success).toBe(false)
+    })
+
+    it("transitions status from 'exploring' to 'walkthrough' on first call", async () => {
+      const tracker = [makeStep({ title: 'Rechnungseingang', status: 'exploring' })]
+
+      let capturedUpdate: unknown
+      mockAdminFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
+        })
+        .mockReturnValueOnce({
+          update: vi.fn().mockImplementation((data: unknown) => {
+            capturedUpdate = data
+            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
+          }),
+        })
+
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (tools.update_walkthrough_data as any).execute({
+        step_title: 'Rechnungseingang',
+        friction_points: ['Langer Genehmigungsprozess'],
+      })
+
+      const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
+      expect(updated[0].status).toBe('walkthrough')
     })
   })
 
