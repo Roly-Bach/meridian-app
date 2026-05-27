@@ -19,7 +19,7 @@ import {
 import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronRight, ExternalLink, Loader2, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, Quote, Users } from 'lucide-react'
 
 interface SubStep {
   id: string
@@ -28,6 +28,7 @@ interface SubStep {
   condition_text?: string | null
   branch_yes?: string | null
   branch_no?: string | null
+  source_text?: string | null
   order: number
 }
 
@@ -455,7 +456,7 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
           )}
 
           {!substepsLoading && !substepsError && substeps && substeps.length > 0 && (
-            <SubStepFlowView substeps={substeps} />
+            <SubStepFlowView substeps={substeps} parentSourceQuote={representative.source_quote ?? null} />
           )}
 
           {!substepsLoading && !substepsError && substeps === null && (
@@ -539,52 +540,83 @@ function SourceQuoteSection({ quote }: { quote: string }) {
 
 // ——— SubStep Flow View ———
 
-function SubStepFlowView({ substeps }: { substeps: SubStep[] }) {
+function SubStepFlowView({ substeps, parentSourceQuote }: { substeps: SubStep[]; parentSourceQuote: string | null }) {
   const sorted = [...substeps].sort((a, b) => a.order - b.order)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  function toggleStep(id: string) {
+    setSelectedId(prev => prev === id ? null : id)
+  }
 
   return (
     <div className="flex flex-col items-center">
-      {sorted.map((step, idx) => (
-        <div key={step.id} className="w-full flex flex-col items-center">
-          {step.step_type === 'decision' ? (
-            <SubStepDecisionNode step={step} />
-          ) : (
-            <SubStepActionNode step={step} />
-          )}
-          {idx < sorted.length - 1 && <FlowArrow />}
-        </div>
-      ))}
+      {sorted.map((step, idx) => {
+        const isSelected = selectedId === step.id
+        const quote = step.source_text ?? parentSourceQuote
+        return (
+          <div key={step.id} className="w-full flex flex-col items-center">
+            {step.step_type === 'decision' ? (
+              <SubStepDecisionNode step={step} selected={isSelected} hasQuote={!!quote} onToggle={() => toggleStep(step.id)} />
+            ) : (
+              <SubStepActionNode step={step} selected={isSelected} hasQuote={!!quote} onToggle={() => toggleStep(step.id)} />
+            )}
+            {isSelected && quote && (
+              <div className="w-full mt-1.5 mb-0.5 bg-[#FAFAFA] border border-[#E5E5E5] rounded-[6px] px-3 py-2.5">
+                <div className="flex items-start gap-2">
+                  <Quote className="w-3 h-3 text-[#9CA3AF] shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-[#4B5563] italic leading-relaxed">{step.source_text ? `"${step.source_text}"` : `"${quote}"`}</p>
+                </div>
+                {!step.source_text && parentSourceQuote && (
+                  <p className="text-[10px] text-[#9CA3AF] mt-1 ml-5">Gesamtes Interview-Zitat des Prozessschritts</p>
+                )}
+              </div>
+            )}
+            {idx < sorted.length - 1 && <FlowArrow />}
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-function SubStepActionNode({ step }: { step: SubStep }) {
+function SubStepActionNode({ step, selected, hasQuote, onToggle }: { step: SubStep; selected: boolean; hasQuote: boolean; onToggle: () => void }) {
   return (
-    <div className="w-full border-2 border-[#3B82F6] bg-white rounded-[6px] px-3 py-2.5">
+    <button
+      onClick={hasQuote ? onToggle : undefined}
+      className={`w-full border-2 rounded-[6px] px-3 py-2.5 text-left transition-colors ${selected ? 'border-[#E040FB] bg-[#FDF4FF]' : 'border-[#3B82F6] bg-white'} ${hasQuote ? 'cursor-pointer hover:border-[#E040FB] hover:bg-[#FDF4FF]' : 'cursor-default'}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <span className="text-[13px] font-medium text-[#111111] leading-snug">{step.title}</span>
-        <Badge className="text-[10px] px-1.5 py-0.5 bg-[#EFF6FF] text-[#2563EB] border-0 font-medium shrink-0 hover:bg-[#EFF6FF]">
-          Aktion
-        </Badge>
+        <div className="flex items-center gap-1 shrink-0">
+          {hasQuote && <Quote className={`w-3 h-3 transition-colors ${selected ? 'text-[#E040FB]' : 'text-[#D1D5DB]'}`} />}
+          <Badge className="text-[10px] px-1.5 py-0.5 bg-[#EFF6FF] text-[#2563EB] border-0 font-medium hover:bg-[#EFF6FF]">
+            Aktion
+          </Badge>
+        </div>
       </div>
-    </div>
+    </button>
   )
 }
 
-function SubStepDecisionNode({ step }: { step: SubStep }) {
+function SubStepDecisionNode({ step, selected, hasQuote, onToggle }: { step: SubStep; selected: boolean; hasQuote: boolean; onToggle: () => void }) {
   const text = step.condition_text ?? step.title
 
   return (
     <div className="w-full flex flex-col items-center">
-      <div className="relative flex items-center justify-center" style={{ width: '180px', height: '90px' }}>
+      <button
+        onClick={hasQuote ? onToggle : undefined}
+        className={`relative flex items-center justify-center ${hasQuote ? 'cursor-pointer' : 'cursor-default'}`}
+        style={{ width: '180px', height: '90px' }}
+      >
         <div
-          className="absolute border-2 border-[#F59E0B] bg-[#FFFBEB]"
+          className={`absolute border-2 transition-colors ${selected ? 'border-[#E040FB] bg-[#FDF4FF]' : 'border-[#F59E0B] bg-[#FFFBEB]'}`}
           style={{ width: '90px', height: '90px', transform: 'rotate(45deg)', borderRadius: '4px' }}
         />
         <div className="relative z-10 px-4 text-center" style={{ maxWidth: '160px' }}>
           <p className="text-[10px] font-medium text-[#92400E] leading-tight line-clamp-3">{text}</p>
+          {hasQuote && <Quote className={`w-2.5 h-2.5 mx-auto mt-1 transition-colors ${selected ? 'text-[#E040FB]' : 'text-[#D1D5DB]'}`} />}
         </div>
-      </div>
+      </button>
       {(step.branch_yes || step.branch_no) && (
         <div className="flex gap-6 text-[10px] text-[#6B7280] mt-1">
           {step.branch_yes && <span className="text-[#16A34A]">✓ {step.branch_yes}</span>}

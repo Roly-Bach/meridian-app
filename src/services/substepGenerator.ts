@@ -8,6 +8,7 @@ export interface SubStep {
   condition_text?: string | null
   branch_yes?: string | null
   branch_no?: string | null
+  source_text?: string | null
   order: number
 }
 
@@ -22,6 +23,9 @@ Für decision-Schritte:
 - branch_yes: Was passiert bei Ja (kurz, max. 5 Wörter)
 - branch_no: Was passiert bei Nein (kurz, max. 5 Wörter)
 
+Für jeden Schritt (wenn ein Interview-Zitat vorliegt):
+- source_text: Die wörtliche Passage aus dem Interview-Zitat, die diesen Schritt belegt (max. 1-2 Sätze, exaktes Zitat). Weglassen wenn kein passendes Zitat vorhanden.
+
 Regeln:
 - Maximal 8 Schritte
 - Halte dich strikt an die Informationen aus dem Interview-Zitat
@@ -30,7 +34,7 @@ Regeln:
 
 Antworte NUR als valides JSON-Array, kein Text davor oder danach:
 [
-  { "id": "1", "title": "Aktion beschreiben", "step_type": "action", "order": 1 },
+  { "id": "1", "title": "Aktion beschreiben", "step_type": "action", "source_text": "Relevante Passage aus dem Interview", "order": 1 },
   { "id": "2", "title": "Entscheidung", "step_type": "decision", "condition_text": "Bedingung?", "branch_yes": "Ja-Pfad", "branch_no": "Nein-Pfad", "order": 2 }
 ]`
 
