@@ -161,9 +161,15 @@ Für jeden Turn N = 1..35:
 
 ### Schritt 5: Transcript schreiben
 
-Stelle sicher, dass das Verzeichnis `docs/evals/interview/` existiert (anlegen falls nicht vorhanden).
+Stelle sicher, dass das Verzeichnis `docs/evals/interview/YYYY-MM-DD/` (tagesaktuell) existiert (anlegen falls nicht vorhanden).
 
-Schreibe den Transcript nach `docs/evals/interview/YYYY-MM-DD-<persona>.md`:
+Prüfe vor dem Schreiben, ob im Tagesordner bereits eine Datei mit demselben Persona-Namen existiert. Die Benennung folgt diesem Schema:
+- Erste Datei des Tages für diese Persona: `YYYY-MM-DD-<persona>.md` (kein Suffix)
+- Jede weitere: `YYYY-MM-DD-<persona>-1.md`, `YYYY-MM-DD-<persona>-2.md`, usw. (aufsteigend, beginnend bei `-1`)
+
+Konkret: `ls docs/evals/interview/YYYY-MM-DD/` vor dem Schreiben ausführen, vorhandene Dateien mit Muster `YYYY-MM-DD-<persona>*.md` zählen und Suffix entsprechend wählen.
+
+Schreibe den Transcript nach `docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-<persona>[suffix].md`:
 
 ```markdown
 ---
@@ -212,7 +218,7 @@ Gib folgenden strukturierten Hinweis aus:
 
 ```
 Eval-Lauf abgeschlossen — <PASS/FAIL>
-Transcript: docs/evals/interview/YYYY-MM-DD-<persona>.md
+Transcript: docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-<persona>[suffix].md
 Interview-ID: <id>
 
 Interview in der App einsehen:

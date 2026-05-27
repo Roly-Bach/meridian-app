@@ -135,3 +135,22 @@ ADR-009 vollständig implementiert. Direkte Auswirkungen auf ADR-010:
 **D1 jetzt aktiv.** `buildStaticPrompt` ist invariant (Persona, turn_format, Silence-Constraint, Tool-Regeln — kein Phasenblock, keine dynamischen Felder). Das System-Prompt-Prefix ist stabil. Implizites Caching greift ab Turn 2 automatisch. Nächster Schritt: `cached_token_count` in den Logs auf positive Hits prüfen (Ziel: ≥ 60% System-Prompt-Tokens gecacht ab Turn 2).
 
 **D3 entblockt.** Eval-Baseline auf `gemini-3.1-flash-lite` kann gestartet werden. Empfehlung: gleiche Buchhalter-Persona wie in `docs/evals/interview/2026-05-27-buchhalter.md`, n=3–5 Runs, Fokus auf Phase-Adherence und Anchoring-Rate nach ADR-009-Fixes.
+
+---
+
+## Amendment 2026-05-27 — googleCached immer null: Ursache identifiziert
+
+**Befund:** Alle Eval-Läufe (buchhalter.md, buchhalter-1.md, buchhalter-2.md) zeigen `googleCachedTokens: null` in `.eval-last-usage.json`.
+
+**Root Cause:** `@ai-sdk/google` liefert `cachedContentTokenCount` aktuell nicht via `providerMetadata`. Bekannte offene Issues:
+- [vercel/ai#3212](https://github.com/vercel/ai/issues/3212): Gemini Context Caching Support
+- [vercel/ai#11513](https://github.com/vercel/ai/issues/11513): Implicit caching with tools
+- [langchain-ai/langchain-google#989](https://github.com/langchain-ai/langchain-google/issues/989): Missing cached_content_token_count
+
+Das implizite Caching ist technisch aktiv (Voraussetzung D2 erfüllt: stabiler System-Prompt), aber der Wert wird nicht vom SDK nach außen exponiert. Die Feldbezeichnung `googleMeta?.cachedContentTokenCount` ist korrekt laut Gemini REST API-Schema — das Problem liegt im SDK-Layer.
+
+**Maßnahme:** Code bleibt unverändert. Kommentar in `interviewAgent.ts` dokumentiert die Ursache. `googleCachedTokens` wird weiterhin als null geloggt bis das SDK-Issue behoben ist.
+
+**D3 (Modell-Vergleich) weiterhin möglich:** Token-Kosten lassen sich über `inputTokens + outputTokens` absolut vergleichen, auch ohne Caching-Nachweis. Der Vergleich misst Qualität und Kosten korrekt — nur der Caching-Effekt ist nicht isoliert quantifizierbar.
+
+**Nächster Check:** Wenn `@ai-sdk/google` ein Update liefert, das `cachedContentTokenCount` exponiert: Eval-Lauf wiederholen und D1 verifizieren.

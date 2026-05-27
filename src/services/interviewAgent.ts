@@ -188,6 +188,9 @@ Richtig: Fragen werden direkt gestellt, ohne Begründung warum die Information b
 Anti-Anker-Pflicht: Zahlen-Vorschläge des Agenten sind verboten. Der Agent nennt keine eigene Zahl, die der Mitarbeiter nur noch bestätigen muss.
 Falsch: "Soll ich mit 90 als Mittelwert rechnen?"
 Falsch: "Dann rechne ich mit 90 als soliden Mittelwert."
+Falsch: "daher rechne ich mit 90 als Orientierungswert"
+Falsch: "dann notiere ich für die Dauer der Mahnrunde im Schnitt 150 Minuten"
+(Gilt für alle Formulierungen wie "rechne ich mit", "notiere ich", "halte ich fest" mit eigenen Zahlenwerten — auch wenn der Wert vom Mitarbeiter stammt, darf der Agent ihn nicht verbalisiert zurückspiegeln.)
 Richtig: "Du hast '80 bis 100' genannt — welche Zahl ist repräsentativer?"
 
 PFLICHT: Generiere in JEDER Antwort zuerst mindestens einen vollständigen Satz sichtbaren Text, dann rufe Tools auf.
@@ -243,8 +246,7 @@ Wechsle nach 1–2 Austauschen zu process_loop via transition_phase.`
 Ziel: Konkreten Prozessschritt identifizieren und mit register_step eintragen.
 - Nutze Critical Incident Technique: "Erzähl mir von einem konkreten Fall, wo du [Tätigkeit] durchgeführt hast."
 - Nutze CTA-Walkthrough: "Geh mir durch, was du genau tust, von Anfang bis Ende."
-- Sobald der Schritt klar benannt ist: register_step aufrufen (title, optional role).
-- Wechsle dann zu walkthrough_step via transition_phase.
+- Sobald der Schritt klar benannt ist: register_step aufrufen (title, optional role). PFLICHT-Reihenfolge: erst register_step, dann transition_phase(walkthrough_step). Kein Übergang zu walkthrough_step ohne erfolgreichen register_step-Call in diesem Turn.
 
 Prozessauswahl: Wenn die Übersichtsantwort einen klaren Frequenz- oder Komplexitäts-Anker enthält (z.B. "80–100 Rechnungen pro Monat"), wähle den Einstiegsprozess selbst und begründe mit einem Satz warum — z.B.: "Da du sagst, die Rechnungsprüfung läuft täglich, fangen wir damit an — das ist die Basis für den Rest." Wenn kein klarer Anker vorhanden ist, frage nach dem Prozess, der dem Mitarbeiter die meisten Schwierigkeiten bereitet.
 
@@ -287,7 +289,7 @@ Rufe update_walkthrough_data auf wenn:
 **Opportunistische Quantifizierung (nur bei spontanen Angaben):**
 Wenn der Mitarbeiter einen Wert von sich aus nennt (nicht als Reaktion auf eine Frage von dir):
 - Mitarbeiter nennt Häufigkeit spontan → record_slot mit evidence_quote
-- Mitarbeiter nennt Dauer spontan → record_slot mit evidence_quote
+- Mitarbeiter nennt Dauer spontan → record_slot mit evidence_quote — ABER: Wenn die Angabe "pro Woche" oder "pro Monat" lautet (z.B. "ca. 1 Stunde pro Woche für die Suche"), ist das ein Teilaufwand eines friction_point, KEIN duration_minutes-Wert (der ist pro Durchführung). Als friction_point via update_walkthrough_data eintragen, NICHT als record_slot(duration_minutes=...).
 - Mitarbeiter nennt ein System → registriere als data_source via update_walkthrough_data
 
 Bei Duration/Frequency: record_slot mit Konfidenz-Feld setzen:
@@ -321,6 +323,8 @@ Agent: [update_walkthrough_data aufrufen mit pain_point_primary: "dass ich diese
     return `## Methodik: slot_completion
 Ziel: Verbleibende Pflichtslots eines Schritts gezielt nachfragen. Kein sichtbarer Phasenwechsel — keine Ankündigung "jetzt noch ein paar Zahlen".
 
+VORAUSSETZUNG: Der aktuell explorierte Schritt MUSS im Schritt-Tracker registriert sein (register_step aufgerufen). Wenn der Tracker keinen passenden Eintrag zeigt: register_step SOFORT aufrufen, dann mit record_slot fortfahren.
+
 Pflichtslots: frequency_per_month, duration_minutes, rule_based, data_sources.
 
 Vorgehen:
@@ -332,11 +336,16 @@ Vorgehen:
   * "estimate" wenn als Schätzung oder "ungefähr" bezeichnet
   * "unknown" wenn Persona keine Zahl nennen kann oder will
 - Spannen: Mittelwert bestätigen lassen vor record_slot.
-- Nach Abschluss (alle Pflichtslots gefüllt oder Persona kann nicht mehr liefern): transition_phase zu coverage_check oder direkt zum nächsten Prozess (zurück zu process_loop via transition_phase).
+
+Abschluss-Signal: Wenn record_slot { step_complete: true } zurückgibt → alle Pflichtslots dieses Schritts sind gefüllt.
+- Gibt es noch Fokusthemen, die im Schritt-Tracker fehlen (noch nicht exploriert)? → transition_phase(process_loop)
+- Alle Fokusthemen im Tracker vorhanden → enter_coverage_check aufrufen.
+Wenn die Persona keine Werte liefern kann (Slots bleiben 'unknown'): trotzdem enter_coverage_check aufrufen.
 
 Default-Fragen für fehlende Slots:
 - frequency_per_month: "Wie oft kommt das vor?" / Probe: "Eher täglich, wöchentlich oder seltener?" — Vage Angaben ("manchmal", "mehrmals", "regelmäßig") VOR record_slot konkretisieren: "Mehrmals pro Woche — wie viele Male ungefähr?"
 - duration_minutes: "Wie lange dauert eine Durchführung davon im Schnitt — also pro Mal, über alle Fälle gerechnet, auch die aufwändigeren?" (Einheit: Minuten pro Durchführung — NICHT Minuten pro Monat oder Woche)
+  ACHTUNG Scoping: Wenn die Persona einen Teilaufwand nennt ("ca. 1 Stunde pro Woche für die Suche bei fehlender Bestellreferenz"), ist das KEIN duration_minutes-Wert — es ist ein friction_point. Nicht in record_slot eintragen. Stattdessen nach der Gesamtdauer fragen: "Das ist der Suchaufwand für Ausnahmen — wie lange dauert [Prozess] insgesamt, von Anfang bis Ende?"
 - rule_based: "Läuft das immer gleich ab?" / Probe: "Gibt es eine feste Reihenfolge oder Checkliste?"
 - data_sources: "Welche Systeme oder Tools nutzt du dabei?" — NUR fragen wenn im Schritt-Tracker noch nicht gefüllt (kein ✓).`
   }
@@ -431,6 +440,8 @@ function buildDynamicContext(ctx: InterviewContext): string {
     ? `\n## Fehlende Pflicht-Slots (${ctx.phase})\n${ctx.missingSlotsForCoverageCheck.map(m => `- Schritt "${m.step_title}" → ${m.slot}`).join('\n')}\nFrage diese Werte gezielt und natürlich nach, bevor du zur nächsten Phase übergehst.`
     : ctx.phase === 'coverage_check'
     ? '\n## Coverage vollständig\nAlle Pflicht-Slots gefüllt. Wechsle direkt zu wrap_up via transition_phase.'
+    : ctx.phase === 'slot_completion' && ctx.missingSlotsForCoverageCheck !== undefined
+    ? '\n## Slot-Completion vollständig\nAlle bisher registrierten Schritte haben vollständige Pflicht-Slots. Nächste Aktion: enter_coverage_check aufrufen.'
     : ''
 
   // D1 — READ_ONLY_STATE: In walkthrough_step only show filled slots to avoid
@@ -670,7 +681,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
             .update({ step_tracker: updated, updated_at: new Date().toISOString() })
             .eq('interview_id', interviewId)
 
-          return { success: true, step_title, slot, value }
+          return { success: true, step_title, slot, value, step_complete: allMandatoryFilled }
         } catch (err) {
           console.error('[record_slot] failed:', err)
           return { success: false, error: (err as Error).message }
@@ -896,6 +907,9 @@ export function createInterviewStream(opts: AgentStreamOptions) {
           const meta = providerMetadata as Record<string, unknown> | undefined
           const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
           const googleMeta = meta?.google as Record<string, unknown> | undefined
+          // googleCachedTokens: @ai-sdk/google does not yet expose cachedContentTokenCount
+          // via providerMetadata (open issue: vercel/ai#3212, vercel/ai#11513).
+          // The field stays null until the SDK surfaces it. ADR-010 tracks this.
           const usageData = {
             model: modelString,
             inputTokens: usage.inputTokens,

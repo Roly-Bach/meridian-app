@@ -167,3 +167,27 @@ Basis: C6 (4–5 Beispiele optimal), C7 (annotierte Transkripte ~88% Treffer), a
 | D6 | Few-Shot-Beispiele in dynamischen Kontext; annotiertes Format | `buildDynamicContext` + Beispiel-Texte | M |
 
 Empfohlene Reihenfolge: D1 + D3 + D4 + D5 zuerst (hoher Hebel, geringer Code-Aufwand), dann D2 + D6 (Kontext-Architektur, größerer Eingriff).
+
+---
+
+## Amendment 2026-05-27 — ADR-009 implementiert + Eval-Befunde
+
+**Alle D1–D6 implementiert** (Commit 15bac4c, 2026-05-27).
+
+**Eval buchhalter-2 (26 Turns, PASS)** nach vollständiger Implementierung:
+
+**Was funktioniert:**
+- D3 (keine direkten Slot-Fragen in walkthrough_step): Turn 2 korrekt narrativer Einstieg
+- D5 (Exception-Klassifikation): kein register_step für "fehlende Bestellreferenz"
+- D1 (READ_ONLY): Observable-State-Pull nicht mehr beobachtbar
+
+**Residuelle Befunde nach ADR-009:**
+
+| # | Befund | ADR-009-Bezug | Status |
+|---|--------|---------------|--------|
+| 1 | Anchoring residual — "rechne ich mit 90 als Orientierungswert" (Turn 4) | D4 adressiert Zahlen-Vorschläge, nicht verbalisierte Bestätigungen | Fix 2026-05-27 |
+| 2 | Phase-Transition-Bug — zirkuläre Fragen ab Turn 20 | D2 nicht kausal, Root Cause: `coverageCheckSection` liefert kein Signal in `slot_completion`-all-done-Fall | Fix 2026-05-27 |
+| 3 | duration_minutes Scoping — Teilaufwand als Prozessdauer | Nicht in ADR-009 adressiert | Fix 2026-05-27 |
+
+**Root Cause Phase-Transition-Bug (für spätere ADRs):**
+In `buildDynamicContext` war `coverageCheckSection` für die Kombination `phase=slot_completion + missing_slots=[]` leer — kein "all done"-Signal. Das Modell hatte keine Anweisung, `enter_coverage_check` aufzurufen, und fragte weiter. Fix: dritte Bedingung in `coverageCheckSection` für `slot_completion`-all-done ergänzt.

@@ -257,3 +257,24 @@ D1 ist der aufwändigste Schritt: `quantify_step` entfällt, `walkthrough_step` 
 - JSONB-Backfill: `status: 'quantifying'` → `'walkthrough'` in bestehenden `step_tracker`-Einträgen
 
 **Tests:** 222 Unit Tests grün (vorher 218 — 4 neue Tests für `update_walkthrough_data`, `data_sources` als Pflichtslot, walkthrough-Initialisierung, slot_completion-Phase)
+
+---
+
+## Amendment 2026-05-27 — Eval-Befunde nach Implementierung (buchhalter-1 + buchhalter-2)
+
+Zwei Verifikations-Eval-Läufe nach Implementierung ergaben folgende Befunde:
+
+**buchhalter-1 (FAIL):** `register_step` wurde nie aufgerufen — alle 3 Prozesse intern im step_tracker erfasst, aber kein DB-Eintrag. Das Interview lief 21 Turns und schloss nie ab. Ursache: Die `process_loop`-Anweisung "register_step aufrufen, dann transition_phase" war als Soft Constraint formuliert. Das Modell hat `transition_phase` ohne `register_step` aufgerufen.
+
+**buchhalter-2 (PASS):** 26 Turns, 3 Prozesse korrekt registriert, alle Pflicht-Slots gefüllt. Verbleibende Befunde:
+1. **Anchoring-Bias residual** — Agent verbalisiert berechnete Werte im Text-Output ("daher rechne ich mit 90 als Orientierungswert", "notiere ich für die Dauer 150 Minuten"). ADR-009 D4 war als Silence-Constraint formuliert aber deckte diese Formulierungsmuster nicht ab.
+2. **Phase-Transition-Bug** — Ab Turn 20 zirkuläre Fragen zu bereits beantworteten Themen. Root Cause: In `slot_completion`-Phase mit vollständigen Slots lieferte `buildDynamicContext` kein "all done"-Signal — die `coverageCheckSection` war für `slot_completion` mit leerer Missing-Liste leer. Kein Trigger für `enter_coverage_check`.
+3. **duration_minutes Scoping** — "ca. 1 Stunde pro Woche für Sucharbeit" wurde als `duration_minutes=60` für Rechnungsprüfung eingetragen. Der Teilaufwand eines Ausnahmepfads ist keine Prozess-Gesamtdauer.
+
+**Fixes (2026-05-27, Commit nach dieser Session):**
+- Silence-Constraint: Verbalized-Anchor-Muster ("rechne ich mit", "notiere ich") als explizite Falsch-Beispiele ergänzt
+- `buildDynamicContext`: `slot_completion`-all-done-Signal als dritte `coverageCheckSection`-Bedingung hinzugefügt
+- `slot_completion` Methodik: VORAUSSETZUNG-Check (register_step Pflicht), Abschluss-Signal (record_slot step_complete), duration_minutes Scoping-Warnung
+- `walkthrough_step` Methodik: Duration-Scoping-Regel für "pro Woche/Monat"-Angaben
+- `process_loop` Methodik: register_step + transition_phase als PFLICHT-Reihenfolge explizit
+- `record_slot` Tool: Gibt `step_complete: true` zurück wenn alle Pflicht-Slots eines Schritts gefüllt sind
