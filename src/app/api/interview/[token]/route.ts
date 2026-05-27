@@ -44,7 +44,7 @@ export async function GET(
 
   const { data: rawState } = await supabase
     .from('interview_state')
-    .select('phase, timer_minutes, topics_covered, topics_open')
+    .select('phase, timer_minutes, topics_covered, topics_open, opener_text')
     .eq('interview_id', interview.id)
     .single()
 
@@ -54,9 +54,12 @@ export async function GET(
     .eq('interview_id', interview.id)
     .order('turn_number', { ascending: true })
 
+  const state = (rawState as Partial<StateRow> | null) ?? null
+
   return NextResponse.json({
     interview,
-    state: (rawState as Partial<StateRow> | null) ?? null,
+    state,
     turns: (rawTurns as TurnRow[]) ?? [],
+    openerText: state?.opener_text ?? null,
   })
 }

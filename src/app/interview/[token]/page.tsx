@@ -27,7 +27,7 @@ type PageState =
   | { status: 'loading' }
   | { status: 'error'; type: 'not_found' | 'expired' }
   | { status: 'completed' }
-  | { status: 'ready'; interview: Interview & { status: ActiveStatus }; turns: Turn[] }
+  | { status: 'ready'; interview: Interview & { status: ActiveStatus }; turns: Turn[]; openerText: string | null }
 
 export default function InterviewPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
@@ -44,7 +44,7 @@ export default function InterviewPage({ params }: { params: Promise<{ token: str
           setPageState({ status: 'error', type: 'expired' })
           return
         }
-        const data = await res.json() as { interview: Interview; turns: Turn[] }
+        const data = await res.json() as { interview: Interview; turns: Turn[]; openerText?: string | null }
         if (data.interview.status === 'completed') {
           setPageState({ status: 'completed' })
         } else {
@@ -52,6 +52,7 @@ export default function InterviewPage({ params }: { params: Promise<{ token: str
             status: 'ready',
             interview: data.interview as Interview & { status: ActiveStatus },
             turns: data.turns ?? [],
+            openerText: data.openerText ?? null,
           })
         }
       })
@@ -82,6 +83,7 @@ export default function InterviewPage({ params }: { params: Promise<{ token: str
       token={token}
       employeeName={pageState.interview.employee_name}
       existingTurns={pageState.turns}
+      openerText={pageState.openerText}
       status={pageState.interview.status}
       onCompleted={() => setPageState({ status: 'completed' })}
     />

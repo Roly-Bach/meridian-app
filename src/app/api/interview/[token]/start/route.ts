@@ -99,6 +99,13 @@ export async function POST(
     },
     history,
     isStart: true,
+    onFinish: async (text) => {
+      if (!text) return
+      await supabase
+        .from('interview_state')
+        .update({ opener_text: text })
+        .eq('interview_id', interview.id)
+    },
   })
 
   return stream.toTextStreamResponse()

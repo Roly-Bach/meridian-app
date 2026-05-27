@@ -111,6 +111,7 @@ export interface Database {
           extractions_log: Json
           step_tracker: Json
           updated_at: string
+          opener_text: string | null
         }
         Insert: {
           interview_id: string
@@ -121,6 +122,7 @@ export interface Database {
           extractions_log?: Json
           step_tracker?: Json
           updated_at?: string
+          opener_text?: string | null
         }
         Update: {
           interview_id?: string
@@ -131,6 +133,7 @@ export interface Database {
           extractions_log?: Json
           step_tracker?: Json
           updated_at?: string
+          opener_text?: string | null
         }
         Relationships: []
       }

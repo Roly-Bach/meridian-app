@@ -18,19 +18,28 @@ type Props = {
   token: string
   employeeName: string
   existingTurns: Turn[]
+  openerText?: string | null
   status: 'created' | 'active'
   onCompleted?: () => void
 }
 
-function turnsToMessages(turns: Turn[]): Message[] {
-  return turns.flatMap((t) => [
-    { id: `${t.id}-user`, role: 'user' as const, content: t.user_input },
-    { id: `${t.id}-agent`, role: 'agent' as const, content: t.agent_response },
-  ])
+function turnsToMessages(turns: Turn[], openerText?: string | null): Message[] {
+  const opener: Message[] = openerText
+    ? [{ id: 'opener', role: 'agent' as const, content: openerText }]
+    : []
+  return [
+    ...opener,
+    ...turns.flatMap((t) => [
+      { id: `${t.id}-user`, role: 'user' as const, content: t.user_input },
+      { id: `${t.id}-agent`, role: 'agent' as const, content: t.agent_response },
+    ]),
+  ]
 }
 
-export function ChatInterface({ token, employeeName, existingTurns, status, onCompleted }: Props) {
-  const [messages, setMessages] = useState<Message[]>(() => turnsToMessages(existingTurns))
+export function ChatInterface({ token, employeeName, existingTurns, openerText, status, onCompleted }: Props) {
+  const [messages, setMessages] = useState<Message[]>(() =>
+    turnsToMessages(existingTurns, existingTurns.length > 0 ? openerText : null)
+  )
   const [showReconnectBanner, setShowReconnectBanner] = useState(() => existingTurns.length > 0)
   const reconnectBannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { isStreaming, error, sendMessage, reconnect, start, clearError } = useInterviewStream(token)
