@@ -34,7 +34,21 @@
       "Bash(curl -s -N --no-buffer -X POST *)",
       "Bash(curl -s -X GET *)",
       "WebFetch(domain:localhost)",
-      "WebFetch(domain:127.0.0.1)"
+      "WebFetch(domain:127.0.0.1)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__get_publishable_keys",
+      "mcp__supabase__generate_typescript_types",
+      "mcp__supabase__search_docs",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__list_branches",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__get_edge_function"
     ]
   },
   "hooks": {

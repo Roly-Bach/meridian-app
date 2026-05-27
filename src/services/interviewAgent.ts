@@ -529,14 +529,19 @@ export function buildTools(interviewId: string, workspaceId: string) {
       inputSchema: z.object({}),
       execute: async () => {
         try {
-          await supabase
+          const admin = getSupabaseAdmin()
+          const { error: interviewError } = await admin
             .from('interviews')
             .update({ status: 'completed', extractions_pending: true })
             .eq('id', interviewId)
-          await supabase
+          if (interviewError) throw new Error(interviewError.message)
+
+          const { error: stateError } = await admin
             .from('interview_state')
             .update({ phase: 'wrap_up', updated_at: new Date().toISOString() })
             .eq('interview_id', interviewId)
+          if (stateError) console.error('[complete_interview] state update failed:', stateError.message)
+
           return { success: true }
         } catch (err) {
           console.error('[complete_interview] failed:', err)

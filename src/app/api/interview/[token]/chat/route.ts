@@ -179,7 +179,7 @@ export async function POST(
 
       // Failsafe: model sometimes prints [complete_interview] as text instead of
       // executing the tool. Detect this and set status server-side so the pipeline runs.
-      const agentWroteFarewell = agentText.includes('[complete_interview]')
+      const agentWroteFarewell = agentText.includes('complete_interview')
       const ensureCompletedIfFarewell = async () => {
         if (!agentWroteFarewell) return
         const { data: ci } = await supabase.from('interviews').select('status').eq('id', interview.id).single()

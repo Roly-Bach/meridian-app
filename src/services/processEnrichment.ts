@@ -313,7 +313,7 @@ export async function createProcessStepsFromTracker({
       rule_based: (step.slots.rule_based?.value as boolean) ?? false,
       data_sources: (step.slots.data_sources?.value as string[]) ?? [],
       error_rate_percent: (step.slots.error_rate_percent?.value as number) ?? null,
-      media_breaks: (step.slots.media_breaks?.value as number) ?? 0,
+      media_breaks: (Number(step.slots.media_breaks?.value) || 0),
     })
 
     if (error) {
