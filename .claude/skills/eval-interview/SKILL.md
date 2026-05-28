@@ -143,6 +143,11 @@ Für jeden Turn N = 1..35:
      [Turn N+1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens> googleCached=<googleCachedTokens>
      (bei lastUsage = null: "[Turn N+1] tokens: n/a")
 
+     Berechne Turn-Kosten (Preise: $1.50/1M Input, $9.00/1M Output):
+     turnCost = (inputTokens / 1_000_000 * 1.50) + (outputTokens / 1_000_000 * 9.00)
+     Addiere turnCost zu runningTotalCost.
+     [Turn N+1] cost: $<turnCost auf 4 Dezimalstellen gerundet>
+
   d) Prüfe Abbruchbedingungen — NUR diese drei:
      1. Agent-Response leer (kein sichtbarer Text):
         Protokolliere: [Turn N+1] Agent: leer — möglicher BUG
@@ -194,6 +199,8 @@ eval_date: YYYY-MM-DD
 persona: <persona-name>
 interview_id: <id>
 turns_total: <N>
+total_cost_usd: <runningTotalCost auf 4 Dezimalstellen>
+pricing: "$1.50/1M input, $9.00/1M output"
 ---
 
 [Turn 1] Agent: "<opener>"
@@ -206,12 +213,15 @@ turns_total: <N>
 [PASS / FAIL] <Abschluss-Label mit Begründung>
 
 ## Token-Usage-Zusammenfassung
-| Turn | inputTokens | outputTokens | cacheRead | cacheCreate | googleCached |
-|------|-------------|--------------|-----------|-------------|--------------|
-| 1    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     |
-| 2    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     |
-| ...  |             |              |           |             |              |
-| **Σ** | **<summe>** | **<summe>** | **<summe>** | **<summe>** | **<summe>** |
+
+Preise: $1.50/1M Input-Tokens, $9.00/1M Output-Tokens.
+
+| Turn | inputTokens | outputTokens | cacheRead | cacheCreate | googleCached | cost_usd |
+|------|-------------|--------------|-----------|-------------|--------------|----------|
+| 1    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     | $<n>     |
+| 2    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     | $<n>     |
+| ...  |             |              |           |             |              |          |
+| **Σ** | **<summe>** | **<summe>** | **<summe>** | **<summe>** | **<summe>** | **$<total>** |
 
 Caching-Effekt: Turn-1-inputTokens vs. Turn-2-inputTokens (Δ in %, erwarteter Abfall ~60–70% bei Anthropic). Bei Gemini: googleCached > 0 zeigt implizites Caching an.
 
@@ -236,6 +246,7 @@ Gib folgenden strukturierten Hinweis aus:
 Eval-Lauf abgeschlossen — <PASS/FAIL>
 Transcript: docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-<persona>[suffix].md
 Interview-ID: <id>
+Kosten: $<runningTotalCost> (bei $1.50/1M Input, $9.00/1M Output)
 
 Interview in der App einsehen:
   http://localhost:3000/interview/<token>
