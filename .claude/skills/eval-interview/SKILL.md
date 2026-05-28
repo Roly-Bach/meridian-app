@@ -31,6 +31,24 @@ Führt einen vollständigen Eval-Lauf des Interview-Agenten durch. Seit PROJ-13 
 
 ## Schritt-für-Schritt-Ablauf
 
+### Schritt 0: Modell-Konfiguration anzeigen und bestätigen
+
+Lese `.env.local` und extrahiere die vier Modell-Vars (Fallback wenn nicht gesetzt: `google/gemini-3.1-flash-lite`):
+
+```
+INTERVIEW_MODEL  = <Wert aus .env.local oder Fallback>
+EXTRACTION_MODEL = <Wert aus .env.local oder Fallback>
+ENRICHMENT_MODEL = <Wert aus .env.local oder Fallback>
+TESTER_MODEL     = <Wert aus .env.local oder Fallback>
+```
+
+Zeige die Liste dem Nutzer und frage via `AskUserQuestion`:
+- Frage: „Passt die Modell-Konfiguration?"
+- Option A: „Ja, Eval starten"
+- Option B: „Nein, ich passe .env.local zuerst an"
+
+Bei Option B: Ablauf beenden. Kein Runner-Start.
+
 ### Schritt 1: Persona-Datei lesen
 
 Lese die Persona-Datei um PASS-Kriterien ableiten zu können:
