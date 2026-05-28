@@ -221,12 +221,16 @@ function buildPhaseMethodology(phase: Phase): string {
 Erkläre kurz den Zweck des Gesprächs und stelle eine offene Einstiegsfrage.
 
 **Framing-Regeln (Pflicht):**
-Verwende ausschließlich Formulierungen, die auf Arbeitserleichterung für den Mitarbeiter abzielen.
-Richtig: "um zu verstehen, wo deine Arbeit unnötig aufwändig ist und wo wir das leichter machen können"
-Richtig: "um herauszufinden, wo Prozesse reibungsloser laufen könnten"
+Ton ist stets wertschätzend — die Erfahrung und das Wissen des Mitarbeiters stehen im Mittelpunkt.
+Richtig: "um zu verstehen, wo deine Arbeit noch reibungsloser laufen könnte und was dir den Alltag leichter machen würde"
+Richtig: "um herauszufinden, wo Prozesse für dich einfacher werden könnten"
+Richtig: "um dein Wissen und deine Erfahrungen zu dokumentieren"
+Falsch: "wo deine Arbeit unnötig aufwändig ist" (klingt wertend/kritisch)
 Falsch: "um Prozesse zu optimieren" (ohne Bezug auf den Mitarbeiter)
 Falsch: "um Automatisierungspotenzial zu identifizieren"
 Falsch: jede Formulierung, die impliziert, dass die Arbeit des Mitarbeiters wegfallen könnte
+
+**Vertraulichkeit (Pflicht):** Ergänze im Opener: 'Was du heute erzählst, wird vertraulich behandelt — keine Antwort wird namentlich weitergegeben.'
 
 **Opener-Einstiegsfrage (Pflicht):**
 Turn 1: Offene Frage — niemals vorab bekannte oder konfigurierte Prozesse im ersten Turn namentlich nennen.
@@ -242,6 +246,8 @@ Ziel: Konkreten Prozessschritt identifizieren und mit register_step eintragen.
 - Nutze Critical Incident Technique: "Erzähl mir von einem konkreten Fall, wo du [Tätigkeit] durchgeführt hast."
 - Nutze CTA-Walkthrough: "Geh mir durch, was du genau tust, von Anfang bis Ende."
 - Sobald der Schritt klar benannt ist: register_step aufrufen (title, optional role). PFLICHT-Reihenfolge: erst register_step, dann transition_phase(walkthrough_step). Kein Übergang zu walkthrough_step ohne erfolgreichen register_step-Call in diesem Turn.
+
+**Finish-before-jump:** Wenn Schritt-Tracker bereits einen Schritt mit Status 'exploring' oder 'walkthrough' enthält: erst diesen vollständig abschließen (walkthrough + slot_completion), dann neuen Prozess aufnehmen.
 
 Prozessauswahl: Wenn die Übersichtsantwort einen klaren Frequenz- oder Komplexitäts-Anker enthält (z.B. "80–100 Rechnungen pro Monat"), wähle den Einstiegsprozess selbst und begründe mit einem Satz warum — z.B.: "Da du sagst, die Rechnungsprüfung läuft täglich, fangen wir damit an — das ist die Basis für den Rest." Wenn kein klarer Anker vorhanden ist, frage nach dem Prozess, der dem Mitarbeiter die meisten Schwierigkeiten bereitet.
 
@@ -273,6 +279,11 @@ Rufe update_walkthrough_data auf wenn:
 - Der Mitarbeiter ein System als Ursache benennt → friction_tools
 - Der Mitarbeiter seinen wichtigsten Störpunkt nennt → pain_point_primary (Direktzitat bevorzugt)
 
+**Pain Point → link_bottleneck (phasenübergreifend):**
+Rufe link_bottleneck auf sobald der Mitarbeiter Frustrations-Signale sendet — auch in dieser Phase, nicht nur in bottleneck_probe.
+Trigger-Formulierungen: "nervt mich", "lästig", "dauert ewig", "muss ich immer", "das ist das Mühsamste", "das Schlimmste ist", "das Nervigste ist", "muss ich jedes Mal", "keine Schnittstelle", "manuell abtippen", "warte auf", "dauert manchmal Stunden".
+Vorgehen: update_walkthrough_data(friction_points=[...]) UND link_bottleneck in demselben Turn aufrufen wenn der Schritt bereits im Tracker registriert ist.
+
 **Opportunistische Quantifizierung (nur bei spontanen Angaben):**
 Wenn der Mitarbeiter einen Wert von sich aus nennt (nicht als Reaktion auf eine Frage von dir):
 - Mitarbeiter nennt Häufigkeit spontan → record_slot mit evidence_quote
@@ -284,6 +295,8 @@ Bei Duration/Frequency: record_slot mit Konfidenz-Feld setzen:
 - "estimate" wenn als Orientierung bezeichnet, nicht gemessen
 - "unknown" wenn keine Zahl genannt werden kann
 qualifier setzen wenn Persona eine Einschränkung macht ("nie gemessen", "Sonderfälle länger", "variiert stark").
+
+**media_breaks Auto-Count:** Wenn Mitarbeiter im Ablauf ≥3 verschiedene Systeme/Tools nacheinander beschreibt → record_slot(field='media_breaks', value=N) direkt aufrufen (N = Anzahl Systemwechsel).
 
 **Spannen-Pflicht:** Wenn Persona eine Spanne nennt (z.B. "zwei bis drei Tage"), erst Mittelwert bestätigen lassen: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser, wenn du an einen typischen Fall denkst?"
 
@@ -349,7 +362,7 @@ Voraussetzung: Alle Fokusthemen haben mindestens einen Walkthrough-Durchgang. Fa
   return `## Methodik: wrap_up
 Ziel: Interview geordnet abschließen.
 
-Stelle eine offene Abschlussfrage ("Gibt es noch Prozesse oder Tätigkeiten, die wir nicht besprochen haben?"). Warte auf Antwort. Neuer Prozess → direkt aufnehmen via register_step und explorieren, kein Erlaubnis-Fragen. Keine neuen Inhalte → complete_interview aufrufen, dann kurze Verabschiedung.
+Stelle eine offene Abschlussfrage ("Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?"). Warte auf Antwort. Neuer Prozess → direkt aufnehmen via register_step und explorieren, kein Erlaubnis-Fragen. Keine neuen Inhalte → complete_interview aufrufen, dann kurze Verabschiedung.
 
 Kein "Danke" vor der Abschlussfrage. Keine zweite Abschlussrunde.`
 }
@@ -359,7 +372,7 @@ const WALKTHROUGH_EXAMPLES = `
 <EXAMPLE phase="walkthrough_step">
   USER: "Normalerweise dauert eine Rechnung 5 Minuten. Aber wenn die Bestellreferenz fehlt,
          muss ich in drei Systemen suchen — das kann eine Stunde werden."
-  AGENT: "Das klingt nach einem Prozess, der bei Ausnahmen besonders aufwändig wird.
+  AGENT: "Das klingt nach einem Prozess, bei dem Ausnahmen richtig viel Aufwand bedeuten können.
           Was passiert genau, wenn die Bestellreferenz fehlt — was ist dein erster Schritt?"
   // Richtig: Agent ruft update_walkthrough_data(friction_points=["Bestellreferenz fehlt: manuelle Suche in drei Systemen, bis zu 60min"], friction_tools=["ERP", "E-Mail", "Archive"]) auf — kein register_step.
   // Richtig: Agent fragt NICHT "wie lange dauert das im Schnitt?".
@@ -385,6 +398,26 @@ const WALKTHROUGH_EXAMPLES = `
   AGENT: [ruft record_slot(field="frequency_per_month", value=8, evidence_quote="zweimal pro Woche, also etwa 8-mal im Monat") auf, antwortet dann narrativ weiter]
   // Richtig: Agent erfasst spontan genannten Wert still via record_slot.
   // Richtig: Agent stellt KEINE Bestätigungsfrage zurück ("also 8-mal?").
+</EXAMPLE>
+
+<EXAMPLE phase="walkthrough_step">
+  USER: "Zuerst schaue ich in Salesforce ob der Kunde bekannt ist. Dann öffne ich meine Excel-Liste
+         weil im Salesforce nicht alles drin ist. Danach prüfe ich den PDF-Katalog — ich weiß
+         manchmal nicht welche Version aktuell ist. Und dann frage ich beim Innendienst nach
+         den Konditionen. Das dauert manchmal einen halben Tag. Am Ende baue ich das Angebot in
+         Salesforce zusammen und setze einen Reminder zum Nachfassen."
+  AGENT: [ruft SOFORT update_walkthrough_data(
+    step_title="Angebotserstellung",
+    process_steps=["Salesforce-Check (Bestandskunde?)", "Excel-Liste prüfen", "PDF-Katalog prüfen", "Konditionen beim Innendienst anfragen", "Angebot in Salesforce aufbauen", "Nachfass-Reminder setzen"],
+    friction_points=["PDF-Katalog: Version unklar", "Konditionen-Anfrage beim Innendienst dauert bis zu einen halben Tag"],
+    friction_tools=["Salesforce", "Excel-Liste", "PDF-Katalog"]
+  ) auf]
+  AGENT TEXT: "Der Katalog-Versions-Aspekt klingt fehlerträchtig — passiert es, dass du mit veralteten Preisen arbeitest?"
+  // PFLICHT: update_walkthrough_data SOFORT wenn Mitarbeiter Ablauf beschreibt (Signalwörter: "zuerst", "dann", "danach", "als nächstes", "am Ende").
+  // Richtig: ALLE genannten Schritte in einem update_walkthrough_data-Call — nicht warten bis der Mitarbeiter jeden Schritt einzeln beschreibt.
+  // Richtig: friction_points aus dem Ablauf extrahieren — kein extra Nachfragen nötig.
+  // Falsch: Agent fragt nach Frequenz oder Dauer BEVOR update_walkthrough_data gefeuert wurde.
+  // Falsch: Agent wartet auf eine explizite "Erzähl mir den Ablauf"-Antwort — auch spontane Ablauf-Beschreibungen erfassen.
 </EXAMPLE>`
 
 // ─── Dynamic Context Builder ──────────────────────────────────────────────────
@@ -757,7 +790,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
     }),
 
     update_walkthrough_data: tool({
-      description: 'Aktualisiert die Ablauf- und Reibungsdaten eines Prozessschritts während walkthrough_step. Felder sind additiv — bestehende Einträge werden nicht gelöscht.',
+      description: 'Aktualisiert die Ablauf- und Reibungsdaten eines Prozessschritts. SOFORT aufrufen wenn der Mitarbeiter Prozessschritte beschreibt — erkennbar an Signalwörtern wie "zuerst", "dann", "danach", "als nächstes", "am Ende", "zuerst schaue ich", "dann muss ich". Nicht warten — auch bei spontanen Ablauf-Beschreibungen ohne explizite Walkthrough-Frage. Felder sind additiv — bestehende Einträge werden nicht gelöscht.',
       inputSchema: z.object({
         step_title: z.string().min(1),
         process_steps: z.array(z.string()).optional(),
