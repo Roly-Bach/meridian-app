@@ -1,7 +1,7 @@
 ---
 name: eval-interview
 description: Führt einen vollständigen Eval-Lauf des Interview-Agenten mit einer synthetischen Persona durch.
-argument-hint: "<persona: buchhalter | vertriebler | it-support> [model: google/gemini-3.5-flash]"
+argument-hint: "<persona: buchhalter | vertriebler | it-support>"
 user-invocable: true
 ---
 
@@ -22,11 +22,10 @@ Führt einen vollständigen Eval-Lauf des Interview-Agenten durch. Seit PROJ-13 
 
 ```
 /eval-interview <persona>
-/eval-interview <persona> <model>
 ```
 
 - `<persona>` = `buchhalter` | `vertriebler` | `it-support`
-- `<model>` = optional, z.B. `google/gemini-3.5-flash` (Default: `google/gemini-3.1-flash-lite`)
+- Modelle werden ausschließlich aus `.env.local` gelesen (`INTERVIEW_MODEL`, `EXTRACTION_MODEL`, `ENRICHMENT_MODEL`, `TESTER_MODEL`). Kein Modell-Argument am Skill-Aufruf.
 
 ---
 
@@ -48,12 +47,12 @@ Extrahiere:
 Baue den Befehl aus den Argumenten:
 
 ```bash
-INTERVIEW_MODEL=<model> npm run eval:interview <persona>
+npm run eval:interview <persona>
 ```
 
-Wenn kein Modell angegeben: ohne Prefix — Runner-Default greift.
+Alle Modell-Env-Vars (`INTERVIEW_MODEL`, `EXTRACTION_MODEL`, `ENRICHMENT_MODEL`, `TESTER_MODEL`) werden vom Runner via dotenv aus `.env.local` geladen. Kein CLI-Prefix nötig.
 
-`LANGFUSE_ENABLED` wird vom Runner intern auf `true` gesetzt (process.env, prozess-lokal) und kehrt nach Abschluss automatisch auf den `.env.local`-Wert zurück. Kein manuelles Setzen nötig.
+`LANGFUSE_ENABLED` wird vom Runner intern auf `true` gesetzt (process.env, prozess-lokal) und kehrt nach Abschluss automatisch auf den `.env.local`-Wert zurück.
 
 Führe den Befehl aus (timeout 10 Minuten — ein vollständiges Interview dauert 3–7 Min).
 
@@ -206,12 +205,10 @@ Nächste Schritte (manuelle Pipeline-Tests):
 
 ## Modell-Vergleich (primärer Use Case von PROJ-13)
 
-Um zwei Modelle direkt zu vergleichen, führe zwei Läufe mit derselben Persona durch:
+Um zwei Modelle direkt zu vergleichen, setze `INTERVIEW_MODEL` in `.env.local` und führe den Skill zweimal aus:
 
-```bash
-INTERVIEW_MODEL=google/gemini-3.1-flash-lite npm run eval:interview buchhalter
-INTERVIEW_MODEL=google/gemini-3.5-flash npm run eval:interview buchhalter
-```
+1. `.env.local`: `INTERVIEW_MODEL=google/gemini-3.1-flash-lite` → `/eval-interview buchhalter`
+2. `.env.local`: `INTERVIEW_MODEL=google/gemini-3.5-flash` → `/eval-interview buchhalter`
 
 Dann via Langfuse MCP in Claude Code:
 - `"Compare tool-call sequences between eval_run_id <A> and <B>"`
