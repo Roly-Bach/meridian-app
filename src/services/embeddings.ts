@@ -1,5 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai'
 import { embed } from 'ai'
+import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 
 const jinaClient = createOpenAI({
   apiKey: process.env.JINA_API_KEY,
@@ -8,7 +9,7 @@ const jinaClient = createOpenAI({
 
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'jina-embeddings-v3'
 
-export async function generateEmbedding(text: string): Promise<number[] | null> {
+export async function generateEmbedding(text: string, traceCtx?: TraceCtx): Promise<number[] | null> {
   if (!process.env.JINA_API_KEY) {
     console.error('[embeddings] JINA_API_KEY not set')
     return null
@@ -18,6 +19,11 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
     const { embedding } = await embed({
       model: jinaClient.embedding(EMBEDDING_MODEL),
       value: text,
+      experimental_telemetry: buildTraceMetadata('embeddings.generateEmbedding', {
+        model: EMBEDDING_MODEL,
+        environment: 'prod',
+        ...traceCtx,
+      }),
     })
     return embedding
   } catch (err) {

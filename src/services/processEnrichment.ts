@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
 import { generateEmbedding } from './embeddings'
 import type { StepEntry } from './interviewAgent'
+import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 
 interface EnrichedAttribute<T> {
   value: T | null
@@ -77,9 +78,11 @@ export function applyGroundingGuard<T>(attr: EnrichedAttribute<T>): T | null {
 export async function enrichProcessSteps({
   interviewId,
   workspaceId,
+  traceCtx,
 }: {
   interviewId: string
   workspaceId: string
+  traceCtx?: TraceCtx
 }): Promise<void> {
   const supabase = getSupabaseAdmin()
 
@@ -131,6 +134,12 @@ export async function enrichProcessSteps({
       system: ENRICHMENT_SYSTEM_PROMPT,
       prompt: `Vollständiges Transkript:\n${transcript}\n\nProzessschritte zum Anreichern:\n${objectsInput}`,
       maxOutputTokens: 4000,
+      experimental_telemetry: buildTraceMetadata('processEnrichment.enrichProcessSteps', {
+        interviewId,
+        model: process.env.ENRICHMENT_MODEL ?? 'google/gemini-3.1-flash-lite',
+        environment: 'prod',
+        ...traceCtx,
+      }),
     })
 
     const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
@@ -209,18 +218,6 @@ interface TrackerDescriptionOutput {
   condition_text: string | null
 }
 
-function extractBestQuote(step: StepEntry): string | null {
-  const slotQuotes = [
-    step.slots.frequency_per_month?.quote,
-    step.slots.duration_minutes?.quote,
-    step.slots.rule_based?.quote,
-    step.slots.data_sources?.quote,
-    step.slots.error_rate_percent?.quote,
-    step.slots.media_breaks?.quote,
-  ].filter((q): q is string => !!q && q.trim().length > 10)
-
-  return step.pain_point_primary ?? slotQuotes[0] ?? null
-}
 
 // Creates process_steps from interview_state.step_tracker (authoritative agent source).
 // Quantitative slots come directly from step_tracker (no LLM). LLM generates only
@@ -228,9 +225,11 @@ function extractBestQuote(step: StepEntry): string | null {
 export async function createProcessStepsFromTracker({
   interviewId,
   workspaceId,
+  traceCtx,
 }: {
   interviewId: string
   workspaceId: string
+  traceCtx?: TraceCtx
 }): Promise<void> {
   const supabase = getSupabaseAdmin()
 
@@ -283,6 +282,12 @@ export async function createProcessStepsFromTracker({
       system: TRACKER_DESCRIPTION_PROMPT,
       prompt: `Vollständiges Transkript:\n${transcript}\n\nProzessschritte:\n${stepsInput}`,
       maxOutputTokens: 2000,
+      experimental_telemetry: buildTraceMetadata('processEnrichment.createProcessStepsFromTracker', {
+        interviewId,
+        model: process.env.ENRICHMENT_MODEL ?? 'google/gemini-3.1-flash-lite',
+        environment: 'prod',
+        ...traceCtx,
+      }),
     })
 
     const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
@@ -309,7 +314,7 @@ export async function createProcessStepsFromTracker({
 
     const title = step.title
     const description = desc?.description ?? null
-    const embedding = await generateEmbedding(`${title} ${description ?? ''}`.trim())
+    const embedding = await generateEmbedding(`${title} ${description ?? ''}`.trim(), traceCtx)
 
     const { error } = await supabase.from('process_steps').insert({
       interview_id: interviewId,
@@ -317,7 +322,7 @@ export async function createProcessStepsFromTracker({
       title,
       description,
       role: step.role ?? null,
-      source_quote: extractBestQuote(step),
+      source_quote: desc?.source_quote ?? null,
       step_type: desc?.step_type === 'decision' ? 'decision' : 'action',
       condition_text: desc?.step_type === 'decision' ? (desc.condition_text ?? null) : null,
       embedding: embedding as number[],

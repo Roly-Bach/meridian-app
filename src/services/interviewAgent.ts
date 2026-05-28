@@ -1,5 +1,6 @@
 import { resolveModel } from '@/lib/llm-provider'
 import { streamText, tool } from 'ai'
+import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { RawExtraction } from './extraction'
@@ -855,6 +856,7 @@ export interface AgentStreamOptions {
   isReconnect?: boolean
   isStart?: boolean
   onFinish?: (text: string) => Promise<void>
+  traceCtx?: TraceCtx
 }
 
 export function createInterviewStream(opts: AgentStreamOptions) {
@@ -911,6 +913,12 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: messages as any,
     tools: buildTools(opts.context.interviewId, opts.context.workspaceId, opts.userInput),
+    experimental_telemetry: buildTraceMetadata('interviewAgent.turn', {
+      interviewId: opts.context.interviewId,
+      model: modelString,
+      environment: 'prod',
+      ...opts.traceCtx,
+    }),
     // Stop as soon as any step has produced visible text — prevents duplicate output.
     // Allow up to 4 tool-only steps before forcing a stop (phase transitions can
     // require 2-3 consecutive tool calls before the model generates visible text).

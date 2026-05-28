@@ -70,7 +70,45 @@ npm run start        # Production server
 npm test             # Vitest unit/integration tests
 npm run test:e2e     # Playwright E2E tests
 npm run test:all     # Both test suites
+
+# Eval runner (PROJ-13) — requires EVAL_WORKSPACE_ID in .env.local
+LANGFUSE_ENABLED=true INTERVIEW_MODEL=google/gemini-3.5-flash npm run eval:interview buchhalter
 ```
+
+## LLM Observability (PROJ-13)
+
+Tracing via Langfuse. Kill-switch: `LANGFUSE_ENABLED=false` (default) — set to `true` only for eval runs or intentional prod tracing.
+
+### Langfuse MCP — Claude Code queries
+
+Add to `.claude/settings.local.json` (gitignored, each dev uses their own read key):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "@langfuse/mcp", "--public-key", "pk-lf-...", "--secret-key", "sk-lf-...", "--base-url", "https://cloud.langfuse.com"]
+    }
+  }
+}
+```
+
+Example queries:
+- "Show me the last eval run for persona buchhalter with model gemini-3.5-flash"
+- "Compare tool-call sequences between two eval runs by eval_run_id"
+- "What was the total token cost for interview session <interview_id>?"
+
+### Tag conventions
+
+| Tag | Values | Source |
+|-----|--------|--------|
+| `model` | `google/gemini-3.1-flash-lite`, `google/gemini-3.5-flash`, `anthropic/claude-...` | set per LLM call |
+| `environment` | `prod`, `eval` | set by runner / default prod |
+| `persona` | `buchhalter`, `vertriebler`, `it-support` | set by eval runner |
+| `eval_run_id` | UUID | set by eval runner |
+
+Session grouping: `langfuse.session_id = interview_id` — all spans of one interview are one session.
 
 ## Product Context
 

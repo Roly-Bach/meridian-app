@@ -1,13 +1,13 @@
 # PROJ-13: LLM Observability & Tracing
 
-## Status: Planned
+## Status: Approved
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-28
 **Type:** Feature
 **Domain:** Platform
 **Extends:** —
 **Appetite:** M (3-5 Tage)
-**Bugs:** —
+**Bugs:** 0:0:2
 
 ## Dependencies
 - PROJ-2 (Interview Engine Backend) — `interviewAgent.ts` ist primärer Trace-Producer
@@ -128,10 +128,263 @@ PROJ-13 schafft genau diese Grundlage:
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+**Status:** Approved 2026-05-28
+
+### A) Komponenten-Struktur
+
+```
+Tracing-Layer (neu)
+├── src/lib/langfuse.ts                          [neu]
+│   ├── OTEL-SDK-Init (NodeSDK + Langfuse-Exporter)
+│   ├── Singleton-Pattern: einmal pro Prozess initialisiert
+│   └── Kill-Switch: LANGFUSE_ENABLED=false → no-op
+│
+├── src/services/_telemetry.ts                   [neu, schmal]
+│   ├── buildTraceMetadata({ interviewId, persona?, model, environment, evalRunId? })
+│   └── liefert das experimental_telemetry-Objekt für AI-SDK-Calls
+│
+├── 6× Service-Dateien                            [modifiziert]
+│   ├── interviewAgent.ts        ← primärer Trace-Producer
+│   ├── extraction.ts
+│   ├── embeddings.ts
+│   ├── processEnrichment.ts
+│   ├── useCaseEngine.ts
+│   └── reportGenerator.ts       ← niedrigste Priorität, eigene Trace ohne interview_id
+│   Pro LLM-Call: experimental_telemetry-Block + TraceContext-Parameter
+│
+└── src/services/__evals__/interview/runner.ts   [modifiziert]
+    └── setzt Tags persona × model × environment=eval × eval_run_id vor jedem Run
+
+API-Layer                                         [modifiziert, minimal]
+└── Routen die Services aufrufen reichen interview_id als TraceContext durch
+    (kein eigener Tracing-Code in API Routes — Service-Layer-Constraint)
+
+MCP-Layer                                         [neu]
+└── .claude/settings.local.json                  [modifiziert]
+    └── Langfuse-MCP-Server-Eintrag (Read-Key pro Developer, gitignored)
+
+Konfiguration                                     [modifiziert]
+├── .env.example                                  ← LANGFUSE_* Variablen + Defaults
+└── CLAUDE.md                                     ← MCP-Query-Patterns, Tag-Konventionen
+```
+
+### B) Datenmodell (was eine Trace beschreibt)
+
+Eine **Trace** bildet einen kompletten Vorgang ab — in Produktion ein Interview, im Eval-Lauf eine Persona-Sitzung.
+
+```
+Trace
+├── ID:           interview_id (oder eval_run_id für reportGenerator-only-Läufe)
+├── Tags:         { persona, model, environment: "prod" | "eval", eval_run_id? }
+├── Status:       running | completed | error
+├── Created at:   Start-Zeitstempel
+└── Spans:        N Service-Calls (eine Span pro LLM-/Embedding-Call)
+```
+
+Ein **Span** pro KI-Call enthält:
+
+```
+Span (LLM-Call)
+├── Service-Name:        interviewAgent | extraction | embeddings | …
+├── Modell-Name:         z.B. "google/gemini-3.1-flash-lite"
+├── System-Prompt:       eigenes Feld
+├── Turn-History:        user/assistant-Verlauf
+├── Tool-Definitionen:   verfügbare Tools für diesen Call
+├── Token-Counts:        { input, output, reasoning, cached }
+├── Latenz:              { ttft_ms, total_ms }
+├── Kosten:              automatisch (Langfuse-Preisliste)
+├── Output-Text:         finaler Assistant-Output
+└── Kind-Spans:
+    ├── Tool-Calls       { name, input, output }
+    ├── RAG-Context      abgerufene Vektordokumente (falls vorhanden)
+    └── Error            falls Exception
+```
+
+**Speicherort:** Langfuse Cloud EU (Free Tier 50k Observations/Mo). Keine Daten in der eigenen DB.
+
+**Trace-Korrelation:** `interview_id` wird als expliziter `TraceContext`-Parameter an jeden Service durchgereicht (von API Route → Service → AI-SDK-Telemetry-Metadata). Keine implizite Async-Hook-Magie, da diese auf Vercel Fluid Compute zwar verfügbar, aber fragil über Streaming-Grenzen hinweg ist.
+
+### C) Tech-Entscheidungen
+
+| Entscheidung | Warum |
+|---|---|
+| **Langfuse** als Observability-Backend (vs. LangSmith, Phoenix, Helicone) | EU-Hosting (DSGVO-konform), Open Source mit Self-Host-Option als Notausgang, kostenloser Tier reicht für aktuelles Volumen, nativer MCP-Server vorhanden, native AI-SDK-v6-OTEL-Integration. Lock-in-Risiko gering: OTEL ist Standard, Wechsel zum Self-Host oder zu anderem OTEL-Backend ist reine Exporter-Umkonfiguration. |
+| **OTEL via AI SDK v6 `experimental_telemetry`** (vs. manuelle Span-Erstellung) | Ein Telemetry-Block pro `generateText`/`streamText`-Aufruf. AI SDK liefert Tool-Calls, Token-Splits (inkl. Reasoning), Latenz und Streaming-Chunks frei Haus. Manuelle Instrumentierung wäre 6× Boilerplate mit hoher Drift-Wahrscheinlichkeit. |
+| **`interview_id` als Trace-Root, explizit weitergereicht** | Eindeutige Korrelation aller Service-Calls eines Interviews ohne Datenbank-Joins. Explizite Übergabe statt Async-Hook-Kontext, weil Service-Layer-Constraint ohnehin saubere Funktions-Signaturen erzwingt und Streaming-Grenzen Async-Hooks schwer machen. |
+| **Fire-and-forget Flush** | Tracing darf den Interview-Hot-Path nie blockieren. Bei Backend-Ausfall fließen Traces verloren, das Interview läuft sauber durch. Akzeptiert für Observability-Layer. |
+| **Kill-Switch `LANGFUSE_ENABLED=false`** | Lokales Dev verbrennt sonst Free-Tier-Kontingent durch Hot-Reload-Spam. Eval-Läufe lokal aktivieren, normales `npm run dev` deaktiviert. |
+| **Langfuse-MCP-Server für Claude Code** | Eval-Vergleich (Persona × Modell × Run) soll von Claude Code selbst auswertbar sein, statt manueller UI-Klicks. MCP macht Traces als strukturierte Resource verfügbar. |
+| **100 % Sampling, kein Sampling-Layer** | Volumen ist klein (≤50k Spans/Mo). Sampling fügt Komplexität ohne Nutzen hinzu. Wenn Volumen steigt, ist Sampling ein separater Refactor. |
+| **Service-Layer-Constraint hält** | Sämtliche Tracing-Aufrufe in `src/services/` — API Routes bleiben frei von Tracing-Code. Folgt PROJ-4-Architekturentscheidung. |
+
+### D) Dependencies (neu)
+
+| Paket | Zweck |
+|---|---|
+| `langfuse` | Server-SDK (Singleton-Client, Kosten-Lookup) |
+| `@langfuse/otel` | OTEL-Exporter, der AI-SDK-v6-Spans an Langfuse weiterleitet |
+| `@opentelemetry/sdk-node` | OTEL-NodeSDK-Init (Peer-Dep des Adapters) |
+| `@opentelemetry/api` | Span-Context-API (falls TraceContext-Helper Spans erweitert) |
+
+Bereits installiert: `ai@^6`, `@ai-sdk/anthropic`, `@ai-sdk/google`.
+
+Kein Frontend-Paket, kein DB-Schema-Change.
+
+### F) Implementierungshinweise (Fallstricke für den Coder)
+
+#### F1 — OTEL-Init-Timing: `src/instrumentation.ts` ist der einzige sichere Ort
+
+Next.js 15+ (hier 16.2.6) führt `src/instrumentation.ts` einmal pro Serverstart aus, bevor der erste Request angenommen wird. Das ist der einzige Ort, an dem OTEL-`NodeSDK.start()` zuverlässig vor dem ersten AI-SDK-Call läuft.
+
+```
+src/instrumentation.ts          ← NEU (Next.js-Hook, kein Import nötig)
+  export async function register() → ruft initLangfuse() aus lib/langfuse.ts auf
+
+src/lib/langfuse.ts             ← enthält die Init-Logik, exportiert initLangfuse()
+```
+
+**Nicht:** `langfuse.ts` per lazy-import irgendwo in einem Service. Auf Vercel Fluid Compute kann die Init nach dem ersten Request-Start ankommen, da Function-Instances wiederverwendet werden — OTEL würde Spans verpassen, die vor dem ersten vollständigen `register()`-Lauf entstehen.
+
+#### F2 — Langfuse-OTEL-Attribut-Namen sind exakt definiert
+
+Der AI SDK übergibt `experimental_telemetry.metadata` als OTEL-Span-Attribute. Langfuse's OTEL-Exporter mappt diese auf Langfuse-Konzepte **nur wenn die Keys exakt stimmen**:
+
+| gewünschtes Langfuse-Konzept | OTEL-Attribut-Key in `metadata` |
+|---|---|
+| Session-Gruppierung (= `interview_id`) | `langfuse.session_id` |
+| User-ID | `langfuse.user_id` |
+| Tags (Persona, Modell, Env) | `langfuse.tags` (JSON-Array als String) |
+| Trace-ID-Override | `langfuse.trace_id` |
+
+`buildTraceMetadata()` in `_telemetry.ts` muss diese Keys exakt setzen. Falsch gewählte Keys landen als unstrukturierte Custom-Attribute und erscheinen nicht in Langfuse-Sessions.
+
+#### F3 — Eval-Runner ist ein separater Node-Prozess
+
+`runner.ts` wird via `tsx src/services/__evals__/...` direkt ausgeführt, nicht durch Next.js. `src/instrumentation.ts` wird **nicht** aufgerufen. Der Eval-Runner muss `initLangfuse()` explizit importieren und als ersten Aufruf ausführen, bevor er die erste Persona-Sitzung startet. Dafür muss `LANGFUSE_ENABLED=true` im lokalen Eval-Kontext gesetzt sein (z. B. als CLI-Env-Variable beim `npm run eval-interview`-Aufruf).
+
+#### F4 — Kill-Switch muss vor NodeSDK-Instanziierung greifen
+
+`initLangfuse()` prüft `LANGFUSE_ENABLED` als allererste Zeile und returnt früh, **bevor** `NodeSDK` oder `LangfuseExporter` instanziiert werden. Nicht erst nach `.start()`. Grund: wenn die Credentials-Env-Variablen fehlen (lokales Dev), schlägt der Exporter-Konstruktor fehl, nicht erst `.start()`.
+
+#### F5 — `interviewId` muss durch `useCaseEngine` → `embeddings` laufen
+
+`useCaseEngine.ts` ruft intern `embeddings.ts` auf. Embedding-Calls müssen denselben `interview_id`-Context erben, sonst erscheinen sie im Dashboard als eigenständige Traces statt als Kind-Spans des Interviews. Das erfordert eine Signaturen-Änderung:
+
+```
+useCaseEngine(input, { interviewId })       ← interviewId als Parameter
+  → embeddings.generateEmbedding(text, { interviewId })
+      → experimental_telemetry.metadata { langfuse.session_id: interviewId }
+```
+
+Der gleiche Durchstich gilt für alle Service-Ketten, in denen ein Service einen anderen aufruft.
+
+### E) Was diese Architektur **nicht** löst
+
+- Keine In-App-Anzeige von Kosten / Tokens (separates Feature)
+- Keine Alerts bei Kosten-Spikes (manuelle Dashboard-Sichtung)
+- Kein Tracing für Nicht-KI-Calls (DB-Queries, Auth) — bewusst aus Scope
+- Kein Trace-Schreibzugriff für Claude Code (MCP nur lesend)
+
+
+## Implementation Notes
+
+**Status:** Implementierung abgeschlossen 2026-05-28. Bereit für `/qa`.
+
+### Neue Dateien
+- `src/lib/langfuse.ts` — OTEL NodeSDK Singleton mit `LangfuseSpanProcessor`. Kill-Switch greift vor SDK-Instanziierung (per F4).
+- `src/instrumentation.ts` — Next.js Hook, ruft `initLangfuse()` einmal pro Serverprozess auf (per F1).
+- `src/services/_telemetry.ts` — `buildTraceMetadata(fnName, TraceCtx)`. Gibt `{ isEnabled: false }` zurück wenn `LANGFUSE_ENABLED !== 'true'`. Setzt `langfuse.session_id = interviewId` und `langfuse.tags` als JSON-Array-String (per F2).
+- `src/services/__evals__/interview/runner.ts` — Standalone Eval-Runner. Lädt `.env.local` via `dotenv`, initialisiert Langfuse, erstellt Interview in Supabase, führt vollständigen Agent-Loop mit LLM-simulierter Persona durch, gibt Langfuse-Session-URL aus.
+
+### Modifizierte Service-Dateien
+Alle 5 KI-Service-Dateien instrumentiert (optional `traceCtx?: TraceCtx`):
+- `interviewAgent.ts` — `streamText` mit `experimental_telemetry: buildTraceMetadata('interviewAgent.turn', ...)`
+- `extraction.ts` — `generateText` mit `extraction.extractAndEmbed`; `traceCtx` wird an `generateEmbedding` weitergegeben (per F5)
+- `embeddings.ts` — `embed` mit `embeddings.generateEmbedding`
+- `processEnrichment.ts` — beide `generateText`-Calls (`enrichProcessSteps` + `createProcessStepsFromTracker`)
+- `reportGenerator.ts` — `generateText` mit `reportGenerator.generateExecutiveSummary`
+
+### Abweichungen vom Spec
+- `useCaseEngine.ts` hat keine LLM-Calls (pure Heuristik) — Instrumentierung nicht durchgeführt, kein Refactor nötig.
+- `@langfuse/otel` exportiert `LangfuseSpanProcessor` (kein `LangfuseExporter`) — `NodeSDK` nutzt `spanProcessors`-Array statt `traceExporter`.
+- `TurnTranscript`-Interface in `extraction.ts` auf `export` gesetzt (war package-private, wird vom Runner benötigt).
+- `dotenv` als neue Dependency für den Eval-Runner hinzugefügt.
+
+### Neue Packages
+`langfuse`, `@langfuse/otel`, `@opentelemetry/sdk-node`, `@opentelemetry/api`, `dotenv`
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-05-28
+**Status:** Approved
+**Bug Tally:** 0:0:2
+
+### Build & Type Safety
+- [x] `npm run build` — passes clean, no warnings
+- [x] `tsc --noEmit` — passes, zero type errors
+- [x] `npm test` — 229/231 passing (2 pre-existing failures in processEnrichment.test.ts from PROJ-20, not PROJ-13)
+
+### Acceptance Criteria
+
+#### Setup & Infrastructure
+- [x] langfuse, @langfuse/otel, @opentelemetry/sdk-node, @opentelemetry/api installiert
+- [x] `src/lib/langfuse.ts` — Singleton-Init, Kill-Switch greift vor NodeSDK-Konstruktion (F4 korrekt)
+- [x] `src/instrumentation.ts` — Next.js auto-detects, ruft initLangfuse() einmal pro Server-Prozess auf
+- [x] Credentials ausschließlich via Env-Vars; .env.local.example vollständig dokumentiert
+- [x] Kill-Switch `LANGFUSE_ENABLED=false` — default off, kein NodeSDK-Overhead
+- [x] CLAUDE.md dokumentiert MCP-Setup, Tag-Konventionen, Beispiel-Queries
+- [ ] `.claude/settings.local.json` — Datei nicht angelegt (erwartet: gitignored, pro-Developer-Setup)
+
+#### Service-Instrumentierung
+- [x] interviewAgent.ts — `streamText` mit `experimental_telemetry`; `context.interviewId` immer gesetzt → session_id auch ohne traceCtx korrekt
+- [x] extraction.ts — `generateText` mit `experimental_telemetry`; `interviewId` direkt aus Funktions-Param → immer session-gebunden
+- [x] embeddings.ts — `embed` mit `experimental_telemetry` und `traceCtx`
+- [x] processEnrichment.ts — beide `generateText`-Calls (`enrichProcessSteps` + `createProcessStepsFromTracker`) mit telemetry
+- [x] useCaseEngine.ts — korrekt ausgelassen (pure Heuristik, keine LLM-Calls)
+- [x] reportGenerator.ts — `generateText` mit `experimental_telemetry`
+
+#### Trace-Struktur
+- [x] Interview-Ablauf → Trace mit `interview_id` als `langfuse.session_id` (interviewAgent immer korrekt)
+- [x] Tool-Calls → Kind-Spans (AI SDK OTEL-Integration liefert das automatisch)
+- [x] reportGenerator ohne interview_id → eigenständige Trace (traceCtx optional)
+- [~] Embedding-Calls als Session-Kind: **partiell** — siehe L1, L2 unten
+
+#### Eval-Integration
+- [x] runner.ts lädt .env.local via dotenv vor allen anderen Imports
+- [x] Initialisiert Langfuse explizit (`process.env.LANGFUSE_ENABLED = 'true'` + `initLangfuse()`)
+- [x] Setzt Tags: `persona`, `model`, `environment=eval`, `eval_run_id`
+- [x] `traceCtx` wird an createInterviewStream, extractAndEmbed durchgereicht
+- [x] Eval-Run erscheint als Session mit `interviewId` als Präfix
+- [x] Langfuse-Session-URL auf stdout: `<base>/project/sessions?search=<interviewId>`
+- [ ] EVAL_WORKSPACE_ID nicht gesetzt (User-Hinweis — Setup-Schritt, kein Code-Bug)
+
+#### Non-Blocking & Robustness
+- [x] Fire-and-forget: LangfuseSpanProcessor ist async, kein await in Hot Paths
+- [x] Tracing-Code ausschließlich in `src/services/` — API Routes bleiben frei
+- [x] SIGTERM-Handler in langfuse.ts registriert für graceful flush
+
+### Bugs Found
+
+**L1 (Low) — Embedding-Spans aus extraction.extractAndEmbed nicht session-gebunden (Produktionspfad)** ✅ FIXED
+- Betroffen: `src/services/extraction.ts:133` — wenn aus dem Chat-API-Route ohne traceCtx aufgerufen, war traceCtx=undefined → kein `langfuse.session_id` auf dem Embedding-Span
+- Fix angewendet: `generateEmbedding(embeddingInput, traceCtx ?? { interviewId })`
+
+**L2 (Low) — Embedding-Span aus processEnrichment.createProcessStepsFromTracker immer ohne session_id** ✅ FIXED
+- Betroffen: `src/services/processEnrichment.ts:329` — `generateEmbedding(...)` ohne traceCtx-Argument in jedem Aufrufpfad
+- Fix angewendet: `generateEmbedding(`${title} ${description ?? ''}`.trim(), traceCtx)`
+
+**Pre-existing (nicht PROJ-13):**
+- 2 failing tests in `processEnrichment.test.ts` (source_quote Feld-Mismatch aus commit 71c3c97, PROJ-20) — verifiziert via git stash
+
+### Security Audit
+- Keine Langfuse-Keys in Logs oder API-Responses
+- Kill-Switch verhindert versehentliche Span-Emission in lokalem Dev
+- Credentials nur server-seitig (kein NEXT_PUBLIC_ Präfix) — korrekt
+- OTEL-Spans verlassen den Server-Prozess, nicht den Browser → CSP irrelevant
+
+### Production-Ready Assessment
+**READY** — keine Critical oder High Bugs. Die zwei Low-Bugs betreffen Embedding-Span-Gruppierung im Langfuse-Dashboard, haben keinen Einfluss auf Funktionalität oder den primären Eval-Use-Case (der korrekt funktioniert, weil der Runner traceCtx immer weitergibt).
 
 ## Deployment
 _To be added by /deploy_

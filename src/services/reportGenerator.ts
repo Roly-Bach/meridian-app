@@ -1,6 +1,7 @@
 import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
+import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import type {
   ReportData,
   ReportKnowledgeObject,
@@ -14,6 +15,8 @@ async function generateExecutiveSummary(
   interview: { employee_name: string; employee_role: string | null; department: string },
   knowledgeObjects: { type: string; content: Record<string, unknown> }[],
   processSteps: { title: string; description: string | null }[],
+  interviewId: string,
+  traceCtx?: TraceCtx,
 ): Promise<string> {
   try {
     const model = resolveModel(process.env.INTERVIEW_MODEL)
@@ -33,6 +36,12 @@ async function generateExecutiveSummary(
       system: 'Du bist ein KI-Assistent für Meridian. Schreibe eine präzise deutsche Zusammenfassung eines Mitarbeiter-Interviews zur Prozessdokumentation.',
       prompt: `Schreibe eine Executive Summary (genau 2–4 Sätze, auf Deutsch) für einen Beratungsbericht basierend auf diesen Interview-Erkenntnissen:\n\n${context}\n\nDie Zusammenfassung soll die Rolle des Mitarbeiters, seine Kernaufgaben und die wichtigsten Erkenntnisse kompakt beschreiben.`,
       maxOutputTokens: 300,
+      experimental_telemetry: buildTraceMetadata('reportGenerator.generateExecutiveSummary', {
+        interviewId,
+        model: process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite',
+        environment: 'prod',
+        ...traceCtx,
+      }),
     })
 
     return text.trim()
@@ -44,7 +53,7 @@ async function generateExecutiveSummary(
 
 // ─── Main data loader ─────────────────────────────────────────────────────────
 
-export async function generateReportData(interviewId: string): Promise<ReportData | null> {
+export async function generateReportData(interviewId: string, traceCtx?: TraceCtx): Promise<ReportData | null> {
   const supabase = getSupabaseAdmin()
 
   const [interviewResult, processStepsResult, knowledgeObjectsResult] = await Promise.all([
@@ -89,6 +98,8 @@ export async function generateReportData(interviewId: string): Promise<ReportDat
     interview,
     knowledgeObjects,
     processSteps,
+    interviewId,
+    traceCtx,
   )
 
   return {

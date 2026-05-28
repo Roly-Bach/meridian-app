@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { generateEmbedding } from './embeddings'
 import { resolveModel } from '@/lib/llm-provider'
 import { cosineSim } from './processClustering'
+import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 
 export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool' | 'role'
 
@@ -14,7 +15,7 @@ export interface RawExtraction {
   source_quote: string
 }
 
-interface TurnTranscript {
+export interface TurnTranscript {
   user_input: string
   agent_response: string
 }
@@ -76,11 +77,13 @@ export async function extractAndEmbed({
   workspaceId,
   turnId,
   transcript,
+  traceCtx,
 }: {
   interviewId: string
   workspaceId: string
   turnId: string
   transcript: TurnTranscript[]
+  traceCtx?: TraceCtx
 }): Promise<RawExtraction[]> {
   if (transcript.length === 0) return []
 
@@ -94,6 +97,12 @@ export async function extractAndEmbed({
       system: EXTRACTION_SYSTEM_PROMPT,
       prompt: buildExtractionPrompt(transcript),
       maxOutputTokens: 2000,
+      experimental_telemetry: buildTraceMetadata('extraction.extractAndEmbed', {
+        interviewId,
+        model: process.env.EXTRACTION_MODEL ?? 'google/gemini-3.1-flash-lite',
+        environment: 'prod',
+        ...traceCtx,
+      }),
     })
 
     const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
@@ -121,7 +130,7 @@ export async function extractAndEmbed({
     }
 
     const embeddingInput = `${item.type}: ${JSON.stringify(item.content)}`
-    const embedding = await generateEmbedding(embeddingInput)
+    const embedding = await generateEmbedding(embeddingInput, traceCtx ?? { interviewId })
 
     const { error } = await supabase.from('knowledge_objects').insert({
       interview_id: interviewId,

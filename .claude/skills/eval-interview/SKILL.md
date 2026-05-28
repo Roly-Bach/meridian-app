@@ -1,256 +1,199 @@
 ---
 name: eval-interview
 description: Führt einen vollständigen Eval-Lauf des Interview-Agenten mit einer synthetischen Persona durch.
-argument-hint: "<persona: buchhalter | vertriebler | it-support>"
+argument-hint: "<persona: buchhalter | vertriebler | it-support> [model: google/gemini-3.5-flash]"
 user-invocable: true
 ---
 
 # Eval-Interview Skill
 
 ## Zweck
-Führt einen vollständigen Eval-Lauf des Interview-Agenten mit einer synthetischen Persona durch.
-Claude Code übernimmt die Persona und antwortet inline auf Agent-Turns — kein separater API-Call, kein Tester-Modell.
+
+Führt einen vollständigen Eval-Lauf des Interview-Agenten durch. Seit PROJ-13 (2026-05-28) läuft der Lauf vollständig automatisiert via `runner.ts` — kein manueller curl-Loop, kein Claude-as-Persona. Der Runner erstellt den Interview-Record, simuliert die Persona mit einem LLM (Tester-Modell) und schreibt alle Spans in Langfuse. Dieser Skill orchestriert den Aufruf und führt danach die Befundanalyse durch.
 
 ## Voraussetzungen
-- Dev-Server läuft: `npm run dev` auf `localhost:3000`
-- Supabase MCP ist verbunden (seit 2026-05-22 Standard)
-- Kein `TEST_INTERVIEW_TOKEN` o.ä. nötig — der Skill legt alles selbst an
+
+- `EVAL_WORKSPACE_ID` in `.env.local` gesetzt (seit 2026-05-28 bereits gesetzt)
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` in `.env.local` gesetzt
+- Supabase MCP verbunden (für Post-Run-Analyse)
+- Dev-Server NICHT nötig — der Runner läuft direkt via tsx, kein localhost
 
 ## Aufruf
+
 ```
 /eval-interview <persona>
+/eval-interview <persona> <model>
 ```
-`<persona>` = `buchhalter` | `vertriebler` | `it-support`
+
+- `<persona>` = `buchhalter` | `vertriebler` | `it-support`
+- `<model>` = optional, z.B. `google/gemini-3.5-flash` (Default: `google/gemini-3.1-flash-lite`)
 
 ---
 
 ## Schritt-für-Schritt-Ablauf
 
-### Schritt 1: Persona lesen
+### Schritt 1: Persona-Datei lesen
 
-Lese die Persona-Datei mit dem Read-Tool:
+Lese die Persona-Datei um PASS-Kriterien ableiten zu können:
 - `buchhalter` → `src/services/__evals__/interview/personas/buchhalter.ts`
 - `vertriebler` → `src/services/__evals__/interview/personas/vertriebler.ts`
 - `it-support`  → `src/services/__evals__/interview/personas/it-support.ts`
 
-Extrahiere aus der Datei:
+Extrahiere:
 - `identity.name`, `identity.role`, `identity.department`
-- `processKnowledge.processes[].name` (für `focus_topics`)
-- `processKnowledge` vollständig (für Persona-Antworten im Loop)
-- `style` (für Antwortton und Verbosity)
+- `processKnowledge.processes[].name` (erwartete Schritte, für PASS-Kriterien)
 
-### Schritt 2: Interview-Record anlegen
+### Schritt 2: Runner starten
 
-Erstelle einen neuen Interview-Record via Supabase MCP. Nutze die `interviews`-Tabelle mit folgendem expliziten Feld-Mapping:
-
-```sql
-INSERT INTO interviews (
-  workspace_id,
-  employee_name,
-  employee_role,
-  department,
-  focus_topics,
-  status,
-  access_token,
-  token_expires_at,
-  max_duration_minutes
-) VALUES (
-  '<workspace_id>',           -- aus der ersten Workspace-Zeile in der DB holen
-  '<identity.name>',
-  '<identity.role>',
-  '<identity.department>',
-  ARRAY['<process_1_name>', '<process_2_name>'],  -- aus processKnowledge.processes[].name
-  'created',
-  gen_random_uuid(),
-  NOW() + INTERVAL '7 days',
-  30
-)
-RETURNING id, access_token;
-```
-
-Hole die Workspace-ID vorher:
-```sql
-SELECT id FROM workspaces LIMIT 1;
-```
-
-**WICHTIG: Danach sofort die `interview_state`-Row anlegen** (der SQL-INSERT umgeht den API-Endpoint der sie normalerweise erstellt):
-
-```sql
-INSERT INTO interview_state (
-  interview_id,
-  phase,
-  timer_minutes,
-  topics_covered,
-  topics_open
-) VALUES (
-  '<interview.id>',
-  'intro',
-  0,
-  ARRAY[]::text[],
-  ARRAY[]::text[]
-);
-```
-
-Merke dir `interview.id` und `interview.access_token` (= Token) aus dem RETURNING-Ergebnis.
-
-### Schritt 3: Interview starten
-
-**CURL-FORMAT-REGELN (bindend für alle curl-Aufrufe in diesem Skill):**
-- Flags in genau dieser Reihenfolge am Anfang: `curl -s -N --no-buffer -X POST`
-- URL beginnt immer mit `http://localhost:3000/api/`
-- `-H` und `-d` kommen direkt nach der URL, auf derselben Zeile, kein Backslash-Zeilenumbruch
-- Kein `2>&1` und keine Shell-Redirects — das bricht das Permission-Matching
+Baue den Befehl aus den Argumenten:
 
 ```bash
-curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/start -H "Content-Type: application/json" -d '{}'
+LANGFUSE_ENABLED=true INTERVIEW_MODEL=<model> npm run eval:interview <persona>
 ```
 
-Das ist der erste Agent-Turn (`[Turn 1] Agent`). Speichere den gesamten Response-Text als `agentText`.
+Wenn kein Modell angegeben: `INTERVIEW_MODEL=google/gemini-3.1-flash-lite`
 
-Danach: Lese `.eval-last-usage.json` mit dem Read-Tool — speichere als `startUsage`.
+Führe den Befehl aus (timeout 10 Minuten — ein vollständiges Interview dauert 3–7 Min).
 
-Falls curl Connection-Refused meldet: brich ab und teile dem Nutzer mit, dass `npm run dev` gestartet werden muss.
-Falls die Antwort leer ist: Protokolliere als BUG und breche ab.
+**Beide Modelle — Interview-Agent und Tester-Persona — verwenden dieselbe Google AI API** (`GOOGLE_GENERATIVE_AI_API_KEY`). Das Tester-Modell ist per Default `google/gemini-3.1-flash-lite` und kann via `TESTER_MODEL` überschrieben werden. Für Benchmarking-Läufe immer den Tester auf Flash Lite lassen, damit nur der Agent variiert.
 
-### Schritt 4: Eval-Loop (kein festes Turn-Limit — nur Endlosschleifen abfangen)
+Der Runner gibt auf stdout aus:
+- `[eval] persona=<p> model=<m> evalRunId=<uuid>` — merke `evalRunId`
+- `[eval] Interview created: <uuid>` — merke `interviewId`
+- Pro Turn: `[Agent]: <text>` und `[<persona.name>]: <text>`
+- Am Ende: `[eval] Done.` + Langfuse-Session-URL + `eval_run_id`
 
-Ziel: Das Interview vollständig durchführen — von intro über process_loop bis wrap_up und complete_interview.
-**Kein vorzeitiger Abbruch bei register_step oder anderen Tool-Calls** — das Interview soll bis zum natürlichen Ende laufen.
-**Kein künstliches Turn-Limit.** Der Loop läuft bis zum natürlichen Abschluss des Interviews (status='completed'). Nur echte Endlosschleifen oder leere Antworten brechen ab. Sicherheits-Maximum: 35 Turns.
+Notiere `interviewId`, `evalRunId` und die Langfuse-Session-URL aus dem stdout.
 
+Falls der Runner mit Fehler abbricht:
+- `EVAL_WORKSPACE_ID not set` → Setup-Problem, `.env.local` prüfen
+- Supabase-Verbindungsfehler → Supabase-Keys in `.env.local` prüfen
+- LLM-API-Fehler → API-Key oder Modell-Name prüfen
+
+### Schritt 3: Post-Run-Analyse (Supabase MCP)
+
+**Interview-Status:**
+```sql
+SELECT status, created_at, updated_at FROM interviews WHERE id = '<interviewId>';
 ```
-Für jeden Turn N = 1..35:
 
-  a) Generiere Persona-Antwort:
-     - Lies agentText des letzten Agent-Turns
-     - Beantworte als Persona basierend auf processKnowledge
-     - Halte dich STRIKT an processKnowledge — erfinde keine Fakten
-     - Wenn die Frage zu etwas führt, das nicht im processKnowledge steht:
-       antworte ehrlich ("Da müsste ich nachsehen." / "Dazu habe ich gerade keine genauen Zahlen.")
-     - Beachte style.verbosity und style.tendencies für den Antwort-Charakter
-     - Eröffne das Gespräch NIE selbst — antworte nur auf Agent-Turns
-     - Protokolliere: [Turn N] Persona (<name>): "<antwortText>"
-
-  b) Sende Persona-Antwort an den Agenten (KEIN 2>&1):
-     curl -s -N --no-buffer -X POST http://localhost:3000/api/interview/<token>/chat -H "Content-Type: application/json" -d '{"user_input": "<personaAntwort>"}'
-
-     Danach: Lese `.eval-last-usage.json` mit dem Read-Tool.
-     Extrahiere: inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, googleCachedTokens.
-     Falls die Datei nicht existiert oder nicht lesbar: lastUsage = null.
-
-  c) Protokolliere Agent-Antwort:
-     [Turn N+1] Agent: "<agentText>"
-     [Turn N+1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens> googleCached=<googleCachedTokens>
-     (bei lastUsage = null: "[Turn N+1] tokens: n/a")
-
-     Berechne Turn-Kosten (Preise: $1.50/1M Input, $9.00/1M Output):
-     turnCost = (inputTokens / 1_000_000 * 1.50) + (outputTokens / 1_000_000 * 9.00)
-     Addiere turnCost zu runningTotalCost.
-     [Turn N+1] cost: $<turnCost auf 4 Dezimalstellen gerundet>
-
-  d) Prüfe Abbruchbedingungen — NUR diese drei:
-     1. Agent-Response leer (kein sichtbarer Text):
-        Protokolliere: [Turn N+1] Agent: leer — möglicher BUG
-        Brich den Loop ab.
-     2. Agent wiederholt dieselbe Frage 3× identisch:
-        Protokolliere: [FAIL] Agent in Endlosschleife bei Turn N+1
-        Brich den Loop ab.
-     3. interview.status = 'completed' (prüfen via SQL nach jedem Turn):
-        Protokolliere: [PASS] Interview abgeschlossen in Turn N+1
-        Brich den Loop ab.
-
-  e) Prüfe interview.status nach jedem Turn via SQL:
-     SELECT status FROM interviews WHERE id = '<interview.id>';
-     Wenn 'completed': Abbruchbedingung 3 aus d).
+**Slot-Tracker:**
+```sql
+SELECT step_tracker FROM interview_state WHERE interview_id = '<interviewId>';
 ```
+
+Lies `step_tracker` vollständig aus — enthält pro registriertem Schritt:
+- `title`, `status` (`exploring` | `walkthrough` | `done`)
+- `slots`: `frequency_per_month`, `duration_minutes`, `rule_based`, `data_sources`, `error_rate_percent`, `media_breaks` (je `null` oder `{ value, quote, confidence }`)
+
+**Turns (für Transcript-Rekonstruktion):**
+```sql
+SELECT turn_number, user_input, agent_response
+FROM turns WHERE interview_id = '<interviewId>'
+ORDER BY turn_number;
+```
+
+**Extrahierte Wissensobjekte:**
+```sql
+SELECT type, content, source_quote FROM knowledge_objects
+WHERE interview_id = '<interviewId>'
+ORDER BY created_at;
+```
+
+### Schritt 4: PASS/FAIL bestimmen
+
+Ein Eval-Lauf gilt als **PASS** wenn:
+1. `interview.status = 'completed'`
+2. Mindestens 2 Prozessschritte in `step_tracker` mit `status != 'exploring'`
+3. Mindestens 1 Schritt mit allen 4 Pflicht-Slots gefüllt (`frequency_per_month`, `duration_minutes`, `rule_based`, `data_sources`)
+4. Kein Turn mit leerem `agent_response`
+5. Kein Dreiwiederholungsmuster bei Agent-Fragen (visuell aus stdout prüfen)
+
+Ein Eval-Lauf gilt als **FAIL** wenn:
+- `interview.status != 'completed'` nach dem Runner-Ende
+- Kein einziger `register_step`-Call (step_tracker leer)
+- Runner beendet mit non-zero Exit-Code ohne `[eval] Done.`
+- Sicherheits-Maximum 25 Turns (Runner-intern) erreicht ohne Abschluss
+
+**Partial PASS** (dokumentieren, kein Abbruch-Fehler):
+- Interview abgeschlossen, aber < 2 Schritte registriert
+- Interview abgeschlossen, aber Pflicht-Slots unvollständig
+- Lauf vollständig, aber Extraktion fehlgeschlagen (Langfuse zeigt Fehler-Span)
 
 ### Schritt 5: Transcript schreiben
 
-**PFLICHT — immer als erstes ausführen:**
+**PFLICHT — Ordner anlegen:**
 ```bash
 mkdir -p docs/evals/interview/YYYY-MM-DD
 ```
-(YYYY-MM-DD = tagesaktuelles Datum. Ordner existiert bereits → kein Fehler dank `-p`.)
 
-Transcripts gehören **ausschließlich** in diesen Datumsordner. Ablage direkt in `docs/evals/interview/` ist ein Fehler.
-
-Ermittle den Timestamp zum Zeitpunkt des Schreibens:
+Ermittle Timestamp:
 ```bash
 date +"%Y-%m-%d-%H-%M-%S"
 ```
-Dateiname: `YYYY-MM-DD-HH-MM-SS-<persona>.md` — der Timestamp macht jeden Lauf eindeutig, kein Zähler-Suffix nötig.
 
-Schreibe den Transcript nach `docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-<persona>.md`:
-
-Lies vor dem Schreiben die aktuellen Modell-Werte aus `.env.local`:
-```bash
-grep -E "^(INTERVIEW_MODEL|EXTRACTION_MODEL|ENRICHMENT_MODEL)" .env.local
-```
-Fehlender Eintrag → Fallback-Wert `google/gemini-3.1-flash-lite` verwenden.
+Dateiname: `YYYY-MM-DD-HH-MM-SS-<persona>.md`
+Ablage: `docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-<persona>.md`
 
 ```markdown
 ---
-interview_model: <Wert von INTERVIEW_MODEL env, oder "google/gemini-3.1-flash-lite" wenn nicht gesetzt>
-extraction_model: <Wert von EXTRACTION_MODEL env, oder "google/gemini-3.1-flash-lite" wenn nicht gesetzt>
-enrichment_model: <Wert von ENRICHMENT_MODEL env, oder "google/gemini-3.1-flash-lite" wenn nicht gesetzt>
+interview_model: <INTERVIEW_MODEL-Wert>
+tester_model: <TESTER_MODEL-Wert oder "google/gemini-3.1-flash-lite" (default)>
 eval_date: YYYY-MM-DD
 persona: <persona-name>
-interview_id: <id>
-turns_total: <N>
-total_cost_usd: <runningTotalCost auf 4 Dezimalstellen>
-pricing: "$1.50/1M input, $9.00/1M output"
+interview_id: <interviewId>
+eval_run_id: <evalRunId>
+langfuse_session: <Langfuse-Session-URL>
+turns_total: <Anzahl Turns aus DB>
+status: PASS | FAIL | PARTIAL PASS
 ---
 
-[Turn 1] Agent: "<opener>"
-[Turn 1] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens> googleCached=<googleCachedTokens>
-[Turn 1] Persona (<name>): "<antwort>"
-[Turn 2] Agent: "<frage>"
-[Turn 2] tokens: in=<inputTokens> out=<outputTokens> cacheRead=<cacheReadTokens> cacheCreate=<cacheCreationTokens> googleCached=<googleCachedTokens>
-[Turn 2] Persona (<name>): "<antwort>"
+## Gesprächsverlauf
+
+[Turn 1] Agent: "<agent_response>"
+[Turn 1] Persona (<name>): "<user_input>"
+[Turn 2] Agent: "<agent_response>"
+[Turn 2] Persona (<name>): "<user_input>"
 ...
-[PASS / FAIL] <Abschluss-Label mit Begründung>
+[PASS / FAIL / PARTIAL PASS] <Abschluss-Label mit Begründung>
 
-## Token-Usage-Zusammenfassung
+## Slot-Filling-Stand
 
-Preise: $1.50/1M Input-Tokens, $9.00/1M Output-Tokens.
+| Schritt | Status | frequency | duration | rule_based | data_sources | error_rate | media_breaks |
+|---------|--------|-----------|----------|------------|--------------|------------|--------------|
+| <title> | done   | <wert>    | <wert>   | <wert>     | <wert>       | <wert>     | <wert>       |
 
-| Turn | inputTokens | outputTokens | cacheRead | cacheCreate | googleCached | cost_usd |
-|------|-------------|--------------|-----------|-------------|--------------|----------|
-| 1    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     | $<n>     |
-| 2    | <n>         | <n>          | <n/null>  | <n/null>    | <n/null>     | $<n>     |
-| ...  |             |              |           |             |              |          |
-| **Σ** | **<summe>** | **<summe>** | **<summe>** | **<summe>** | **<summe>** | **$<total>** |
+## Extrahierte Wissensobjekte
 
-Caching-Effekt: Turn-1-inputTokens vs. Turn-2-inputTokens (Δ in %, erwarteter Abfall ~60–70% bei Anthropic). Bei Gemini: googleCached > 0 zeigt implizites Caching an.
-
-## Slot-Filling-Stand (aus interview_state.step_tracker)
-<step_tracker JSON oder Tabelle>
+| Typ | Content | Source Quote |
+|-----|---------|--------------|
+| <type> | <content summary> | <source_quote> |
 
 ## Befunde
-<Liste aller beobachteten Auffälligkeiten, Bugs, oder positiven Verhalten>
+
+<Liste aller beobachteten Auffälligkeiten, Regressionen oder positiven Verhalten>
+<Verweise auf Langfuse-Spans wo relevant (via eval_run_id filter)>
 ```
 
 ### Schritt 6: Interview-Record bleibt in DB
 
-**Kein Cleanup.** Der Record bleibt in der Datenbank, damit:
-- Die personalisierte Begrüßung in der App-UI überprüft werden kann
-- Extraktion, Prozessschritt-Anreicherung und Use-Case-Engine auf echten Eval-Daten getestet werden können
+Kein Cleanup. Der Record bleibt für manuelle Nachkontrolle in der App-UI und Pipeline-Tests.
 
 ### Schritt 7: Abschluss-Output
 
-Gib folgenden strukturierten Hinweis aus:
-
 ```
-Eval-Lauf abgeschlossen — <PASS/FAIL>
-Transcript: docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-<persona>.md
-Interview-ID: <id>
-Kosten: $<runningTotalCost> (bei $1.50/1M Input, $9.00/1M Output)
+Eval-Lauf abgeschlossen — <PASS/FAIL/PARTIAL PASS>
+Transcript:    docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-<persona>.md
+Interview-ID:  <interviewId>
+eval_run_id:   <evalRunId>
+Langfuse:      <Session-URL>
 
-Interview in der App einsehen:
-  http://localhost:3000/interview/<token>
+Langfuse MCP-Queries (Beispiele):
+  "Show me the last eval run for persona <persona> with model <model>"
+  "Compare tool-call sequences between two eval runs by eval_run_id"
+  "What was the total token cost for interview session <interviewId>?"
 
 Nächste Schritte (manuelle Pipeline-Tests):
-  → Extraktion triggern:   POST http://localhost:3000/api/interviews/<id>/reextract
   → Prozessschritte prüfen: SELECT * FROM process_steps WHERE interview_id = '<id>';
   → Use Cases prüfen:       SELECT * FROM use_cases WHERE process_step_id IN (
                               SELECT id FROM process_steps WHERE interview_id = '<id>'
@@ -259,32 +202,15 @@ Nächste Schritte (manuelle Pipeline-Tests):
 
 ---
 
-## Pass-Kriterien
+## Modell-Vergleich (primärer Use Case von PROJ-13)
 
-Ein Eval-Lauf gilt als **PASS** wenn:
-1. Der erste Turn im Transcript ist `[Turn 1] Agent:` — nicht `[Turn 1] Persona`
-2. Kein Persona-Text wiederholt sich in zwei aufeinanderfolgenden Turns identisch
-3. Persona-Antworten gehen kontextuell auf die jeweilige Agent-Frage ein (visuell prüfen)
-4. Der Agent registriert mindestens 2 Prozessschritte via `register_step`
-5. Für mindestens 1 Schritt sind alle 3 Pflicht-Slots gefüllt (`frequency_per_month`, `duration_minutes`, `rule_based`)
-6. Das Interview erreicht `status = 'completed'` (complete_interview wird aufgerufen)
+Um zwei Modelle direkt zu vergleichen, führe zwei Läufe mit derselben Persona durch:
 
-Ein Eval-Lauf gilt als **FAIL** wenn:
-- Der Agent eröffnet nicht (erste Antwort leer oder fehlt)
-- Der Agent wiederholt dieselbe Frage 3× hintereinander
-- Turn 35 (Sicherheits-Maximum) erreicht ohne `status = 'completed'`
-- Kein einziger `register_step`-Call über den gesamten Lauf
+```bash
+LANGFUSE_ENABLED=true INTERVIEW_MODEL=google/gemini-3.1-flash-lite npm run eval:interview buchhalter
+LANGFUSE_ENABLED=true INTERVIEW_MODEL=google/gemini-3.5-flash npm run eval:interview buchhalter
+```
 
-**Partial PASS** (dokumentieren, kein Abbruch-Fehler):
-- Weniger als 2 Schritte registriert, aber Interview abgeschlossen
-- Nicht alle Pflicht-Slots gefüllt, aber Interview abgeschlossen
-- Turn 35 erreicht mit mindestens 1 register_step-Call
-
----
-
-## Anti-Halluzinations-Regel
-
-Claude Code MUSS sich beim Spielen der Persona strikt an `processKnowledge` halten:
-- Slot-Werte (Frequenz, Dauer, Fehlerrate) nur nennen wenn sie in `processKnowledge` stehen
-- Bei unbekannten Werten: „Da habe ich gerade keine genaue Zahl" oder „Das weiß ich nicht auswendig"
-- Niemals Prozesse, Tools oder Pain Points erfinden, die nicht in der Persona-Datei stehen
+Dann via Langfuse MCP in Claude Code:
+- `"Compare tool-call sequences between eval_run_id <A> and <B>"`
+- `"Show sessions tagged persona:buchhalter, grouped by model"`
