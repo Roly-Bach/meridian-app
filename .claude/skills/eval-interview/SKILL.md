@@ -48,10 +48,12 @@ Extrahiere:
 Baue den Befehl aus den Argumenten:
 
 ```bash
-LANGFUSE_ENABLED=true INTERVIEW_MODEL=<model> npm run eval:interview <persona>
+INTERVIEW_MODEL=<model> npm run eval:interview <persona>
 ```
 
-Wenn kein Modell angegeben: `INTERVIEW_MODEL=google/gemini-3.1-flash-lite`
+Wenn kein Modell angegeben: ohne Prefix — Runner-Default greift.
+
+`LANGFUSE_ENABLED` wird vom Runner intern auf `true` gesetzt (process.env, prozess-lokal) und kehrt nach Abschluss automatisch auf den `.env.local`-Wert zurück. Kein manuelles Setzen nötig.
 
 Führe den Befehl aus (timeout 10 Minuten — ein vollständiges Interview dauert 3–7 Min).
 
@@ -207,8 +209,8 @@ Nächste Schritte (manuelle Pipeline-Tests):
 Um zwei Modelle direkt zu vergleichen, führe zwei Läufe mit derselben Persona durch:
 
 ```bash
-LANGFUSE_ENABLED=true INTERVIEW_MODEL=google/gemini-3.1-flash-lite npm run eval:interview buchhalter
-LANGFUSE_ENABLED=true INTERVIEW_MODEL=google/gemini-3.5-flash npm run eval:interview buchhalter
+INTERVIEW_MODEL=google/gemini-3.1-flash-lite npm run eval:interview buchhalter
+INTERVIEW_MODEL=google/gemini-3.5-flash npm run eval:interview buchhalter
 ```
 
 Dann via Langfuse MCP in Claude Code:

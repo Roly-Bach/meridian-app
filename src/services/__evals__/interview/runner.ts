@@ -3,8 +3,10 @@
  * Eval runner for interview agent benchmarking (PROJ-13).
  *
  * Usage:
- *   LANGFUSE_ENABLED=true INTERVIEW_MODEL=google/gemini-3.5-flash \
- *     npm run eval:interview buchhalter
+ *   INTERVIEW_MODEL=google/gemini-3.5-flash npm run eval:interview buchhalter
+ *
+ * LANGFUSE_ENABLED is set to true automatically by this runner (process-local).
+ * No manual env var needed. Reverts to .env.local value after the process exits.
  *
  * Requires in .env.local:
  *   EVAL_WORKSPACE_ID=<uuid of a workspace in your local DB>
