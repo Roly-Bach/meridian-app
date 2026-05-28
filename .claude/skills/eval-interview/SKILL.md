@@ -161,19 +161,35 @@ Für jeden Turn N = 1..35:
 
 ### Schritt 5: Transcript schreiben
 
-Stelle sicher, dass das Verzeichnis `docs/evals/interview/YYYY-MM-DD/` (tagesaktuell) existiert (anlegen falls nicht vorhanden).
+**PFLICHT — immer als erstes ausführen:**
+```bash
+mkdir -p docs/evals/interview/YYYY-MM-DD
+```
+(YYYY-MM-DD = tagesaktuelles Datum. Ordner existiert bereits → kein Fehler dank `-p`.)
 
-Prüfe vor dem Schreiben, ob im Tagesordner bereits eine Datei mit demselben Persona-Namen existiert. Die Benennung folgt diesem Schema:
+Transcripts gehören **ausschließlich** in diesen Datumsordner. Ablage direkt in `docs/evals/interview/` ist ein Fehler.
+
+Prüfe danach, ob im Tagesordner bereits eine Datei mit demselben Persona-Namen existiert:
+```bash
+ls docs/evals/interview/YYYY-MM-DD/
+```
+Benennung:
 - Erste Datei des Tages für diese Persona: `YYYY-MM-DD-<persona>.md` (kein Suffix)
 - Jede weitere: `YYYY-MM-DD-<persona>-1.md`, `YYYY-MM-DD-<persona>-2.md`, usw. (aufsteigend, beginnend bei `-1`)
 
-Konkret: `ls docs/evals/interview/YYYY-MM-DD/` vor dem Schreiben ausführen, vorhandene Dateien mit Muster `YYYY-MM-DD-<persona>*.md` zählen und Suffix entsprechend wählen.
-
 Schreibe den Transcript nach `docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-<persona>[suffix].md`:
+
+Lies vor dem Schreiben die aktuellen Modell-Werte aus `.env.local`:
+```bash
+grep -E "^(INTERVIEW_MODEL|EXTRACTION_MODEL|ENRICHMENT_MODEL)" .env.local
+```
+Fehlender Eintrag → Fallback-Wert `google/gemini-3.1-flash-lite` verwenden.
 
 ```markdown
 ---
-interview_model: <Wert von INTERVIEW_MODEL env, oder "default" wenn nicht gesetzt>
+interview_model: <Wert von INTERVIEW_MODEL env, oder "google/gemini-3.1-flash-lite" wenn nicht gesetzt>
+extraction_model: <Wert von EXTRACTION_MODEL env, oder "google/gemini-3.1-flash-lite" wenn nicht gesetzt>
+enrichment_model: <Wert von ENRICHMENT_MODEL env, oder "google/gemini-3.1-flash-lite" wenn nicht gesetzt>
 eval_date: YYYY-MM-DD
 persona: <persona-name>
 interview_id: <id>

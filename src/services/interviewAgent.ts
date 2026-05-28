@@ -233,11 +233,6 @@ Turn 1: Offene Frage — niemals vorab bekannte oder konfigurierte Prozesse im e
 Richtig: "Erzähl mir kurz: Was sind deine Hauptaufgaben und wie sieht ein typischer Arbeitstag bei dir aus?"
 Falsch: "Ich würde gerne mit der Rechnungsprüfung starten — wie läuft das bei dir ab?"
 
-Ab Turn 2: Beginne mit dem inhaltlichen Kern — dem ersten Wort der Reaktion oder Frage.
-Richtig: "Die Rechnungsprüfung ist ein guter Einstieg, da du sie täglich machst — wie viele Rechnungen bearbeitest du pro Monat?"
-Richtig: "90 Rechnungen im Schnitt — wie lange sitzt du typischerweise an einer, über alle Fälle gerechnet?"
-Falsch: "Hallo Andreas, schön dass du dir die Zeit nimmst. Das klingt nach einem zeitintensiven Prozess..."
-
 Wechsle nach 1–2 Austauschen zu process_loop via transition_phase.`
   }
 
@@ -261,17 +256,9 @@ Ziel: Pain Points an konkreten Schritten verorten.
     return `## Methodik: walkthrough_step
 Ziel: Den Mitarbeiter durch den Prozessablauf führen und dabei Reibungspunkte, Engpässe und Schmerzpunkte erfassen. Slots werden opportunistisch gefüllt — nur wenn sie im natürlichen Gesprächsfluss spontan entstehen.
 
-**Fünf Leitfragen (über mehrere Turns entfalten — eine Frage pro Turn):**
+Führe durch den Ablauf — eine Frage pro Turn: Einstieg (wie beginnt der Prozess?), dann vorwärts durch die Schritte. Wenn Reibung auftaucht, vertiefe dort direkt (Ursache, Systemabhängigkeiten) — ohne zurückzuspringen. Abschluss: persönliche Priorität ("Wenn du einen Punkt ändern könntest — was wäre das?").
 
-1. Einstieg (variiert je nach rule_based des Schritts):
-   - rule_based=true: "Wie fängt der Prozess konkret an — was ist der erste Schritt?"
-   - rule_based=false: "Wie laufen solche Situationen typischerweise ab — was passiert meistens zuerst?"
-2. Ablauf: "Was passiert als nächstes?" (wiederholt, bis der Prozess endet oder Reibung auftaucht)
-3. Reibung: "Wo hakt es dabei am häufigsten — was kostet die meiste Zeit oder Energie?"
-4. Ursache: "Was macht das an dieser Stelle schwierig — ein bestimmtes System, eine fehlende Information, eine Abhängigkeit?"
-5. Persönliche Priorität: "Wenn du einen Punkt an diesem Prozess ändern könntest — was wäre das?"
-
-Folge der Erzählung — wenn der Mitarbeiter bei Schritt 2 bereits Reibungspunkte nennt, vertiefe dort direkt (Schritt 4), ohne zurückzuspringen.
+Einstieg je nach rule_based: bei true → "Was ist der erste Schritt?", bei false → "Wie läuft das typischerweise ab — was passiert meistens zuerst?"
 
 **Direkte Slot-Fragen verboten:**
 In dieser Phase niemals direkt fragen: "Wie viele [Einheiten] pro Monat?", "Wie lange dauert das?",
@@ -299,11 +286,6 @@ Bei Duration/Frequency: record_slot mit Konfidenz-Feld setzen:
 qualifier setzen wenn Persona eine Einschränkung macht ("nie gemessen", "Sonderfälle länger", "variiert stark").
 
 **Spannen-Pflicht:** Wenn Persona eine Spanne nennt (z.B. "zwei bis drei Tage"), erst Mittelwert bestätigen lassen: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser, wenn du an einen typischen Fall denkst?"
-
-**Exception-Klassifikation:**
-Wenn der Mitarbeiter eine Ausnahme oder einen Sonderfall beschreibt — erkennbar an Phrasen wie
-"aber wenn", "nur wenn", "normalerweise schon, aber", "Sonderfall", "meistens geht das, außer" —
-ist das ein friction_point auf dem aktuellen Prozess, kein eigenständiger Prozess.
 
 Falsch: register_step("Rechnungsprüfung bei fehlender Bestellreferenz")
 Richtig: update_walkthrough_data mit friction_points=["Bestellreferenz fehlt: manuelle Suche in drei Systemen, bis zu 60min"] und friction_tools=["ERP", "E-Mail", "Archive"]
@@ -354,7 +336,7 @@ Default-Fragen für fehlende Slots:
     return `## Methodik: coverage_check
 Ziel: Fehlende Pflicht-Slots aller Schritte nachfüllen.
 
-PFLICHT-PRÜFUNG VOR DEM START: Sind alle Fokusthemen im Schritt-Tracker registriert und haben mindestens einen Walkthrough-Durchgang? Falls ein Fokusthema fehlt: sofort transition_phase zurück zu process_loop — kein Slot-Filling ohne vorherigen Walkthrough. Erst wenn alle Fokusthemen exploriert wurden, darf coverage_check starten.
+Voraussetzung: Alle Fokusthemen haben mindestens einen Walkthrough-Durchgang. Falls ein Fokusthema fehlt: transition_phase zurück zu process_loop.
 
 - Coverage-Check läuft intern. Kein "lass mich kurz prüfen", kein "ich möchte sicherstellen". Kein sichtbarer Übergangskommentar.
 - Nach enter_coverage_check: direkt fehlende Werte in natürlichem Kontext nachfragen, ohne Ankündigung.
@@ -367,18 +349,9 @@ PFLICHT-PRÜFUNG VOR DEM START: Sind alle Fokusthemen im Schritt-Tracker registr
   return `## Methodik: wrap_up
 Ziel: Interview geordnet abschließen.
 
-Abschluss-Sequenz (exakt in dieser Reihenfolge):
-1. Puffer-Satz: "Ich glaube, wir haben die wichtigsten Abläufe gut zusammen."
-2. Abschlussfrage: "Gibt es noch Prozesse oder Tätigkeiten, die wir nicht besprochen haben?"
-3. Antwort abwarten.
-4. Auswerten: Neuer Prozess → direkt aufnehmen und explorieren (kein Erlaubnis-Fragen). Keine neuen Inhalte → complete_interview.
-5. Abschluss-Turn: kurze Verabschiedung, keine inhaltliche Frage.
+Stelle eine offene Abschlussfrage ("Gibt es noch Prozesse oder Tätigkeiten, die wir nicht besprochen haben?"). Warte auf Antwort. Neuer Prozess → direkt aufnehmen via register_step und explorieren, kein Erlaubnis-Fragen. Keine neuen Inhalte → complete_interview aufrufen, dann kurze Verabschiedung.
 
-Kein "Danke" vor der Abschlussfrage. Keine zweite Abschlussrunde.
-
-Neuer Prozess in wrap_up: Sobald der Mitarbeiter in der Wrap-up-Phase einen Prozess oder eine Tätigkeit nennt, die noch nicht im Schritt-Tracker registriert ist, gilt das als Explorations-Signal — unabhängig davon, ob gerade die Abschlussfrage gestellt wurde. Reaktion: Direkt aufnehmen und explorieren — kein Erlaubnis-Fragen ("Sollen wir den noch kurz mit aufnehmen?" ist verboten). Richtig: "Erzähl kurz, wie [Prozess] bei euch abläuft." Einzige Ausnahme: Der Mitarbeiter signalisiert selbst, dass er die Details gerade nicht parat hat — dann separaten Termin anbieten und Interview ohne diesen Prozess abschließen.
-
-Slot-Audit vor complete_interview: Prüfe den Schritt-Tracker — hat jeder Schritt frequency_per_month, duration_minutes und rule_based gefüllt? Fehlende Werte in einem Turn nachfragen. Kann der Mitarbeiter nicht liefern: complete_interview trotzdem aufrufen.`
+Kein "Danke" vor der Abschlussfrage. Keine zweite Abschlussrunde.`
 }
 
 // ─── Few-shot examples for walkthrough_step (D6) ─────────────────────────────
@@ -577,11 +550,21 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
 
           const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
 
-          // Deduplicate: case-insensitive title match
+          // Deduplicate: exact case-insensitive OR substring match (catches "Reisekostenabrechnung" vs "Reisekostenabrechnung nach Dienstreisen")
           const normalizedTitle = title.trim().toLowerCase()
-          const exists = current.some((s) => s.title.trim().toLowerCase() === normalizedTitle)
-          if (exists) {
-            return { success: true, deduplicated: true, message: 'Schritt bereits vorhanden' }
+          const duplicate = current.find((s) => {
+            const existing = s.title.trim().toLowerCase()
+            return existing === normalizedTitle || existing.includes(normalizedTitle) || normalizedTitle.includes(existing)
+          })
+          if (duplicate) {
+            return {
+              success: true,
+              deduplicated: true,
+              matched_title: duplicate.title,
+              message: `Schritt bereits vorhanden als "${duplicate.title}" — nutze diesen Titel für record_slot`,
+              step_tracker: current,
+              existing_step_titles: current.map((s) => s.title),
+            }
           }
 
           const newEntry: StepEntry = {
@@ -890,6 +873,7 @@ export function createInterviewStream(opts: AgentStreamOptions) {
 
   return streamText({
     model,
+    temperature: 0.5,
     system: systemPrompt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: messages as any,
