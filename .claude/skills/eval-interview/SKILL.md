@@ -174,15 +174,13 @@ mkdir -p docs/evals/interview/YYYY-MM-DD
 
 Transcripts gehören **ausschließlich** in diesen Datumsordner. Ablage direkt in `docs/evals/interview/` ist ein Fehler.
 
-Prüfe danach, ob im Tagesordner bereits eine Datei mit demselben Persona-Namen existiert:
+Ermittle den Timestamp zum Zeitpunkt des Schreibens:
 ```bash
-ls docs/evals/interview/YYYY-MM-DD/
+date +"%Y-%m-%d-%H-%M-%S"
 ```
-Benennung:
-- Erste Datei des Tages für diese Persona: `YYYY-MM-DD-<persona>.md` (kein Suffix)
-- Jede weitere: `YYYY-MM-DD-<persona>-1.md`, `YYYY-MM-DD-<persona>-2.md`, usw. (aufsteigend, beginnend bei `-1`)
+Dateiname: `YYYY-MM-DD-HH-MM-SS-<persona>.md` — der Timestamp macht jeden Lauf eindeutig, kein Zähler-Suffix nötig.
 
-Schreibe den Transcript nach `docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-<persona>[suffix].md`:
+Schreibe den Transcript nach `docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-<persona>.md`:
 
 Lies vor dem Schreiben die aktuellen Modell-Werte aus `.env.local`:
 ```bash
@@ -244,7 +242,7 @@ Gib folgenden strukturierten Hinweis aus:
 
 ```
 Eval-Lauf abgeschlossen — <PASS/FAIL>
-Transcript: docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-<persona>[suffix].md
+Transcript: docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-<persona>.md
 Interview-ID: <id>
 Kosten: $<runningTotalCost> (bei $1.50/1M Input, $9.00/1M Output)
 
