@@ -1,6 +1,6 @@
 # PROJ-13: LLM Observability & Tracing
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-21
 **Last Updated:** 2026-05-28
 **Type:** Feature
@@ -387,16 +387,26 @@ Alle 5 KI-Service-Dateien instrumentiert (optional `traceCtx?: TraceCtx`):
 **READY** — keine Critical oder High Bugs. Die zwei Low-Bugs betreffen Embedding-Span-Gruppierung im Langfuse-Dashboard, haben keinen Einfluss auf Funktionalität oder den primären Eval-Use-Case (der korrekt funktioniert, weil der Runner traceCtx immer weitergibt).
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-05-28
+**Production URL:** https://meridian-app-tau.vercel.app
+**Commit:** 91748d9
+**Vercel Deployment:** dpl_HrKhGe9ruHzBCMiGiUeQvXDL3sFN
+
+| Gate | Status | Notiz |
+|------|--------|-------|
+| G1 Static | pass | Build + tsc sauber |
+| G2 Tests | pass | 231/231 nach processEnrichment-Fix (fix(PROJ-20): source_quote) |
+| G3 Sandbox | skipped | rein server-seitig, kill-switch default off, kein Risiko |
+| G4 Permissions | pass | keine neuen Tabellen/Endpoints; Langfuse-Keys server-only |
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
+| Spec-Genauigkeit | High — Abweichungen minor: useCaseEngine (pure Heuristik, kein LLM), @langfuse/otel SpanProcessor statt LangfuseExporter; beide dokumentiert |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: S (1-2 Tage) |
+| Größte Überraschung | Eval-Runner und MCP-Server entstanden umfangreicher als geplant — eval-Logik grundlegend angepasst, MCP-Server automatisch mitangelegt ohne vorherige Absprache |
+| Vorgeschlagene Regeländerung | Pre-existing Test-Failures sofort fixen, nicht als "pre-existing" markieren und weiterziehen. Vor jedem Deploy müssen 100 % Tests grün sein. |
 | Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Häufigste Fehlerkategorie im Loop | Test (processEnrichment source_quote Mismatch) |
