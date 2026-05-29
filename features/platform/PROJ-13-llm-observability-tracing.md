@@ -252,12 +252,14 @@ Der AI SDK übergibt `experimental_telemetry.metadata` als OTEL-Span-Attribute. 
 
 | gewünschtes Langfuse-Konzept | OTEL-Attribut-Key in `metadata` |
 |---|---|
-| Session-Gruppierung (= `interview_id`) | `langfuse.session_id` |
-| User-ID | `langfuse.user_id` |
-| Tags (Persona, Modell, Env) | `langfuse.tags` (JSON-Array als String) |
-| Trace-ID-Override | `langfuse.trace_id` |
+| Session-Gruppierung (= `interview_id`) | `session.id` ← OTel-Standard, kein `langfuse.`-Prefix |
+| User-ID | `user.id` |
+| Tags (Persona, Modell, Env) | `langfuse.trace.tags` (JSON-Array als String) |
+| Trace-Name | `langfuse.trace.name` |
 
 `buildTraceMetadata()` in `_telemetry.ts` muss diese Keys exakt setzen. Falsch gewählte Keys landen als unstrukturierte Custom-Attribute und erscheinen nicht in Langfuse-Sessions.
+
+> **Post-Deploy-Korrektur 2026-05-28:** Die ursprünglich dokumentierten Keys `langfuse.session_id` und `langfuse.tags` waren falsch — sie stammen nicht aus `@langfuse/core`'s `LangfuseOtelSpanAttributes`-Enum. Korrigiert auf `session.id` / `langfuse.trace.tags`. Verifiziert via `node -e` gegen installierte `@langfuse/core` v5.x.
 
 #### F3 — Eval-Runner ist ein separater Node-Prozess
 
@@ -294,7 +296,7 @@ Der gleiche Durchstich gilt für alle Service-Ketten, in denen ein Service einen
 ### Neue Dateien
 - `src/lib/langfuse.ts` — OTEL NodeSDK Singleton mit `LangfuseSpanProcessor`. Kill-Switch greift vor SDK-Instanziierung (per F4).
 - `src/instrumentation.ts` — Next.js Hook, ruft `initLangfuse()` einmal pro Serverprozess auf (per F1).
-- `src/services/_telemetry.ts` — `buildTraceMetadata(fnName, TraceCtx)`. Gibt `{ isEnabled: false }` zurück wenn `LANGFUSE_ENABLED !== 'true'`. Setzt `langfuse.session_id = interviewId` und `langfuse.tags` als JSON-Array-String (per F2).
+- `src/services/_telemetry.ts` — `buildTraceMetadata(fnName, TraceCtx)`. Gibt `{ isEnabled: false }` zurück wenn `LANGFUSE_ENABLED !== 'true'`. Setzt `session.id = interviewId` und `langfuse.trace.tags` als JSON-Array-String (per F2; korrigiert 2026-05-28).
 - `src/services/__evals__/interview/runner.ts` — Standalone Eval-Runner. Lädt `.env.local` via `dotenv`, initialisiert Langfuse, erstellt Interview in Supabase, führt vollständigen Agent-Loop mit LLM-simulierter Persona durch, gibt Langfuse-Session-URL aus.
 
 ### Modifizierte Service-Dateien
@@ -345,7 +347,7 @@ Alle 5 KI-Service-Dateien instrumentiert (optional `traceCtx?: TraceCtx`):
 - [x] reportGenerator.ts — `generateText` mit `experimental_telemetry`
 
 #### Trace-Struktur
-- [x] Interview-Ablauf → Trace mit `interview_id` als `langfuse.session_id` (interviewAgent immer korrekt)
+- [x] Interview-Ablauf → Trace mit `interview_id` als `session.id` (korrigiert 2026-05-28: war `langfuse.session_id`, Sessions blieben leer)
 - [x] Tool-Calls → Kind-Spans (AI SDK OTEL-Integration liefert das automatisch)
 - [x] reportGenerator ohne interview_id → eigenständige Trace (traceCtx optional)
 - [~] Embedding-Calls als Session-Kind: **partiell** — siehe L1, L2 unten
@@ -356,7 +358,7 @@ Alle 5 KI-Service-Dateien instrumentiert (optional `traceCtx?: TraceCtx`):
 - [x] Setzt Tags: `persona`, `model`, `environment=eval`, `eval_run_id`
 - [x] `traceCtx` wird an createInterviewStream, extractAndEmbed durchgereicht
 - [x] Eval-Run erscheint als Session mit `interviewId` als Präfix
-- [x] Langfuse-Session-URL auf stdout: `<base>/project/sessions?search=<interviewId>`
+- [x] Langfuse-Links auf stdout: `interview_id` + `eval_run_id` immer; direkte URLs wenn `LANGFUSE_PROJECT_URL` gesetzt (korrigiert 2026-05-28: Pfad `/project/sessions` war ohne Org/Projekt-ID → "Project Not Found")
 - [ ] EVAL_WORKSPACE_ID nicht gesetzt (User-Hinweis — Setup-Schritt, kein Code-Bug)
 
 #### Non-Blocking & Robustness
@@ -410,3 +412,35 @@ Alle 5 KI-Service-Dateien instrumentiert (optional `traceCtx?: TraceCtx`):
 | Vorgeschlagene Regeländerung | Pre-existing Test-Failures sofort fixen, nicht als "pre-existing" markieren und weiterziehen. Vor jedem Deploy müssen 100 % Tests grün sein. |
 | Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
 | Häufigste Fehlerkategorie im Loop | Test (processEnrichment source_quote Mismatch) |
+
+## Post-Deploy-Fixes (2026-05-28)
+
+Entdeckt via Eval-Run (Buchhalter-Persona, `gemini-3.1-flash-lite`).
+
+### Fix 1 — Embedding-Provider-Fallback auf OpenAI (`embeddings.ts`)
+
+**Problem:** `jinaClient = createOpenAI({ apiKey: process.env.JINA_API_KEY })` war auf Modulebene. ESM/tsx wertet alle static imports vor dem Modulbody aus → `dotenv.config()` im Runner lief zu spät → `JINA_API_KEY` war beim Import noch `undefined` → `@ai-sdk/openai` fiel auf `OPENAI_API_KEY` zurück → `LoadAPIKeyError`. 100 % Embedding-Fehlerrate im Eval.
+
+**Fix:** `jinaClient` und `embeddingModel` lazy innerhalb `generateEmbedding` initialisiert (call-time statt import-time).
+
+**Datei:** `src/services/embeddings.ts`
+
+### Fix 2 — Langfuse-Session-Attribute-Namen falsch (`_telemetry.ts`)
+
+**Problem:** `buildTraceMetadata` setzte `'langfuse.session_id'` und `'langfuse.tags'`. Diese Keys existieren nicht in `@langfuse/core`'s `LangfuseOtelSpanAttributes`-Enum und werden vom OTLP-Backend ignoriert → Sessions blieben leer, Tags nicht gesetzt.
+
+**Korrekte Keys** (verifiziert gegen `@langfuse/core` v5 CJS-Bundle):
+- Session: `session.id` (OTel-Standard-Attribut)
+- Tags: `langfuse.trace.tags`
+
+**Fix:** Beide Keys in `buildTraceMetadata` korrigiert.
+
+**Datei:** `src/services/_telemetry.ts`
+
+### Fix 3 — Eval-Runner-URL ohne Org/Projekt-ID (`runner.ts`)
+
+**Problem:** Runner loggte `<base>/project/sessions?search=<id>` — kein Org- oder Projekt-Segment → Langfuse zeigte "Project Not Found".
+
+**Fix:** Runner loggt jetzt `interview_id` und `eval_run_id` direkt. Wenn `LANGFUSE_PROJECT_URL=https://cloud.langfuse.com/<org-id>/<project-id>` in `.env.local` gesetzt, werden korrekte direkte Links ausgegeben.
+
+**Datei:** `src/services/__evals__/interview/runner.ts`

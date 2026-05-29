@@ -346,10 +346,16 @@ async function main() {
   await flushLangfuse().catch(() => {})
   await new Promise(r => setTimeout(r, 3000))
 
-  const langfuseBase = process.env.LANGFUSE_BASE_URL ?? 'https://cloud.langfuse.com'
   console.log(`\n[eval] Done.`)
-  console.log(`  Langfuse session: ${langfuseBase}/project/sessions?search=${interviewId}`)
-  console.log(`  eval_run_id: ${evalRunId}`)
+  console.log(`  interview_id (session): ${interviewId}`)
+  console.log(`  eval_run_id:            ${evalRunId}`)
+  const projectUrl = process.env.LANGFUSE_PROJECT_URL
+  if (projectUrl) {
+    console.log(`  Langfuse session:       ${projectUrl}/sessions/${interviewId}`)
+    console.log(`  Langfuse traces:        ${projectUrl}/traces?search=${interviewId}`)
+  } else {
+    console.log(`  (Set LANGFUSE_PROJECT_URL=https://cloud.langfuse.com/<org>/<project> in .env.local for direct links)`)
+  }
 }
 
 main().catch(err => {

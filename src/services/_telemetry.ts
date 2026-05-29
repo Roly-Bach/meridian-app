@@ -30,8 +30,8 @@ export function buildTraceMetadata(fnName: string, ctx: TraceCtx) {
     isEnabled: true as const,
     functionId: fnName,
     metadata: {
-      ...(sessionId ? { 'langfuse.session_id': sessionId } : {}),
-      ...(tags.length > 0 ? { 'langfuse.tags': JSON.stringify(tags) } : {}),
+      ...(sessionId ? { 'session.id': sessionId } : {}),
+      ...(tags.length > 0 ? { 'langfuse.trace.tags': JSON.stringify(tags) } : {}),
     } as Record<string, string>,
   }
 }

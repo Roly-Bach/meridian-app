@@ -81,20 +81,27 @@ Tracing via Langfuse. Kill-switch: `LANGFUSE_ENABLED=false` (default) — set to
 
 ### Langfuse MCP — Claude Code queries
 
-Add to `.claude/settings.local.json` (gitignored, each dev uses their own read key):
+Zwei MCP Server, beide global in `~/.claude.json` registriert (kein Eintrag in `settings.local.json` nötig):
 
-```json
-{
-  "mcpServers": {
-    "langfuse": {
-      "command": "npx",
-      "args": ["-y", "@langfuse/mcp", "--public-key", "pk-lf-...", "--secret-key", "sk-lf-...", "--base-url", "https://cloud.langfuse.com"]
-    }
-  }
-}
+| Server | Transport | Zweck | Tool-Präfix |
+|--------|-----------|-------|-------------|
+| `langfuse` | HTTP (offiziell) | Prompt Management | `mcp__langfuse__*` |
+| `langfuse-data` | stdio (Community `langfuse-mcp`) | Traces, Sessions, Eval, Metrics | `mcp__langfuse_data__*` |
+
+**Für Eval-Abfragen immer `langfuse-data` nutzen** — nur dieser Server hat `listTraces`, `getTrace`, `listSessions`, `listDatasetRuns`, `getDailyMetrics` etc.
+
+Einrichtung (einmalig, `--scope user`):
+```bash
+# 1. Offizieller HTTP-Server (Prompt Management)
+TOKEN=$(echo -n "pk-lf-...:sk-lf-..." | base64 -w 0)
+claude mcp add --transport http --header "Authorization: Basic $TOKEN" --scope user langfuse https://cloud.langfuse.com/api/public/mcp
+
+# 2. Community stdio-Server (Trace-Abfragen) — Env-Vars danach manuell in ~/.claude.json eintragen
+claude mcp add --scope user langfuse-data npx -- -y langfuse-mcp
+# env: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
-Example queries:
+Example queries (nutzen `langfuse-data`):
 - "Show me the last eval run for persona buchhalter with model gemini-3.5-flash"
 - "Compare tool-call sequences between two eval runs by eval_run_id"
 - "What was the total token cost for interview session <interview_id>?"
