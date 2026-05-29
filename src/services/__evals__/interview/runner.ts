@@ -184,6 +184,8 @@ async function main() {
   const interviewId: string = interview.id
   console.log(`[eval] Interview created: ${interviewId}`)
 
+  await supabase.from('interviews').update({ status: 'active' }).eq('id', interviewId)
+
   // Create initial interview_state
   await supabase.from('interview_state').insert({
     interview_id: interviewId,

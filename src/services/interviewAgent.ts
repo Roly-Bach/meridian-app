@@ -241,9 +241,12 @@ Antworten nicht kommentieren — direkt zur nächsten Frage übergehen.`
 
   // wrap_up
   return `## Methodik: wrap_up
-Stelle die Abschlussfrage: "Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?"
-Neuer Prozess → direkt aufnehmen via register_step und explorieren.
-Keine neuen Inhalte → Interview abschließen und kurz verabschieden.`
+PFLICHT — stelle genau diese Abschlussfrage, bevor du dich verabschiedest:
+"Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?"
+Verabschiede dich NIEMALS ohne diese Frage gestellt und beantwortet zu haben.
+Nach der Antwort:
+- Neuer Prozess → register_step aufrufen, explorieren — kein Abschluss.
+- Keine neuen Inhalte → kurz verabschieden.`
 }
 
 // ─── Canonical Example (Iteration 1: 6 examples → 1) ─────────────────────────

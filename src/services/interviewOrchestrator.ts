@@ -58,10 +58,22 @@ function allMandatorySlotsFilled(tracker: StepEntry[]): boolean {
 function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content: string }[]): boolean {
   const recentAssistant = history.filter((t) => t.role === 'assistant').slice(-3)
   return recentAssistant.some(
-    (t) =>
-      t.content.toLowerCase().includes('letzte arbeitswoche') ||
-      t.content.toLowerCase().includes('nicht erwähnt haben') ||
-      t.content.toLowerCase().includes('wiederkehrend'),
+    (t) => {
+      const lc = t.content.toLowerCase()
+      return (
+        lc.includes('letzte arbeitswoche') ||
+        lc.includes('nicht erwähnt haben') ||
+        lc.includes('wiederkehrend') ||
+        lc.includes('nicht besprochen') ||
+        lc.includes('nicht beleuchtet') ||
+        lc.includes('noch nicht erwähnt') ||
+        lc.includes('noch nicht besprochen') ||
+        lc.includes('noch nicht angesprochen') ||
+        lc.includes('fehlt noch') ||
+        lc.includes('gibt es noch etwas') ||
+        lc.includes('gibt es etwas') && lc.includes('nicht')
+      )
+    },
   )
 }
 
@@ -110,6 +122,10 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       return 'coverage_check'
 
     case 'wrap_up': {
+      // If agent registered new steps after asking the closing question → back to exploration
+      if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'walkthrough_step'
+      if (hasStepInStatus(ctx.stepTracker, 'walkthrough')) return 'slot_completion'
+
       // Trigger B: Analyst confirmed (Iteration 3) or text heuristic (Iteration 2)
       const questionAsked =
         analystSuggestion?.wrap_up_question_asked === true || closingQuestionWasAsked(ctx.history)
@@ -144,6 +160,11 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
 
   // Trigger B: Soft-Confirm (wrap_up question asked + user has responded)
   if (ctx.phase === 'wrap_up') {
+    // Don't complete if new steps were registered (new content introduced at wrap-up)
+    if (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')) {
+      return { shouldComplete: false, reason: null }
+    }
+
     const questionAsked =
       analystSuggestion?.wrap_up_question_asked === true || closingQuestionWasAsked(ctx.history)
 
