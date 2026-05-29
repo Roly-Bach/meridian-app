@@ -60,19 +60,8 @@ export async function clusterProcessSteps(workspaceId: string): Promise<void> {
   const unclustered = (unclusteredRaw ?? []) as unknown as ProcessStepRow[]
   if (unclustered.length === 0) return
 
-  // Load existing clusters for this workspace
-  const { data: existingClusters, error: clusterErr } = await supabase
-    .from('process_clusters')
-    .select('id, canonical_title, canonical_description, participant_count, participants, representative_embedding')
-    .eq('workspace_id', workspaceId)
-
-  if (clusterErr) {
-    console.error('[processClustering] Failed to fetch clusters:', clusterErr.message)
-    return
-  }
-
-  // Work with a mutable copy so newly created clusters are visible within this run
-  const clusters: ClusterRow[] = (existingClusters ?? []) as unknown as ClusterRow[]
+  // Work with a local map so newly created clusters are visible for participant updates within this run
+  const clusterParticipants = new Map<string, { count: number; participants: ClusterRow['participants'] }>()
 
   for (const step of unclustered) {
     if (!step.embedding) continue
@@ -85,45 +74,61 @@ export async function clusterProcessSteps(workspaceId: string): Promise<void> {
       process_step_id: step.id,
     }
 
-    // Find best matching cluster
-    let bestCluster: ClusterRow | null = null
-    let bestSim = 0
+    // Find best matching cluster via pgvector index
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: matchRows, error: rpcErr } = await (supabase as any).rpc('match_process_cluster', {
+      query_embedding: step.embedding,
+      workspace_id: workspaceId,
+      similarity_threshold: SIMILARITY_THRESHOLD,
+    })
 
-    for (const cluster of clusters) {
-      if (!cluster.representative_embedding) continue
-      const sim = cosineSim(step.embedding, cluster.representative_embedding)
-      if (sim > bestSim) {
-        bestSim = sim
-        bestCluster = cluster
-      }
+    if (rpcErr) {
+      console.error('[processClustering] RPC match_process_cluster failed:', rpcErr.message)
+      continue
     }
 
-    if (bestCluster && bestSim >= SIMILARITY_THRESHOLD) {
-      // Extend existing cluster
-      const updatedParticipants = [...bestCluster.participants, participantEntry]
-      const updatedCount = bestCluster.participant_count + 1
+    const bestMatch = (matchRows as Array<{ cluster_id: string; similarity: number }> | null)?.[0] ?? null
+
+    if (bestMatch) {
+      const clusterId = bestMatch.cluster_id
+      const local = clusterParticipants.get(clusterId)
+
+      let updatedParticipants: ClusterRow['participants']
+      let updatedCount: number
+
+      if (local) {
+        updatedParticipants = [...local.participants, participantEntry]
+        updatedCount = local.count + 1
+      } else {
+        const { data: clusterRow, error: fetchErr } = await supabase
+          .from('process_clusters')
+          .select('participant_count, participants')
+          .eq('id', clusterId)
+          .single()
+
+        if (fetchErr || !clusterRow) {
+          console.error('[processClustering] Failed to fetch cluster for update:', fetchErr?.message)
+          continue
+        }
+        updatedParticipants = [...(clusterRow.participants as ClusterRow['participants']), participantEntry]
+        updatedCount = (clusterRow.participant_count as number) + 1
+      }
 
       const { error: updateErr } = await supabase
         .from('process_clusters')
-        .update({
-          participant_count: updatedCount,
-          participants: updatedParticipants,
-        })
-        .eq('id', bestCluster.id)
+        .update({ participant_count: updatedCount, participants: updatedParticipants })
+        .eq('id', clusterId)
 
       if (updateErr) {
         console.error('[processClustering] Cluster update failed:', updateErr.message)
         continue
       }
 
-      // Update local state
-      bestCluster.participant_count = updatedCount
-      bestCluster.participants = updatedParticipants
+      clusterParticipants.set(clusterId, { count: updatedCount, participants: updatedParticipants })
 
-      // Link step to cluster
       const { error: linkErr } = await supabase
         .from('process_steps')
-        .update({ cluster_id: bestCluster.id })
+        .update({ cluster_id: clusterId })
         .eq('id', step.id)
       if (linkErr) {
         console.error('[processClustering] Step link failed:', linkErr.message, 'step:', step.id)
@@ -149,7 +154,7 @@ export async function clusterProcessSteps(workspaceId: string): Promise<void> {
         continue
       }
 
-      clusters.push(newCluster as ClusterRow)
+      clusterParticipants.set(newCluster.id, { count: 1, participants: [participantEntry] })
 
       // Link step to new cluster
       const { error: linkErr } = await supabase

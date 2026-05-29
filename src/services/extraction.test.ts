@@ -26,7 +26,7 @@ vi.mock('./embeddings', () => ({
   generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
 }))
 
-import { extractAndEmbed } from './extraction'
+import { extractAndEmbed, levenshtein } from './extraction'
 import { generateText } from 'ai'
 import { generateEmbedding } from './embeddings'
 
@@ -257,5 +257,60 @@ describe('extractAndEmbed', () => {
     expect(mockInsert).toHaveBeenCalledTimes(1)
     const insertCall = mockInsert.mock.calls[0][0]
     expect(insertCall.embedding).toBeNull()
+  })
+})
+
+// ─── levenshtein (dedup title-distance gate) ──────────────────────────────────
+
+describe('levenshtein', () => {
+  it('returns 0 for identical strings', () => {
+    expect(levenshtein('rechnung prüfen', 'rechnung prüfen')).toBe(0)
+  })
+
+  it('returns 0 for two empty strings', () => {
+    expect(levenshtein('', '')).toBe(0)
+  })
+
+  it('equals length of the other string when one side is empty (fallback case)', () => {
+    expect(levenshtein('', 'abc')).toBe(3)
+    expect(levenshtein('abc', '')).toBe(3)
+  })
+
+  it('returns 1 for a single-character substitution', () => {
+    expect(levenshtein('cat', 'bat')).toBe(1)
+  })
+
+  it('returns 1 for a single-character insertion', () => {
+    expect(levenshtein('cat', 'cats')).toBe(1)
+  })
+
+  it('returns 1 for a single-character deletion', () => {
+    expect(levenshtein('cats', 'cat')).toBe(1)
+  })
+
+  it('is symmetric', () => {
+    expect(levenshtein('kitten', 'sitting')).toBe(levenshtein('sitting', 'kitten'))
+  })
+
+  it('matches the classic kitten/sitting distance of 3', () => {
+    expect(levenshtein('kitten', 'sitting')).toBe(3)
+  })
+
+  // Dedup gate: distance <= 8 -> merge ALLOWED
+  it('near-duplicate process step titles have distance <= 8 (merge allowed)', () => {
+    expect(levenshtein('rechnung prüfen', 'rechnungen prüfen')).toBeLessThanOrEqual(8)
+    expect(levenshtein('bestellung erfassen', 'bestellung erfasst')).toBeLessThanOrEqual(8)
+  })
+
+  // Dedup gate: distance > 8 -> merge BLOCKED
+  it('semantically different titles have distance > 8 (merge blocked)', () => {
+    expect(levenshtein('rechnung prüfen', 'urlaubsantrag genehmigen')).toBeGreaterThan(8)
+  })
+
+  it('honours the > 8 boundary exactly used by the dedup gate', () => {
+    // exactly 8 substitutions -> NOT > 8 -> allowed
+    expect(levenshtein('aaaaaaaa', 'bbbbbbbb')).toBe(8)
+    // 9 substitutions -> > 8 -> blocked
+    expect(levenshtein('aaaaaaaaa', 'bbbbbbbbb')).toBe(9)
   })
 })
