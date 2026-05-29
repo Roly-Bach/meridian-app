@@ -1,6 +1,8 @@
 # PROJ-8: Interview-Design Optimierung (Re-Architektur)
 
-## Status: Deployed
+> **Superseded by PROJ-22 (2026-05-29).** Der Single-Call-Agent mit Negative Constraints, Anti-Anchoring-Block und sechs Walkthrough-Few-Shot-Beispielen aus PROJ-8 wird durch die Dual-Loop-Architektur (ADR-011 / PROJ-22) ersetzt. Die in PROJ-8 etablierte Phasen-Methodologie (intro → process_loop → walkthrough_step → slot_completion → coverage_check → wrap_up) bleibt konzeptionell bestehen, wandert aber aus dem Prompt in den Orchestrator. Spec bleibt als historischer Kontext erhalten.
+
+## Status: Deployed (Superseded by PROJ-22)
 **Created:** 2026-05-20
 **Last Updated:** 2026-05-24
 **Deployed:** 2026-05-24

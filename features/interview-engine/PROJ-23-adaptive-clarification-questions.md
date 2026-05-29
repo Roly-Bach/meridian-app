@@ -1,4 +1,4 @@
-# PROJ-21: Adaptive Clarification Questions
+# PROJ-23: Adaptive Clarification Questions
 
 ## Status: Planned
 **Type:** Extension
@@ -10,7 +10,7 @@
 **Last Updated:** 2026-05-29
 
 ## Dependencies
-- **Hard Prerequisite: PROJ-22** (ADR-011 Dual-Loop Implementierung) — Analyst-Komponente, `produce_briefing`-Schema mit `clarification_cards`, `clarification`-Phase im Orchestrator müssen existieren bevor PROJ-21 gebaut werden kann
+- **Hard Prerequisite: PROJ-22** (ADR-011 Dual-Loop Implementierung) — Analyst-Komponente, `produce_briefing`-Schema mit `clarification_cards`, `clarification`-Phase im Orchestrator müssen existieren bevor PROJ-23 gebaut werden kann
 - Requires: PROJ-2 (Interview Engine Backend) — interview state, phase management, Analyst tool-call pipeline
 - Requires: PROJ-3 (Interview UI) — ChatInterface, ChatInput (wird konditionell ersetzt)
 - Requires: ADR-011 Amendment A (2026-05-29) — `clarification` Phase in State Machine (D4, D12, D3) — implementiert durch PROJ-22

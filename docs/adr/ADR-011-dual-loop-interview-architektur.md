@@ -1,6 +1,6 @@
 # ADR-011: Dual-Loop Architektur für Interview Engine — Talker, Analyst, Orchestrator
 
-**Status:** Proposed (2026-05-28)
+**Status:** Accepted (2026-05-29)
 **Author:** lyas53
 **Repository:** Roly-Bach/meridian-app
 **Auslöser:** Beobachtung schlechter Interview-Qualität bei `gemini-3.5-flash` trotz fähigeren Modells. Research-Bericht `docs/Prompting-Strategien_für_deutsche_Multi-Turn-Agenten.md` (KI-generierter Bericht, Quellen verifiziert).
@@ -71,6 +71,55 @@ ORCHESTRATOR
 ```
 
 Alternativen V2 (Speculative Parallel Merge mit Stream-Korrektur) und V3 (Sequential mit Verstehen-Buffer) wurden verworfen: V2 ist forschungsnah und kaum debuggbar, V3 zerstört Voice-Tauglichkeit. V1 ist die einzige produktionsreife Variante.
+
+**Talker-Input-Komposition (Klärung zu Briefing-Lag):**
+
+Der Talker bekommt pro Turn drei Eingabe-Schichten in einem einzigen Prompt. Wichtig: das Briefing *ersetzt* nicht die User-Antwort, sondern existiert *neben* dem Dialog-Verlauf. Der Talker sieht beides und muss beides berücksichtigen.
+
+```
+System-Prompt (invariant, cacheable):
+  Persona, Tonalität, Format-Regeln, ein Canonical Example.
+
+User-Turn (pro Aufruf neu komponiert):
+  ## Briefing (Planungs-Schicht vom letzten Analyst-Lauf)
+  Ziel: {tactical_goal}
+  Geplante nächste Frage: {suggested_question}
+  {context_note (optional, max 1 Satz)}
+
+  ## Dialog-Verlauf
+  [letzte 3-5 Turns inkl. Agent-Antwort]
+
+  ## Aktueller Beitrag des Mitarbeiters
+  {userInput verbatim}
+
+  ## Aufgabe
+  1. Reagiere kurz und natürlich auf den aktuellen Beitrag.
+  2. Wenn der Beitrag das Ziel bereits beantwortet hat, akzeptiere das
+     und führe mit einer Folgefrage natürlich weiter.
+  3. Andernfalls: stelle die geplante nächste Frage.
+```
+
+**Briefing-Schema (vom Analyst produziert):**
+
+```ts
+type Briefing = {
+  tactical_goal: string             // "Erfasse Dauer pro Rechnung"
+  target_slot: SlotName | null      // optional, für semantische Übereinstimmung
+  suggested_question: string        // "Wie lange sitzt du im Schnitt an einer Rechnung?"
+  context_note: string | null       // optional, max 1 Satz Hinweis
+  wrap_up_question_asked: boolean   // für D12 Soft-Confirm-Completion
+}
+```
+
+**Drei Drift-Szenarien und ihre Schutzmechanismen:**
+
+| Szenario | Mechanismus |
+|---|---|
+| User füllt den im Briefing geplanten Slot proaktiv | Talker-Regel 2 plus `target_slot`-Feld zur semantischen Übereinstimmung |
+| User wechselt das Thema | Briefing ist Plan, nicht Zwang. Talker folgt dem Gesprächspartner, Analyst registriert Switch im nächsten Lauf |
+| Briefing ist eine Iteration alt (Catch-up-Fall) | Orchestrator tauscht stale Briefing gegen **Phase-Default-Briefing**. Talker verlässt sich auf Dialog-Verlauf und sein Sprachverständnis |
+
+Garantie: Im schlechtesten Fall (Briefing komplett unbrauchbar) operiert der Talker als gewöhnlicher Chat-Agent über dem Dialog-Verlauf. Das ist immer mindestens so gut wie der heutige Single-Call-Stand, weil das Briefing additiv ist und niemals den Dialog-Verlauf maskiert.
 
 ### D3 — Tool-Migration: Strikte Boundaries pro Komponente
 
