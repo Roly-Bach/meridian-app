@@ -6,6 +6,7 @@ export interface TraceCtx {
   persona?: string
   model?: string
   environment?: 'prod' | 'eval'
+  component?: 'talker' | 'analyst' | 'orchestrator'
 }
 
 /**
@@ -24,6 +25,7 @@ export function buildTraceMetadata(fnName: string, ctx: TraceCtx) {
     ctx.model ? `model:${ctx.model}` : null,
     `environment:${ctx.environment ?? 'prod'}`,
     ctx.evalRunId ? `eval_run_id:${ctx.evalRunId}` : null,
+    ctx.component ? `component:${ctx.component}` : null,
   ].filter((t): t is string => t !== null)
 
   return {

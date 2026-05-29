@@ -300,54 +300,8 @@ describe('Tool Handlers', () => {
     })
   })
 
-  // ── enter_coverage_check ────────────────────────────────────────────────────
-
-  describe('enter_coverage_check', () => {
-    it('transitions phase to coverage_check and returns missing mandatory slots', async () => {
-      const tracker = [makeStep({ title: 'Schritt A' })]
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.enter_coverage_check as any).execute({})
-
-      expect(result.success).toBe(true)
-      expect(result.phase).toBe('coverage_check')
-      expect(result.missing_mandatory_slots).toHaveLength(4)
-      expect(result.all_covered).toBe(false)
-    })
-
-    it('reports all_covered true when all mandatory slots are filled', async () => {
-      const tracker = [makeFilledStep({ title: 'Schritt A' })]
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.enter_coverage_check as any).execute({})
-
-      expect(result.success).toBe(true)
-      expect(result.all_covered).toBe(true)
-      expect(result.missing_mandatory_slots).toHaveLength(0)
-    })
-  })
+  // enter_coverage_check removed in Iteration 2 (PROJ-22) — Orchestrator handles phase transitions.
+  // Coverage check logic is tested in interviewOrchestrator.test.ts.
 
   // ── update_walkthrough_data ─────────────────────────────────────────────────
 

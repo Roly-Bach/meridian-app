@@ -12,18 +12,45 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
 }))
 
-vi.mock('@/services/interviewAgent', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/interviewAgent')>()
+vi.mock('@/services/interviewTalker', () => ({
+  createTalkerStream: vi.fn().mockReturnValue({
+    toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
+  }),
+}))
+
+vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/interviewOrchestrator')>()
   return {
     ...actual,
-    createInterviewStream: vi.fn().mockReturnValue({
-      toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
-    }),
+    checkLifecycle: vi.fn().mockReturnValue({ shouldComplete: false, reason: null }),
+    decideNextPhase: vi.fn().mockImplementation((ctx: import('@/services/interviewOrchestrator').OrchestratorContext) => ctx.phase),
+  }
+})
+
+vi.mock('@/services/interviewAnalyst', () => ({
+  runAnalyst: vi.fn().mockResolvedValue({}),
+  runAnalystCatchup: vi.fn().mockResolvedValue({}),
+}))
+
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>()
+  return {
+    ...actual,
+    after: vi.fn().mockImplementation(() => {}),
   }
 })
 
 vi.mock('@/services/extraction', () => ({
   extractAndEmbed: vi.fn().mockResolvedValue(undefined),
+  deduplicateKnowledgeObjects: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/services/processEnrichment', () => ({
+  createProcessStepsFromTracker: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/services/processClustering', () => ({
+  clusterProcessSteps: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/ratelimit', () => ({
@@ -192,6 +219,11 @@ describe('POST /api/interview/[token]/chat', () => {
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
+      // analyst_status='processing' non-blocking write
+      .mockReturnValueOnce({
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(200)
@@ -199,8 +231,8 @@ describe('POST /api/interview/[token]/chat', () => {
     expect(updateMock).toHaveBeenCalledWith({ status: 'active' })
   })
 
-  it('passes step_tracker from state to createInterviewStream context', async () => {
-    const { createInterviewStream } = await import('@/services/interviewAgent')
+  it('passes step_tracker from state to createTalkerStream context', async () => {
+    const { createTalkerStream } = await import('@/services/interviewTalker')
 
     const stepTracker = [
       {
@@ -218,6 +250,8 @@ describe('POST /api/interview/[token]/chat', () => {
       },
     ]
 
+    const updateMockNoop = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
+
     mockAdminFrom
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
@@ -234,6 +268,8 @@ describe('POST /api/interview/[token]/chat', () => {
             token_expires_at: FUTURE_EXPIRY,
             max_duration_minutes: 30,
             created_at: new Date().toISOString(),
+            analyst_status: 'idle',
+            next_briefing: null,
           },
           error: null,
         }),
@@ -253,10 +289,12 @@ describe('POST /api/interview/[token]/chat', () => {
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
+      // analyst_status='processing' non-blocking write
+      .mockReturnValueOnce(updateMockNoop)
 
     await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
 
-    expect(createInterviewStream).toHaveBeenCalledWith(
+    expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
           stepTracker,
@@ -268,7 +306,7 @@ describe('POST /api/interview/[token]/chat', () => {
   })
 
   it('injects missing slots into context when phase is coverage_check', async () => {
-    const { createInterviewStream } = await import('@/services/interviewAgent')
+    const { createTalkerStream } = await import('@/services/interviewTalker')
 
     const stepTracker = [
       {
@@ -285,6 +323,8 @@ describe('POST /api/interview/[token]/chat', () => {
         },
       },
     ]
+
+    const updateMockNoop = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
 
     mockAdminFrom
       .mockReturnValueOnce({
@@ -302,6 +342,8 @@ describe('POST /api/interview/[token]/chat', () => {
             token_expires_at: FUTURE_EXPIRY,
             max_duration_minutes: 30,
             created_at: new Date().toISOString(),
+            analyst_status: 'idle',
+            next_briefing: null,
           },
           error: null,
         }),
@@ -319,10 +361,12 @@ describe('POST /api/interview/[token]/chat', () => {
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
+      // analyst_status='processing' non-blocking write
+      .mockReturnValueOnce(updateMockNoop)
 
     await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
 
-    expect(createInterviewStream).toHaveBeenCalledWith(
+    expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
           phase: 'coverage_check',
@@ -337,7 +381,7 @@ describe('POST /api/interview/[token]/chat', () => {
   })
 
   it('injects missing slots into context when phase is slot_completion', async () => {
-    const { createInterviewStream } = await import('@/services/interviewAgent')
+    const { createTalkerStream } = await import('@/services/interviewTalker')
 
     const stepTracker = [
       {
@@ -355,6 +399,8 @@ describe('POST /api/interview/[token]/chat', () => {
       },
     ]
 
+    const updateMockNoop = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
+
     mockAdminFrom
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
@@ -371,6 +417,8 @@ describe('POST /api/interview/[token]/chat', () => {
             token_expires_at: FUTURE_EXPIRY,
             max_duration_minutes: 30,
             created_at: new Date().toISOString(),
+            analyst_status: 'idle',
+            next_briefing: null,
           },
           error: null,
         }),
@@ -388,10 +436,12 @@ describe('POST /api/interview/[token]/chat', () => {
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
+      // analyst_status='processing' non-blocking write
+      .mockReturnValueOnce(updateMockNoop)
 
     await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
 
-    expect(createInterviewStream).toHaveBeenCalledWith(
+    expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
           phase: 'slot_completion',

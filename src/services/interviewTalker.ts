@@ -1,0 +1,115 @@
+import { resolveModel } from '@/lib/llm-provider'
+import { streamText } from 'ai'
+import { buildTraceMetadata, type TraceCtx } from './_telemetry'
+import {
+  buildDynamicContext,
+  type InterviewContext,
+  type TurnMessage,
+  type AnalystBriefing,
+} from './interviewAgent'
+
+// ─── Talker Stream (Iteration 3) ──────────────────────────────────────────────
+// Text-only streaming response. No tools — pure conversation.
+// Analyst runs in parallel via after() in chat/route.ts.
+
+export interface TalkerStreamOptions {
+  context: InterviewContext
+  history: TurnMessage[]
+  briefing?: AnalystBriefing | null
+  isReconnect?: boolean
+  isStart?: boolean
+  userInput?: string
+  onFinish?: (text: string) => Promise<void>
+  traceCtx?: TraceCtx
+}
+
+const STATIC_PROMPT = `Du bist KI-Interviewer. Erhebe implizites Prozesswissen von Mitarbeitern strukturiert.
+Führe das Gespräch auf Deutsch — sachlich, direkt, präzise.
+Sprich den Mitarbeiter mit Du an.
+
+Phasenmodell: intro → process_loop → walkthrough_step → slot_completion → coverage_check → wrap_up
+
+<turn_format>
+Ab Turn 2: Maximal ein kurzer Reaktionssatz (optional), dann eine direkte Frage — sonst nichts.
+Turn 1 (Opener): Kontext + offene Einstiegsfrage.
+Abschluss-Turn: kurze Verabschiedung.
+Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
+Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
+Spannen konkretisieren: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser für einen typischen Fall?"
+</turn_format>
+
+`
+
+export function createTalkerStream(opts: TalkerStreamOptions) {
+  // INTERVIEW_TALKER_MODEL overrides the shared INTERVIEW_MODEL for the Talker component
+  const modelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
+  const model = resolveModel(modelString)
+
+  const dynamicPart = buildDynamicContext(opts.context, opts.briefing)
+
+  type PlainMessage = { role: 'user' | 'assistant'; content: string }
+  type RichMessage = { role: 'user' | 'assistant'; content: string | Array<{ type: 'text'; text: string }> }
+
+  const baseMessages: PlainMessage[] = opts.isReconnect
+    ? [
+        ...opts.history.map((t) => ({ role: t.role, content: t.content })),
+        { role: 'user' as const, content: 'Ich bin wieder da, können wir weitermachen?' },
+      ]
+    : opts.isStart
+    ? [{ role: 'user' as const, content: 'Bitte starte das Interview.' }]
+    : opts.history.map((t) => ({ role: t.role, content: t.content }))
+
+  // Dynamic context prepended to last user turn (keeps static prompt cacheable)
+  let messages: RichMessage[]
+  if (baseMessages.length > 0) {
+    messages = baseMessages.map((msg, idx) => {
+      if (idx === baseMessages.length - 1 && msg.role === 'user') {
+        return {
+          role: 'user' as const,
+          content: [
+            { type: 'text' as const, text: dynamicPart + '\n\n---\n\n' },
+            { type: 'text' as const, text: msg.content },
+          ],
+        }
+      }
+      return msg
+    })
+  } else {
+    messages = [{ role: 'user', content: `${dynamicPart}\n\n---\n\nBitte starte das Interview.` }]
+  }
+
+  return streamText({
+    model,
+    temperature: 0.5,
+    system: STATIC_PROMPT,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: messages as any,
+    // NO TOOLS — Talker is text-only (ADR-011 D3)
+    experimental_telemetry: buildTraceMetadata('interview.talker', {
+      interviewId: opts.context.interviewId,
+      model: modelString,
+      environment: 'prod',
+      component: 'talker',
+      ...opts.traceCtx,
+    }),
+    onFinish: opts.onFinish
+      ? async ({ text, usage, providerMetadata }) => {
+          const meta = providerMetadata as Record<string, unknown> | undefined
+          const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
+          const details = usage.inputTokenDetails as Record<string, unknown> | undefined
+          const usageData = {
+            model: modelString,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadTokens: (details?.cacheReadTokens as number | undefined) ?? null,
+            cacheCreationTokens:
+              (details?.cacheWriteTokens as number | undefined) ??
+              (anthropicMeta?.cacheCreationInputTokens as number | undefined) ??
+              null,
+          }
+          console.log('[token-usage] talker', usageData)
+          await opts.onFinish!(text)
+        }
+      : undefined,
+  })
+}

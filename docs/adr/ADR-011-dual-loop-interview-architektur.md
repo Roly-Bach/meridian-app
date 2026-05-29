@@ -296,6 +296,85 @@ Empfohlene Reihenfolge der Implementierung (jede Iteration mit Eval-Gate gegen P
 
 ---
 
+## Amendment A — Clarification Phase (2026-05-29)
+
+**Auslöser:** PROJ-21 (Adaptive Clarification Questions) erfordert neue Phase `clarification` zwischen `wrap_up` und `completed`, um strukturierte Slot-Vervollständigung in den Interview-Flow zu integrieren.
+
+### A-D4 — Phase Logic erweitert
+
+`decideNextPhase` erhält zwei neue Transitionen:
+
+```ts
+case 'wrap_up':
+  if (completionConfirmed(ctx)) {
+    return ctx.analystBriefing?.clarification_cards?.length
+      ? 'clarification'
+      : 'completed'
+  }
+  return 'wrap_up'
+
+case 'clarification':
+  return allClarificationsAnswered(ctx) ? 'completed' : 'clarification'
+```
+
+Transition `wrap_up → clarification` nur wenn:
+1. Analyst hat `clarification_cards` im letzten Briefing generiert (mind. 1 Card), UND
+2. Completion-Bedingung (Trigger B oder Hard-Stop) ist erfüllt.
+
+Transition `clarification → completed` wenn alle Cards im `interview_state.clarification_answers` beantwortet sind. Orchestrator validiert — nicht der Client.
+
+### A-D12 — Completion Lifecycle angepasst
+
+Trigger B (Soft-Confirm) führt nicht mehr direkt zu `completed`, sondern zu `clarification` wenn Cards vorhanden:
+
+```
+Trigger B erfüllt:
+  → Analyst hat clarification_cards? → Phase = 'clarification'
+  → Analyst hat keine clarification_cards? → Phase = 'completed' (wie bisher)
+
+Trigger A (Hard-Stop Timer):
+  → Unverändert: direkt 'completed', keine Clarification-Phase
+     Begründung: Hard-Stop bedeutet Zeitlimit überschritten — keine weiteren Interaktionen zumutbar.
+```
+
+### A-D3 — Analyst produce_briefing Schema-Erweiterung
+
+`produce_briefing` structured output erhält neues optionales Feld:
+
+```ts
+interface AnalystBriefing {
+  // ... bestehende Felder ...
+  wrap_up_question_asked?: boolean
+  clarification_cards?: ClarificationCard[]
+}
+
+interface ClarificationCard {
+  process_step_id: string       // Referenz auf process_steps.id
+  step_title: string            // Anzeige-Label in UI
+  question: string              // z.B. "Wie oft läuft dieser Schritt?"
+  options: string[]             // 2–4 Klick-Optionen, letzte immer "Andere"
+  slot_key: string              // Welches knowledge_object-Feld befüllt wird
+                                // z.B. "frequency", "duration_minutes", "error_rate"
+}
+```
+
+Analyst generiert `clarification_cards` ausschließlich wenn:
+- Aktuelle Phase = `wrap_up`, UND
+- `wrap_up_question_asked = true`, UND
+- Es `process_steps` mit `slot_key`-Feldern `= null` gibt (frequency, duration_minutes, error_rate, rule_based)
+
+Max. 8 Cards pro Interview (Analyst priorisiert nach Use-Case-Relevanz der fehlenden Slots).
+
+### Neue Komponenten (PROJ-21)
+
+| Komponente | Datei | Beschreibung |
+|---|---|---|
+| Clarification UI | `src/components/interview/ClarificationCards.tsx` | Ersetzt Chat-Input wenn Phase = `clarification` |
+| Clarification API | `src/app/api/interview/clarification/route.ts` | POST — empfängt Klick-Antworten, schreibt in `knowledge_objects` |
+| State-Erweiterung | `interview_state.clarification_answers` | JSONB `{ [card_index]: string }` |
+
+---
+
 ## Verweise
 
 - Research-Bericht: `docs/Prompting-Strategien_für_deutsche_Multi-Turn-Agenten.md`

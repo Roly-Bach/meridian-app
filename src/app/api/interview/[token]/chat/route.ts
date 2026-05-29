@@ -1,17 +1,22 @@
+import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import {
-  createInterviewStream,
   computeMissingMandatorySlots,
   type Phase,
   type TurnMessage,
   type StepEntry,
+  type AnalystBriefing,
 } from '@/services/interviewAgent'
+import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/services/interviewOrchestrator'
+import { createTalkerStream } from '@/services/interviewTalker'
+import { runAnalyst, runAnalystCatchup } from '@/services/interviewAnalyst'
 import { extractAndEmbed, deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 import { clusterProcessSteps } from '@/services/processClustering'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
+import { buildTraceMetadata } from '@/services/_telemetry'
 import type { Database } from '@/lib/database.types'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
@@ -25,8 +30,8 @@ const ChatInputSchema = z.object({
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // ─── POST /api/interview/[token]/chat ─────────────────────────────────────────
-// Public endpoint — authenticated via token only.
-// Streams the agent response as a text stream.
+// Iteration 2: Orchestrator decides phase (deterministic TypeScript).
+// Iteration 3: Talker streams text-only; Analyst runs in background via after().
 
 export async function POST(
   req: Request,
@@ -55,11 +60,11 @@ export async function POST(
   // ── Load interview ──────────────────────────────────────────────────────────
   const { data: rawInterview, error: fetchError } = await supabase
     .from('interviews')
-    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes, created_at')
+    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes, created_at, analyst_status, next_briefing')
     .eq('access_token', token)
     .single()
 
-  const interview = rawInterview as InterviewRow | null
+  const interview = rawInterview as (InterviewRow & { analyst_status?: string | null; next_briefing?: AnalystBriefing | null }) | null
 
   if (fetchError || !interview) {
     return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
@@ -121,21 +126,130 @@ export async function POST(
     timerMinutes = Math.floor((Date.now() - firstTurnTime) / 60000)
   }
 
-  // ── Compute missing slots for coverage_check and slot_completion phases ─────
-  const missingSlotsForCoverageCheck =
-    currentPhase === 'coverage_check' || currentPhase === 'slot_completion'
-      ? computeMissingMandatorySlots(stepTracker)
-      : undefined
-
-  // ── Build conversation history ──────────────────────────────────────────────
+  // ── Build full history (including current user turn) ────────────────────────
   const history: TurnMessage[] = existingTurns.flatMap((t) => [
     { role: 'user' as const, content: t.user_input },
     { role: 'assistant' as const, content: t.agent_response },
   ])
   history.push({ role: 'user', content: user_input })
 
-  // ── Stream agent response ───────────────────────────────────────────────────
-  const stream = createInterviewStream({
+  // ── Read Analyst briefing from previous turn ────────────────────────────────
+  const analystStatus = interview.analyst_status ?? 'idle'
+  const analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
+
+  // ── Iteration 2: Orchestrator decides phase ─────────────────────────────────
+  const orchestratorCtx: OrchestratorContext = {
+    phase: currentPhase,
+    stepTracker,
+    topicsOpen: (state?.topics_open as string[] | null) ?? [],
+    topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+    timerMinutes,
+    maxDurationMinutes: interview.max_duration_minutes ?? 30,
+    historyLength: history.length,
+    history,
+  }
+
+  // Log Orchestrator span
+  const orchTelemetry = buildTraceMetadata('interview.orchestrator', {
+    interviewId: interview.id,
+    environment: 'prod',
+    component: 'orchestrator',
+  })
+  if (orchTelemetry.isEnabled) {
+    console.log('[orchestrator] phase decision', { from: currentPhase, analystStatus })
+  }
+
+  // Check lifecycle (complete interview if Hard-Stop or Soft-Confirm)
+  const lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
+  if (lifecycle.shouldComplete) {
+    await supabase
+      .from('interviews')
+      .update({ status: 'completed', extractions_pending: true })
+      .eq('id', interview.id)
+
+    console.log('[orchestrator] lifecycle complete:', lifecycle.reason)
+
+    // Trigger post-completion tasks fire-and-forget
+    after(async () => {
+      await createProcessStepsFromTracker({ interviewId: interview.id, workspaceId: interview.workspace_id })
+      clusterProcessSteps(interview.workspace_id).catch((err) =>
+        console.error('[chat] post-complete clusterProcessSteps failed:', err),
+      )
+      deduplicateKnowledgeObjects(interview.workspace_id).catch((err) =>
+        console.error('[chat] post-complete deduplicateKnowledgeObjects failed:', err),
+      )
+    })
+
+    // Save farewell turn before returning — Talker stream for farewell message
+    const farewellContext = {
+      interviewId: interview.id,
+      workspaceId: interview.workspace_id,
+      employeeName: interview.employee_name,
+      employeeRole: interview.employee_role,
+      department: interview.department,
+      focusTopics: interview.focus_topics,
+      phase: 'wrap_up' as Phase,
+      timerMinutes,
+      topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+      topicsOpen: (state?.topics_open as string[] | null) ?? [],
+      extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
+      maxDurationMinutes: interview.max_duration_minutes ?? 30,
+      stepTracker,
+    }
+
+    const farewellBriefing: AnalystBriefing = {
+      next_focus: 'Verabschiedung',
+      suggested_question: 'Verabschiede dich kurz und herzlich.',
+    }
+
+    const farewellStream = createTalkerStream({
+      context: farewellContext,
+      history,
+      briefing: farewellBriefing,
+      onFinish: async (agentText) => {
+        if (!agentText) return
+        await supabase.from('turns').insert({
+          interview_id: interview.id,
+          turn_number: nextTurnNumber,
+          user_input,
+          agent_response: agentText,
+        })
+      },
+    })
+    return farewellStream.toTextStreamResponse()
+  }
+
+  // Decide phase for this turn
+  const nextPhaseDecision = decideNextPhase(orchestratorCtx, analystBriefing)
+  // 'completed' means lifecycle.shouldComplete should have caught it above; treat as wrap_up for safety
+  const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
+
+  // Update phase in DB if changed
+  if (orchestratedPhase !== currentPhase) {
+    await supabase
+      .from('interview_state')
+      .update({ phase: orchestratedPhase, updated_at: new Date().toISOString() })
+      .eq('interview_id', interview.id)
+  }
+
+  // ── Compute missing slots for slot_completion / coverage_check ──────────────
+  const missingSlotsForCoverageCheck =
+    orchestratedPhase === 'coverage_check' || orchestratedPhase === 'slot_completion'
+      ? computeMissingMandatorySlots(stepTracker)
+      : undefined
+
+  // ── Catch-up run detection (analyst_status='failed') ───────────────────────
+  const needsCatchup = analystStatus === 'failed'
+
+  // ── Iteration 3: Talker stream (text-only, no tools) ───────────────────────
+
+  // Set analyst_status='processing' (non-blocking write, Orchestrator span)
+  // Non-blocking: set analyst_status='processing' before Talker stream starts
+  void supabase.from('interviews').update({ analyst_status: 'processing' }).eq('id', interview.id).then(() => {}, () => {})
+
+  const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
+
+  const stream = createTalkerStream({
     context: {
       interviewId: interview.id,
       workspaceId: interview.workspace_id,
@@ -143,30 +257,32 @@ export async function POST(
       employeeRole: interview.employee_role,
       department: interview.department,
       focusTopics: interview.focus_topics,
-      phase: currentPhase,
+      phase: orchestratedPhase,
       timerMinutes,
-      topicsCovered: state?.topics_covered ?? [],
-      topicsOpen: state?.topics_open ?? [],
-      extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
+      topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+      topicsOpen: (state?.topics_open as string[] | null) ?? [],
+      extractionsLog: currentLog,
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
       stepTracker,
       missingSlotsForCoverageCheck,
     },
     history,
+    briefing: analystBriefing,
     userInput: user_input,
     onFinish: async (agentText) => {
       if (!agentText) return
 
-      const { data: newTurn, error: turnError } = await supabase.from('turns').insert({
-        interview_id: interview.id,
-        turn_number: nextTurnNumber,
-        user_input,
-        agent_response: agentText,
-      }).select('id').single()
+      const { data: newTurn, error: turnError } = await supabase
+        .from('turns')
+        .insert({
+          interview_id: interview.id,
+          turn_number: nextTurnNumber,
+          user_input,
+          agent_response: agentText,
+        })
+        .select('id')
+        .single()
       if (turnError) console.error('[onFinish] turns insert failed:', turnError.message)
-
-      // Update state immediately (no extraction result needed for state update)
-      const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
 
       const { error: stateError } = await supabase
         .from('interview_state')
@@ -178,40 +294,28 @@ export async function POST(
         .eq('interview_id', interview.id)
       if (stateError) console.error('[onFinish] state update failed:', stateError.message)
 
-      // Failsafe: model sometimes prints [complete_interview] as text instead of
-      // executing the tool. Detect this and set status server-side so the pipeline runs.
-      const agentWroteFarewell = agentText.includes('complete_interview')
-      const ensureCompletedIfFarewell = async () => {
-        if (!agentWroteFarewell) return
-        const { data: ci } = await supabase.from('interviews').select('status').eq('id', interview.id).single()
-        if (ci?.status === 'completed') return
-        await supabase.from('interviews').update({ status: 'completed', extractions_pending: true }).eq('id', interview.id)
-        await supabase.from('interview_state').update({ phase: 'wrap_up', updated_at: new Date().toISOString() }).eq('interview_id', interview.id)
-        console.log('[onFinish] failsafe: set status=completed via text-pattern detection')
-      }
-
-      // Post-completion tasks: process_steps from tracker, clustering, dedup.
+      // Post-completion tasks: fire-and-forget extraction pipeline
       const runPostCompletionTasks = async () => {
         const { data: ci } = await supabase
-          .from('interviews').select('status').eq('id', interview.id).single()
+          .from('interviews')
+          .select('status')
+          .eq('id', interview.id)
+          .single()
         if (ci?.status !== 'completed') return
         await createProcessStepsFromTracker({ interviewId: interview.id, workspaceId: interview.workspace_id })
         clusterProcessSteps(interview.workspace_id).catch((err) =>
-          console.error('[chat] clusterProcessSteps failed:', err)
+          console.error('[chat] clusterProcessSteps failed:', err),
         )
         deduplicateKnowledgeObjects(interview.workspace_id).catch((err) =>
-          console.error('[chat] deduplicateKnowledgeObjects failed:', err)
+          console.error('[chat] deduplicateKnowledgeObjects failed:', err),
         )
       }
 
-      // Fire-and-forget extraction — decoupled from response stream (D8/ADR-006).
-      // extractions_log in subsequent turns may lag one turn; acceptable since the
-      // agent uses the log as a context hint, not a control signal.
-      // Post-completion tasks are chained inside .then() so enrichProcessSteps only
-      // runs after all knowledge_objects for this turn are committed.
+      // extractAndEmbed: post-turn semantic extraction (knowledge_objects)
+      // Continues to run alongside the Analyst's live tracker-pflege (PROJ-20 out of scope)
       if (newTurn?.id) {
         const transcript = [
-          ...existingTurns.map(t => ({ user_input: t.user_input, agent_response: t.agent_response })),
+          ...existingTurns.map((t) => ({ user_input: t.user_input, agent_response: t.agent_response })),
           { user_input, agent_response: agentText },
         ]
         extractAndEmbed({
@@ -219,24 +323,81 @@ export async function POST(
           workspaceId: interview.workspace_id,
           turnId: newTurn.id,
           transcript,
-        }).then(async (newExtractions) => {
-          if (newExtractions.length > 0) {
-            const updatedLog = [...currentLog, ...newExtractions]
-            const { error } = await supabase
-              .from('interview_state')
-              .update({ extractions_log: updatedLog as unknown as import('@/lib/database.types').Json, updated_at: new Date().toISOString() })
-              .eq('interview_id', interview.id)
-            if (error) console.error('[onFinish] extractions_log update failed:', error.message)
-          }
-          await ensureCompletedIfFarewell()
-          await runPostCompletionTasks()
-        }).catch((err) => console.error('[onFinish] extractAndEmbed failed:', err))
+        })
+          .then(async (newExtractions) => {
+            if (newExtractions.length > 0) {
+              const updatedLog = [...currentLog, ...newExtractions]
+              const { error } = await supabase
+                .from('interview_state')
+                .update({
+                  extractions_log: updatedLog as unknown as import('@/lib/database.types').Json,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('interview_id', interview.id)
+              if (error) console.error('[onFinish] extractions_log update failed:', error.message)
+            }
+            await runPostCompletionTasks()
+          })
+          .catch((err) => console.error('[onFinish] extractAndEmbed failed:', err))
       } else {
-        // No turn ID (turn insert failed) — still run completion tasks if needed.
-        await ensureCompletedIfFarewell()
         await runPostCompletionTasks()
       }
     },
+  })
+
+  // ── Iteration 3: Analyst runs in background ─────────────────────────────────
+  after(async () => {
+    try {
+      const analystHistory = history // includes current user_input as last message
+
+      if (needsCatchup && existingTurns.length >= 2) {
+        // Catch-up: previous analyst failed, process two turns at once
+        const prevUserInput = existingTurns[existingTurns.length - 1]?.user_input ?? ''
+        await runAnalystCatchup({
+          context: {
+            interviewId: interview.id,
+            workspaceId: interview.workspace_id,
+            employeeName: interview.employee_name,
+            employeeRole: interview.employee_role,
+            department: interview.department,
+            focusTopics: interview.focus_topics,
+            phase: orchestratedPhase,
+            timerMinutes,
+            topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+            topicsOpen: (state?.topics_open as string[] | null) ?? [],
+            extractionsLog: currentLog,
+            maxDurationMinutes: interview.max_duration_minutes ?? 30,
+            stepTracker,
+          },
+          history: analystHistory,
+          previousUserInput: prevUserInput,
+          traceCtx: { interviewId: interview.id, environment: 'prod' },
+        })
+      } else {
+        await runAnalyst({
+          context: {
+            interviewId: interview.id,
+            workspaceId: interview.workspace_id,
+            employeeName: interview.employee_name,
+            employeeRole: interview.employee_role,
+            department: interview.department,
+            focusTopics: interview.focus_topics,
+            phase: orchestratedPhase,
+            timerMinutes,
+            topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+            topicsOpen: (state?.topics_open as string[] | null) ?? [],
+            extractionsLog: currentLog,
+            maxDurationMinutes: interview.max_duration_minutes ?? 30,
+            stepTracker,
+          },
+          history: analystHistory,
+          traceCtx: { interviewId: interview.id, environment: 'prod' },
+        })
+      }
+    } catch (err) {
+      // runAnalyst already writes analyst_status='failed' on error
+      console.error('[analyst] background run error:', err)
+    }
   })
 
   return stream.toTextStreamResponse()

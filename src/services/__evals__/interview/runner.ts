@@ -32,6 +32,7 @@ import {
   type StepEntry,
   type MissingSlot,
 } from '@/services/interviewAgent'
+import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/services/interviewOrchestrator'
 import { extractAndEmbed, type TurnTranscript, type RawExtraction } from '@/services/extraction'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
@@ -251,16 +252,45 @@ async function main() {
     const dbState = await loadState(interviewId)
     const dbHistory = await loadHistory(interviewId)
 
-    const missingSlotsForCoverageCheck: MissingSlot[] | undefined =
-      dbState.phase === 'coverage_check' || dbState.phase === 'slot_completion'
-        ? computeMissingMandatorySlots(dbState.stepTracker)
-        : undefined
-
-    // Build history for agent: DB turns + current user turn
+    // Build full history (includes current persona response)
     const agentHistory: TurnMessage[] = [
       ...dbHistory,
       { role: 'user', content: personaResponse },
     ]
+
+    // Orchestrator: decide phase and check lifecycle
+    const orchCtx: OrchestratorContext = {
+      phase: dbState.phase,
+      stepTracker: dbState.stepTracker,
+      topicsOpen: dbState.topicsOpen,
+      topicsCovered: dbState.topicsCovered,
+      timerMinutes: dbState.timerMinutes,
+      maxDurationMinutes: 30,
+      historyLength: agentHistory.length,
+      history: agentHistory,
+    }
+
+    const lifecycle = checkLifecycle(orchCtx, null)
+    if (lifecycle.shouldComplete) {
+      await supabase.from('interviews').update({ status: 'completed', extractions_pending: true }).eq('id', interviewId)
+      console.log('\n[eval] Orchestrator: lifecycle complete:', lifecycle.reason)
+      break
+    }
+
+    const nextPhaseDecision = decideNextPhase(orchCtx, null)
+    const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
+
+    if (orchestratedPhase !== dbState.phase) {
+      await supabase
+        .from('interview_state')
+        .update({ phase: orchestratedPhase, updated_at: new Date().toISOString() })
+        .eq('interview_id', interviewId)
+    }
+
+    const missingSlotsForCoverageCheck: MissingSlot[] | undefined =
+      orchestratedPhase === 'coverage_check' || orchestratedPhase === 'slot_completion'
+        ? computeMissingMandatorySlots(dbState.stepTracker)
+        : undefined
 
     // Agent responds
     const agentStream = createInterviewStream({
@@ -271,7 +301,7 @@ async function main() {
         employeeRole: persona.identity.role,
         department: persona.identity.department,
         focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
-        phase: dbState.phase,
+        phase: orchestratedPhase,
         timerMinutes: dbState.timerMinutes,
         topicsCovered: dbState.topicsCovered,
         topicsOpen: dbState.topicsOpen,
@@ -323,21 +353,14 @@ async function main() {
       }).catch(err => console.error('[runner] extractAndEmbed failed:', err))
     }
 
-    // Check for completion
+    // Safety check: Orchestrator may have marked completed via checkLifecycle on a previous turn
     const { data: iv } = await supabase
       .from('interviews')
       .select('status')
       .eq('id', interviewId)
       .single()
     if ((iv as { status: string } | null)?.status === 'completed') {
-      console.log('\n[eval] Interview completed by agent.')
-      break
-    }
-
-    // Failsafe: detect farewell text
-    if (agentText.includes('complete_interview') || agentText.toLowerCase().includes('viel erfolg')) {
-      await supabase.from('interviews').update({ status: 'completed' }).eq('id', interviewId)
-      console.log('\n[eval] Farewell detected — marking completed.')
+      console.log('\n[eval] Interview completed.')
       break
     }
   }
