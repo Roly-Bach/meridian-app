@@ -23,7 +23,7 @@
 | PROJ-5 | Prozessschritt-Anreicherung | Feature | Wissensbank | — | Deployed | → PROJ-20 | P0 | — | — |
 | PROJ-6 | Use Case Identifikation | Epic | Use Case Engine | — | Deployed | [spec](use-case-engine/PROJ-6-use-case-identifikation.md) | P0 | — | — |
 | PROJ-7 | Voice Input (Interview) | Extension | Interview Engine | PROJ-3 | Deployed | [spec](interview-engine/PROJ-7-voice-input.md) | P1 | — | — |
-| PROJ-8 | Interview-Design Optimierung | Revision | Interview Engine | PROJ-2 | Deployed | [spec](interview-engine/PROJ-8-interview-design-optimierung.md) | P1 | — | — |
+| PROJ-8 | Interview-Design Optimierung | Revision | Interview Engine | PROJ-2 | Deployed (superseded by PROJ-22) | [spec](interview-engine/PROJ-8-interview-design-optimierung.md) | P1 | — | — |
 | PROJ-9 | LLM Provider Optimierung | Feature | Platform | — | Roadmap | [spec](platform/PROJ-9-llm-provider-optimierung.md) | P1 | — | — |
 | PROJ-10 | Access Control & Shared Workspace | Feature | Platform | — | Deployed | [spec](platform/PROJ-10-access-control-shared-workspace.md) | P0 | — | — |
 | PROJ-11 | Interview PDF Report | Feature | Dashboard & Output | — | Deployed | [spec](dashboard-output/PROJ-11-interview-pdf-report.md) | P1 | — | — |
@@ -36,10 +36,12 @@
 | PROJ-18 | Prozessschritt-Deduplication | Feature | Wissensbank | PROJ-5 | Deployed | → PROJ-20 | P1 | M | 0:0:2 |
 | PROJ-19 | Knowledge-Informed Interviewing | Extension | Interview Engine | PROJ-2 | Roadmap | — | P2 | — | — |
 | PROJ-20 | Prozessableitungs-Pipeline | Epic | Wissensbank | — | Deployed | [spec](wissensbank/PROJ-20-prozessableitungs-pipeline.md) | P0 | — | 0:0:4 |
+| PROJ-21 | Eval-Foundation für Modell- und Architektur-Vergleich | Revision | Interview Engine | PROJ-17 | Planned | [spec](interview-engine/PROJ-21-eval-foundation-modell-architektur-vergleich.md) | P1 | M | — |
+| PROJ-22 | Dual-Loop Interview Architektur | Revision | Interview Engine | PROJ-2 | Planned | [spec](interview-engine/PROJ-22-dual-loop-interview-architektur.md) | P0 | XL | — |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-21
+## Next Available ID: PROJ-23
 
 ## Known Issues
 
