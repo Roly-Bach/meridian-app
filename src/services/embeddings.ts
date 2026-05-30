@@ -18,6 +18,9 @@ export async function generateEmbedding(text: string, traceCtx?: TraceCtx): Prom
     const { embedding } = await embed({
       model: jinaClient.embedding(embeddingModel),
       value: text,
+      providerOptions: {
+        openai: { dimensions: 1024 },
+      },
       experimental_telemetry: buildTraceMetadata('embeddings.generateEmbedding', {
         model: embeddingModel,
         environment: 'prod',

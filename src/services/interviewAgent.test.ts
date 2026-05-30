@@ -306,7 +306,7 @@ describe('Tool Handlers', () => {
   // ── update_walkthrough_data ─────────────────────────────────────────────────
 
   describe('update_walkthrough_data', () => {
-    it('additively merges process_steps from a second call without replacing existing ones', async () => {
+    it('replaces process_steps on a second call (no additive duplication)', async () => {
       const tracker = [
         makeStep({
           title: 'Rechnungseingang',
@@ -340,8 +340,6 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(true)
       const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
       expect(updated[0].process_steps).toEqual([
-        'Rechnung öffnen',
-        'Datum prüfen',
         'Betrag kontrollieren',
       ])
     })

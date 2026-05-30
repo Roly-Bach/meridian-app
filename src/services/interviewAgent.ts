@@ -220,6 +220,7 @@ Abschluss: wenn Ablauf natürlich endet oder alle Leitfragen gestellt wurden, zu
   if (phase === 'slot_completion') {
     return `## Methodik: slot_completion
 Ziel: Verbleibende Pflichtslots nachfragen (frequency_per_month, duration_minutes, rule_based, data_sources).
+Optional: media_breaks fragen wenn Prozess papier- oder systemintensiv erscheint ("Druckst du etwas aus?" / "Gibt es Schritte wo du zwischen Systemen wechselst?").
 Max. 2–3 fehlende Slots pro Turn — natürlicher Gesprächsfluss, kein Listenformat, keine Ankündigung.
 Spannen vor dem Erfassen konkretisieren. Konfidenz setzen: confirmed / estimate / unknown.
 data_sources-Fallback wenn keine Antwort: leeres Array setzen.`
@@ -597,15 +598,9 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
           updated[stepIndex] = {
             ...existing,
             status: existing.status === 'exploring' ? 'walkthrough' : existing.status,
-            process_steps: process_steps !== undefined
-              ? [...(existing.process_steps ?? []), ...process_steps]
-              : (existing.process_steps ?? []),
-            friction_points: friction_points !== undefined
-              ? [...(existing.friction_points ?? []), ...friction_points]
-              : (existing.friction_points ?? []),
-            friction_tools: friction_tools !== undefined
-              ? [...(existing.friction_tools ?? []), ...friction_tools]
-              : (existing.friction_tools ?? []),
+            process_steps: process_steps !== undefined ? process_steps : (existing.process_steps ?? []),
+            friction_points: friction_points !== undefined ? friction_points : (existing.friction_points ?? []),
+            friction_tools: friction_tools !== undefined ? friction_tools : (existing.friction_tools ?? []),
             pain_point_primary: pain_point_primary !== undefined ? pain_point_primary : existing.pain_point_primary,
           }
 
