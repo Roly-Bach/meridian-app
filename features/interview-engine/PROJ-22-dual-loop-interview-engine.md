@@ -96,6 +96,8 @@ Iterationen 4 (Modell-Allokation final) und 5 (Provider-Compiler-Layer Anthropic
 
 ## Tech Design (Solution Architect)
 
+> **Updated 2026-05-30** — Design reviewed and corrected against actual implementation after all 3 iterations shipped.
+
 ### Overview
 
 Three sequential iterations, each deployable independently with an Eval-Gate before proceeding. Every iteration is backward-compatible with live interviews.
@@ -104,13 +106,13 @@ Three sequential iterations, each deployable independently with an Eval-Gate bef
 
 ### Iteration 1 — Prompt-Refactor (in-place)
 
-**What changes:** `src/services/interviewAgent.ts` only — no new files, no DB changes.
+**What changed:** Static prompt moved to `src/services/interviewTalker.ts` as `STATIC_PROMPT` constant. No `buildStaticPrompt()` function — prompt is inlined.
 
-- `buildStaticPrompt()`: All `NIEMALS`/`VERBOTEN`/`PFLICHT` blocks removed, replaced with positive phrasing. Anti-Anchoring and Silence-Constraint blocks deleted entirely.
-- `buildPhaseMethodology()`: Each phase reduced from ~150-300 tokens to max 5 lines. Content: current goal + recommended next question only. No transition rules, no tool reminders.
-- Few-shot examples: 6 walkthrough examples → 1 canonical format-anchoring example.
+- All `NIEMALS`/`VERBOTEN`/`PFLICHT` blocks removed, replaced with positive phrasing. Anti-Anchoring and Silence-Constraint blocks deleted.
+- Phase methodology: reduced to turn-format rules + single canonical example. Dynamic context injected per-turn via `buildDynamicContext()` (stays in `interviewAgent.ts`).
+- Few-shot examples: collapsed to 1 format-anchoring rule in `STATIC_PROMPT`.
 
-**Eval-Gate:** Run `npm run eval:interview buchhalter` before deploy. Interview quality must be ≥ baseline.
+**Eval-Gate:** `npm run eval:interview buchhalter` before deploy. Quality ≥ baseline.
 
 ---
 
@@ -119,44 +121,54 @@ Three sequential iterations, each deployable independently with an Eval-Gate bef
 **New file:** `src/services/interviewOrchestrator.ts`
 
 Responsibilities:
-- `decideNextPhase(ctx, analystSuggestion)` — pure TypeScript, no LLM, covers all 7 phase transitions including the Amendment-A `clarification` phase
-- Lifecycle: Hard-Stop (timer ≥ max) and Soft-Confirm (Trigger B: `wrap_up_question_asked=true` + user answered) — both write `status='completed'` and `extractions_pending=true`
-- Stale-briefing detection: if `analyst_status='processing'` for >30s → flag Catch-up-Run for next turn
+- `decideNextPhase(ctx, analystSuggestion)` — pure TypeScript, no LLM, covers all 7 phase transitions including Amendment-A `clarification` phase
+- `checkLifecycle(ctx, analystSuggestion)` — Hard-Stop (timer ≥ max) and Soft-Confirm (Trigger B: `wrap_up_question_asked=true` + user responded) — both set `status='completed'` + `extractions_pending=true`
+- Stale detection: only via `analyst_status='failed'` (explicit error path) — **no 30s timer check implemented** (edge case de-prioritized; Catch-up-Run handles recovery)
 
 **Modified:** `src/services/interviewAgent.ts`
 - `transition_phase`, `enter_coverage_check`, `complete_interview` tools **removed** from `buildTools()`
 - Remaining tools: `register_step`, `record_slot`, `update_walkthrough_data`, `link_bottleneck`, `update_topics`
 
 **Modified:** `src/app/api/interview/[token]/chat/route.ts`
-- Orchestrator runs at turn start, before the Agent call
+- Orchestrator runs at turn start, before Talker
 - Phase written to DB by Orchestrator (not by LLM tool call)
 
 **New file:** `src/services/interviewOrchestrator.test.ts`
 - Unit tests: `decideNextPhase` with Tracker snapshots, offline, no LLM
-- Covers all 7 phase transitions + both lifecycle triggers + Catch-up detection
+- Covers all 7 phase transitions + both lifecycle triggers
 
-**Langfuse spans:** 3 spans per turn — `interview.talker`, `interview.analyst`, `interview.orchestrator` — all under `session_id = interview_id`, tagged `component=talker|analyst|orchestrator`.
+**Langfuse spans:** 3 spans per turn — `interview.talker`, `interview.analyst`, `interview.orchestrator` — all under `session_id = interview_id`, tagged `component=talker|analyst|orchestrator`. Orchestrator span is logged via console (not full Langfuse instrumentation); Talker and Analyst use `experimental_telemetry`.
 
-**Eval-Gate:** Phase-logic regressions = 0, interview quality ≥ Iteration-1 baseline.
+**Eval-Gate:** Phase-logic regressions = 0, quality ≥ Iteration-1 baseline.
 
 ---
 
 ### Iteration 3 — Talker/Analyst Split
 
 **New files:**
-- `src/services/interviewTalker.ts` — text-only `streamText`, zero tools, starts immediately on user turn
-- `src/services/interviewAnalyst.ts` — all 5 knowledge tools + `produce_briefing` structured output (AI SDK `generateObject`)
+- `src/services/interviewTalker.ts` — text-only `streamText`, zero tools, streams immediately on user turn
+- `src/services/interviewAnalyst.ts` — all 5 knowledge tools + `produce_briefing` tool (Zod-typed schema), `runAnalystCatchup` for recovery
 
 **Modified:** `src/app/api/interview/[token]/chat/route.ts`
 
-Turn flow:
+Actual turn flow:
 ```
 1. User turn N arrives
-2. Orchestrator: read analyst_status + next_briefing, decideNextPhase, build briefing
-3. Talker: streamText → client (First-Token target: <2s)
-4. waitUntil(runAnalyst(turnPayload, state))   ← background, Vercel Fluid Compute
-5. Analyst: runs knowledge tools, writes produce_briefing → next_briefing + analyst_status='done'
+2. Orchestrator: read analyst_status + next_briefing, decideNextPhase, checkLifecycle
+3. If lifecycle.shouldComplete → farewell Talker stream, mark completed, after() post-pipeline
+4. Talker: streamText → client (First-Token target: <2s)
+5. after(runAnalyst(...))   ← background, Next.js after() / Vercel Fluid Compute
+6. Analyst: runs knowledge tools, calls produce_briefing tool → writes next_briefing + analyst_status='done'
 ```
+
+**Async background:** `after()` (Next.js) is the implementation — functionally equivalent to `waitUntil()` Vercel Fluid Compute.
+
+**`produce_briefing` implementation:** `generateText` with a `tool` call (Zod schema) — same typed output as `generateObject`, tool-call pattern used for sequencing after knowledge tools. `stopWhen: stepCountIs(15)` caps Analyst tool steps.
+
+**Per-component model env vars (new, not in original spec):**
+- `INTERVIEW_TALKER_MODEL` — overrides `INTERVIEW_MODEL` for Talker only
+- `INTERVIEW_ANALYST_MODEL` — overrides `INTERVIEW_MODEL` for Analyst only
+- Fallback for both: `INTERVIEW_MODEL` → `google/gemini-3.1-flash-lite`
 
 **DB Migration** (new columns in `interviews` table):
 - `analyst_status` text DEFAULT `'idle'` — values: `idle | processing | done | failed`
@@ -175,31 +187,40 @@ Turn flow:
 - `options` (2–4 strings, last always "Andere")
 - `slot_key` — which knowledge_objects field this fills
 
-**Reasoning via API params:**
-- Talker: `thinking_level: 'low'` (Gemini) — no textual CoT
-- Analyst: `thinking_level: 'medium'` (Gemini) — deep reasoning for extraction and briefing
+**Reasoning via API params — TODO (post-Eval decision):**
+- `thinking_level: 'low'` (Talker) and `'medium'` (Analyst) designed but **not yet implemented**
+- Decision deferred: run Eval-Gate first, compare `toolCallPlausibility` + `slotCoverage` with and without reasoning params before adding
+- Implementation: 2 lines per file via `providerOptions: { google: { thinkingConfig: { thinkingBudget: 128 } } }`
+
+**Dual extraction boundary:**
+- `extractAndEmbed` (PROJ-20 semantic extraction → `knowledge_objects`) continues to run in `onFinish` alongside the Analyst
+- Analyst handles tracker-based structured extraction (`step_tracker`, `interview_state`)
+- Two parallel extraction paths are intentional: tracker = structured/real-time, `extractAndEmbed` = semantic/deferred
+
+**Clarification phase wiring:**
+- `decideNextPhase` enters `clarification` and stays there (no auto-exit)
+- Route does NOT yet check clarification completion — transition out of `clarification` is wired in PROJ-21 (Adaptive Clarification Questions)
 
 **Error handling:**
 - Analyst throws → wrapper writes `analyst_status='failed'`
-- Next turn: Orchestrator detects `failed` → Catch-up-Run (Analyst processes two turns at once)
-- Talker receives Tool-Use in output → Hard Error, output discarded, Langfuse error span
+- Next turn: Orchestrator detects `failed` → Catch-up-Run (`runAnalystCatchup` — processes two turns at once)
 
 **Eval-Gate:** Interview completeness (slots filled, phases traversed) ≥ Iteration-2 baseline.
 
 ---
 
-### Component Map (after all 3 iterations)
+### Component Map (as-built)
 
 ```
 src/services/
-  interviewOrchestrator.ts     Phase logic + lifecycle (TypeScript only)
-  interviewOrchestrator.test.ts  Unit tests, offline, Tracker snapshots
-  interviewTalker.ts           Streaming text response (no tools)
-  interviewAnalyst.ts          Knowledge tools + produce_briefing
-  interviewAgent.ts            Prompt builders, types, shared context (no phase tools)
+  interviewOrchestrator.ts      Phase logic + lifecycle (TypeScript only)
+  interviewOrchestrator.test.ts   Unit tests, offline, Tracker snapshots
+  interviewTalker.ts            Streaming text response (no tools)
+  interviewAnalyst.ts           Knowledge tools + produce_briefing + runAnalystCatchup
+  interviewAgent.ts             Types, buildTools, buildDynamicContext (no phase tools)
 
 src/app/api/interview/[token]/chat/route.ts
-  ↳ Orchestrator → Talker (sync stream) + waitUntil(Analyst)
+  ↳ Orchestrator → Talker (sync stream) + after(Analyst)
 
 supabase/migrations/
   YYYYMMDD_add_analyst_state_to_interviews.sql
@@ -213,15 +234,17 @@ supabase/migrations/
 | Decision | Choice | Reason |
 |----------|--------|--------|
 | Phase logic | Pure TypeScript (`decideNextPhase`) | Testable offline, deterministic, no LLM cost |
-| Async Analyst | `waitUntil()` Vercel Fluid Compute | No external queue needed for V1 |
-| Briefing output | `generateObject` (AI SDK structured output) | Typed `AnalystBriefing`, no parsing |
-| Eventual consistency | Accepted — stale briefing fallback | Simpler than streaming merge; fixable with Catch-up-Run |
+| Async Analyst | `after()` (Next.js / Vercel Fluid Compute) | No external queue needed for V1 |
+| Briefing output | `generateText` + `produce_briefing` tool (Zod schema) | Tool-call sequencing after knowledge tools; same typed output as `generateObject` |
+| Eventual consistency | Accepted — stale briefing fallback | Simpler than streaming merge; Catch-up-Run handles recovery |
 | DB columns | Separate `analyst_status`, `next_briefing`, `clarification_answers` | `analyst_status` read every turn → separate column faster than JSONB nested read |
-| Reasoning control | API params (`thinking_level`) not textual CoT | Google recommends for Gemini 3.x; textual CoT conflicts with native control |
+| Stale detection | `analyst_status='failed'` only (no 30s timer) | 30s timer adds complexity; explicit failure path sufficient for V1 |
+| Reasoning control | `thinking_level` deferred post-Eval | Measure before adding: `toolCallPlausibility` + `slotCoverage` in Eval-Gate |
+| Model selection | Per-component env vars (`INTERVIEW_TALKER_MODEL`, `INTERVIEW_ANALYST_MODEL`) | Enables independent model swap per component without redeploying config |
 
 ### No New Dependencies
 
-All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `generateObject`), `@ai-sdk/google` (Gemini `thinking_level`), Langfuse (`_telemetry.ts`), Supabase admin client.
+All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `generateText`), `@ai-sdk/google`, Langfuse (`_telemetry.ts`), Supabase admin client.
 
 ## QA Test Results
 _To be added by /qa_
