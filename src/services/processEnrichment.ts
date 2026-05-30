@@ -328,7 +328,9 @@ export async function createProcessStepsFromTracker({
       embedding: embedding as number[],
       frequency_per_month: (step.slots.frequency_per_month?.value as number) ?? null,
       duration_minutes: (step.slots.duration_minutes?.value as number) ?? null,
-      rule_based: (step.slots.rule_based?.value as boolean) ?? false,
+      rule_based: typeof step.slots.rule_based?.value === 'boolean'
+        ? step.slots.rule_based.value
+        : Boolean(step.slots.rule_based?.value),
       data_sources: (step.slots.data_sources?.value as string[]) ?? [],
       error_rate_percent: (step.slots.error_rate_percent?.value as number) ?? null,
       media_breaks: (Number(step.slots.media_breaks?.value) || 0),

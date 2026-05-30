@@ -38,7 +38,9 @@ import {
   type MissingSlot,
 } from '@/services/interviewAgent'
 import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/services/interviewOrchestrator'
-import { extractAndEmbed, type TurnTranscript, type RawExtraction } from '@/services/extraction'
+import { extractAndEmbed, deduplicateKnowledgeObjects, type TurnTranscript, type RawExtraction } from '@/services/extraction'
+import { createProcessStepsFromTracker } from '@/services/processEnrichment'
+import { clusterProcessSteps } from '@/services/processClustering'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
 import { runAllScorers, type TurnRecord, type ToolCallRecord, type ScoreSet } from './scorers'
@@ -495,6 +497,16 @@ async function runInterview(
         .update({ status: 'completed', extractions_pending: true })
         .eq('id', interviewId)
       console.log('\n[eval] Orchestrator: lifecycle complete:', lifecycle.reason)
+
+      // Mirror post-completion pipeline from chat route
+      await createProcessStepsFromTracker({ interviewId, workspaceId })
+      clusterProcessSteps(workspaceId).catch((err) =>
+        console.error('[runner] post-complete clusterProcessSteps failed:', err),
+      )
+      deduplicateKnowledgeObjects(workspaceId).catch((err) =>
+        console.error('[runner] post-complete deduplicateKnowledgeObjects failed:', err),
+      )
+
       break
     }
 
