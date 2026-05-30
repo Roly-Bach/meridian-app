@@ -98,8 +98,11 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       return ctx.historyLength >= 4 ? 'process_loop' : 'intro'
 
     case 'process_loop':
-      // A step was registered (status='exploring') → start walkthrough
-      if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'walkthrough_step'
+      // Analyst writes exploring→walkthrough in same run, so Orchestrator reads walkthrough next turn.
+      // Advance on either status — exploring = just registered, walkthrough = Analyst already progressed it.
+      if (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')) {
+        return 'walkthrough_step'
+      }
       return 'process_loop'
 
     case 'walkthrough_step':

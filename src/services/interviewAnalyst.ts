@@ -160,6 +160,8 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefi
     produce_briefing: produceBriefingTool,
   }
 
+  const isGoogleModel = modelString.startsWith('google/')
+
   try {
     await generateText({
       model,
@@ -168,6 +170,11 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefi
       messages: messages as any,
       tools: allTools,
       stopWhen: stepCountIs(15),
+      ...(isGoogleModel && {
+        providerOptions: {
+          google: { thinkingConfig: { thinkingBudget: 2048 } },
+        },
+      }),
       experimental_telemetry: buildTraceMetadata('interview.analyst', {
         interviewId,
         model: modelString,

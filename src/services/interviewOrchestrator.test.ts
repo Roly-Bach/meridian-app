@@ -70,6 +70,11 @@ describe('decideNextPhase — process_loop', () => {
     const tracker = [makeStep('Rechnungsprüfung', 'exploring')]
     expect(decideNextPhase(baseCtx({ phase: 'process_loop', stepTracker: tracker }), null)).toBe('walkthrough_step')
   })
+
+  it('advances to walkthrough_step when a step is in walkthrough status (Analyst already progressed it)', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough')]
+    expect(decideNextPhase(baseCtx({ phase: 'process_loop', stepTracker: tracker }), null)).toBe('walkthrough_step')
+  })
 })
 
 // ─── walkthrough_step transitions ────────────────────────────────────────────

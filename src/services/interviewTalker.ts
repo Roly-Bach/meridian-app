@@ -78,6 +78,8 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
     messages = [{ role: 'user', content: `${dynamicPart}\n\n---\n\nBitte starte das Interview.` }]
   }
 
+  const isGoogleModel = modelString.startsWith('google/')
+
   return streamText({
     model,
     temperature: 0.5,
@@ -85,6 +87,11 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: messages as any,
     // NO TOOLS — Talker is text-only (ADR-011 D3)
+    ...(isGoogleModel && {
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: 0 } },
+      },
+    }),
     experimental_telemetry: buildTraceMetadata('interview.talker', {
       interviewId: opts.context.interviewId,
       model: modelString,
