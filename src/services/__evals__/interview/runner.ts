@@ -1,12 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * Eval runner for interview agent benchmarking (PROJ-13).
+ * Eval runner for interview agent benchmarking (PROJ-17/PROJ-21).
  *
- * Usage:
+ * Usage (single run — backward-compatible):
+ *   npm run eval:interview buchhalter
  *   INTERVIEW_MODEL=google/gemini-3.5-flash npm run eval:interview buchhalter
  *
- * LANGFUSE_ENABLED is set to true automatically by this runner (process-local).
- * No manual env var needed. Reverts to .env.local value after the process exits.
+ * Usage (model matrix):
+ *   npm run eval:interview -- --models gemini-3.1-flash-lite,gemini-3.5-flash --personas buchhalter,vertriebler
+ *   npm run eval:interview -- --models gemini-3.1-flash-lite --personas buchhalter --baseline-label PROJ-22-pre-refactor
+ *
+ * LANGFUSE_ENABLED is set to true automatically for eval runs.
  *
  * Requires in .env.local:
  *   EVAL_WORKSPACE_ID=<uuid of a workspace in your local DB>
@@ -19,6 +23,7 @@ import { config } from 'dotenv'
 // Load .env.local from project root before any other imports that read env vars.
 config({ path: path.resolve(process.cwd(), '.env.local') })
 
+import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
@@ -36,6 +41,7 @@ import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/ser
 import { extractAndEmbed, type TurnTranscript, type RawExtraction } from '@/services/extraction'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
+import { runAllScorers, type TurnRecord, type ToolCallRecord, type ScoreSet } from './scorers'
 
 // ─── Persona loader ───────────────────────────────────────────────────────────
 
@@ -43,6 +49,43 @@ const PERSONA_MAP: Record<string, () => Promise<Persona>> = {
   buchhalter: async () => (await import('./personas/buchhalter')).buchhalter,
   vertriebler: async () => (await import('./personas/vertriebler')).vertriebler,
   'it-support': async () => (await import('./personas/it-support')).itSupport,
+}
+
+// ─── CLI arg parser ───────────────────────────────────────────────────────────
+
+interface RunArgs {
+  models: string[]
+  personas: string[]
+  baselineLabel: string | null
+}
+
+function parseArgs(): RunArgs {
+  const args = process.argv.slice(2)
+  let models: string[] | null = null
+  let personas: string[] | null = null
+  let baselineLabel: string | null = null
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--models' && args[i + 1]) {
+      models = args[++i].split(',').map(s => s.trim()).filter(Boolean)
+    } else if (args[i] === '--personas' && args[i + 1]) {
+      personas = args[++i].split(',').map(s => s.trim()).filter(Boolean)
+    } else if (args[i] === '--baseline-label' && args[i + 1]) {
+      baselineLabel = args[++i]
+    } else if (!args[i].startsWith('--') && !personas) {
+      // Backward-compatible: positional persona arg
+      personas = [args[i]]
+    }
+  }
+
+  // Normalize bare model IDs (no provider prefix) → google/ default
+  const normalizeModel = (m: string) => (m.includes('/') ? m : `google/${m}`)
+
+  return {
+    models: (models ?? [process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite']).map(normalizeModel),
+    personas: personas ?? [],
+    baselineLabel,
+  }
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -73,15 +116,19 @@ async function loadState(interviewId: string): Promise<DBState> {
   ])
 
   const firstTurnCreated = (turns as Array<{ created_at: string }> | null)?.[0]?.created_at
-  const timerMinutes = firstTurnCreated ? Math.floor((Date.now() - new Date(firstTurnCreated).getTime()) / 60000) : 0
+  const timerMinutes = firstTurnCreated
+    ? Math.floor((Date.now() - new Date(firstTurnCreated).getTime()) / 60000)
+    : 0
 
   return {
     phase: ((stateRow as Record<string, unknown> | null)?.phase ?? 'intro') as Phase,
     timerMinutes,
     topicsCovered: ((stateRow as Record<string, unknown> | null)?.topics_covered as string[]) ?? [],
     topicsOpen: ((stateRow as Record<string, unknown> | null)?.topics_open as string[]) ?? [],
-    extractionsLog: ((stateRow as Record<string, unknown> | null)?.extractions_log as RawExtraction[]) ?? [],
-    stepTracker: ((stateRow as Record<string, unknown> | null)?.step_tracker as StepEntry[]) ?? [],
+    extractionsLog:
+      ((stateRow as Record<string, unknown> | null)?.extractions_log as RawExtraction[]) ?? [],
+    stepTracker:
+      ((stateRow as Record<string, unknown> | null)?.step_tracker as StepEntry[]) ?? [],
   }
 }
 
@@ -93,7 +140,9 @@ async function loadHistory(interviewId: string): Promise<TurnMessage[]> {
     .eq('interview_id', interviewId)
     .order('turn_number', { ascending: true })
 
-  return ((rows as Array<{ user_input: string; agent_response: string }> | null) ?? []).flatMap(t => [
+  return (
+    (rows as Array<{ user_input: string; agent_response: string }> | null) ?? []
+  ).flatMap(t => [
     { role: 'user' as const, content: t.user_input },
     { role: 'assistant' as const, content: t.agent_response },
   ])
@@ -137,30 +186,209 @@ async function generatePersonaResponse(
   return text.trim()
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Report writer ────────────────────────────────────────────────────────────
 
-async function main() {
-  const personaName = process.argv[2]
-  if (!personaName || !PERSONA_MAP[personaName]) {
-    console.error(`Usage: npm run eval:interview <persona>`)
-    console.error(`Available personas: ${Object.keys(PERSONA_MAP).join(', ')}`)
-    process.exit(1)
+function modelSlug(model: string): string {
+  return model.replace(/[/\.]/g, '-')
+}
+
+function buildReport(opts: {
+  model: string
+  personaName: string
+  interviewId: string
+  evalRunId: string
+  baselineLabel: string | null
+  turns: TurnRecord[]
+  finalStepTracker: StepEntry[]
+  interviewStatus: string
+  scores: ScoreSet
+}): string {
+  const {
+    model, personaName, interviewId, evalRunId, baselineLabel,
+    turns, finalStepTracker, interviewStatus, scores,
+  } = opts
+
+  const testerModel = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
+  const evalDate = new Date().toISOString().slice(0, 10)
+  const langfuseSession = process.env.LANGFUSE_PROJECT_URL
+    ? `${process.env.LANGFUSE_PROJECT_URL}/sessions/${interviewId}`
+    : null
+  const status = scores.completionCorrectness ? 'PASS' : 'FAIL'
+
+  const frontmatter = [
+    '---',
+    `interview_model: ${model}`,
+    `tester_model: ${testerModel}`,
+    `eval_date: ${evalDate}`,
+    `persona: ${personaName}`,
+    `interview_id: ${interviewId}`,
+    `eval_run_id: ${evalRunId}`,
+    langfuseSession ? `langfuse_session: ${langfuseSession}` : null,
+    `turns_total: ${turns.length}`,
+    `status: ${status}`,
+    `baseline_label: ${baselineLabel ?? 'null'}`,
+    'scores:',
+    `  slot_coverage: ${scores.slotCoverage}`,
+    `  phase_adherence: ${scores.phaseAdherence}`,
+    `  anchoring_violations: ${scores.anchoringViolations}`,
+    `  tool_call_plausibility: ${scores.toolCallPlausibility}`,
+    `  dialog_naturalness: ${scores.dialogNaturalness}`,
+    `  completion_correctness: ${scores.completionCorrectness}`,
+    '---',
+  ].filter(l => l !== null).join('\n')
+
+  const scoreTable = [
+    '',
+    '## Quality Scores',
+    '',
+    '| Metrik | Score | Ziel |',
+    '|--------|-------|------|',
+    `| slot_coverage | ${scores.slotCoverage} | maximize |`,
+    `| phase_adherence | ${scores.phaseAdherence} | maximize |`,
+    `| anchoring_violations | ${scores.anchoringViolations} | 0 |`,
+    `| tool_call_plausibility | ${scores.toolCallPlausibility} | ≥ 0.95 |`,
+    `| dialog_naturalness | ${scores.dialogNaturalness} | maximize |`,
+    `| completion_correctness | ${scores.completionCorrectness} | true |`,
+    '',
+  ].join('\n')
+
+  const conversationLog = [
+    '## Gesprächsverlauf',
+    '',
+    ...turns.flatMap(t => [
+      `[Turn ${t.turnNumber}] Persona: ${t.userInput}`,
+      `[Turn ${t.turnNumber}] Agent: "${t.agentText}"`,
+      '',
+    ]),
+  ].join('\n')
+
+  const slotTable = buildSlotTable(finalStepTracker)
+
+  return [frontmatter, scoreTable, conversationLog, slotTable].join('\n')
+}
+
+function buildSlotTable(stepTracker: StepEntry[]): string {
+  if (stepTracker.length === 0) return ''
+
+  const header = [
+    '## Slot-Filling-Stand',
+    '',
+    '| Schritt | Status | frequency | duration | rule_based | data_sources | error_rate | media_breaks |',
+    '|---------|--------|-----------|----------|------------|--------------|------------|--------------|',
+  ]
+
+  const rows = stepTracker.map(step => {
+    const f = (s: StepEntry['slots'][keyof StepEntry['slots']]) =>
+      s ? `${String(s.value).slice(0, 30)} ✓` : 'null'
+    return `| ${step.title} | ${step.status} | ${f(step.slots.frequency_per_month)} | ${f(step.slots.duration_minutes)} | ${f(step.slots.rule_based)} | ${f(step.slots.data_sources)} | ${f(step.slots.error_rate_percent)} | ${f(step.slots.media_breaks)} |`
+  })
+
+  return [...header, ...rows, ''].join('\n')
+}
+
+function writeReport(opts: {
+  model: string
+  personaName: string
+  interviewId: string
+  evalRunId: string
+  baselineLabel: string | null
+  turns: TurnRecord[]
+  finalStepTracker: StepEntry[]
+  interviewStatus: string
+  scores: ScoreSet
+}): string {
+  const now = new Date()
+  const dateStr = now.toISOString().slice(0, 10)
+  const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-')
+
+  const dir = path.resolve(process.cwd(), 'docs', 'evals', 'interview', dateStr)
+  fs.mkdirSync(dir, { recursive: true })
+
+  const filename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}.md`
+  const filepath = path.join(dir, filename)
+
+  const content = buildReport(opts)
+  fs.writeFileSync(filepath, content, 'utf8')
+
+  return filepath
+}
+
+// ─── Langfuse score writer ────────────────────────────────────────────────────
+
+async function writeLangfuseScores(
+  interviewId: string,
+  evalRunId: string,
+  personaName: string,
+  model: string,
+  baselineLabel: string | null,
+  scores: ScoreSet,
+): Promise<void> {
+  if (!process.env.LANGFUSE_PUBLIC_KEY || !process.env.LANGFUSE_SECRET_KEY) return
+
+  // Import langfuse SDK directly (separate from OTel integration in @/lib/langfuse)
+  const { Langfuse } = await import('langfuse')
+  const lf = new Langfuse({
+    publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+    secretKey: process.env.LANGFUSE_SECRET_KEY,
+    baseUrl: process.env.LANGFUSE_BASE_URL ?? 'https://cloud.langfuse.com',
+  })
+
+  const tags = ['eval', 'scoring', `persona:${personaName}`, `model:${model}`, `eval_run_id:${evalRunId}`]
+  if (baselineLabel) tags.push(`baseline_label:${baselineLabel}`)
+
+  const trace = lf.trace({
+    name: 'eval-scores',
+    sessionId: interviewId,
+    tags,
+    metadata: { evalRunId, persona: personaName, model, baselineLabel },
+  })
+
+  const scoreEntries: Array<{ name: string; value: number; dataType: 'NUMERIC' | 'BOOLEAN' }> = [
+    { name: 'slot_coverage', value: scores.slotCoverage, dataType: 'NUMERIC' },
+    { name: 'phase_adherence', value: scores.phaseAdherence, dataType: 'NUMERIC' },
+    { name: 'anchoring_violations', value: scores.anchoringViolations, dataType: 'NUMERIC' },
+    { name: 'tool_call_plausibility', value: scores.toolCallPlausibility, dataType: 'NUMERIC' },
+    { name: 'dialog_naturalness', value: scores.dialogNaturalness, dataType: 'NUMERIC' },
+    { name: 'completion_correctness', value: scores.completionCorrectness ? 1 : 0, dataType: 'BOOLEAN' },
+  ]
+
+  for (const entry of scoreEntries) {
+    lf.score({ traceId: trace.id, name: entry.name, value: entry.value, dataType: entry.dataType })
   }
 
-  // Enable tracing for this run (override kill-switch for eval)
-  process.env.LANGFUSE_ENABLED = 'true'
-  initLangfuse()
+  await lf.shutdownAsync()
+}
+
+// ─── Interview runner ─────────────────────────────────────────────────────────
+
+interface InterviewResult {
+  interviewId: string
+  evalRunId: string
+  model: string
+  personaName: string
+  baselineLabel: string | null
+  turnRecords: TurnRecord[]
+  finalStepTracker: StepEntry[]
+  finalInterviewStatus: string
+}
+
+async function runInterview(
+  model: string,
+  persona: Persona,
+  personaName: string,
+  baselineLabel: string | null,
+): Promise<InterviewResult> {
+  // Override INTERVIEW_MODEL for this run
+  process.env.INTERVIEW_MODEL = model
 
   const evalRunId = randomUUID()
-  const interviewModel = process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
-
-  console.log(`[eval] persona=${personaName} model=${interviewModel} evalRunId=${evalRunId}`)
-
-  const persona = await PERSONA_MAP[personaName]()
   const supabase = getSupabaseAdmin()
 
   const workspaceId = process.env.EVAL_WORKSPACE_ID
   if (!workspaceId) throw new Error('[runner] EVAL_WORKSPACE_ID not set in .env.local')
+
+  console.log(`\n${'─'.repeat(60)}`)
+  console.log(`[eval] model=${model} persona=${personaName} evalRunId=${evalRunId}`)
 
   // Create interview record
   const { data: interview, error: insertError } = await supabase
@@ -171,7 +399,7 @@ async function main() {
       employee_role: persona.identity.role,
       department: persona.identity.department,
       focus_topics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
-      status: 'created',
+      status: 'active',
       access_token: randomUUID(),
       token_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       max_duration_minutes: 30,
@@ -184,9 +412,6 @@ async function main() {
   const interviewId: string = interview.id
   console.log(`[eval] Interview created: ${interviewId}`)
 
-  await supabase.from('interviews').update({ status: 'active' }).eq('id', interviewId)
-
-  // Create initial interview_state
   await supabase.from('interview_state').insert({
     interview_id: interviewId,
     phase: 'intro',
@@ -200,14 +425,15 @@ async function main() {
   const traceCtx: TraceCtx = {
     interviewId,
     persona: personaName,
-    model: interviewModel,
+    model,
     environment: 'eval',
     evalRunId,
   }
 
   const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
+  const turnRecords: TurnRecord[] = []
 
-  // ── Start turn (agent greeting, not saved as a turn per spec) ─────────────
+  // ── Start turn (greeting) ──────────────────────────────────────────────────
   const startStream = createInterviewStream({
     context: {
       interviewId,
@@ -229,10 +455,7 @@ async function main() {
     traceCtx,
     onFinish: async (text) => {
       if (!text) return
-      await supabase
-        .from('interview_state')
-        .update({ opener_text: text })
-        .eq('interview_id', interviewId)
+      await supabase.from('interview_state').update({ opener_text: text }).eq('interview_id', interviewId)
     },
   })
 
@@ -245,22 +468,15 @@ async function main() {
   let lastAgentText = greeting
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    // Persona responds to last agent turn
     const personaResponse = await generatePersonaResponse(persona, lastAgentText, conversationHistory)
     console.log(`\n[${persona.identity.name}]: ${personaResponse}`)
     conversationHistory.push({ role: 'user', content: personaResponse })
 
-    // Load fresh state from DB (agent tool calls update it during stream)
     const dbState = await loadState(interviewId)
     const dbHistory = await loadHistory(interviewId)
 
-    // Build full history (includes current persona response)
-    const agentHistory: TurnMessage[] = [
-      ...dbHistory,
-      { role: 'user', content: personaResponse },
-    ]
+    const agentHistory: TurnMessage[] = [...dbHistory, { role: 'user', content: personaResponse }]
 
-    // Orchestrator: decide phase and check lifecycle
     const orchCtx: OrchestratorContext = {
       phase: dbState.phase,
       stepTracker: dbState.stepTracker,
@@ -274,13 +490,17 @@ async function main() {
 
     const lifecycle = checkLifecycle(orchCtx, null)
     if (lifecycle.shouldComplete) {
-      await supabase.from('interviews').update({ status: 'completed', extractions_pending: true }).eq('id', interviewId)
+      await supabase
+        .from('interviews')
+        .update({ status: 'completed', extractions_pending: true })
+        .eq('id', interviewId)
       console.log('\n[eval] Orchestrator: lifecycle complete:', lifecycle.reason)
       break
     }
 
     const nextPhaseDecision = decideNextPhase(orchCtx, null)
-    const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
+    const orchestratedPhase: Phase =
+      nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
 
     if (orchestratedPhase !== dbState.phase) {
       await supabase
@@ -294,7 +514,6 @@ async function main() {
         ? computeMissingMandatorySlots(dbState.stepTracker)
         : undefined
 
-    // Agent responds
     const agentStream = createInterviewStream({
       context: {
         interviewId,
@@ -318,12 +537,29 @@ async function main() {
     })
 
     const agentText = await agentStream.text
+
+    // Capture tool calls from AI SDK steps for scorer
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawToolCalls = ((await (agentStream as any).toolCalls) as Array<{ toolName: string; args: Record<string, unknown> }>) ?? []
+    const toolCallRecords: ToolCallRecord[] = rawToolCalls.map(tc => ({
+      toolName: tc.toolName,
+      args: tc.args,
+    }))
+
+    const turnNumber = dbHistory.length / 2 + 1
+    turnRecords.push({
+      turnNumber,
+      userInput: personaResponse,
+      agentText,
+      phase: orchestratedPhase,
+      toolCalls: toolCallRecords,
+    })
+
     console.log(`\n[Agent]: ${agentText}`)
     conversationHistory.push({ role: 'assistant', content: agentText })
     lastAgentText = agentText
 
     // Save turn to DB
-    const turnNumber = dbHistory.length / 2 + 1
     const { data: newTurn } = await supabase
       .from('turns')
       .insert({
@@ -335,7 +571,6 @@ async function main() {
       .select('id')
       .single()
 
-    // Fire-and-forget extraction (non-blocking, traceCtx carries eval tags)
     if (newTurn?.id) {
       const transcript: TurnTranscript[] = [
         ...dbHistory
@@ -346,16 +581,11 @@ async function main() {
           })),
         { user_input: personaResponse, agent_response: agentText },
       ]
-      extractAndEmbed({
-        interviewId,
-        workspaceId,
-        turnId: newTurn.id,
-        transcript,
-        traceCtx,
-      }).catch(err => console.error('[runner] extractAndEmbed failed:', err))
+      extractAndEmbed({ interviewId, workspaceId, turnId: newTurn.id, transcript, traceCtx }).catch(
+        err => console.error('[runner] extractAndEmbed failed:', err),
+      )
     }
 
-    // Safety check: Orchestrator may have marked completed via checkLifecycle on a previous turn
     const { data: iv } = await supabase
       .from('interviews')
       .select('status')
@@ -367,20 +597,147 @@ async function main() {
     }
   }
 
-  // Flush pending spans before exit
+  // Load final state for scorers
+  const finalState = await loadState(interviewId)
+  const { data: finalInterview } = await supabase
+    .from('interviews')
+    .select('status')
+    .eq('id', interviewId)
+    .single()
+  const finalInterviewStatus = (finalInterview as { status: string } | null)?.status ?? 'created'
+
+  return {
+    interviewId,
+    evalRunId,
+    model,
+    personaName,
+    baselineLabel,
+    turnRecords,
+    finalStepTracker: finalState.stepTracker,
+    finalInterviewStatus,
+  }
+}
+
+// ─── Summary printer ──────────────────────────────────────────────────────────
+
+interface RunSummary {
+  model: string
+  persona: string
+  scores: ScoreSet | null
+  reportPath: string | null
+  error?: string
+}
+
+function printSummary(results: RunSummary[]): void {
+  console.log('\n' + '═'.repeat(80))
+  console.log('EVAL SUMMARY')
+  console.log('═'.repeat(80))
+  console.log(
+    `${'Model'.padEnd(40)} ${'Persona'.padEnd(15)} ${'slot_cov'.padStart(8)} ${'phase_adh'.padStart(9)} ${'anchoring'.padStart(9)} ${'natural'.padStart(8)} ${'complete'.padStart(9)}`,
+  )
+  console.log('─'.repeat(80))
+
+  for (const r of results) {
+    if (!r.scores) {
+      console.log(`${r.model.padEnd(40)} ${r.persona.padEnd(15)} ERROR: ${r.error ?? 'unknown'}`)
+      continue
+    }
+    const s = r.scores
+    console.log(
+      `${r.model.padEnd(40)} ${r.persona.padEnd(15)} ${String(s.slotCoverage).padStart(8)} ${String(s.phaseAdherence).padStart(9)} ${String(s.anchoringViolations).padStart(9)} ${String(s.dialogNaturalness).padStart(8)} ${String(s.completionCorrectness).padStart(9)}`,
+    )
+    if (r.reportPath) console.log(`  → ${r.reportPath}`)
+  }
+  console.log('═'.repeat(80))
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const { models, personas, baselineLabel } = parseArgs()
+
+  if (personas.length === 0) {
+    console.error('Usage: npm run eval:interview <persona>')
+    console.error('       npm run eval:interview -- --models m1,m2 --personas p1,p2')
+    console.error(`Available personas: ${Object.keys(PERSONA_MAP).join(', ')}`)
+    process.exit(1)
+  }
+
+  const unknownPersonas = personas.filter(p => !PERSONA_MAP[p])
+  if (unknownPersonas.length > 0) {
+    console.error(`Unknown persona(s): ${unknownPersonas.join(', ')}`)
+    console.error(`Available: ${Object.keys(PERSONA_MAP).join(', ')}`)
+    process.exit(1)
+  }
+
+  // Enable Langfuse tracing for all eval runs
+  process.env.LANGFUSE_ENABLED = 'true'
+  initLangfuse()
+
+  const results: RunSummary[] = []
+
+  for (const model of [...models].sort()) {
+    for (const personaName of personas) {
+      const persona = await PERSONA_MAP[personaName]()
+      try {
+        const result = await runInterview(model, persona, personaName, baselineLabel)
+
+        // Flush OTel spans before scoring (ensures traces are in Langfuse)
+        await flushLangfuse().catch(() => {})
+
+        const scores = await runAllScorers({
+          turns: result.turnRecords,
+          finalStepTracker: result.finalStepTracker,
+          interviewStatus: result.finalInterviewStatus,
+          evalModel: model,
+        })
+
+        const reportPath = writeReport({
+          model,
+          personaName,
+          interviewId: result.interviewId,
+          evalRunId: result.evalRunId,
+          baselineLabel,
+          turns: result.turnRecords,
+          finalStepTracker: result.finalStepTracker,
+          interviewStatus: result.finalInterviewStatus,
+          scores,
+        })
+
+        console.log(`\n[eval] Report written: ${reportPath}`)
+
+        // Write scores to Langfuse (non-blocking, fire-and-forget)
+        writeLangfuseScores(
+          result.interviewId,
+          result.evalRunId,
+          personaName,
+          model,
+          baselineLabel,
+          scores,
+        ).catch(err => console.error('[runner] langfuse score write failed:', err))
+
+        results.push({ model, persona: personaName, scores, reportPath })
+
+        console.log(`\n[eval] Done: interview_id=${result.interviewId} eval_run_id=${result.evalRunId}`)
+        const projectUrl = process.env.LANGFUSE_PROJECT_URL
+        if (projectUrl) {
+          console.log(`  Langfuse session: ${projectUrl}/sessions/${result.interviewId}`)
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        console.error(`[runner] Run failed for model=${model} persona=${personaName}:`, err)
+        results.push({ model, persona: personaName, scores: null, reportPath: null, error: errMsg })
+      }
+    }
+  }
+
+  if (models.length * personas.length > 1) {
+    printSummary(results)
+  }
+
+  // Final Langfuse flush
   await flushLangfuse().catch(() => {})
   await new Promise(r => setTimeout(r, 3000))
-
-  console.log(`\n[eval] Done.`)
-  console.log(`  interview_id (session): ${interviewId}`)
-  console.log(`  eval_run_id:            ${evalRunId}`)
-  const projectUrl = process.env.LANGFUSE_PROJECT_URL
-  if (projectUrl) {
-    console.log(`  Langfuse session:       ${projectUrl}/sessions/${interviewId}`)
-    console.log(`  Langfuse traces:        ${projectUrl}/traces?search=${interviewId}`)
-  } else {
-    console.log(`  (Set LANGFUSE_PROJECT_URL=https://cloud.langfuse.com/<org>/<project> in .env.local for direct links)`)
-  }
 }
 
 main().catch(err => {
