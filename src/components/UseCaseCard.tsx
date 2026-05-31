@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 
 const TYPE_ICONS: Record<string, string> = {
@@ -9,6 +8,10 @@ const TYPE_ICONS: Record<string, string> = {
   process_improvement: '🔧',
   tool_consolidation: '🔗',
   automation_candidate: '⚙️',
+  automation_at_scale: '⚡',
+  process_standardization: '📋',
+  knowledge_rag_at_scale: '🔍',
+  cross_team_pain_resolution: '🤝',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -19,6 +22,10 @@ const TYPE_LABELS: Record<string, string> = {
   process_improvement: 'Prozessverbesserung',
   tool_consolidation: 'Tool-Integration',
   automation_candidate: 'Automatisierungskandidat',
+  automation_at_scale: 'Automatisierung (Workspace)',
+  process_standardization: 'Prozess-Standardisierung',
+  knowledge_rag_at_scale: 'Wissensassistent (Workspace)',
+  cross_team_pain_resolution: 'Teamweite Problemlösung',
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -51,23 +58,29 @@ interface UseCase {
   roi_hours_per_year: number | null
   score: number | null
   quarter: string | null
-  process_step_id: string
+  process_step_id: string | null
+  cluster_id: string | null
 }
 
 interface Props {
   useCase: UseCase
   compact?: boolean
+  onClick?: () => void
 }
 
-export function UseCaseCard({ useCase: uc, compact = false }: Props) {
+export function UseCaseCard({ useCase: uc, compact = false, onClick }: Props) {
   const isQuickWin = uc.priority === 'high' && uc.effort === 'low'
+  const isCluster = Boolean(uc.cluster_id)
   const icon = TYPE_ICONS[uc.type] ?? '🤖'
   const typeLabel = TYPE_LABELS[uc.type] ?? uc.type
 
   return (
-    <Card className="border border-[#E5E5E5] bg-white hover:border-[#E040FB]/30 hover:shadow-sm transition-all rounded-[6px]">
+    <Card
+      className={`border border-[#E5E5E5] bg-white hover:border-[#E040FB]/30 hover:shadow-sm transition-all rounded-[6px] ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <CardContent className={compact ? 'p-3' : 'p-4'}>
-        {/* Header: type + quick win */}
+        {/* Header: type + badges */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
             <span className="text-[14px]">{icon}</span>
@@ -75,11 +88,18 @@ export function UseCaseCard({ useCase: uc, compact = false }: Props) {
               {typeLabel}
             </span>
           </div>
-          {isQuickWin && (
-            <span className="text-[10px] font-semibold bg-[#E040FB] text-white px-1.5 py-0.5 rounded-full">
-              Quick Win
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {isCluster && (
+              <span className="text-[10px] font-semibold bg-[#9C27B0] text-white px-1.5 py-0.5 rounded-full">
+                Cluster
+              </span>
+            )}
+            {isQuickWin && (
+              <span className="text-[10px] font-semibold bg-[#E040FB] text-white px-1.5 py-0.5 rounded-full">
+                Quick Win
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Title */}

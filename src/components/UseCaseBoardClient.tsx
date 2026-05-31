@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { UseCaseCard } from './UseCaseCard'
+import { UseCaseSheet } from './UseCaseSheet'
 import { getCluster, CLUSTER_META, type UseCaseCluster } from '@/services/useCaseEngine'
 
 interface UseCase {
@@ -18,9 +19,11 @@ interface UseCase {
   effort: string | null
   roi_eur_per_year: number | null
   roi_hours_per_year: number | null
+  roi_breakdown: unknown
   score: number | null
   quarter: string | null
-  process_step_id: string
+  process_step_id: string | null
+  cluster_id: string | null
 }
 
 interface Props {
@@ -33,6 +36,7 @@ export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalR
   const [useCases, setUseCases] = useState<UseCase[]>(initialUseCases)
   const [totalRoi, setTotalRoi] = useState(initialTotalRoi)
   const [generating, setGenerating] = useState(false)
+  const [selectedUseCase, setSelectedUseCase] = useState<UseCase | null>(null)
 
   async function handleGenerate() {
     setGenerating(true)
@@ -145,7 +149,11 @@ export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalR
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     {items.map((uc) => (
-                      <UseCaseCard key={uc.id} useCase={uc} />
+                      <UseCaseCard
+                        key={uc.id}
+                        useCase={uc}
+                        onClick={() => setSelectedUseCase(uc)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -154,6 +162,12 @@ export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalR
           </div>
         )
       })()}
+
+      {/* Detail Sheet */}
+      <UseCaseSheet
+        useCase={selectedUseCase}
+        onClose={() => setSelectedUseCase(null)}
+      />
     </div>
   )
 }

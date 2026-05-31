@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { deleteTestUsers } from './helpers/cleanup'
+import { createTestUser } from './helpers/createTestUser'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -9,16 +10,6 @@ const TEST_PASSWORD = 'QaTestPass123!'
 const TEST_WORKSPACE = `QA Workspace ${RUN_ID}`
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function signupAndLand(page: Page) {
-  await page.goto('/signup')
-  await page.fill('input[placeholder="z.B. Mahr GmbH"]', TEST_WORKSPACE)
-  await page.fill('input[type="email"]', TEST_EMAIL)
-  await page.fill('input[type="password"]', TEST_PASSWORD)
-  await page.click('button[type="submit"]')
-  await page.waitForURL('/dashboard', { timeout: 15000 })
-  await page.waitForLoadState('networkidle')
-}
 
 async function loginAndLand(page: Page) {
   await page.goto('/login')
@@ -34,8 +25,12 @@ async function loginAndLand(page: Page) {
 test.describe('Dashboard — empty state (serial, signup first)', () => {
   test.describe.configure({ mode: 'serial' })
 
+  test.beforeAll(async () => {
+    await createTestUser(TEST_EMAIL, TEST_PASSWORD, TEST_WORKSPACE)
+  })
+
   test('Dashboard: shows empty state with CTA when no interviews exist', async ({ page }) => {
-    await signupAndLand(page)
+    await loginAndLand(page)
     await expect(page.getByText('Noch keine Interviews')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Erstes Interview anlegen' })).toBeVisible()
   })
@@ -188,9 +183,8 @@ test.describe('Employee Chat Page — chat interface (serial)', () => {
   const INTERVIEWER_EMAIL = `qa3b-${RUN_ID}@meridian-test.dev`
 
   test('Setup: create interview and get link', async ({ page }) => {
-    // Signup as consultant
-    await page.goto('/signup')
-    await page.fill('input[placeholder="z.B. Mahr GmbH"]', `B-Workspace-${RUN_ID}`)
+    await createTestUser(INTERVIEWER_EMAIL, TEST_PASSWORD, `B-Workspace-${RUN_ID}`)
+    await page.goto('/login')
     await page.fill('input[type="email"]', INTERVIEWER_EMAIL)
     await page.fill('input[type="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
@@ -337,8 +331,8 @@ test.describe('Dashboard — sidebar navigation', () => {
   const SIDEBAR_EMAIL = `qa3c-${RUN_ID}@meridian-test.dev`
 
   test('Sidebar has "Interviews" nav item', async ({ page }) => {
-    await page.goto('/signup')
-    await page.fill('input[placeholder="z.B. Mahr GmbH"]', `C-WS-${RUN_ID}`)
+    await createTestUser(SIDEBAR_EMAIL, TEST_PASSWORD, `C-WS-${RUN_ID}`)
+    await page.goto('/login')
     await page.fill('input[type="email"]', SIDEBAR_EMAIL)
     await page.fill('input[type="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')

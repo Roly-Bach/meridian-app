@@ -1,20 +1,11 @@
 import { test, expect, type Page } from '@playwright/test'
 import { deleteTestUsers } from './helpers/cleanup'
+import { createTestUser } from './helpers/createTestUser'
 
 const RUN_ID = Date.now()
 const TEST_EMAIL = `qa-${RUN_ID}@meridian-test.dev`
 const TEST_PASSWORD = 'QaTestPass123!'
 const TEST_WORKSPACE = `QA Workspace ${RUN_ID}`
-
-// Helper: signs up and lands on /dashboard
-async function signupNewUser(page: Page) {
-  await page.goto('/signup')
-  await page.fill('input[placeholder="z.B. Mahr GmbH"]', TEST_WORKSPACE)
-  await page.fill('input[type="email"]', TEST_EMAIL)
-  await page.fill('input[type="password"]', TEST_PASSWORD)
-  await page.click('button[type="submit"]')
-  await page.waitForURL('/dashboard', { timeout: 15000 })
-}
 
 // Helper: logs in with test credentials and lands on /dashboard
 async function loginTestUser(page: Page) {
@@ -78,13 +69,9 @@ test.describe('Auth flows (serial — signup first)', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('Signup: creates account and redirects to /dashboard', async ({ page }) => {
-    await page.goto('/signup')
-    await expect(page.locator('h1')).toHaveText('Konto erstellen')
-    await page.fill('input[placeholder="z.B. Mahr GmbH"]', TEST_WORKSPACE)
-    await page.fill('input[type="email"]', TEST_EMAIL)
-    await page.fill('input[type="password"]', TEST_PASSWORD)
-    await page.click('button[type="submit"]')
-    await page.waitForURL('/dashboard', { timeout: 15000 })
+    // Create via admin API (bypasses env-specific ALLOWED_EMAILS allowlist)
+    await createTestUser(TEST_EMAIL, TEST_PASSWORD, TEST_WORKSPACE)
+    await loginTestUser(page)
     await expect(page).toHaveURL('/dashboard')
   })
 

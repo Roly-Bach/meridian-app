@@ -8,6 +8,7 @@ let tokenLimiter: Ratelimit | null = null
 let ipLimiter: Ratelimit | null = null
 let processStepsLimiter: Ratelimit | null = null
 let useCasesLimiter: Ratelimit | null = null
+let insightsLimiter: Ratelimit | null = null
 
 function getRedis(): Redis | null {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null
@@ -36,8 +37,11 @@ function getLimiters() {
   if (!useCasesLimiter) {
     useCasesLimiter = new Ratelimit({ redis: r, limiter: Ratelimit.slidingWindow(30, '1 h'), prefix: 'user_usecases' })
   }
+  if (!insightsLimiter) {
+    insightsLimiter = new Ratelimit({ redis: r, limiter: Ratelimit.slidingWindow(60, '1 h'), prefix: 'user_insights' })
+  }
 
-  return { tokenLimiter, ipLimiter, processStepsLimiter, useCasesLimiter }
+  return { tokenLimiter, ipLimiter, processStepsLimiter, useCasesLimiter, insightsLimiter }
 }
 
 export function extractIP(req: Request): string {
@@ -113,6 +117,18 @@ export async function checkUserLimitUseCases(userId: string): Promise<NextRespon
 
   const result = await runLimit(
     limiters.useCasesLimiter,
+    userId,
+    'Rate limit exceeded. Try again later.'
+  )
+  return result.blocked ? result.response : null
+}
+
+export async function checkUserLimitInsights(userId: string): Promise<NextResponse | null> {
+  const limiters = getLimiters()
+  if (!limiters) return null
+
+  const result = await runLimit(
+    limiters.insightsLimiter,
     userId,
     'Rate limit exceeded. Try again later.'
   )

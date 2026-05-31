@@ -1,18 +1,10 @@
 import { test, expect, type Page } from '@playwright/test'
 import { deleteTestUsers } from './helpers/cleanup'
+import { createTestUser } from './helpers/createTestUser'
 
 const RUN_ID = Date.now()
 const TEST_EMAIL = `qa6-${RUN_ID}@meridian-test.dev`
 const TEST_PASSWORD = 'QaTestPass123!'
-
-async function signupAndLand(page: Page) {
-  await page.goto('/signup')
-  await page.fill('input[type="email"]', TEST_EMAIL)
-  await page.fill('input[type="password"]', TEST_PASSWORD)
-  await page.click('button[type="submit"]')
-  await page.waitForURL('/dashboard', { timeout: 15000 })
-  await page.waitForLoadState('networkidle')
-}
 
 async function loginAndLand(page: Page) {
   await page.goto('/login')
@@ -55,8 +47,9 @@ test.describe('Use Case Board — UI (serial)', () => {
     await deleteTestUsers([TEST_EMAIL])
   })
 
-  test('Setup: signup and reach dashboard', async ({ page }) => {
-    await signupAndLand(page)
+  test('Setup: create test user and reach dashboard', async ({ page }) => {
+    await createTestUser(TEST_EMAIL, TEST_PASSWORD, `QA Workspace ${RUN_ID}`)
+    await loginAndLand(page)
     expect(page.url()).toContain('/dashboard')
   })
 

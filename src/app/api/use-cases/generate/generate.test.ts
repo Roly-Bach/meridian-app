@@ -28,6 +28,7 @@ vi.mock('@/services/useCaseEngine', () => ({
   runHeuristicEngine: vi.fn().mockReturnValue([
     {
       process_step_id: 'step-1',
+      cluster_id: null,
       workspace_id: 'ws-1',
       type: 'automation',
       title: 'Test Use Case',
@@ -36,6 +37,7 @@ vi.mock('@/services/useCaseEngine', () => ({
       effort: 'low',
       roi_hours_per_year: 100,
       roi_eur_per_year: 4500,
+      roi_breakdown: null,
       score: 4500,
       priority: 'medium',
       quarter: 'Q2',
@@ -124,6 +126,12 @@ describe('POST /api/use-cases/generate', () => {
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
+      // clusters (Promise.all[2])
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
     const res = await POST(makeRequest({ workspace_id: WORKSPACE_ID }))
     expect(res.status).toBe(200)
     const json = await res.json()
@@ -156,6 +164,12 @@ describe('POST /api/use-cases/generate', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+      // clusters fetch (Promise.all[2])
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
       // fetch existing IDs
       .mockReturnValueOnce({

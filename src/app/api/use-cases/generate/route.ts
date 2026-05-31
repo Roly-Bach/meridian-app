@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { runHeuristicEngine } from '@/services/useCaseEngine'
+import { runHeuristicEngine, type ClusterContext, type ClusterParticipant, type EngineProcessStep } from '@/services/useCaseEngine'
 import { checkUserLimitUseCases } from '@/lib/ratelimit'
 
 const GenerateSchema = z.object({
@@ -10,7 +10,7 @@ const GenerateSchema = z.object({
 })
 
 // POST /api/use-cases/generate
-// Runs the 8-rule heuristic engine on all process_steps in a workspace.
+// Runs the heuristic engine (R1–R8, P1–P4, C1–C3) on all process_steps + clusters in a workspace.
 // Insert-then-delete: new use_cases inserted first to prevent data loss on failure.
 
 export async function POST(req: Request) {
@@ -51,28 +51,72 @@ export async function POST(req: Request) {
 
   const hourlyRate = workspace?.hourly_rate ?? 45
 
-  // Fetch all process_steps + knowledge_objects for workspace in parallel
-  const [{ data: steps }, { data: knowledgeObjects }] = await Promise.all([
+  // Fetch process_steps, knowledge_objects (with embeddings for P4), and clusters in parallel
+  const [{ data: steps }, { data: knowledgeObjects }, { data: clustersRaw }] = await Promise.all([
     admin
       .from('process_steps')
       .select('id, workspace_id, title, description, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks, interview_id')
       .eq('workspace_id', workspace_id),
     admin
       .from('knowledge_objects')
-      .select('type, content, interview_id')
+      .select('type, content, interview_id, embedding')
       .eq('workspace_id', workspace_id)
       .in('type', ['pain_point', 'tool']),
+    admin
+      .from('process_clusters')
+      .select(`
+        id, workspace_id, canonical_title, canonical_description, participant_count, participants,
+        process_steps(id, workspace_id, interview_id, title, description, frequency_per_month, duration_minutes, error_rate_percent, rule_based, data_sources, media_breaks)
+      `)
+      .eq('workspace_id', workspace_id)
+      .gte('participant_count', 2),
   ])
 
   if (!steps || steps.length === 0) {
     return NextResponse.json({ use_cases: [], total_roi_eur: 0 })
   }
 
-  // Run heuristic engine (quantitative R1-R8 + qualitative P1-P3)
+  // Build a step lookup map for cluster participant resolution
+  const stepMap = new Map<string, EngineProcessStep>()
+  for (const s of steps) {
+    stepMap.set(s.id, s as EngineProcessStep)
+  }
+
+  // Build ClusterContext[] from raw cluster data
+  const clusterContexts: ClusterContext[] = []
+  for (const raw of clustersRaw ?? []) {
+    const participants: ClusterParticipant[] = []
+
+    for (const p of (raw.participants as Array<{ interview_id: string; employee_name: string; employee_role: string | null; process_step_id: string }> ?? [])) {
+      const step = stepMap.get(p.process_step_id)
+      if (!step) continue
+      participants.push({
+        interview_id: p.interview_id,
+        employee_name: p.employee_name,
+        employee_role: p.employee_role,
+        process_step_id: p.process_step_id,
+        step,
+      })
+    }
+
+    if (participants.length >= 2) {
+      clusterContexts.push({
+        id: raw.id,
+        workspace_id: raw.workspace_id,
+        canonical_title: raw.canonical_title,
+        canonical_description: raw.canonical_description,
+        participant_count: raw.participant_count,
+        participants,
+      })
+    }
+  }
+
+  // Run heuristic engine: R1–R8 + P1–P4 + C1–C3
   const generated = runHeuristicEngine(
-    steps,
+    steps as EngineProcessStep[],
     hourlyRate,
-    (knowledgeObjects ?? []) as import('@/services/useCaseEngine').KnowledgeObjectContext[]
+    (knowledgeObjects ?? []) as import('@/services/useCaseEngine').KnowledgeObjectContext[],
+    clusterContexts,
   )
 
   // Fetch existing IDs before any writes (for safe cleanup after successful insert)

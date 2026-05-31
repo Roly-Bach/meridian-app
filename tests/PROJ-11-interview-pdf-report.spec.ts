@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { deleteTestUsers } from './helpers/cleanup'
+import { createTestUser } from './helpers/createTestUser'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -35,9 +36,9 @@ test.describe('PDF button — dashboard UI (serial)', () => {
   let interviewId = ''
   const LIVE_EMAIL = `qa11-${RUN_ID}@meridian-test.dev`
 
-  test('Setup: signup + create interview', async ({ page }) => {
-    await page.goto('/signup')
-    await page.fill('input[placeholder="z.B. Mahr GmbH"]', `PDF-WS-${RUN_ID}`)
+  test('Setup: create user + create interview', async ({ page }) => {
+    await createTestUser(LIVE_EMAIL, TEST_PASSWORD, `PDF-WS-${RUN_ID}`)
+    await page.goto('/login')
     await page.fill('input[type="email"]', LIVE_EMAIL)
     await page.fill('input[type="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')

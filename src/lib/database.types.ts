@@ -1,5 +1,5 @@
-// Minimal Supabase table types — generated manually from the migration schema.
-// Replace with full generated types from `supabase gen types typescript` when available.
+// Minimal Supabase table types — updated for PROJ-24 (use_cases enrichment).
+// Uses interface format (no __InternalSupabase) to preserve existing type-check strictness.
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
@@ -50,18 +50,18 @@ export interface Database {
         }
         Relationships: [
           {
-            foreignKeyName: "workspace_members_workspace_id_fkey"
-            columns: ["workspace_id"]
+            foreignKeyName: 'workspace_members_workspace_id_fkey'
+            columns: ['workspace_id']
             isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
+            referencedRelation: 'workspaces'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "workspace_members_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: 'workspace_members_user_id_fkey'
+            columns: ['user_id']
             isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
+            referencedRelation: 'users'
+            referencedColumns: ['id']
           }
         ]
       }
@@ -247,7 +247,6 @@ export interface Database {
           created_at?: string
         }
         Update: {
-          cluster_id?: string | null
           title?: string
           description?: string | null
           role?: string | null
@@ -262,60 +261,22 @@ export interface Database {
           condition_text?: string | null
           substeps?: Json | null
           embedding?: number[] | null
+          cluster_id?: string | null
         }
         Relationships: [
-          { foreignKeyName: 'process_steps_cluster_id_fkey'; columns: ['cluster_id']; referencedRelation: 'process_clusters'; referencedColumns: ['id'] }
+          { foreignKeyName: 'process_steps_interview_id_fkey'; columns: ['interview_id']; referencedRelation: 'interviews'; referencedColumns: ['id'] },
+          { foreignKeyName: 'process_steps_cluster_id_fkey'; columns: ['cluster_id']; isOneToOne: false; referencedRelation: 'process_clusters'; referencedColumns: ['id'] }
         ]
-      }
-      use_cases: {
-        Row: {
-          id: string
-          process_step_id: string
-          workspace_id: string
-          type: string
-          title: string
-          description: string | null
-          reasoning: string | null
-          priority: 'high' | 'medium' | 'low' | null
-          roi_hours_per_year: number | null
-          roi_eur_per_year: number | null
-          effort: 'low' | 'medium' | 'high' | null
-          score: number | null
-          quarter: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          process_step_id: string
-          workspace_id: string
-          type: string
-          title: string
-          description?: string | null
-          reasoning?: string | null
-          priority?: 'high' | 'medium' | 'low' | null
-          roi_hours_per_year?: number | null
-          roi_eur_per_year?: number | null
-          effort?: 'low' | 'medium' | 'high' | null
-          score?: number | null
-          quarter?: string | null
-          created_at?: string
-        }
-        Update: {
-          title?: string
-          description?: string | null
-          reasoning?: string | null
-        }
-        Relationships: []
       }
       knowledge_objects: {
         Row: {
           id: string
-          interview_id: string
           workspace_id: string
-          type: 'process_step' | 'tool' | 'pain_point' | 'role' | 'fact' | 'contact'
-          content: Record<string, unknown>
-          source_quote: string | null
+          interview_id: string
           turn_id: string | null
+          type: string
+          content: Json
+          source_quote: string | null
           embedding: number[] | null
           existing_count: number
           last_seen_at: string
@@ -323,29 +284,117 @@ export interface Database {
         }
         Insert: {
           id?: string
-          interview_id: string
           workspace_id: string
-          type: 'process_step' | 'tool' | 'pain_point' | 'role' | 'fact' | 'contact'
-          content: Record<string, unknown>
-          source_quote?: string | null
+          interview_id: string
           turn_id?: string | null
-          embedding?: unknown
+          type: string
+          content?: Json | Record<string, unknown>
+          source_quote?: string | null
+          embedding?: number[] | null
           existing_count?: number
           last_seen_at?: string
           created_at?: string
         }
         Update: {
-          content?: Record<string, unknown>
+          type?: string
+          content?: Json
           source_quote?: string | null
-          embedding?: unknown
+          embedding?: number[] | null
           existing_count?: number
           last_seen_at?: string
         }
         Relationships: []
       }
+      use_cases: {
+        Row: {
+          id: string
+          workspace_id: string
+          type: string
+          title: string
+          description: string | null
+          reasoning: string | null
+          effort: 'low' | 'medium' | 'high' | null
+          priority: 'low' | 'medium' | 'high' | null
+          roi_hours_per_year: number | null
+          roi_eur_per_year: number | null
+          roi_breakdown: Json | null
+          score: number | null
+          quarter: string | null
+          process_step_id: string | null
+          cluster_id: string | null
+          llm_insights: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          type: string
+          title: string
+          description?: string | null
+          reasoning?: string | null
+          effort?: 'low' | 'medium' | 'high' | null
+          priority?: 'low' | 'medium' | 'high' | null
+          roi_hours_per_year?: number | null
+          roi_eur_per_year?: number | null
+          roi_breakdown?: Json | null
+          score?: number | null
+          quarter?: string | null
+          process_step_id?: string | null
+          cluster_id?: string | null
+          llm_insights?: Json | null
+          created_at?: string
+        }
+        Update: {
+          type?: string
+          title?: string
+          description?: string | null
+          reasoning?: string | null
+          effort?: 'low' | 'medium' | 'high' | null
+          priority?: 'low' | 'medium' | 'high' | null
+          roi_hours_per_year?: number | null
+          roi_eur_per_year?: number | null
+          roi_breakdown?: Json | null
+          score?: number | null
+          quarter?: string | null
+          process_step_id?: string | null
+          cluster_id?: string | null
+          llm_insights?: Json | null
+        }
+        Relationships: []
+      }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
-    Enums: Record<string, never>
+    Views: {}
+    Functions: {
+      match_process_cluster: {
+        Args: {
+          query_embedding: string
+          similarity_threshold?: number
+          workspace_id: string
+        }
+        Returns: {
+          cluster_id: string
+          similarity: number
+        }[]
+      }
+      search_knowledge_objects: {
+        Args: {
+          match_count?: number
+          object_type?: string
+          query_embedding: string
+          similarity_threshold?: number
+          workspace_id: string
+        }
+        Returns: {
+          content: Json
+          id: string
+          interview_id: string
+          similarity: number
+          source_quote: string
+          type: string
+        }[]
+      }
+    }
+    Enums: {}
+    CompositeTypes: {}
   }
 }

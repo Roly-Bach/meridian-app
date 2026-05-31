@@ -37,12 +37,7 @@ interface ProcessCluster {
   canonical_title: string
   canonical_description: string | null
   participant_count: number
-  participants: Array<{
-    interview_id: string
-    employee_name: string
-    employee_role: string | null
-    process_step_id: string
-  }>
+  participants: unknown
 }
 
 interface ProcessStep {
@@ -62,7 +57,7 @@ interface ProcessStep {
   source_quote: string | null
   step_type: 'action' | 'decision'
   condition_text: string | null
-  substeps: SubStep[] | null
+  substeps: unknown
   created_at: string
   interviews: {
     department: string
@@ -340,7 +335,7 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
   }))
 
   // Substep state — auto-generate on mount if not yet cached
-  const [substeps, setSubsteps] = useState<SubStep[] | null>(representative.substeps ?? null)
+  const [substeps, setSubsteps] = useState<SubStep[] | null>((representative.substeps ?? null) as SubStep[] | null)
   const [substepsLoading, setSubstepsLoading] = useState(false)
   const [substepsError, setSubstepsError] = useState<string | null>(null)
 
