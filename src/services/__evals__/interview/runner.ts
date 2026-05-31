@@ -36,13 +36,19 @@ import {
   type TurnMessage,
   type StepEntry,
   type MissingSlot,
+  type ClarificationCard,
+  type AnalystBriefing,
 } from '@/services/interviewAgent'
 import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/services/interviewOrchestrator'
 import { extractAndEmbed, deduplicateKnowledgeObjects, type TurnTranscript, type RawExtraction } from '@/services/extraction'
+import { runAnalyst } from '@/services/interviewAnalyst'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 import { clusterProcessSteps } from '@/services/processClustering'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
+import type { Database } from '@/lib/database.types'
+
+type ProcessStepUpdate = Database['public']['Tables']['process_steps']['Update']
 import { runAllScorers, type TurnRecord, type ToolCallRecord, type ScoreSet } from './scorers'
 
 // ─── Persona loader ───────────────────────────────────────────────────────────
@@ -134,6 +140,16 @@ async function loadState(interviewId: string): Promise<DBState> {
   }
 }
 
+async function loadAnalystBriefing(interviewId: string): Promise<AnalystBriefing | null> {
+  const supabase = getSupabaseAdmin()
+  const { data } = await supabase
+    .from('interviews')
+    .select('next_briefing')
+    .eq('id', interviewId)
+    .single()
+  return (data?.next_briefing as AnalystBriefing | null) ?? null
+}
+
 async function loadHistory(interviewId: string): Promise<TurnMessage[]> {
   const supabase = getSupabaseAdmin()
   const { data: rows } = await supabase
@@ -148,6 +164,94 @@ async function loadHistory(interviewId: string): Promise<TurnMessage[]> {
     { role: 'user' as const, content: t.user_input },
     { role: 'assistant' as const, content: t.agent_response },
   ])
+}
+
+// ─── Clarification helpers (PROJ-23) ─────────────────────────────────────────
+
+// Slot answer maps (mirror of POST /clarification route)
+const FREQUENCY_MAP: Record<string, number> = { 'Täglich': 22, 'Wöchentlich': 4, 'Mehrfach/Monat': 8, 'Monatlich': 1 }
+const DURATION_MAP: Record<string, number> = { '< 5 Min': 3, '5–15 Min': 10, '15–30 Min': 22, '> 30 Min': 45 }
+const RULE_BASED_MAP: Record<string, boolean> = { 'Immer gleich': true, 'Meistens gleich': true, 'Variiert stark': false }
+const ERROR_RATE_MAP: Record<string, number> = { 'Selten Fehler': 2, 'Gelegentlich': 10, 'Häufig': 30 }
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Deterministic synthetic answers for each card type
+function buildSyntheticClarificationAnswers(cards: ClarificationCard[]): Array<{ process_step_id: string; slot_key: string; answer: string | string[] }> {
+  const SLOT_DEFAULTS: Record<string, string> = {
+    frequency_per_month: 'Wöchentlich',
+    duration_minutes: '15–30 Min',
+    rule_based: 'Meistens gleich',
+    error_rate_percent: 'Gelegentlich',
+    open_item: 'Ja',
+  }
+  return cards.map(card => {
+    const def = SLOT_DEFAULTS[card.slot_key]
+    if (def) return { process_step_id: card.process_step_id, slot_key: card.slot_key, answer: def }
+    // Qualitative: first non-"Weiß ich nicht" option
+    const valid = card.options.filter(o => o !== 'Weiß ich nicht')
+    const chosen = valid[0] ?? card.options[0] ?? 'Weiß ich nicht'
+    return {
+      process_step_id: card.process_step_id,
+      slot_key: card.slot_key,
+      answer: card.answer_type === 'multi' ? [chosen] : chosen,
+    }
+  })
+}
+
+async function executeClarificationCompletion(
+  interviewId: string,
+  workspaceId: string,
+  answers: Array<{ process_step_id: string; slot_key: string; answer: string | string[] }>,
+): Promise<void> {
+  const supabase = getSupabaseAdmin()
+
+  // Persist clarification_answers
+  const clarificationRecord: Record<string, string | string[]> = {}
+  for (const a of answers) clarificationRecord[`${a.process_step_id}__${a.slot_key}`] = a.answer
+  await supabase
+    .from('interviews')
+    .update({ clarification_answers: clarificationRecord as unknown as import('@/lib/database.types').Json })
+    .eq('id', interviewId)
+
+  // Process SlotCards → update process_steps
+  const SLOT_KEYS = ['frequency_per_month', 'duration_minutes', 'rule_based', 'error_rate_percent']
+  for (const a of answers) {
+    if (!SLOT_KEYS.includes(a.slot_key) || typeof a.answer !== 'string' || a.answer === 'Weiß ich nicht') continue
+    const update: ProcessStepUpdate = {}
+    if (a.slot_key === 'frequency_per_month' && FREQUENCY_MAP[a.answer] !== undefined) update.frequency_per_month = FREQUENCY_MAP[a.answer]
+    else if (a.slot_key === 'duration_minutes' && DURATION_MAP[a.answer] !== undefined) update.duration_minutes = DURATION_MAP[a.answer]
+    else if (a.slot_key === 'rule_based' && RULE_BASED_MAP[a.answer] !== undefined) update.rule_based = RULE_BASED_MAP[a.answer]
+    else if (a.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[a.answer] !== undefined) update.error_rate_percent = ERROR_RATE_MAP[a.answer]
+    if (Object.keys(update).length === 0) continue
+    const isUuid = UUID_RE.test(a.process_step_id)
+    if (isUuid) {
+      await supabase.from('process_steps').update(update).eq('id', a.process_step_id).eq('interview_id', interviewId)
+    } else {
+      await supabase.from('process_steps').update(update).eq('title', a.process_step_id).eq('interview_id', interviewId)
+    }
+  }
+
+  // Process OpenItemCards (Ja/Manchmal) → insert knowledge_objects
+  for (const a of answers) {
+    if (a.slot_key !== 'open_item' || typeof a.answer !== 'string') continue
+    if (a.answer !== 'Ja' && a.answer !== 'Manchmal') continue
+    await supabase.from('knowledge_objects').insert({
+      interview_id: interviewId,
+      workspace_id: workspaceId,
+      type: 'process_step',
+      content: { title: a.process_step_id, confirmed_via: 'clarification', answer: a.answer },
+    })
+  }
+
+  // Complete interview + post-completion pipeline
+  await supabase.from('interviews').update({ status: 'completed', extractions_pending: true }).eq('id', interviewId)
+  try {
+    await createProcessStepsFromTracker({ interviewId, workspaceId })
+  } catch (err) {
+    console.error('[runner] clarification createProcessStepsFromTracker failed:', err)
+  }
+  clusterProcessSteps(workspaceId).catch(err => console.error('[runner] clarification clusterProcessSteps failed:', err))
+  deduplicateKnowledgeObjects(workspaceId).catch(err => console.error('[runner] clarification deduplicateKnowledgeObjects failed:', err))
 }
 
 // ─── Persona simulator ────────────────────────────────────────────────────────
@@ -474,8 +578,11 @@ async function runInterview(
     console.log(`\n[${persona.identity.name}]: ${personaResponse}`)
     conversationHistory.push({ role: 'user', content: personaResponse })
 
-    const dbState = await loadState(interviewId)
-    const dbHistory = await loadHistory(interviewId)
+    const [dbState, dbHistory, analystBriefing] = await Promise.all([
+      loadState(interviewId),
+      loadHistory(interviewId),
+      loadAnalystBriefing(interviewId),
+    ])
 
     const agentHistory: TurnMessage[] = [...dbHistory, { role: 'user', content: personaResponse }]
 
@@ -490,7 +597,7 @@ async function runInterview(
       history: agentHistory,
     }
 
-    const lifecycle = checkLifecycle(orchCtx, null)
+    const lifecycle = checkLifecycle(orchCtx, analystBriefing)
     if (lifecycle.shouldComplete) {
       await supabase
         .from('interviews')
@@ -510,9 +617,22 @@ async function runInterview(
       break
     }
 
-    const nextPhaseDecision = decideNextPhase(orchCtx, null)
+    const nextPhaseDecision = decideNextPhase(orchCtx, analystBriefing)
     const orchestratedPhase: Phase =
       nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
+
+    // PROJ-23: Clarification phase — submit synthetic answers and complete
+    if (orchestratedPhase === 'clarification') {
+      const cards = analystBriefing?.clarification_cards ?? []
+      console.log(`\n[eval] Clarification phase: ${cards.length} cards — submitting synthetic answers`)
+      const syntheticAnswers = buildSyntheticClarificationAnswers(cards)
+      for (const a of syntheticAnswers) {
+        console.log(`  [card] ${a.slot_key} → ${JSON.stringify(a.answer)}`)
+      }
+      await executeClarificationCompletion(interviewId, workspaceId, syntheticAnswers)
+      console.log('[eval] Clarification complete → interview completed')
+      break
+    }
 
     if (orchestratedPhase !== dbState.phase) {
       await supabase
@@ -597,6 +717,27 @@ async function runInterview(
         err => console.error('[runner] extractAndEmbed failed:', err),
       )
     }
+
+    // Run analyst synchronously so briefing is ready for next iteration's orchestration
+    await runAnalyst({
+      context: {
+        interviewId,
+        workspaceId,
+        employeeName: persona.identity.name,
+        employeeRole: persona.identity.role,
+        department: persona.identity.department,
+        focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
+        phase: orchestratedPhase,
+        timerMinutes: dbState.timerMinutes,
+        topicsCovered: dbState.topicsCovered,
+        topicsOpen: dbState.topicsOpen,
+        extractionsLog: dbState.extractionsLog,
+        maxDurationMinutes: 30,
+        stepTracker: dbState.stepTracker,
+      },
+      history: [...agentHistory, { role: 'assistant', content: agentText }],
+      traceCtx,
+    }).catch(err => console.error('[runner] runAnalyst failed:', err))
 
     const { data: iv } = await supabase
       .from('interviews')
