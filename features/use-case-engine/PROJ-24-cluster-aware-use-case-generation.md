@@ -243,7 +243,150 @@ Click auf Use Case Card → Sheet öffnet von rechts. Sektionen (in Reihenfolge)
 ---
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponentenstruktur (Frontend)
+
+```
+UseCaseBoardClient (existiert — selectedId State hinzufügen)
++-- UseCaseCard (existiert — onClick Handler + Cluster-Badge hinzufügen)
++-- UseCaseSheet (NEU — shadcn Sheet, bereits installiert)
+    +-- SheetHeader
+    |   +-- Titel + Typ-Badge + Quartal-Badge
+    |   +-- ROI gesamt (fett, groß)
+    +-- SummarySection
+    |   +-- Template-generierte Zusammenfassung (sofort sichtbar)
+    +-- ProcessSection
+    |   +-- Einzel-UC: Prozessname + Mitarbeitername/-rolle + Originalzitat
+    |   +-- Cluster-UC: Cluster-Titel + canonical_description Auszug
+    +-- MetricsGrid (NEU)
+    |   +-- Frequenz-Badge · Dauer-Badge · Fehlerrate-Badge
+    +-- RoiBreakdown (NEU)
+    |   +-- Formel-Darstellung: Freq × Dauer × Stundensatz × Reduktion = €/Monat
+    |   +-- Bei Cluster-UC: + Teilnehmerzahl in Formel
+    +-- InsightsSection (NEU)
+    |   +-- Skeleton-Loader während LLM-Call (~2s)
+    |   +-- Business Case Text
+    |   +-- Implementierungsempfehlung + Komplexitäts-Indikator
+    |   +-- Nächste Schritte (3 Bullets)
+    |   +-- Risiko-Hinweis
+    +-- ParticipantList (NEU — nur bei Cluster-UCs)
+        +-- Anzahl Mitarbeiter + Headline
+        +-- Pro Teilnehmer: Name, Rolle, Frequenz, ROI
+```
+
+**Wichtig:** `sheet.tsx` und `skeleton.tsx` sind bereits installiert (shadcn/ui). Keine neuen Pakete nötig.
+
+---
+
+### Datenbankänderungen
+
+**Tabelle:** `use_cases` (existiert) — 4 neue Spalten:
+
+| Spalte | Was gespeichert wird |
+|--------|---------------------|
+| `description` | Kurzzusammenfassung in Deutsch, template-generiert bei Use Case Erstellung (kein LLM) |
+| `roi_breakdown` | Alle Zahlen für die ROI-Berechnung: Frequenz, Dauer, Stundensatz, Reduktionsrate, Teilnehmerzahl |
+| `cluster_id` | Verweis auf den Prozess-Cluster (nur bei Cluster-Use-Cases gesetzt, sonst leer) |
+| `llm_insights` | KI-Analyse: Business Case, Empfehlung, Nächste Schritte, Risiken — nur nach erstem Klick befüllt |
+
+Keine neuen Tabellen. Keine Änderungen an anderen Tabellen.
+
+---
+
+### Backend — 3 Schichten
+
+#### Schicht 1: Erweiterter Generate-Prozess
+
+`POST /api/use-cases/generate` (existiert — erweitert)
+
+**Was sich ändert:** Zwei zusätzliche Datenbankabfragen beim Start:
+1. Lade alle Prozess-Cluster mit ≥ 2 Teilnehmern + deren Process Steps
+2. Lade alle pain_points mit Embeddings (für P4-Clustering)
+
+**Ablauf danach:**
+
+```
+Cluster-Regeln (C1–C3) zuerst auswerten
+    ↓
+Merken: welche Process Steps sind durch Cluster-UCs abgedeckt?
+    ↓
+Einzel-Regeln (R1–R8) auswerten — covered Steps überspringen
+    ↓
+P4: pain_points nach Ähnlichkeit gruppieren → Use Cases daraus
+    ↓
+P1–P3: normal pro Interview (unverändert)
+    ↓
+Für jeden Use Case: description + roi_breakdown berechnen und speichern
+```
+
+Idempotenz bleibt erhalten: Bei erneutem Aufruf werden alle Use Cases des Workspace gelöscht und neu berechnet (wie heute).
+
+#### Schicht 2: Detail-Endpoint (neu)
+
+`GET /api/use-cases/[id]`
+
+Gibt einen Use Case mit allen verknüpften Daten zurück:
+- Use Case Stammdaten (inkl. description, roi_breakdown)
+- Process Step + Mitarbeiterdaten (falls Einzel-UC)
+- Cluster-Daten + Sub-Use-Cases pro Teilnehmer (falls Cluster-UC)
+
+Reine Datenbankabfrage — kein LLM, kein Warten. Ziel: < 300ms.
+
+#### Schicht 3: Insights-Endpoint (neu, lazy)
+
+`POST /api/use-cases/[id]/insights`
+
+**Cache-first Logik:**
+1. Ist `llm_insights` bereits befüllt? → Sofort zurückgeben
+2. Nein → LLM Call mit vollem Kontext → In DB speichern → Zurückgeben
+
+Der LLM erhält: Use Case Typ + Regel, Prozess-Beschreibung, Originalzitat, Metriken, Mitarbeiterdaten, und bei Cluster-UCs die cross-employee Analyse.
+
+**Neuer Service:** `src/services/useCaseInsights.ts` — isoliert die LLM-Logik vom API-Endpoint. Nutzt `ENRICHMENT_MODEL` env var (google/gemini-3.1-flash-lite by default).
+
+---
+
+### Geänderte Dateien
+
+| Datei | Art der Änderung |
+|-------|-----------------|
+| `supabase/migrations/YYYYMMDD_proj24_use_cases_enrichment.sql` | NEU — 4 neue Spalten in use_cases |
+| `src/services/useCaseEngine.ts` | ERWEITERT — runClusterRules() + clusterPainPointsByEmbedding() hinzufügen |
+| `src/app/api/use-cases/generate/route.ts` | ERWEITERT — Cluster- + pain_point-Fetch, Suppression-Logik |
+| `src/app/api/use-cases/[id]/route.ts` | NEU — Detail-Endpoint |
+| `src/app/api/use-cases/[id]/insights/route.ts` | NEU — Insights-Endpoint |
+| `src/services/useCaseInsights.ts` | NEU — LLM Insights Service |
+| `src/components/UseCaseBoardClient.tsx` | ERWEITERT — selectedId State + UseCaseSheet einbinden |
+| `src/components/UseCaseCard.tsx` | ERWEITERT — onClick Handler + Cluster-Badge |
+| `src/components/UseCaseSheet.tsx` | NEU — Sheet/Drawer Hauptkomponente |
+| `src/components/MetricsGrid.tsx` | NEU — Metriken-Badges |
+| `src/components/RoiBreakdown.tsx` | NEU — ROI-Formel Darstellung |
+| `src/components/ParticipantList.tsx` | NEU — Sub-Use-Cases für Cluster-UCs |
+
+---
+
+### Technische Entscheidungen
+
+**Suppression statt Deduplication bei Cluster-UCs**
+Wenn ein Cluster-UC für einen Prozess existiert, werden individuelle UCs für dieselben Steps nicht generiert. Alternative wäre, alle zu generieren und bei der Anzeige zu deduplizieren — aber Suppression bei der Generierung ist deterministischer und einfacher zu testen.
+
+**Template-Description statt LLM bei Generate**
+Bei `POST /generate` werden ggf. 10–20 Use Cases auf einmal erstellt. Für jeden einen LLM-Call zu machen würde den Endpoint auf 30–60 Sekunden verlangsamen. Templates sind sofort und konsistent.
+
+**Lazy Insights statt Eager**
+Der KI-Berater öffnet in einer Session typischerweise 3–5 Use Cases im Detail, aber ein Workspace kann 15–30 Use Cases haben. Lazy Generierung spart ~75% der LLM-Calls. Caching in der DB stellt sicher, dass der Nutzer nur einmal wartet.
+
+**Greedy In-Memory Clustering für P4 (Pain Points)**
+Pain Points sind klein in der Anzahl (typisch < 50 pro Workspace im MVP). Ein einfaches In-Memory Verfahren mit Cosine-Similarity reicht — keine neue Datenbank-Infrastruktur oder RPC-Funktion nötig.
+
+**Sheet statt Modal für Detail View**
+Ein Sheet lässt die Use Case Liste im Hintergrund sichtbar. Der Berater kann den Sheet schließen und direkt den nächsten Use Case öffnen — besser für Vergleichsworkflows als ein blockierendes Modal.
+
+---
+
+### Neue Abhängigkeiten
+
+Keine. Alle benötigten shadcn/ui Komponenten (Sheet, Skeleton, Badge, Card) sind bereits installiert.
 
 ## QA Test Results
 _To be added by /qa_
