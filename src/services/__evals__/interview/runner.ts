@@ -718,26 +718,31 @@ async function runInterview(
       )
     }
 
-    // Run analyst synchronously so briefing is ready for next iteration's orchestration
-    await runAnalyst({
-      context: {
-        interviewId,
-        workspaceId,
-        employeeName: persona.identity.name,
-        employeeRole: persona.identity.role,
-        department: persona.identity.department,
-        focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
-        phase: orchestratedPhase,
-        timerMinutes: dbState.timerMinutes,
-        topicsCovered: dbState.topicsCovered,
-        topicsOpen: dbState.topicsOpen,
-        extractionsLog: dbState.extractionsLog,
-        maxDurationMinutes: 30,
-        stepTracker: dbState.stepTracker,
-      },
-      history: [...agentHistory, { role: 'assistant', content: agentText }],
-      traceCtx,
-    }).catch(err => console.error('[runner] runAnalyst failed:', err))
+    // Run analyst only at wrap_up to generate clarification cards.
+    // Running at every phase would cause duplicate step_tracker entries (analyst
+    // calls register_step, same as agent) → inflates step count → interview
+    // never completes. At wrap_up, step count no longer drives phase decisions.
+    if (orchestratedPhase === 'wrap_up') {
+      await runAnalyst({
+        context: {
+          interviewId,
+          workspaceId,
+          employeeName: persona.identity.name,
+          employeeRole: persona.identity.role,
+          department: persona.identity.department,
+          focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
+          phase: orchestratedPhase,
+          timerMinutes: dbState.timerMinutes,
+          topicsCovered: dbState.topicsCovered,
+          topicsOpen: dbState.topicsOpen,
+          extractionsLog: dbState.extractionsLog,
+          maxDurationMinutes: 30,
+          stepTracker: dbState.stepTracker,
+        },
+        history: [...agentHistory, { role: 'assistant', content: agentText }],
+        traceCtx,
+      }).catch(err => console.error('[runner] runAnalyst failed:', err))
+    }
 
     const { data: iv } = await supabase
       .from('interviews')
