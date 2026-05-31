@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { extractAndEmbed } from '@/services/extraction'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
+import { clusterProcessSteps } from '@/services/processClustering'
 
 // ─── POST /api/interviews/[id]/reextract ──────────────────────────────────────
 // Auth: Supabase session (Berater only — checks workspace ownership)
@@ -90,6 +91,7 @@ export async function POST(
 
   // ── Re-create process_steps from tracker ────────────────────────────────────
   // Delete existing first so idempotency guard doesn't block re-creation.
+  // Also reset cluster_id on peer steps in same workspace so clustering reruns clean.
   try {
     await supabase.from('process_steps').delete().eq('interview_id', interviewId)
     await createProcessStepsFromTracker({
@@ -98,6 +100,21 @@ export async function POST(
     })
   } catch (err) {
     console.error('[reextract] createProcessStepsFromTracker failed:', err)
+  }
+
+  // ── Re-cluster all steps in workspace ───────────────────────────────────────
+  try {
+    await supabase
+      .from('process_clusters')
+      .delete()
+      .eq('workspace_id', interview.workspace_id)
+    await supabase
+      .from('process_steps')
+      .update({ cluster_id: null })
+      .eq('workspace_id', interview.workspace_id)
+    await clusterProcessSteps(interview.workspace_id)
+  } catch (err) {
+    console.error('[reextract] clusterProcessSteps failed:', err)
   }
 
   // ── Count results ────────────────────────────────────────────────────────────

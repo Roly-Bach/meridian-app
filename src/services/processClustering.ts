@@ -1,4 +1,6 @@
+import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { resolveModel } from '@/lib/llm-provider'
 
 const SIMILARITY_THRESHOLD = parseFloat(
   process.env.CLUSTER_SIMILARITY_THRESHOLD ?? '0.85'
@@ -40,6 +42,66 @@ interface ClusterRow {
     process_step_id: string
   }>
   representative_embedding: number[] | null
+}
+
+interface ProcessStepForSynthesis {
+  title: string
+  description: string | null
+  source_quote: string | null
+  frequency_per_month: number | null
+  duration_minutes: number | null
+  data_sources: string[] | null
+  rule_based: boolean | null
+  interviews: { employee_name: string; employee_role: string | null } | null
+}
+
+async function synthesizeCluster(clusterId: string): Promise<void> {
+  const supabase = getSupabaseAdmin()
+
+  const { data: stepsRaw, error } = await supabase
+    .from('process_steps')
+    .select('title, description, source_quote, frequency_per_month, duration_minutes, data_sources, rule_based, interviews(employee_name, employee_role)')
+    .eq('cluster_id', clusterId)
+
+  if (error || !stepsRaw || stepsRaw.length < 2) return
+
+  const steps = stepsRaw as unknown as ProcessStepForSynthesis[]
+
+  const participantSections = steps
+    .map((s) => {
+      const info = Array.isArray(s.interviews) ? s.interviews[0] : s.interviews
+      const name = info?.employee_name ?? 'Unbekannt'
+      const role = info?.employee_role ?? 'Unbekannte Rolle'
+      const parts = [`**${name} (${role})**`]
+      if (s.description) parts.push(`Beschreibung: ${s.description}`)
+      if (s.duration_minutes) parts.push(`Dauer: ${s.duration_minutes} Minuten`)
+      if (s.frequency_per_month) parts.push(`Häufigkeit: ${s.frequency_per_month}× pro Monat`)
+      if (s.data_sources?.length) parts.push(`Tools/Systeme: ${s.data_sources.join(', ')}`)
+      if (s.source_quote) parts.push(`Originalzitat: "${s.source_quote}"`)
+      return parts.join('\n')
+    })
+    .join('\n\n---\n\n')
+
+  const prompt = `Vergleiche folgende Beschreibungen desselben Prozessschritts von verschiedenen Mitarbeitern:\n\n${participantSections}\n\nSchreibe eine strukturierte Zusammenfassung auf Deutsch mit:\n1. Gemeinsamkeiten: Was alle Teilnehmer ähnlich beschreiben\n2. Abweichungen: Unterschiede in Dauer, Tools oder Vorgehen\n3. Mögliche Ursachen: Warum gibt es Unterschiede? (z.B. Rolle, Erfahrung, Abteilung, Workarounds)`
+
+  try {
+    const { text } = await generateText({
+      model: resolveModel(process.env.ENRICHMENT_MODEL),
+      prompt,
+      maxOutputTokens: 600,
+    })
+
+    const { error: updateErr } = await supabase
+      .from('process_clusters')
+      .update({ canonical_description: text.trim() })
+      .eq('id', clusterId)
+
+    if (updateErr) {
+      console.error('[processClustering] synthesizeCluster update failed:', updateErr.message)
+    }
+  } catch (err) {
+    console.error('[processClustering] synthesizeCluster LLM failed:', err)
+  }
 }
 
 export async function clusterProcessSteps(workspaceId: string): Promise<void> {
@@ -164,6 +226,13 @@ export async function clusterProcessSteps(workspaceId: string): Promise<void> {
       if (linkErr) {
         console.error('[processClustering] Step link failed:', linkErr.message, 'step:', step.id)
       }
+    }
+  }
+
+  // Fire-and-forget synthesis for any cluster that reached ≥2 participants this run
+  for (const [clusterId, { count }] of clusterParticipants.entries()) {
+    if (count >= 2) {
+      void synthesizeCluster(clusterId)
     }
   }
 }

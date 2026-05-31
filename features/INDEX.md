@@ -35,7 +35,7 @@
 | PROJ-17 | Adaptive Eval-Harness + Start-Endpoint | Feature | Interview Engine | — | Deployed | [spec](interview-engine/PROJ-17-adaptive-eval-harness-start-endpoint.md) | P1 | M | 0:0:2 |
 | PROJ-18 | Prozessschritt-Deduplication | Feature | Wissensbank | PROJ-5 | Deployed | → PROJ-20 | P1 | M | 0:0:2 |
 | PROJ-19 | Knowledge-Informed Interviewing | Extension | Interview Engine | PROJ-2 | Roadmap | — | P2 | — | — |
-| PROJ-20 | Prozessableitungs-Pipeline | Epic | Wissensbank | — | Deployed | [spec](wissensbank/PROJ-20-prozessableitungs-pipeline.md) | P0 | — | 0:0:4 |
+| PROJ-20 | Prozessableitungs-Pipeline | Epic | Wissensbank | — | Approved | [spec](wissensbank/PROJ-20-prozessableitungs-pipeline.md) | P0 | — | 0:0:1 |
 | PROJ-21 | Eval-Foundation für Modell- und Architektur-Vergleich | Revision | Interview Engine | PROJ-17 | Approved | [spec](interview-engine/PROJ-21-eval-foundation-modell-architektur-vergleich.md) | P1 | M | 0:0:0 |
 | PROJ-22 | Dual-Loop Interview Engine (ADR-011) | Revision | Interview Engine | PROJ-2 | Approved | [spec](interview-engine/PROJ-22-dual-loop-interview-engine.md) | P1 | L | 0:0:2 |
 | PROJ-23 | Adaptive Clarification Questions | Extension | Interview Engine | PROJ-2 | Approved | [spec](interview-engine/PROJ-23-adaptive-clarification-questions.md) | P1 | M | 0:0:0 |

@@ -2,14 +2,14 @@
 
 ## Status: Deployed
 **Created:** 2026-05-27
-**Last Updated:** 2026-05-31
+**Last Updated:** 2026-05-31 (Frontend + Backend Cluster-Synthese)
 **Type:** Epic
 **Domain:** Wissensbank
 **Extends:** —
 **Appetite:** —
 **Bugs:** 0:0:4 (alle Low, alle behoben)
 
-> **Pipeline-Update 2026-05-31:** Schritt [4b] `synthesizeCluster()` hinzugefügt — LLM-Synthese für Cluster mit ≥2 Teilnehmern. Embedding-Bug behoben: AI SDK `@ai-sdk/openai` durch direkten `fetch` ersetzt (Jina gibt kein `prompt_tokens` zurück → strict validation schlug fehl → alle Embeddings null).
+> **Pipeline-Update 2026-05-31:** Schritt [4b] `synthesizeCluster()` implementiert — LLM-Synthese für Cluster mit ≥2 Teilnehmern (fire-and-forget nach `clusterProcessSteps()`). `embeddings.ts` auf direkten `fetch` umgestellt (AI SDK `@ai-sdk/openai` inkompatibel mit Jina-`usage`-Feld). Frontend: `MitarbeiterVergleichSection` in `ClusterDetailSheet` — aufklappbare Per-Teilnehmer-Cards (Name, Rolle, Beschreibung, Metriken, Source Quote) bei ≥2 Participants.
 
 > **Pipeline-Update 2026-05-27:** Schritt [3] auf `createProcessStepsFromTracker()` umgestellt. Slot-Werte kommen jetzt direkt aus `interview_state.step_tracker` (authoritative), LLM generiert nur noch description + source_quote. Failsafe: `ensureCompletedIfFarewell` setzt `status=completed` wenn Modell `[complete_interview]` als Text statt Tool-Call ausgibt.
 
@@ -248,6 +248,51 @@ Neuer aufklappbarer Abschnitt in `ClusterDetailSheet` (shadcn `Collapsible`, ber
 
 **Deployed:** 2026-05-26 (PROJ-18 war letztes Modul — alle Phasen live)  
 **Production URL:** https://meridian-app.vercel.app
+
+---
+
+## QA Test Results — 2026-05-31 (Cluster-Synthese + Mitarbeiter-Vergleich)
+
+**Getestete Änderungen:** `synthesizeCluster()` (processClustering.ts), `MitarbeiterVergleichSection` (ProcessStepsTable.tsx), `embeddings.ts` fetch-Refactor, reextract re-clustering.
+
+### Acceptance Criteria
+| # | Kriterium | Ergebnis |
+|---|-----------|---------|
+| AC-1 | "Je Mitarbeiter" Section fehlt bei 1 Teilnehmer | ✅ PASS |
+| AC-2 | Section erscheint collapsed bei ≥2 Teilnehmern | ✅ PASS |
+| AC-3 | Collapsible öffnet sich beim Klick, ChevronDown dreht sich | ✅ PASS |
+| AC-4 | Jede Card zeigt Name, Rolle, Beschreibung, Dauer/Häufigkeit/Tools | ✅ PASS |
+| AC-5 | Source Quotes >120 Zeichen: truncated, "Mehr"-Toggle | ✅ PASS |
+| AC-6 | `canonical_description` aus synthesizeCluster in "Warum zusammengefasst" | ✅ PASS |
+| AC-7 | synthesizeCluster nur für participant_count ≥ 2 (fire-and-forget) | ✅ PASS |
+| AC-8 | embeddings.ts: null bei API-Fehler, null bei fehlendem Key | ✅ PASS |
+
+### Automated Tests
+| Suite | Ergebnis |
+|-------|---------|
+| Vitest Unit (308 Tests) | ✅ 308/308 passed |
+| E2E Playwright (new spec) | ✅ 6/6 passed |
+
+### Unit Tests aktualisiert / neu
+`embeddings.test.ts` — Kompletter Rewrite (alter AI-SDK-Mock → fetch-Mock), +2 neue Cases:
+- Erfolg via fetch ✅
+- Kein Key → null ✅
+- fetch wirft → null ✅
+- Non-ok Response → null ✅ (neu)
+- Leeres data-Array → null ✅ (neu)
+
+### Security Audit
+- `synthesizeCluster`: private Funktion, nicht via API aufrufbar — kein direkter Angriffsvektor. Admin-Client korrekt (server-side background job). LLM-Input enthält employee content (source_quote, description) — Prompt-Injection theoretisch möglich, aber Output nur in canonical_description (kein Code-Exec, kein XSS via JSX-String-Rendering). Akzeptiertes MVP-Risiko.
+- reextract re-clustering: workspace_id aus DB (admin client), nicht aus User-Input — kein IDOR-Risiko. Workspace-Ownership vor Ausführung geprüft.
+- embeddings.ts: JINA_API_KEY kein NEXT_PUBLIC_ — nicht im Client-Bundle.
+
+### Bugs
+| # | Severity | Beschreibung | Entscheidung |
+|---|----------|-------------|--------------|
+| B-2026-05-31-1 | Low | `synthesizeCluster` filtert process_steps nur nach cluster_id, kein workspace_id-Scoping. Nicht ausnutzbar (private Fn, wird nur aus workspace-gescoped clusterProcessSteps aufgerufen). | Akzeptiert MVP |
+
+**Bugs gesamt: 0:0:1**
+**Production-Ready: YES**
 
 ---
 

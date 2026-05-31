@@ -1,33 +1,34 @@
-import { createOpenAI } from '@ai-sdk/openai'
-import { embed } from 'ai'
-import { buildTraceMetadata, type TraceCtx } from './_telemetry'
+import type { TraceCtx } from './_telemetry'
 
-export async function generateEmbedding(text: string, traceCtx?: TraceCtx): Promise<number[] | null> {
+// Jina's OpenAI-compatible API omits `prompt_tokens` from usage,
+// which causes @ai-sdk/openai strict schema validation to throw.
+// Direct fetch avoids the incompatibility.
+export async function generateEmbedding(text: string, _traceCtx?: TraceCtx): Promise<number[] | null> {
   if (!process.env.JINA_API_KEY) {
     console.error('[embeddings] JINA_API_KEY not set')
     return null
   }
 
-  const embeddingModel = process.env.EMBEDDING_MODEL ?? 'jina-embeddings-v3'
-  const jinaClient = createOpenAI({
-    apiKey: process.env.JINA_API_KEY,
-    baseURL: 'https://api.jina.ai/v1',
-  })
+  const model = process.env.EMBEDDING_MODEL ?? 'jina-embeddings-v3'
 
   try {
-    const { embedding } = await embed({
-      model: jinaClient.embedding(embeddingModel),
-      value: text,
-      providerOptions: {
-        openai: { dimensions: 1024 },
+    const res = await fetch('https://api.jina.ai/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.JINA_API_KEY}`,
+        'Content-Type': 'application/json',
       },
-      experimental_telemetry: buildTraceMetadata('embeddings.generateEmbedding', {
-        model: embeddingModel,
-        environment: 'prod',
-        ...traceCtx,
-      }),
+      body: JSON.stringify({ model, input: [text], dimensions: 1024 }),
     })
-    return embedding
+
+    if (!res.ok) {
+      const body = await res.text()
+      console.error('[embeddings] Jina API error:', res.status, body)
+      return null
+    }
+
+    const data = await res.json() as { data: Array<{ embedding: number[] }> }
+    return data.data[0]?.embedding ?? null
   } catch (err) {
     console.error('[embeddings] Jina embedding failed:', err)
     return null

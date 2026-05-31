@@ -387,6 +387,11 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
           )}
         </div>
 
+        {/* Je Mitarbeiter — only if ≥2 participants */}
+        {groupSteps.length >= 2 && (
+          <MitarbeiterVergleichSection groupSteps={groupSteps} />
+        )}
+
         <Separator className="bg-[#F3F4F6]" />
 
         {/* Interviews */}
@@ -534,6 +539,84 @@ function SourceQuoteSection({ quote }: { quote: string }) {
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+// ——— Je Mitarbeiter Section ———
+
+function MitarbeiterVergleichSection({ groupSteps }: { groupSteps: ProcessStep[] }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="w-full group">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide">
+            Je Mitarbeiter ({groupSteps.length})
+          </p>
+          <ChevronDown className={`w-3.5 h-3.5 text-[#9CA3AF] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-2 space-y-2">
+          {groupSteps.map(step => (
+            <MitarbeiterCard key={step.id} step={step} />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function MitarbeiterCard({ step }: { step: ProcessStep }) {
+  const [quoteExpanded, setQuoteExpanded] = useState(false)
+  const name = step.interviews?.employee_name ?? '—'
+  const role = step.interviews?.employee_role ?? null
+  const quote = step.source_quote
+  const isLong = (quote?.length ?? 0) > 120
+  const displayQuote = quote && isLong && !quoteExpanded ? quote.slice(0, 120) + '…' : quote
+
+  return (
+    <div className="bg-[#F9FAFB] border border-[#E5E5E5] rounded-[6px] px-3 py-2.5">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className="text-[13px] font-medium text-[#111111]">{name}</span>
+        {role && <span className="text-[12px] text-[#9CA3AF]">· {role}</span>}
+      </div>
+
+      {step.description && (
+        <p className="text-[12px] text-[#4B5563] leading-relaxed mb-2">{step.description}</p>
+      )}
+
+      <div className="flex items-center gap-3 flex-wrap">
+        {step.duration_minutes != null && (
+          <span className="text-[11px] text-[#6B7280]">⏱ {step.duration_minutes} Min</span>
+        )}
+        {step.frequency_per_month != null && (
+          <span className="text-[11px] text-[#6B7280]">📅 {step.frequency_per_month}×/Mo</span>
+        )}
+        {step.data_sources.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {step.data_sources.map(ds => (
+              <span key={ds} className="inline-block bg-[#EDE9FE] text-[#7C3AED] text-[10px] px-1.5 py-0.5 rounded-[3px]">{ds}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {displayQuote && (
+        <div className={`border-t border-[#E5E5E5] pt-2 ${step.duration_minutes != null || step.frequency_per_month != null || step.data_sources.length > 0 ? 'mt-2' : ''}`}>
+          <p className="text-[11px] text-[#6B7280] italic leading-relaxed">&ldquo;{displayQuote}&rdquo;</p>
+          {isLong && (
+            <button
+              onClick={() => setQuoteExpanded(e => !e)}
+              className="text-[10px] text-[#9CA3AF] hover:text-[#E040FB] mt-1 transition-colors"
+            >
+              {quoteExpanded ? 'Weniger' : 'Mehr'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
