@@ -1,0 +1,186 @@
+import { after } from 'next/server'
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { createProcessStepsFromTracker } from '@/services/processEnrichment'
+import { clusterProcessSteps } from '@/services/processClustering'
+import { deduplicateKnowledgeObjects } from '@/services/extraction'
+import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
+import type { Database } from '@/lib/database.types'
+
+type ProcessStepUpdate = Database['public']['Tables']['process_steps']['Update']
+
+const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const AnswerSchema = z.object({
+  process_step_id: z.string().min(1),
+  slot_key: z.string().min(1),
+  answer: z.union([z.string(), z.array(z.string()).min(1)]),
+})
+
+const ClarificationInputSchema = z.object({
+  answers: z.array(AnswerSchema).min(1),
+})
+
+// ─── Slot answer → typed DB value ────────────────────────────────────────────
+
+const FREQUENCY_MAP: Record<string, number> = {
+  'Täglich': 22,
+  'Wöchentlich': 4,
+  'Mehrfach/Monat': 8,
+  'Monatlich': 1,
+}
+
+const DURATION_MAP: Record<string, number> = {
+  '< 5 Min': 3,
+  '5–15 Min': 10,
+  '15–30 Min': 22,
+  '> 30 Min': 45,
+}
+
+const RULE_BASED_MAP: Record<string, boolean> = {
+  'Immer gleich': true,
+  'Meistens gleich': true,
+  'Variiert stark': false,
+}
+
+const ERROR_RATE_MAP: Record<string, number> = {
+  'Selten Fehler': 2,
+  'Gelegentlich': 10,
+  'Häufig': 30,
+}
+
+// ─── POST /api/interview/[token]/clarification ────────────────────────────────
+
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  const { token } = await params
+  if (!TOKEN_UUID_RE.test(token)) {
+    return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
+  }
+
+  const ip = extractIP(req)
+  const rateLimitResponse = await checkTokenEndpointLimits(token, ip)
+  if (rateLimitResponse) return rateLimitResponse
+
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const parsed = ClarificationInputSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+  const { answers } = parsed.data
+
+  const supabase = getSupabaseAdmin()
+
+  const { data: rawInterview, error: fetchError } = await supabase
+    .from('interviews')
+    .select('id, workspace_id, status, token_expires_at')
+    .eq('access_token', token)
+    .single()
+
+  if (fetchError || !rawInterview) {
+    return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
+  }
+
+  if (new Date(rawInterview.token_expires_at) < new Date()) {
+    return NextResponse.json({ error: 'Dieser Interview-Link ist nicht mehr gültig' }, { status: 410 })
+  }
+
+  if (rawInterview.status === 'completed') {
+    return NextResponse.json({ success: true }, { status: 409 })
+  }
+
+  const interviewId = rawInterview.id
+  const workspaceId = rawInterview.workspace_id
+
+  // Build clarification_answers record keyed by `${process_step_id}__${slot_key}`
+  const clarificationAnswers: Record<string, string | string[]> = {}
+  for (const a of answers) {
+    clarificationAnswers[`${a.process_step_id}__${a.slot_key}`] = a.answer
+  }
+
+  // Persist clarification_answers to interviews table
+  await supabase
+    .from('interviews')
+    .update({ clarification_answers: clarificationAnswers as unknown as import('@/lib/database.types').Json })
+    .eq('id', interviewId)
+
+  // Process SlotCards — update process_steps
+  const slotAnswers = answers.filter(
+    (a) => ['frequency_per_month', 'duration_minutes', 'rule_based', 'error_rate_percent'].includes(a.slot_key)
+      && typeof a.answer === 'string'
+      && a.answer !== 'Weiß ich nicht'
+  )
+
+  for (const sa of slotAnswers) {
+    const answerStr = sa.answer as string
+    const update: ProcessStepUpdate = {}
+
+    if (sa.slot_key === 'frequency_per_month' && FREQUENCY_MAP[answerStr] !== undefined) {
+      update.frequency_per_month = FREQUENCY_MAP[answerStr]
+    } else if (sa.slot_key === 'duration_minutes' && DURATION_MAP[answerStr] !== undefined) {
+      update.duration_minutes = DURATION_MAP[answerStr]
+    } else if (sa.slot_key === 'rule_based' && RULE_BASED_MAP[answerStr] !== undefined) {
+      update.rule_based = RULE_BASED_MAP[answerStr]
+    } else if (sa.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[answerStr] !== undefined) {
+      update.error_rate_percent = ERROR_RATE_MAP[answerStr]
+    }
+
+    if (Object.keys(update).length === 0) continue
+
+    // Try to match by UUID first, fall back to title match
+    const isUuid = TOKEN_UUID_RE.test(sa.process_step_id)
+    if (isUuid) {
+      await supabase.from('process_steps').update(update).eq('id', sa.process_step_id).eq('interview_id', interviewId)
+    } else {
+      await supabase.from('process_steps').update(update).eq('title', sa.process_step_id).eq('interview_id', interviewId)
+    }
+  }
+
+  // Process OpenItemCards — register confirmed steps via knowledge_objects
+  const openItemAnswers = answers.filter(
+    (a) => a.slot_key === 'open_item'
+      && typeof a.answer === 'string'
+      && (a.answer === 'Ja' || a.answer === 'Manchmal')
+  )
+
+  for (const oa of openItemAnswers) {
+    await supabase.from('knowledge_objects').insert({
+      interview_id: interviewId,
+      workspace_id: workspaceId,
+      type: 'process_step',
+      content: { title: oa.process_step_id, confirmed_via: 'clarification', answer: oa.answer },
+    })
+  }
+
+  // Complete the interview
+  await supabase
+    .from('interviews')
+    .update({ status: 'completed', extractions_pending: true })
+    .eq('id', interviewId)
+
+  // Post-completion pipeline
+  after(async () => {
+    try {
+      await createProcessStepsFromTracker({ interviewId, workspaceId })
+    } catch (err) {
+      console.error('[clarification] createProcessStepsFromTracker failed:', err)
+    }
+    clusterProcessSteps(workspaceId).catch((err) =>
+      console.error('[clarification] clusterProcessSteps failed:', err)
+    )
+    deduplicateKnowledgeObjects(workspaceId).catch((err) =>
+      console.error('[clarification] deduplicateKnowledgeObjects failed:', err)
+    )
+  })
+
+  return NextResponse.json({ success: true })
+}

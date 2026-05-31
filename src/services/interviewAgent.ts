@@ -73,6 +73,7 @@ export interface ClarificationCard {
   question: string
   options: string[]
   slot_key: string
+  answer_type?: 'single' | 'multi'
 }
 
 export interface AnalystBriefing {
@@ -235,9 +236,8 @@ Neu genannte Prozesse direkt aufnehmen und explorieren.`
 
   if (phase === 'clarification') {
     return `## Methodik: clarification
-Stelle die vorbereiteten Verständnisfragen zu offenen Slots natürlich nach.
-Eine Frage pro Turn. Antwortoptionen kurz nennen wenn vorhanden.
-Antworten nicht kommentieren — direkt zur nächsten Frage übergehen.`
+Sage genau einmal: "Danke! Ich habe noch ein paar kurze Abschlussfragen für dich."
+Stelle keine weiteren Fragen — die Abschlussfragen erscheinen im Interface.`
   }
 
   // wrap_up

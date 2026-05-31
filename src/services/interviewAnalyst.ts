@@ -32,8 +32,9 @@ const ClarificationCardSchema = z.object({
   process_step_id: z.string().describe('ID of the process step (use step title if ID unknown)'),
   step_title: z.string(),
   question: z.string().describe('Natural language question for the missing slot'),
-  options: z.array(z.string()).min(2).max(4).describe('Answer options, last option must be "Andere"'),
-  slot_key: z.string().describe('Which slot key this fills, e.g. frequency, duration_minutes'),
+  options: z.array(z.string()).min(2).max(4).describe('Answer options for QualitativeCards; last option must be "Weiß ich nicht". SlotCards and OpenItemCards use UI-fixed options.'),
+  slot_key: z.string().describe('Which slot key this fills: frequency_per_month | duration_minutes | rule_based | error_rate_percent | open_item | qualitative'),
+  answer_type: z.enum(['single', 'multi']).optional().default('single').describe('single for slot/open-item cards, multi for qualitative cards'),
 })
 
 const AnalystBriefingSchema = z.object({
@@ -75,6 +76,13 @@ Sprache des Interviews: Deutsch.
 
 **produce_briefing**: Als letzten Tool-Call aufrufen. Enthält next_focus, suggested_question und optional wrap_up_question_asked.
 
+## Clarification Cards (nur bei Phase=wrap_up)
+Generiere bis zu 8 ClarificationCards via produce_briefing.clarification_cards, priorisiert nach Use-Case-Relevanz:
+1. **SlotCards** (slot_key=frequency_per_month|duration_minutes|rule_based|error_rate_percent): Für jeden registrierten Schritt mit leerem Pflicht-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
+2. **OpenItemCards** (slot_key=open_item): Für erwähnte aber nicht registrierte Prozessschritte. options leer lassen — UI verwendet Ja/Nein/Manchmal.
+3. **QualitativeCards** (slot_key=qualitative, answer_type=multi): Für fehlenden Prozesskontext: Beteiligte, Systeme, Blockaden, Abstimmungsbedarf, Automatisierungspotenzial. options=[2-4 spezifische Antwortoptionen], letzter Eintrag="Weiß ich nicht".
+Wenn keine Lücken existieren: leeres Array zurückgeben.
+
 ## Halluzinations-Guard
 Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fakten setzen.
 
@@ -90,7 +98,7 @@ Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fa
 // ─── Clarification Cards Generation ──────────────────────────────────────────
 
 function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
-  return ctx.phase === 'wrap_up' && computeEmptyMandatorySlots(ctx.stepTracker).length > 0
+  return ctx.phase === 'wrap_up'
 }
 
 function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; slot: string }[] {

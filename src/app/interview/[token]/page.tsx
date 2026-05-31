@@ -4,6 +4,8 @@ import { use, useEffect, useState } from 'react'
 import { ChatErrorScreen } from '@/components/interview/ChatErrorScreen'
 import { ChatCompletedScreen } from '@/components/interview/ChatCompletedScreen'
 import { ChatInterface } from '@/components/interview/ChatInterface'
+import { ClarificationView } from '@/components/interview/ClarificationView'
+import type { ClarificationCard } from '@/services/interviewAgent'
 
 type Interview = {
   id: string
@@ -28,6 +30,7 @@ type PageState =
   | { status: 'error'; type: 'not_found' | 'expired' }
   | { status: 'completed' }
   | { status: 'ready'; interview: Interview & { status: ActiveStatus }; turns: Turn[]; openerText: string | null }
+  | { status: 'clarification'; employeeName: string; cards: ClarificationCard[]; answers: Record<string, string | string[]> }
 
 export default function InterviewPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
@@ -44,9 +47,23 @@ export default function InterviewPage({ params }: { params: Promise<{ token: str
           setPageState({ status: 'error', type: 'expired' })
           return
         }
-        const data = await res.json() as { interview: Interview; turns: Turn[]; openerText?: string | null }
+        const data = await res.json() as {
+          interview: Interview
+          turns: Turn[]
+          openerText?: string | null
+          state?: { phase?: string }
+          clarificationCards?: ClarificationCard[] | null
+          clarificationAnswers?: Record<string, string | string[]> | null
+        }
         if (data.interview.status === 'completed') {
           setPageState({ status: 'completed' })
+        } else if (data.state?.phase === 'clarification' && data.clarificationCards?.length) {
+          setPageState({
+            status: 'clarification',
+            employeeName: data.interview.employee_name,
+            cards: data.clarificationCards,
+            answers: data.clarificationAnswers ?? {},
+          })
         } else {
           setPageState({
             status: 'ready',
@@ -78,6 +95,18 @@ export default function InterviewPage({ params }: { params: Promise<{ token: str
     return <ChatCompletedScreen />
   }
 
+  if (pageState.status === 'clarification') {
+    return (
+      <ClarificationView
+        token={token}
+        employeeName={pageState.employeeName}
+        cards={pageState.cards}
+        initialAnswers={pageState.answers}
+        onCompleted={() => setPageState({ status: 'completed' })}
+      />
+    )
+  }
+
   return (
     <ChatInterface
       token={token}
@@ -86,6 +115,14 @@ export default function InterviewPage({ params }: { params: Promise<{ token: str
       openerText={pageState.openerText}
       status={pageState.interview.status}
       onCompleted={() => setPageState({ status: 'completed' })}
+      onClarification={(cards, answers) =>
+        setPageState({
+          status: 'clarification',
+          employeeName: pageState.interview.employee_name,
+          cards,
+          answers,
+        })
+      }
     />
   )
 }

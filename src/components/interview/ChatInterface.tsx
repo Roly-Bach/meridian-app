@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { MessageList, type Message } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { useInterviewStream } from '@/hooks/useInterviewStream'
+import type { ClarificationCard } from '@/services/interviewAgent'
 
 type Turn = {
   id: string
@@ -21,6 +22,7 @@ type Props = {
   openerText?: string | null
   status: 'created' | 'active'
   onCompleted?: () => void
+  onClarification?: (cards: ClarificationCard[], existingAnswers: Record<string, string | string[]>) => void
 }
 
 function turnsToMessages(turns: Turn[], openerText?: string | null): Message[] {
@@ -36,7 +38,7 @@ function turnsToMessages(turns: Turn[], openerText?: string | null): Message[] {
   ]
 }
 
-export function ChatInterface({ token, employeeName, existingTurns, openerText, status, onCompleted }: Props) {
+export function ChatInterface({ token, employeeName, existingTurns, openerText, status, onCompleted, onClarification }: Props) {
   const [messages, setMessages] = useState<Message[]>(() =>
     turnsToMessages(existingTurns, existingTurns.length > 0 ? openerText : null)
   )
@@ -92,7 +94,16 @@ export function ChatInterface({ token, employeeName, existingTurns, openerText, 
     try {
       const res = await fetch(`/api/interview/${token}`)
       if (!res.ok) return
-      const data = await res.json() as { interview?: { status: string } }
+      const data = await res.json() as {
+        interview?: { status: string }
+        state?: { phase?: string }
+        clarificationCards?: ClarificationCard[] | null
+        clarificationAnswers?: Record<string, string | string[]> | null
+      }
+      if (data.state?.phase === 'clarification' && data.clarificationCards?.length) {
+        onClarification?.(data.clarificationCards, data.clarificationAnswers ?? {})
+        return
+      }
       if (data.interview?.status === 'completed') {
         onCompleted?.()
       }

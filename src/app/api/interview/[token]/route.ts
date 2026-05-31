@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { Database } from '@/lib/database.types'
+import type { ClarificationCard, AnalystBriefing } from '@/services/interviewAgent'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
 type StateRow = Database['public']['Tables']['interview_state']['Row']
@@ -56,10 +57,26 @@ export async function GET(
 
   const state = (rawState as Partial<StateRow> | null) ?? null
 
+  let clarificationCards: ClarificationCard[] | null = null
+  let clarificationAnswers: Record<string, string | string[]> | null = null
+
+  if (state?.phase === 'clarification') {
+    const { data: briefingRow } = await supabase
+      .from('interviews')
+      .select('next_briefing, clarification_answers')
+      .eq('id', interview.id)
+      .single()
+    const briefing = briefingRow?.next_briefing as AnalystBriefing | null
+    clarificationCards = briefing?.clarification_cards ?? null
+    clarificationAnswers = (briefingRow?.clarification_answers as Record<string, string | string[]> | null) ?? null
+  }
+
   return NextResponse.json({
     interview,
     state,
     turns: (rawTurns as TurnRow[]) ?? [],
     openerText: state?.opener_text ?? null,
+    clarificationCards,
+    clarificationAnswers,
   })
 }
