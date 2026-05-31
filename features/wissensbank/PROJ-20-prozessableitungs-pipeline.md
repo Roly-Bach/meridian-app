@@ -189,6 +189,47 @@ Threshold-Änderung erfordert Backfill via `clusterProcessSteps()`.
 
 ---
 
+## Tech Design — Cluster-Synthese + Mitarbeiter-Vergleich (2026-05-31)
+
+### Backend: `synthesizeCluster()`
+
+Wird am Ende von `clusterProcessSteps()` aufgerufen — nach Abschluss des Clustering-Loops. Läuft nur für Cluster mit `participant_count ≥ 2` die im aktuellen Lauf neu erstellt oder aktualisiert wurden.
+
+**Datenfluss:**
+- Lädt alle verknüpften `process_steps` des Clusters: title, description, source_quote, frequency_per_month, duration_minutes, data_sources, rule_based + employee_name/role via Join auf interviews
+- LLM-Call: `generateText` mit `ENRICHMENT_MODEL` (Wiederverwendung bestehenden Patterns), deutschsprachiger Freitext-Prompt
+- Prompt-Struktur: (1) Gemeinsamkeiten, (2) Abweichungen nach Dauer/Tools/Vorgehen, (3) Mögliche Ursachen (Workaround, Rolle, Erfahrung)
+- Schreibt Ergebnis in `process_clusters.canonical_description`
+
+**Keine DB-Migration** — Spalte existiert bereits.
+
+**Kein neuer Env-Var** — `ENRICHMENT_MODEL` wird wiederverwendet.
+
+**Fire-and-forget** — wie Clustering selbst, kein Blocking der API-Response.
+
+### Frontend: "Je Mitarbeiter" Section
+
+Neuer aufklappbarer Abschnitt in `ClusterDetailSheet` (shadcn `Collapsible`, bereits installiert). Erscheint nur wenn `groupSteps.length ≥ 2`, direkt unter "Warum zusammengefasst".
+
+**Pro Teilnehmer-Card:**
+- Name + Rolle (aus `interviews`-Join)
+- Beschreibung (aus `process_steps.description`)
+- Kernmetriken: Dauer, Häufigkeit, Tools
+- Source Quote (gekürzt, aufklappbar)
+
+**Keine neuen API-Calls** — alle Daten bereits im bestehenden Page-Query (`process_steps` mit `interviews`-Join).
+
+### Entscheidungen
+
+| Entscheidung | Begründung |
+|---|---|
+| `generateText` statt `generateObject` | Freitext-Synthese — kein Schema nötig, weniger Token |
+| `ENRICHMENT_MODEL` wiederverwenden | Gleicher Kontext, keine neue Config |
+| Synthese fire-and-forget | Kein Impact auf Interview-Abschluss-Latenz |
+| Collapsible für Vergleich | Platz sparen wenn nur 1 Participant — kein Noise |
+
+---
+
 ## Out of Scope
 
 - Manuelle Anlage von Prozessschritten ohne Interview
