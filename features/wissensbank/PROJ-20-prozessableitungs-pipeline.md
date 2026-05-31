@@ -2,12 +2,14 @@
 
 ## Status: Deployed
 **Created:** 2026-05-27
-**Last Updated:** 2026-05-27
+**Last Updated:** 2026-05-31
 **Type:** Epic
 **Domain:** Wissensbank
 **Extends:** —
 **Appetite:** —
 **Bugs:** 0:0:4 (alle Low, alle behoben)
+
+> **Pipeline-Update 2026-05-31:** Schritt [4b] `synthesizeCluster()` hinzugefügt — LLM-Synthese für Cluster mit ≥2 Teilnehmern. Embedding-Bug behoben: AI SDK `@ai-sdk/openai` durch direkten `fetch` ersetzt (Jina gibt kein `prompt_tokens` zurück → strict validation schlug fehl → alle Embeddings null).
 
 > **Pipeline-Update 2026-05-27:** Schritt [3] auf `createProcessStepsFromTracker()` umgestellt. Slot-Werte kommen jetzt direkt aus `interview_state.step_tracker` (authoritative), LLM generiert nur noch description + source_quote. Failsafe: `ensureCompletedIfFarewell` setzt `status=completed` wenn Modell `[complete_interview]` als Text statt Tool-Call ausgibt.
 
@@ -28,7 +30,7 @@ Interview (status → completed)
         ↓
 [1] extractAndEmbed()           extraction.ts
     ├─ LLM: 4 Typen aus Transkript (process_step, pain_point, tool, role)
-    ├─ Jina Embedding: 1024-dim Vektor pro Objekt
+    ├─ Jina Embedding: 1024-dim Vektor pro Objekt (direkter fetch, kein AI SDK wrapper)
     └─ INSERT INTO knowledge_objects
         ↓
 [2] deduplicateKnowledgeObjects()   extraction.ts (fire-and-forget, jeder Turn)
@@ -43,6 +45,14 @@ Interview (status → completed)
     ├─ Cosine-Similarity ≥ 0.85 → in bestehendem Cluster einordnen
     ├─ Sonst → neuen Cluster anlegen
     └─ UPDATE process_steps.cluster_id + process_clusters
+        ↓
+[4b] synthesizeCluster()        processClustering.ts (nach [4], nur wenn participant_count ≥ 2)
+    ├─ Lädt alle Steps des Clusters (description, source_quote, metrics, data_sources)
+    ├─ LLM: vergleicht Teilnehmerbeschreibungen auf Deutsch
+    │   ├─ Gemeinsamkeiten
+    │   ├─ Abweichungen (Dauer, Tools, Vorgehen)
+    │   └─ Mögliche Ursachen (Workaround, Rolle, Abteilung)
+    └─ UPDATE process_clusters.canonical_description
 ```
 
 **Trigger:** `onFinish` in `src/app/api/interview/[token]/chat/route.ts`  
@@ -102,9 +112,9 @@ Interview (status → completed)
 | Service | Datei | Funktion |
 |---------|-------|---------|
 | Extraktion + Embedding | `src/services/extraction.ts` | `extractAndEmbed()`, `deduplicateKnowledgeObjects()` |
-| Embedding-Provider | `src/services/embeddings.ts` | `generateEmbedding()` — Jina jina-embeddings-v3 |
+| Embedding-Provider | `src/services/embeddings.ts` | `generateEmbedding()` — Jina jina-embeddings-v3 via direktem `fetch` |
 | Anreicherung | `src/services/processEnrichment.ts` | `enrichProcessSteps()` |
-| Clustering | `src/services/processClustering.ts` | `clusterProcessSteps()` |
+| Clustering + Synthese | `src/services/processClustering.ts` | `clusterProcessSteps()`, `synthesizeCluster()` |
 
 ### Service-Layer-Constraint
 KI-Logik (LLM-Calls, Embedding-Calls, Vektor-Operationen) ausschließlich in `src/services/` — nicht direkt in API Routes.
@@ -129,7 +139,7 @@ KI-Logik (LLM-Calls, Embedding-Calls, Vektor-Operationen) ausschließlich in `sr
 
 **Aktuell:** Jina AI jina-embeddings-v3 (1024 dim, EU DPA via Elastic)  
 **Env:** `JINA_API_KEY`, `EMBEDDING_MODEL=jina-embeddings-v3`  
-**Integration:** `@ai-sdk/openai` mit custom `baseURL: 'https://api.jina.ai/v1'`
+**Integration:** Direkter `fetch` zu `https://api.jina.ai/v1/embeddings` — AI SDK `@ai-sdk/openai` inkompatibel (Jina gibt kein `prompt_tokens` in `usage` zurück, strict validation wirft `AI_APICallError`)
 
 **DSGVO-Fallback (bei Bedarf):** Qwen3-Embedding-0.6B via HuggingFace Inference Endpoints (EU-Region, AWS eu-west-1) — gleiche API-Signatur, nur andere `baseURL`.
 
@@ -149,7 +159,10 @@ Threshold-Änderung erfordert Backfill via `clusterProcessSteps()`.
 
 - `/dashboard/process-steps` — Prozessschritte gruppiert nach Abteilung + Cluster
 - Cluster-Karte: `canonical_title`, Badge "N Interviews" (blau wenn >1), gemittelte Metriken
-- Cluster Detail Sheet: Warum geclustert, Interviews-Liste, Steps aufklappbar
+- Cluster Detail Sheet:
+  - "Warum zusammengefasst" — zeigt `canonical_description` (LLM-Synthese wenn ≥2 Teilnehmer, sonst Fallback-Text)
+  - "Je Mitarbeiter" — aufklappbarer Abschnitt (nur wenn participant_count ≥ 2): pro Teilnehmer Name, Rolle, Beschreibung, Kernmetriken (Dauer, Häufigkeit, Tools), Source Quote
+  - Interviews-Liste, Metriken, Prozess-Ablauf (Substeps)
 - Inline-Edit: Number-Zellen (Enter/Blur), Tags-Zelle (kommagetrennt), Switch (rule_based)
 - Optimistic Updates + Fehler-Toast (sonner)
 
