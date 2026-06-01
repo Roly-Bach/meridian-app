@@ -176,6 +176,25 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
     return { shouldComplete: true, reason: 'hard_stop' }
   }
 
+  // Farewell-loop escape valve — phase-agnostic. Fires when the agent is stuck in a goodbye
+  // loop regardless of phase. Necessary because a step discovered at wrap_up can push the phase
+  // back to walkthrough_step/slot_completion; if that step stays walkthrough, the wrap_up-gated
+  // path below is never reached and the farewell loop runs until MAX_TURNS.
+  // Must check BEFORE the active-step guard.
+  {
+    const allAssistant = ctx.history.filter((t) => t.role === 'assistant')
+    const lastTwo = allAssistant.slice(-2)
+    const FAREWELL_MARKERS = ['vielen dank', 'auf wiedersehen', 'bis zum nächsten', 'wünsche dir', 'verabschied']
+    if (
+      lastTwo.length >= 2 &&
+      ctx.history.length > 0 &&
+      ctx.history[ctx.history.length - 1].role === 'user' &&
+      lastTwo.every((t) => FAREWELL_MARKERS.some((m) => t.content.toLowerCase().includes(m)))
+    ) {
+      return { shouldComplete: true, reason: 'soft_confirm' }
+    }
+  }
+
   // Trigger B: Soft-Confirm (wrap_up question asked + user has responded)
   if (ctx.phase === 'wrap_up') {
     // Don't complete if new steps were registered (new content introduced at wrap-up)

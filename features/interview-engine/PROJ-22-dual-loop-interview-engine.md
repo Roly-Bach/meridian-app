@@ -1,6 +1,6 @@
 # PROJ-22: Dual-Loop Interview Engine (ADR-011)
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-2
@@ -249,7 +249,7 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
 
 ## QA Test Results
 
-> **QA Datum:** 2026-05-30 (initial) + **Re-QA 2026-06-01** (B1–B3) + **Re-QA 2026-06-01 (2nd pass)** (B4/B5) + **Re-QA 2026-06-01 (3rd pass)** (B6 found, open) | **Status:** In Review | **Bugs:** 0:0:2 + EVAL-22-B6 (Critical, open)
+> **QA Datum:** 2026-05-30 (initial) + **Re-QA 2026-06-01** (B1–B3) + **Re-QA 2026-06-01 (2nd pass)** (B4/B5) + **Re-QA 2026-06-01 (3rd pass)** (B6 fixed) | **Status:** Approved | **Bugs:** 0:0:2
 
 ### Acceptance Criteria — Testergebnis
 
@@ -313,7 +313,7 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
 | EVAL-22-B3 | Medium | DB-Constraint-Verletzung: `role`-Type in `extraction.ts` nicht in DB `knowledge_objects_type_check`; 5× Insert-Fehler | `role` aus `KnowledgeObjectType`, `ALLOWED_TYPES`, `EXTRACTION_SYSTEM_PROMPT` entfernt | ✅ Fixed |
 | EVAL-22-B4 | High | Closing-Question-Heuristic missed word-split phrase: "Gibt es aus deiner Sicht noch etwas" → `includes('gibt es noch etwas')` failed weil "aus deiner Sicht" dazwischen. Agent loopte 5 Farewell-Turns ohne Completion. Eval-Run 2026-06-01-09-53-42 | `closingQuestionWasAsked`: neues OR-Pattern `(lc.includes('gibt es') && lc.includes('noch etwas'))` in `interviewOrchestrator.ts` | ✅ Fixed |
 | EVAL-22-B5 | Medium | Stale stepTracker in `after()`: stepTracker geladen vor Talker-Streaming, Analyst sah Pre-Streaming-Snapshot → `record_slot` für bereits gefüllte Mahnprozess-Slots, `source_quote` = Farewell-Text. Auch: Eval-Runner `loadState` zu früh (vor Talker-Tools) | Reload `step_tracker` aus DB in `after()`-Callback (`route.ts`) + `loadState` nach `agentStream.text` (`runner.ts`) | ✅ Fixed |
-| EVAL-22-B6 | Critical | Farewell-Loop blocked by walkthrough step: Mahnprozess discovered at wrap_up → briefly explored (frequency+duration filled, rule_based+data_sources missing) → stays `walkthrough` → `checkLifecycle` short-circuits at `hasStepInStatus(walkthrough)=true` BEFORE farewell-loop fallback → 9 farewell turns (17–25) → MAX_TURNS=25 → FAIL. Eval-Run 2026-06-01-10-42-20 | Move farewell-loop check in `checkLifecycle` BEFORE active-step guard — if 2+ consecutive farewell turns, complete regardless of step status | ❌ Open |
+| EVAL-22-B6 | Critical | Farewell-Loop blocked by walkthrough step: Mahnprozess discovered at wrap_up → briefly explored (frequency+duration filled, rule_based+data_sources missing) → stays `walkthrough` → phase reverts to `walkthrough_step` → `checkLifecycle` farewell-loop was `wrap_up`-gated → never fired → 9 farewell turns (17–25) → MAX_TURNS=25 → FAIL. Eval-Run 2026-06-01-10-42-20 | Phase-agnostic farewell-loop escape valve added BEFORE active-step guard in `checkLifecycle` + 3 regression tests | ✅ Fixed |
 
 ### Re-QA 2026-06-01
 
@@ -339,13 +339,25 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
   - Detects formal-Sie variant "Gibt es aus Ihrer Sicht noch etwas"
   - Does NOT fire when "gibt es" / "noch etwas" appear in separate turns
 
+### Re-QA 2026-06-01 (3rd pass — B6)
+
+| Suite | Ergebnis |
+|-------|----------|
+| Vitest Unit (351 Tests, +3 neue) | ✅ 351 passed |
+
+**Neue Tests hinzugefügt:**
+- `interviewOrchestrator.test.ts`: 3 Tests für phase-agnostic farewell-loop (EVAL-22-B6)
+  - Fires when phase=walkthrough_step + step walkthrough
+  - Fires when phase=slot_completion + step walkthrough
+  - Does NOT fire when only 1 farewell turn (no false positive)
+
 ### Regression
 
 Getestete Features: PROJ-2 (Interview Backend), PROJ-3 (Chat UI), PROJ-13 (Langfuse), PROJ-17 (Eval-Harness). Keine neuen Regressions festgestellt.
 
 ### Production-Ready
 
-**NO** — EVAL-22-B6 (Critical) offen: Interview kann nicht abschließen wenn ein neuer Schritt am wrap_up entdeckt wird und walkthrough bleibt. Fix nötig bevor Deploy.
+**YES** — keine Critical/High Bugs offen. Alle Low-Bugs dokumentarisch/funktional-positiv.
 
 ## Deployment
 _To be added by /deploy_

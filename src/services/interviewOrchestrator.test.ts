@@ -272,6 +272,57 @@ describe('closingQuestionWasAsked — farewell loop fallback', () => {
   })
 })
 
+// ─── B6 Regression: farewell loop fires even when active steps exist ──────────
+
+describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => {
+  it('completes even when Mahnprozess is walkthrough (phase=walkthrough_step)', () => {
+    const tracker = [
+      makeStep('Rechnungsprüfung', 'done', fullSlots),
+      makeStep('Mahnprozess', 'walkthrough', emptySlots),
+    ]
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank für die Ergänzung! Auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Auf Wiedersehen!' },
+      { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+    ]
+    const result = checkLifecycle(
+      baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, history, historyLength: 4 }),
+      null,
+    )
+    expect(result.shouldComplete).toBe(true)
+    expect(result.reason).toBe('soft_confirm')
+  })
+
+  it('completes even when step is walkthrough in slot_completion phase', () => {
+    const tracker = [makeStep('Mahnprozess', 'walkthrough', emptySlots)]
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Auf Wiedersehen.' },
+      { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+    ]
+    const result = checkLifecycle(
+      baseCtx({ phase: 'slot_completion', stepTracker: tracker, history, historyLength: 4 }),
+      null,
+    )
+    expect(result.shouldComplete).toBe(true)
+  })
+
+  it('does NOT fire mid-interview when agent uses "Vielen Dank" in single turn only', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', emptySlots)]
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank für den Einblick! Wie oft passiert das?' },
+      { role: 'user' as const, content: 'Ca. 5 mal pro Woche.' },
+    ]
+    const result = checkLifecycle(
+      baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, history, historyLength: 2 }),
+      null,
+    )
+    expect(result.shouldComplete).toBe(false)
+  })
+})
+
 // ─── closingQuestionWasAsked — word-split phrase (B1 Regression) ─────────────
 
 describe('closingQuestionWasAsked — word-split gibt-es phrase (B1 regression)', () => {
