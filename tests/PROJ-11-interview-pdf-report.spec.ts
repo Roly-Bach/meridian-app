@@ -4,6 +4,8 @@ import { createTestUser } from './helpers/createTestUser'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+import type { Page } from '@playwright/test'
+
 const RUN_ID = Date.now()
 const TEST_PASSWORD = 'QaTestPass123!'
 
@@ -36,19 +38,41 @@ test.describe('PDF button — dashboard UI (serial)', () => {
   let interviewId = ''
   const LIVE_EMAIL = `qa11-${RUN_ID}@meridian-test.dev`
 
-  test('Setup: create user + create interview', async ({ page }) => {
-    await createTestUser(LIVE_EMAIL, TEST_PASSWORD, `PDF-WS-${RUN_ID}`)
+  async function loginAndLand(page: Page) {
     await page.goto('/login')
     await page.fill('input[type="email"]', LIVE_EMAIL)
     await page.fill('input[type="password"]', TEST_PASSWORD)
     await page.click('button[type="submit"]')
     await page.waitForURL('/dashboard', { timeout: 15000 })
     await page.waitForLoadState('networkidle')
+  }
+
+  test('Setup: create user + create interview', async ({ page }) => {
+    await createTestUser(LIVE_EMAIL, TEST_PASSWORD, `PDF-WS-${RUN_ID}`)
+    // Login — retry once after brief delay in case of auth propagation lag
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await page.goto('/login')
+      await page.fill('input[type="email"]', LIVE_EMAIL)
+      await page.fill('input[type="password"]', TEST_PASSWORD)
+      await page.click('button[type="submit"]')
+      try {
+        await page.waitForURL('/dashboard', { timeout: 12000 })
+        break
+      } catch {
+        if (attempt === 1) throw new Error('Login failed after retry')
+        await page.waitForTimeout(3000)
+      }
+    }
+    await page.waitForLoadState('networkidle')
 
     await page.click('button:has-text("Neues Interview")')
+    await page.getByRole('dialog').waitFor({ state: 'visible' })
     await page.fill('input[placeholder="z.B. Hans Becker"]', 'PDF Test User')
-    await page.fill('input[placeholder="z.B. Produktionsleiter"]', 'Testleiter')
-    await page.fill('input[placeholder="z.B. Qualitätssicherung"]', 'QA')
+    await page.locator('[role="dialog"] [role="combobox"]').first().click()
+    await page.getByRole('option', { name: 'Operations', exact: true }).click()
+    await page.locator('[role="dialog"] button').filter({ hasText: 'Rolle eingeben oder wählen' }).click()
+    await page.getByPlaceholder('Rolle eingeben…').fill('Testleiter')
+    await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'Interview anlegen', exact: true }).click()
     await expect(page.getByText('Interview erstellt')).toBeVisible({ timeout: 10000 })
 
@@ -61,9 +85,7 @@ test.describe('PDF button — dashboard UI (serial)', () => {
   test('PDF button NOT shown for created/active interview', async ({ page }) => {
     test.skip(!interviewToken, 'Setup did not run')
 
-    await page.goto('/dashboard')
-    await page.waitForLoadState('networkidle')
-
+    await loginAndLand(page)
     // Interview is still 'created' — PDF button must not appear
     await expect(page.getByRole('button', { name: /PDF erstellen/i })).not.toBeVisible({ timeout: 5000 })
     // CopyLink button IS visible
@@ -84,8 +106,7 @@ test.describe('PDF button — dashboard UI (serial)', () => {
   test('PDF API returns 404 for non-completed interview (authenticated)', async ({ page }) => {
     test.skip(!interviewId, 'Interview ID not available')
 
-    await page.goto('/dashboard')
-    await page.waitForLoadState('networkidle')
+    await loginAndLand(page)
 
     // Make authenticated request using page context (has session cookie)
     const res = await page.request.get(`/api/interviews/${interviewId}/pdf`)

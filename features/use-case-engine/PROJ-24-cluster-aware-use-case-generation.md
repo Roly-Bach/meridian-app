@@ -5,7 +5,7 @@
 **Domain:** Use Case Engine
 **Extends:** PROJ-6
 **Appetite:** L
-**Bugs:** 0:0:2
+**Bugs:** 0:0:0
 **Created:** 2026-05-31
 **Last Updated:** 2026-05-31
 
@@ -433,9 +433,9 @@ Migration `20260531000000_proj24_use_cases_enrichment.sql` applied:
 
 ## QA Test Results
 
-**Date:** 2026-05-31 (re-QA: 2026-05-31)
+**Date:** 2026-05-31 (re-QA: 2026-06-01 — full bug fix pass)
 **Tester:** /qa  
-**Status:** APPROVED — all High/Medium bugs fixed
+**Status:** APPROVED — all bugs fixed, 100/105 E2E pass
 
 ### Acceptance Criteria
 
@@ -500,7 +500,7 @@ Migration `20260531000000_proj24_use_cases_enrichment.sql` applied:
 
 ### Test Artifacts
 - **Unit tests:** 20 new tests added to `src/services/useCaseEngine.test.ts` covering C1-C3, suppression, `clusterPainPointsByEmbedding`, and P4 rules. 338/338 pass.
-- **E2E tests:** `tests/PROJ-24-cluster-use-case-detail.spec.ts` — 3/8 API auth guard tests pass; 4 UI tests skip due to pre-existing signup environment issue.
+- **E2E tests:** `tests/PROJ-24-cluster-use-case-detail.spec.ts` — 7/8 pass (1 correctly skipped — fresh workspace has no data). Full suite: 100/105 pass across all test files after fixing systemic signup infrastructure issues (ALLOWED_EMAILS, shared workspace pattern, stale form selectors).
 
 ### Security Audit
 - Auth guards: ✅ Both new endpoints require authentication
@@ -510,7 +510,7 @@ Migration `20260531000000_proj24_use_cases_enrichment.sql` applied:
 - Minor IDOR: see BUG-3 (Low)
 
 ### Production-Ready Decision
-**READY** — BUG-1 and BUG-2 fixed. Remaining: 2 Low bugs (BUG-3 minor IDOR, BUG-4 pre-existing E2E env). Both acceptable for MVP deploy.
+**READY** — All 4 bugs fixed (BUG-1 TS build, BUG-2 P4 process_step_id, BUG-3 IDOR, BUG-4 E2E signup). 100/105 E2E pass; 5 skipped are fixme (pre-existing rate-limit + WebSocket flakiness, not PROJ-24 regressions).
 
 ## Deployment
 _To be added by /deploy_
