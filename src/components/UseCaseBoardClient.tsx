@@ -30,9 +30,10 @@ interface Props {
   workspaceId: string
   initialUseCases: UseCase[]
   initialTotalRoi: number
+  interviewCount?: number
 }
 
-export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalRoi }: Props) {
+export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalRoi, interviewCount = 0 }: Props) {
   const [useCases, setUseCases] = useState<UseCase[]>(initialUseCases)
   const [totalRoi, setTotalRoi] = useState(initialTotalRoi)
   const [generating, setGenerating] = useState(false)
@@ -101,6 +102,13 @@ export function UseCaseBoardClient({ workspaceId, initialUseCases, initialTotalR
             <span className="text-[16px] font-normal text-[#6B7280] ml-2">/Jahr</span>
           </p>
         </div>
+      )}
+
+      {/* Single-interview hint — C1–C3 cluster rules need ≥2 interviews */}
+      {interviewCount < 2 && useCases.length > 0 && (
+        <p className="text-[12px] text-[#6B7280] mb-5">
+          Tipp: Mehr Interviews → stärkere Use Cases. Cluster-Regeln (workspace-weite Automatisierung) greifen ab 2 Mitarbeitern.
+        </p>
       )}
 
       {/* Loading Skeleton */}

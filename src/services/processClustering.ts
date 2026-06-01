@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
 
 const SIMILARITY_THRESHOLD = parseFloat(
-  process.env.CLUSTER_SIMILARITY_THRESHOLD ?? '0.85'
+  process.env.CLUSTER_SIMILARITY_THRESHOLD ?? '0.78'
 )
 
 export function cosineSim(a: number[], b: number[]): number {
@@ -15,6 +15,39 @@ export function cosineSim(a: number[], b: number[]): number {
   }
   const denom = Math.sqrt(normA) * Math.sqrt(normB)
   return denom === 0 ? 0 : dot / denom
+}
+
+function computeCentroid(embeddings: number[][]): number[] {
+  const dim = embeddings[0].length
+  const centroid = new Array<number>(dim).fill(0)
+  for (const emb of embeddings) {
+    for (let i = 0; i < dim; i++) centroid[i] += emb[i]
+  }
+  for (let i = 0; i < dim; i++) centroid[i] /= embeddings.length
+  return centroid
+}
+
+async function updateClusterCentroid(clusterId: string): Promise<void> {
+  const supabase = getSupabaseAdmin()
+  const { data: members, error } = await supabase
+    .from('process_steps')
+    .select('embedding')
+    .eq('cluster_id', clusterId)
+    .not('embedding', 'is', null)
+
+  if (error || !members || members.length === 0) return
+
+  const embeddings = members.map(m => m.embedding as number[])
+  const centroid = computeCentroid(embeddings)
+
+  const { error: updateErr } = await supabase
+    .from('process_clusters')
+    .update({ representative_embedding: centroid })
+    .eq('id', clusterId)
+
+  if (updateErr) {
+    console.error('[processClustering] Centroid update failed:', updateErr.message)
+  }
 }
 
 interface ProcessStepRow {
@@ -194,6 +227,8 @@ export async function clusterProcessSteps(workspaceId: string): Promise<void> {
         .eq('id', step.id)
       if (linkErr) {
         console.error('[processClustering] Step link failed:', linkErr.message, 'step:', step.id)
+      } else {
+        await updateClusterCentroid(clusterId)
       }
 
     } else {
@@ -235,4 +270,35 @@ export async function clusterProcessSteps(workspaceId: string): Promise<void> {
       void synthesizeCluster(clusterId)
     }
   }
+
+  // Retroactive synthesis: clusters with ≥2 real linked steps but no canonical_description yet.
+  // Handles clusters that accumulated participants across multiple runs (synthesis only fires
+  // when ≥2 participants join in the same run, so cross-run accumulation is never synthesized).
+  const { data: unsynthesized } = await supabase
+    .from('process_clusters')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .is('canonical_description', null)
+    .gte('participant_count', 2)
+
+  if (unsynthesized && unsynthesized.length > 0) {
+    for (const { id } of unsynthesized) {
+      // Skip clusters already handled in this run (already queued above)
+      if (clusterParticipants.has(id)) continue
+      // Verify ≥2 real process_steps are linked (not just JSON participants)
+      const { count: realCount } = await supabase
+        .from('process_steps')
+        .select('*', { count: 'exact', head: true })
+        .eq('cluster_id', id)
+      if ((realCount ?? 0) >= 2) {
+        void synthesizeCluster(id)
+      }
+    }
+  }
+}
+
+// Re-run synthesis for specific clusters — called after Clarification slot updates
+// so canonical_description reflects the latest slot values.
+export async function resynthesizeClusters(clusterIds: string[]): Promise<void> {
+  await Promise.all(clusterIds.map((id) => synthesizeCluster(id)))
 }

@@ -97,6 +97,16 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
   return missing
 }
 
+// Normalize step title for semantic deduplication by stripping common German
+// process noun suffixes (e.g. "Mahnprozess" → "mahn", "Mahnwesen" → "mahn").
+function normalizeStepTitleForDedup(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/(prozess|wesen|ablauf|vorgang|schritt|bearbeitung|handling|verwaltung|management)$/, '')
+    .trim()
+}
+
 // Strip markdown headings and control characters from LLM-generated strings
 // before injecting them back into the system prompt.
 function sanitizeForPrompt(s: string): string {
@@ -239,9 +249,9 @@ Stelle keine weiteren Fragen — die Abschlussfragen erscheinen im Interface.`
 
   // wrap_up
   return `## Methodik: wrap_up
-Stelle als nächste Frage:
+PFLICHT: Stelle als allererste Antwort in dieser Phase exakt diese Frage — keine Verabschiedung davor:
 "Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?"
-Warte auf eine Antwort, bevor du dich verabschiedest.
+Verabschiede dich NICHT ohne diese Frage gestellt zu haben.
 Nach der Antwort:
 - Neuer Prozess → register_step aufrufen, explorieren — kein Abschluss.
 - Keine neuen Inhalte → kurz verabschieden.`
@@ -392,11 +402,22 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
 
           const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
 
-          // Deduplicate: exact case-insensitive OR substring match
+          // Deduplicate: exact/substring match OR normalized suffix-stripped match
+          // (e.g. "Mahnprozess" and "Mahnwesen" both normalize to "mahn" → same step)
           const normalizedTitle = title.trim().toLowerCase()
+          const normalizedForDedup = normalizeStepTitleForDedup(title)
           const duplicate = current.find((s) => {
             const existing = s.title.trim().toLowerCase()
-            return existing === normalizedTitle || existing.includes(normalizedTitle) || normalizedTitle.includes(existing)
+            if (existing === normalizedTitle || existing.includes(normalizedTitle) || normalizedTitle.includes(existing)) {
+              return true
+            }
+            const existingForDedup = normalizeStepTitleForDedup(s.title)
+            if (existingForDedup.length >= 4 && normalizedForDedup.length >= 4) {
+              return existingForDedup === normalizedForDedup ||
+                existingForDedup.includes(normalizedForDedup) ||
+                normalizedForDedup.includes(existingForDedup)
+            }
+            return false
           })
           if (duplicate) {
             return {
@@ -460,6 +481,21 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
         if (!evidence_quote || evidence_quote.trim().length < 3) {
           return { success: false, error: 'evidence_quote fehlt oder zu kurz. Zitiere wörtlich aus der Mitarbeiter-Antwort.' }
         }
+
+        // Per-slot type guards — return error so LLM corrects the call
+        if (slot === 'rule_based' && typeof value !== 'boolean') {
+          return { success: false, error: `rule_based erwartet true oder false (boolean), nicht "${value}". Nutze true wenn der Schritt feste Regeln/Richtlinien hat, false wenn nicht.` }
+        }
+        if (slot === 'media_breaks' && typeof value !== 'number') {
+          return { success: false, error: `media_breaks erwartet eine ganze Zahl (Anzahl Medienbrüche pro Durchlauf, z.B. 0, 1, 2), nicht "${value}".` }
+        }
+        if ((slot === 'frequency_per_month' || slot === 'duration_minutes' || slot === 'error_rate_percent') && typeof value !== 'number') {
+          return { success: false, error: `${slot} erwartet eine Zahl, nicht "${value}". Extrahiere den numerischen Mittelwert.` }
+        }
+        if (slot === 'data_sources' && !Array.isArray(value)) {
+          return { success: false, error: `data_sources erwartet ein String-Array, z.B. ["SAP", "Excel"]. Nicht: "${value}".` }
+        }
+
         const verbatimQuote = currentUserInput?.trim() || evidence_quote
 
         try {

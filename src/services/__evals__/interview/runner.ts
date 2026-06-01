@@ -282,6 +282,8 @@ async function generatePersonaResponse(
       'WICHTIG: Antworte AUSSCHLIESSLICH auf Basis deines Prozesswissens. Erfinde keine Fakten.',
       'Teile konkrete Zahlen (Mengen, Zeitangaben, Prozentwerte) und Tool-Namen nur auf direkte Nachfrage mit.',
       'Antworte in der Ich-Perspektive, auf Deutsch. Maximal 3–4 Sätze.',
+      'WICHTIG: Verwende NIEMALS dieselbe Einleitungsphrase wie in einer vorherigen Antwort dieses Gesprächs. Wenn du "Ich fange damit an, die Rechnung zu prüfen" oder eine ähnliche Formulierung bereits gesagt hast, ist sie VERBOTEN — wähle einen anderen Einstieg.',
+      'KONTEXTREGEL: Beantworte immer den gerade erfragten Prozess. Wenn der Interviewer nach Monatsabschluss, Mahnprozess oder einem anderen Thema fragt, beginne NICHT mit Rechnungsprüfungs-Phrasen.',
     ].join('\n'),
     prompt: historyText
       ? `Bisheriges Gespräch:\n${historyText}\n\nInterviewer sagt gerade: ${agentText}\n\nDeine Antwort als ${persona.identity.name}:`

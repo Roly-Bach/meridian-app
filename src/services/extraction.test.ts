@@ -68,7 +68,7 @@ describe('extractAndEmbed', () => {
     expect(call.prompt).toContain('Rechnungen in SAP')
   })
 
-  it('inserts valid extractions with embeddings', async () => {
+  it('inserts valid extractions with embeddings — process_step filtered (K2)', async () => {
     const mockObjects = [
       {
         type: 'process_step',
@@ -91,12 +91,13 @@ describe('extractAndEmbed', () => {
       transcript: MOCK_TRANSCRIPT,
     })
 
-    expect(generateEmbedding).toHaveBeenCalledTimes(2)
-    expect(mockInsert).toHaveBeenCalledTimes(2)
+    // process_step is no longer in ALLOWED_TYPES — only tool inserted
+    expect(generateEmbedding).toHaveBeenCalledTimes(1)
+    expect(mockInsert).toHaveBeenCalledTimes(1)
 
     const firstInsert = mockInsert.mock.calls[0][0]
-    expect(firstInsert.type).toBe('process_step')
-    expect(firstInsert.source_quote).toBe('Ich verarbeite täglich Rechnungen in SAP.')
+    expect(firstInsert.type).toBe('tool')
+    expect(firstInsert.source_quote).toBe('Rechnungen in SAP')
     expect(firstInsert.interview_id).toBe('iv-1')
     expect(firstInsert.workspace_id).toBe('ws-1')
     expect(firstInsert.turn_id).toBe('turn-1')
@@ -256,6 +257,25 @@ describe('extractAndEmbed', () => {
 
     expect(mockInsert).not.toHaveBeenCalled()
     expect(errorSpy).toHaveBeenCalledWith('[extraction] Invalid type, skipping:', 'role')
+    errorSpy.mockRestore()
+  })
+
+  it('rejects `process_step` type — removed from allowlist in K2 (ADR-013)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const objects = [
+      { type: 'process_step', content: { title: 'Rechnung prüfen' }, source_quote: 'täglich prüfe ich' },
+    ]
+    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(objects) } as never)
+
+    await extractAndEmbed({
+      interviewId: 'iv-1',
+      workspaceId: 'ws-1',
+      turnId: 'turn-1',
+      transcript: MOCK_TRANSCRIPT,
+    })
+
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith('[extraction] Invalid type, skipping:', 'process_step')
     errorSpy.mockRestore()
   })
 

@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
-import { clusterProcessSteps } from '@/services/processClustering'
+import { clusterProcessSteps, resynthesizeClusters } from '@/services/processClustering'
 import { deduplicateKnowledgeObjects } from '@/services/extraction'
+import { generateEmbedding } from '@/services/embeddings'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
 
@@ -120,6 +121,8 @@ export async function POST(
       && a.answer !== 'Weiß ich nicht'
   )
 
+  const updatedStepIds = new Set<string>()
+
   for (const sa of slotAnswers) {
     const answerStr = sa.answer as string
     const update: ProcessStepUpdate = {}
@@ -140,12 +143,40 @@ export async function POST(
     const isUuid = TOKEN_UUID_RE.test(sa.process_step_id)
     if (isUuid) {
       await supabase.from('process_steps').update(update).eq('id', sa.process_step_id).eq('interview_id', interviewId)
+      updatedStepIds.add(sa.process_step_id)
     } else {
-      await supabase.from('process_steps').update(update).eq('title', sa.process_step_id).eq('interview_id', interviewId)
+      const { data: matchedSteps } = await supabase
+        .from('process_steps')
+        .select('id')
+        .eq('title', sa.process_step_id)
+        .eq('interview_id', interviewId)
+      if (matchedSteps) {
+        await supabase.from('process_steps').update(update).eq('title', sa.process_step_id).eq('interview_id', interviewId)
+        for (const s of matchedSteps) updatedStepIds.add(s.id)
+      }
     }
   }
 
-  // Process OpenItemCards — register confirmed steps via knowledge_objects
+  // Collect cluster_ids of updated steps so synthesis can be re-run with fresh slot values
+  const affectedClusterIds: string[] = []
+  if (updatedStepIds.size > 0) {
+    const { data: clusteredSteps } = await supabase
+      .from('process_steps')
+      .select('cluster_id')
+      .in('id', [...updatedStepIds])
+      .not('cluster_id', 'is', null)
+    if (clusteredSteps) {
+      const seen = new Set<string>()
+      for (const row of clusteredSteps) {
+        if (row.cluster_id && !seen.has(row.cluster_id)) {
+          seen.add(row.cluster_id)
+          affectedClusterIds.push(row.cluster_id)
+        }
+      }
+    }
+  }
+
+  // Process OpenItemCards — register confirmed steps as process_steps (+ KO for audit)
   const openItemAnswers = answers.filter(
     (a) => a.slot_key === 'open_item'
       && typeof a.answer === 'string'
@@ -159,6 +190,42 @@ export async function POST(
       type: 'process_step',
       content: { title: oa.process_step_id, confirmed_via: 'clarification', answer: oa.answer },
     })
+
+    // Skip if a process_step with this title already exists for the interview
+    const { count: existingCount } = await supabase
+      .from('process_steps')
+      .select('*', { count: 'exact', head: true })
+      .eq('interview_id', interviewId)
+      .eq('title', oa.process_step_id)
+
+    if ((existingCount ?? 0) > 0) continue
+
+    // Insert process_step so it participates in clustering and use-case generation.
+    // No slots — step was only confirmed, not walked through. Clustering picks it up via embedding.
+    const title = oa.process_step_id
+    const embedding = await generateEmbedding(title, { interviewId })
+
+    const { error: stepError } = await supabase.from('process_steps').insert({
+      interview_id: interviewId,
+      workspace_id: workspaceId,
+      title,
+      description: null,
+      role: null,
+      source_quote: null,
+      step_type: 'action',
+      condition_text: null,
+      embedding: embedding as number[],
+      frequency_per_month: null,
+      duration_minutes: null,
+      rule_based: false,
+      data_sources: [],
+      error_rate_percent: null,
+      media_breaks: 0,
+    })
+
+    if (stepError) {
+      console.error('[clarification] OpenItem process_step insert failed:', stepError.message)
+    }
   }
 
   // Complete the interview
@@ -180,6 +247,11 @@ export async function POST(
     deduplicateKnowledgeObjects(workspaceId).catch((err) =>
       console.error('[clarification] deduplicateKnowledgeObjects failed:', err)
     )
+    if (affectedClusterIds.length > 0) {
+      resynthesizeClusters(affectedClusterIds).catch((err) =>
+        console.error('[clarification] resynthesizeClusters failed:', err)
+      )
+    }
   })
 
   return NextResponse.json({ success: true })

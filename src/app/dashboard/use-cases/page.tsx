@@ -20,18 +20,25 @@ export default async function UseCasesPage() {
     workspaceId = member?.workspace_id
   }
 
-  const useCases = workspaceId
+  const [useCases, interviewCount] = workspaceId
     ? await (async () => {
         const admin = getSupabaseAdmin()
-        const { data } = await admin
-          .from('use_cases')
-          .select('*')
-          .eq('workspace_id', workspaceId)
-          .order('score', { ascending: false })
-          .limit(500)
-        return data ?? []
+        const [{ data: ucs }, { count }] = await Promise.all([
+          admin
+            .from('use_cases')
+            .select('*')
+            .eq('workspace_id', workspaceId)
+            .order('score', { ascending: false })
+            .limit(500),
+          admin
+            .from('interviews')
+            .select('*', { count: 'exact', head: true })
+            .eq('workspace_id', workspaceId)
+            .eq('status', 'completed'),
+        ])
+        return [ucs ?? [], count ?? 0] as const
       })()
-    : []
+    : [[], 0] as const
 
   const totalRoi = useCases.reduce((sum, uc) => sum + (uc.roi_eur_per_year ?? 0), 0)
 
@@ -40,6 +47,7 @@ export default async function UseCasesPage() {
       workspaceId={workspaceId ?? ''}
       initialUseCases={useCases}
       initialTotalRoi={Math.round(totalRoi * 100) / 100}
+      interviewCount={interviewCount}
     />
   )
 }

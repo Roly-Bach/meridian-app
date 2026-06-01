@@ -253,11 +253,13 @@ export function UseCaseSheet({ useCase, onClose }: Props) {
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-0">
 
-              {/* Zusammenfassung */}
-              {useCase.description && (
+              {/* Zusammenfassung — business_case from insights when available, else engine description */}
+              {(insights?.business_case || useCase.description) && (
                 <>
                   <SectionLabel>Zusammenfassung</SectionLabel>
-                  <p className="text-[13px] text-[#111111] leading-relaxed">{useCase.description}</p>
+                  <p className="text-[13px] text-[#111111] leading-relaxed">
+                    {insights?.business_case ?? useCase.description}
+                  </p>
                   <Divider />
                 </>
               )}

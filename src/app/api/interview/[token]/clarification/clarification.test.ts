@@ -30,6 +30,10 @@ vi.mock('@/services/extraction', () => ({
   deduplicateKnowledgeObjects: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/services/embeddings', () => ({
+  generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+}))
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { POST } from './route'
@@ -200,6 +204,11 @@ describe('POST /api/interview/[token]/clarification', () => {
               eq: vi.fn().mockResolvedValue({ error: null }),
             }),
           }),
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
+              not: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
         }
       }
       return buildChain()
@@ -312,6 +321,104 @@ describe('POST /api/interview/[token]/clarification', () => {
         type: 'process_step',
       })
     )
+  })
+
+  it('OpenItem "Ja" inserts process_step with embedding for clustering', async () => {
+    const processStepsInsertSpy = vi.fn().mockResolvedValue({ error: null })
+    let callCount = 0
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'interviews') {
+        callCount++
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: { id: INTERVIEW_ID, workspace_id: WORKSPACE_ID, status: 'active', token_expires_at: new Date(Date.now() + 86400000).toISOString() },
+              error: null,
+            }),
+          }
+        }
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) }
+      }
+      if (table === 'knowledge_objects') {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) }
+      }
+      if (table === 'process_steps') {
+        return {
+          // First call: count check → returns 0 (not existing)
+          select: vi.fn().mockReturnValue({
+            count: 0,
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+            }),
+          }),
+          insert: processStepsInsertSpy,
+        }
+      }
+      return buildChain()
+    })
+
+    await POST(
+      makeRequest({ answers: [{ process_step_id: 'Mahnwesen', slot_key: 'open_item', answer: 'Ja' }] }),
+      makeParams()
+    )
+
+    expect(processStepsInsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        interview_id: INTERVIEW_ID,
+        workspace_id: WORKSPACE_ID,
+        title: 'Mahnwesen',
+        frequency_per_month: null,
+        duration_minutes: null,
+        step_type: 'action',
+      })
+    )
+  })
+
+  it('OpenItem "Ja" skips process_step insert if title already exists', async () => {
+    const processStepsInsertSpy = vi.fn()
+    let callCount = 0
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'interviews') {
+        callCount++
+        if (callCount === 1) {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: { id: INTERVIEW_ID, workspace_id: WORKSPACE_ID, status: 'active', token_expires_at: new Date(Date.now() + 86400000).toISOString() },
+              error: null,
+            }),
+          }
+        }
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) }
+      }
+      if (table === 'knowledge_objects') {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) }
+      }
+      if (table === 'process_steps') {
+        return {
+          // Count check → returns 1 (already exists)
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ count: 1, error: null }),
+            }),
+          }),
+          insert: processStepsInsertSpy,
+        }
+      }
+      return buildChain()
+    })
+
+    await POST(
+      makeRequest({ answers: [{ process_step_id: 'Mahnwesen', slot_key: 'open_item', answer: 'Ja' }] }),
+      makeParams()
+    )
+
+    expect(processStepsInsertSpy).not.toHaveBeenCalled()
   })
 
   it('OpenItem "Nein" does not insert knowledge_object', async () => {

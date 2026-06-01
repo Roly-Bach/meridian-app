@@ -20,7 +20,7 @@ vi.mock('./embeddings', () => ({
   generateEmbedding: vi.fn().mockResolvedValue(new Array(1024).fill(0)),
 }))
 
-import { enrichProcessSteps, applyGroundingGuard, createProcessStepsFromTracker } from './processEnrichment'
+import { applyGroundingGuard, createProcessStepsFromTracker } from './processEnrichment'
 import { generateText } from 'ai'
 import { generateEmbedding } from './embeddings'
 
@@ -61,45 +61,9 @@ describe('applyGroundingGuard', () => {
   })
 })
 
-// ─── enrichProcessSteps ───────────────────────────────────────────────────────
-
-const INTERVIEW_ID = 'iv-uuid-1'
-const WORKSPACE_ID = 'ws-uuid-1'
-
-const MOCK_KNOWLEDGE_OBJECTS = [
-  {
-    id: 'ko-1',
-    content: { title: 'Rechnungen prüfen', description: 'Täglich eingehende Rechnungen prüfen', role: 'Buchhalter' },
-    source_quote: 'Ich prüfe jeden Morgen die eingehenden Rechnungen in SAP',
-  },
-]
-
-const MOCK_TURNS = [
-  { turn_number: 1, user_input: 'Ich prüfe jeden Morgen die eingehenden Rechnungen in SAP. Das dauert etwa 30 Minuten.', agent_response: 'Wie oft machen Sie das?' },
-]
-
-const VALID_LLM_RESPONSE = [
-  {
-    knowledge_object_id: 'ko-1',
-    title: 'Rechnungen prüfen',
-    description: 'Täglich eingehende Rechnungen prüfen',
-    role: 'Buchhalter',
-    source_quote: 'Ich prüfe jeden Morgen die eingehenden Rechnungen in SAP',
-    attributes: {
-      frequency_per_month: { value: 22, evidence_quote: 'jeden Morgen' },
-      duration_minutes: { value: 30, evidence_quote: 'dauert etwa 30 Minuten' },
-      data_sources: { value: ['SAP'], evidence_quote: 'eingehenden Rechnungen in SAP' },
-      rule_based: { value: null, evidence_quote: null },
-      error_rate_percent: { value: null, evidence_quote: null },
-      media_breaks: { value: null, evidence_quote: null },
-    },
-  },
-]
-
 // Creates a chainable Supabase mock that resolves to the given value
 function makeChain(resolved: unknown) {
   const chain: Record<string, unknown> = {}
-  const self = () => chain
   chain.select = vi.fn().mockReturnValue(chain)
   chain.eq = vi.fn().mockReturnValue(chain)
   chain.order = vi.fn().mockReturnValue(chain)
@@ -108,128 +72,14 @@ function makeChain(resolved: unknown) {
   chain.maybeSingle = vi.fn().mockResolvedValue(resolved)
   chain.delete = vi.fn().mockResolvedValue(resolved)
   chain.update = vi.fn().mockResolvedValue(resolved)
-  // Make the chain itself thenable (awaitable)
   chain.then = (onFulfilled: (v: unknown) => unknown) => Promise.resolve(resolved).then(onFulfilled)
   chain.catch = (onRejected: (e: unknown) => unknown) => Promise.resolve(resolved).catch(onRejected)
   chain.finally = (onFinally: () => void) => Promise.resolve(resolved).finally(onFinally)
-  void self
   return chain
 }
 
-describe('enrichProcessSteps', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockFrom.mockReset()
-  })
-
-  it('returns early when process_steps already exist (idempotency)', async () => {
-    mockFrom.mockReturnValueOnce(makeChain({ count: 2, data: null, error: null }))
-
-    await enrichProcessSteps({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
-    expect(generateText).not.toHaveBeenCalled()
-  })
-
-  it('returns early when no process_step knowledge objects exist', async () => {
-    mockFrom
-      .mockReturnValueOnce(makeChain({ count: 0, data: null, error: null }))
-      .mockReturnValueOnce(makeChain({ data: [], error: null }))
-
-    await enrichProcessSteps({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
-    expect(generateText).not.toHaveBeenCalled()
-  })
-
-  it('logs error and returns when LLM throws', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    mockFrom
-      .mockReturnValueOnce(makeChain({ count: 0, data: null, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_KNOWLEDGE_OBJECTS, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_TURNS, error: null }))
-
-    vi.mocked(generateText).mockRejectedValue(new Error('LLM timeout'))
-
-    await enrichProcessSteps({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[processEnrichment] LLM enrichment failed:'),
-      expect.anything()
-    )
-    errorSpy.mockRestore()
-  })
-
-  it('logs error when LLM returns non-array JSON', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    mockFrom
-      .mockReturnValueOnce(makeChain({ count: 0, data: null, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_KNOWLEDGE_OBJECTS, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_TURNS, error: null }))
-
-    vi.mocked(generateText).mockResolvedValue({ text: '{"not": "an array"}' } as never)
-
-    await enrichProcessSteps({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[processEnrichment] LLM enrichment failed:'),
-      expect.anything()
-    )
-    errorSpy.mockRestore()
-  })
-
-  it('applies grounding guard — null evidence_quote → attribute not stored', async () => {
-    const insertChain = makeChain({ error: null })
-
-    mockFrom
-      .mockReturnValueOnce(makeChain({ count: 0, data: null, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_KNOWLEDGE_OBJECTS, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_TURNS, error: null }))
-      .mockReturnValueOnce(insertChain)
-
-    vi.mocked(generateText).mockResolvedValue({
-      text: JSON.stringify(VALID_LLM_RESPONSE),
-    } as never)
-
-    await enrichProcessSteps({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
-
-    expect(insertChain.insert).toHaveBeenCalledOnce()
-    const insertArg = (insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
-
-    // With evidence → stored
-    expect(insertArg.frequency_per_month).toBe(22)
-    expect(insertArg.duration_minutes).toBe(30)
-    expect(insertArg.data_sources).toEqual(['SAP'])
-
-    // Without evidence → null / defaults
-    expect(insertArg.rule_based).toBe(false)
-    expect(insertArg.error_rate_percent).toBeNull()
-    expect(insertArg.media_breaks).toBe(0)
-  })
-
-  it('skips steps without title', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const llmResponse = [
-      { ...VALID_LLM_RESPONSE[0], title: '' },
-      { ...VALID_LLM_RESPONSE[0], title: 'Valid Step' },
-    ]
-
-    const insertChain = makeChain({ error: null })
-
-    mockFrom
-      .mockReturnValueOnce(makeChain({ count: 0, data: null, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_KNOWLEDGE_OBJECTS, error: null }))
-      .mockReturnValueOnce(makeChain({ data: MOCK_TURNS, error: null }))
-      .mockReturnValueOnce(insertChain)
-
-    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(llmResponse) } as never)
-
-    await enrichProcessSteps({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
-
-    expect(insertChain.insert).toHaveBeenCalledTimes(1)
-    expect((insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0].title).toBe('Valid Step')
-    errorSpy.mockRestore()
-  })
-})
+const INTERVIEW_ID = 'iv-uuid-1'
+const WORKSPACE_ID = 'ws-uuid-1'
 
 // ─── createProcessStepsFromTracker ───────────────────────────────────────────
 
@@ -417,6 +267,34 @@ describe('createProcessStepsFromTracker', () => {
     // Only the walkthrough step inserted, not the exploring one
     expect(insertChain.insert).toHaveBeenCalledTimes(1)
     expect((insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0].title).toBe('Angebotserstellung')
+  })
+
+  it('matches by index even when LLM returns different step_title (paraphrase)', async () => {
+    const insertChain = makeChain({ error: null })
+    const paraphrasedResponse = [
+      {
+        step_title: 'Angebotserstellung (paraphrasiert vom LLM)',
+        description: 'Beschreibung trotzdem korrekt.',
+        source_quote: 'Ich bekomme Anfragen per Mail',
+        step_type: 'action',
+        condition_text: null,
+      },
+    ]
+
+    mockFrom
+      .mockReturnValueOnce(makeChain({ count: 0, data: null, error: null }))
+      .mockReturnValueOnce(makeChain({ data: { step_tracker: [MOCK_STEP_WALKTHROUGH] }, error: null }))
+      .mockReturnValueOnce(makeChain({ data: [], error: null }))
+      .mockReturnValueOnce(insertChain)
+
+    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(paraphrasedResponse) } as never)
+
+    await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
+
+    const arg = (insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(arg.title).toBe('Angebotserstellung')
+    expect(arg.description).toBe('Beschreibung trotzdem korrekt.')
+    expect(arg.source_quote).toBe('Ich bekomme Anfragen per Mail')
   })
 
   it('sets step_type=decision and condition_text when LLM returns decision', async () => {

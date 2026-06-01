@@ -51,11 +51,11 @@ export async function POST(req: Request) {
 
   const hourlyRate = workspace?.hourly_rate ?? 45
 
-  // Fetch process_steps, knowledge_objects (with embeddings for P4), and clusters in parallel
-  const [{ data: steps }, { data: knowledgeObjects }, { data: clustersRaw }] = await Promise.all([
+  // Fetch process_steps, knowledge_objects, clusters, and interview clarification_answers in parallel
+  const [{ data: steps }, { data: knowledgeObjects }, { data: clustersRaw }, { data: interviews }] = await Promise.all([
     admin
       .from('process_steps')
-      .select('id, workspace_id, title, description, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks, interview_id')
+      .select('id, workspace_id, title, description, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks, interview_id, embedding')
       .eq('workspace_id', workspace_id),
     admin
       .from('knowledge_objects')
@@ -70,6 +70,11 @@ export async function POST(req: Request) {
       `)
       .eq('workspace_id', workspace_id)
       .gte('participant_count', 2),
+    admin
+      .from('interviews')
+      .select('id, clarification_answers')
+      .eq('workspace_id', workspace_id)
+      .not('clarification_answers', 'is', null),
   ])
 
   if (!steps || steps.length === 0) {
@@ -82,19 +87,24 @@ export async function POST(req: Request) {
     stepMap.set(s.id, s as EngineProcessStep)
   }
 
-  // Build ClusterContext[] from raw cluster data
+  // Build ClusterContext[] from raw cluster data.
+  // Use FK-joined process_steps (cluster_id) as source of truth — not the participants JSON,
+  // which can contain ghost references to process_steps deleted from previous eval runs.
   const clusterContexts: ClusterContext[] = []
   for (const raw of clustersRaw ?? []) {
     const participants: ClusterParticipant[] = []
 
-    for (const p of (raw.participants as Array<{ interview_id: string; employee_name: string; employee_role: string | null; process_step_id: string }> ?? [])) {
-      const step = stepMap.get(p.process_step_id)
+    for (const ps of (raw.process_steps as Array<{ id: string; workspace_id: string; interview_id: string; title: string; description: string | null; frequency_per_month: number | null; duration_minutes: number | null; error_rate_percent: number | null; rule_based: boolean; data_sources: string[]; media_breaks: number | null }> ?? [])) {
+      const step = stepMap.get(ps.id)
       if (!step) continue
+      // Employee metadata from participants JSON (best-effort, not required for engine logic)
+      const jsonEntry = (raw.participants as Array<{ process_step_id: string; employee_name: string; employee_role: string | null }> ?? [])
+        .find(p => p.process_step_id === ps.id)
       participants.push({
-        interview_id: p.interview_id,
-        employee_name: p.employee_name,
-        employee_role: p.employee_role,
-        process_step_id: p.process_step_id,
+        interview_id: ps.interview_id,
+        employee_name: jsonEntry?.employee_name ?? 'Unbekannt',
+        employee_role: jsonEntry?.employee_role ?? null,
+        process_step_id: ps.id,
         step,
       })
     }
@@ -105,10 +115,24 @@ export async function POST(req: Request) {
         workspace_id: raw.workspace_id,
         canonical_title: raw.canonical_title,
         canonical_description: raw.canonical_description,
-        participant_count: raw.participant_count,
+        participant_count: participants.length,
         participants,
       })
     }
+  }
+
+  // Build qualitative context map: interview_id → string[] of qualitative answers (M2)
+  const qualitativeContext = new Map<string, string[]>()
+  for (const iv of interviews ?? []) {
+    const answers = iv.clarification_answers as Record<string, string | string[]> | null
+    if (!answers) continue
+    const qualTexts: string[] = []
+    for (const [key, value] of Object.entries(answers)) {
+      if (!key.endsWith('__qualitative')) continue
+      if (typeof value === 'string' && value.trim()) qualTexts.push(value.trim())
+      else if (Array.isArray(value)) qualTexts.push(...value.filter(Boolean))
+    }
+    if (qualTexts.length > 0) qualitativeContext.set(iv.id, qualTexts)
   }
 
   // Run heuristic engine: R1–R8 + P1–P4 + C1–C3
@@ -117,6 +141,7 @@ export async function POST(req: Request) {
     hourlyRate,
     (knowledgeObjects ?? []) as import('@/services/useCaseEngine').KnowledgeObjectContext[],
     clusterContexts,
+    qualitativeContext,
   )
 
   // Fetch existing IDs before any writes (for safe cleanup after successful insert)

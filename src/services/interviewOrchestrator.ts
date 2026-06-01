@@ -77,19 +77,7 @@ function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content:
       (lc.includes('gibt es etwas') && lc.includes('nicht'))
     )
   })
-  if (mandatoryQuestionAsked) return true
-
-  // Fallback: farewell loop — agent sent 2+ consecutive farewells without new content.
-  // Prevents infinite goodbye loops when the agent skips the mandatory question.
-  const lastTwo = allAssistant.slice(-2)
-  if (lastTwo.length >= 2) {
-    const FAREWELL_MARKERS = ['vielen dank', 'auf wiedersehen', 'bis zum nächsten', 'wünsche dir', 'verabschied']
-    if (lastTwo.every((t) => FAREWELL_MARKERS.some((m) => t.content.toLowerCase().includes(m)))) {
-      return true
-    }
-  }
-
-  return false
+  return mandatoryQuestionAsked
 }
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
@@ -191,7 +179,14 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
       ctx.history[ctx.history.length - 1].role === 'user' &&
       lastTwo.every((t) => FAREWELL_MARKERS.some((m) => t.content.toLowerCase().includes(m)))
     ) {
-      return { shouldComplete: true, reason: 'soft_confirm' }
+      // PROJ-23: Don't complete when Analyst has clarification_cards pending — route to clarification instead.
+      // Also don't complete when analyst hasn't run yet (analystSuggestion=null means next_briefing is not
+      // set, i.e. we never reached wrap_up). An agent saying farewell at coverage_check/slot_completion is
+      // premature — let decideNextPhase advance to wrap_up so the analyst runs and can produce cards.
+      const cards = analystSuggestion?.clarification_cards
+      if (analystSuggestion !== null && (!cards || cards.length === 0)) {
+        return { shouldComplete: true, reason: 'soft_confirm' }
+      }
     }
   }
 

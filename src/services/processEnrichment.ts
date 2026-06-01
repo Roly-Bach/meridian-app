@@ -5,188 +5,50 @@ import { generateEmbedding } from './embeddings'
 import type { StepEntry } from './interviewAgent'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 
+// ── Slot coercions (safety net for legacy tracker data or LLM type errors) ──────
+
+const FALSY_STRINGS = new Set(['false', 'nein', 'no', 'none', 'keine', 'niemals', '0', ''])
+
+function coerceRuleBased(v: unknown): boolean {
+  if (typeof v === 'boolean') return v
+  if (typeof v === 'number') return v !== 0
+  if (typeof v === 'string') return !FALSY_STRINGS.has(v.toLowerCase().trim())
+  return Boolean(v)
+}
+
+const MEDIA_BREAKS_TEXT_MAP: [RegExp, number][] = [
+  [/nie|niemals|keine|nein|no\b|0/i, 0],
+  [/sehr selten|kaum|fast nie|rarely/i, 0],
+  [/selten|manchmal|occasionally/i, 1],
+  [/gelegentlich|ab und zu|sometimes/i, 2],
+  [/häufig|often|regelmäßig/i, 4],
+  [/sehr häufig|always|immer/i, 6],
+]
+
+function coerceMediaBreaks(v: unknown): number {
+  if (typeof v === 'number') return Math.round(v)
+  if (typeof v === 'boolean') return v ? 1 : 0
+  if (typeof v === 'string') {
+    const parsed = parseFloat(v)
+    if (!isNaN(parsed)) return Math.round(parsed)
+    for (const [pattern, count] of MEDIA_BREAKS_TEXT_MAP) {
+      if (pattern.test(v)) return count
+    }
+    console.warn(`[coerceMediaBreaks] Unrecognized text value: "${v}", defaulting to 0`)
+    return 0
+  }
+  return 0
+}
+
 interface EnrichedAttribute<T> {
   value: T | null
   evidence_quote: string | null
 }
 
-interface LLMProcessStep {
-  knowledge_object_id: string
-  title: string
-  description: string | null
-  role: string | null
-  source_quote: string | null
-  step_type: 'action' | 'decision' | null
-  condition_text: string | null
-  attributes: {
-    frequency_per_month: EnrichedAttribute<number>
-    duration_minutes: EnrichedAttribute<number>
-    data_sources: EnrichedAttribute<string[]>
-    rule_based: EnrichedAttribute<boolean>
-    error_rate_percent: EnrichedAttribute<number>
-    media_breaks: EnrichedAttribute<number>
-  }
-}
-
-const ENRICHMENT_SYSTEM_PROMPT = `Du bist ein Prozessanalyse-Agent für Meridian. Leite quantitative Attribute für Prozessschritte aus Interview-Transkripten ab.
-
-KRITISCHE REGEL: Setze ein Attribut NUR wenn es im Interview EXPLIZIT genannt wurde.
-- Kein Raten, keine Schätzungen, keine Annahmen
-- Ohne klaren Beleg im Transkript: value = null, evidence_quote = null
-- evidence_quote MUSS ein wörtliches Zitat aus dem Mitarbeiter-Input sein
-
-Attribute:
-- frequency_per_month (integer): Nur wenn Häufigkeit explizit genannt ("täglich" → 22, "wöchentlich" → 4, "jeden Montag" → 4, "monatlich" → 1)
-- duration_minutes (integer): Nur wenn Dauer explizit genannt ("2 Stunden" → 120, "30 Minuten" → 30)
-- data_sources (string[]): Nur explizit genannte Systeme/Tools als Datenquellen
-- rule_based (boolean): true NUR bei "immer gleich", "feste Regel", "immer wenn X dann Y" — sonst false
-- error_rate_percent (integer 0-100): Nur wenn Fehlerrate/Probleme mit Häufigkeit explizit erwähnt
-- media_breaks (integer): Nur wenn Systemwechsel explizit beschrieben
-
-Zusätzlich: Schritt-Typ bestimmen
-- step_type = "decision" wenn der Schritt eine Entscheidungsverzweigung beschreibt ("wenn X dann Y sonst Z", "je nachdem ob", "abhängig davon")
-- condition_text: Bedingung als Prosatext, z.B. "Wenn interne Kapazität vorhanden → intern, sonst → extern"
-- Alle anderen Schritte: step_type = "action", condition_text = null
-
-Ausgabeformat — nur valides JSON, kein Text davor oder danach:
-[
-  {
-    "knowledge_object_id": "uuid",
-    "title": "Titel des Prozessschritts",
-    "description": "Beschreibung oder null",
-    "role": "Rolle oder null",
-    "source_quote": "Originalzitat aus dem Interview",
-    "step_type": "action",
-    "condition_text": null,
-    "attributes": {
-      "frequency_per_month": { "value": 4, "evidence_quote": "jeden Montag" },
-      "duration_minutes": { "value": null, "evidence_quote": null },
-      "data_sources": { "value": ["SAP", "Excel"], "evidence_quote": "wir nutzen SAP und Excel" },
-      "rule_based": { "value": false, "evidence_quote": null },
-      "error_rate_percent": { "value": null, "evidence_quote": null },
-      "media_breaks": { "value": null, "evidence_quote": null }
-    }
-  }
-]`
-
 // Guard: only use attribute value if evidence_quote is present and non-empty
 export function applyGroundingGuard<T>(attr: EnrichedAttribute<T>): T | null {
   if (!attr || !attr.evidence_quote || attr.evidence_quote.trim() === '') return null
   return attr.value
-}
-
-export async function enrichProcessSteps({
-  interviewId,
-  workspaceId,
-  traceCtx,
-}: {
-  interviewId: string
-  workspaceId: string
-  traceCtx?: TraceCtx
-}): Promise<void> {
-  const supabase = getSupabaseAdmin()
-
-  // ── Idempotency check ────────────────────────────────────────────────────────
-  const { count } = await supabase
-    .from('process_steps')
-    .select('*', { count: 'exact', head: true })
-    .eq('interview_id', interviewId)
-
-  if ((count ?? 0) > 0) {
-    return
-  }
-
-  // ── Fetch process_step knowledge objects ─────────────────────────────────────
-  const { data: knowledgeObjects } = await supabase
-    .from('knowledge_objects')
-    .select('id, content, source_quote, embedding')
-    .eq('interview_id', interviewId)
-    .eq('type', 'process_step')
-
-  if (!knowledgeObjects || knowledgeObjects.length === 0) {
-    return
-  }
-
-  // ── Fetch transcript ─────────────────────────────────────────────────────────
-  const { data: turns } = await supabase
-    .from('turns')
-    .select('turn_number, user_input, agent_response')
-    .eq('interview_id', interviewId)
-    .order('turn_number', { ascending: true })
-
-  const transcript = (turns ?? [])
-    .map((t) => `Turn ${t.turn_number}:\nMitarbeiter: ${t.user_input}\nAgent: ${t.agent_response}`)
-    .join('\n\n')
-
-  const objectsInput = JSON.stringify(
-    knowledgeObjects.map((ko) => ({
-      id: ko.id,
-      content: ko.content,
-      source_quote: ko.source_quote,
-    }))
-  )
-
-  // ── LLM Enrichment ───────────────────────────────────────────────────────────
-  let enriched: LLMProcessStep[] = []
-  try {
-    const { text } = await generateText({
-      model: resolveModel(process.env.ENRICHMENT_MODEL),
-      system: ENRICHMENT_SYSTEM_PROMPT,
-      prompt: `Vollständiges Transkript:\n${transcript}\n\nProzessschritte zum Anreichern:\n${objectsInput}`,
-      maxOutputTokens: 4000,
-      experimental_telemetry: buildTraceMetadata('processEnrichment.enrichProcessSteps', {
-        interviewId,
-        model: process.env.ENRICHMENT_MODEL ?? 'google/gemini-3.1-flash-lite',
-        environment: 'prod',
-        ...traceCtx,
-      }),
-    })
-
-    const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
-    const parsed = JSON.parse(cleaned)
-    if (!Array.isArray(parsed)) throw new Error('Response is not an array')
-    enriched = parsed
-  } catch (err) {
-    console.error('[processEnrichment] LLM enrichment failed:', err)
-    return
-  }
-
-  // Build embedding lookup: knowledge_object_id → embedding
-  const embeddingByKoId = new Map<string, number[] | null>(
-    (knowledgeObjects ?? []).map((ko) => [ko.id, ko.embedding as number[] | null])
-  )
-
-  // ── Insert with grounding guard ──────────────────────────────────────────────
-  for (const step of enriched) {
-    if (!step.title) {
-      console.error('[processEnrichment] Skipping step without title:', step)
-      continue
-    }
-
-    const embedding = embeddingByKoId.get(step.knowledge_object_id) ?? null
-
-    const { error } = await supabase.from('process_steps').insert({
-      interview_id: interviewId,
-      workspace_id: workspaceId,
-      title: step.title,
-      description: step.description ?? null,
-      role: step.role ?? null,
-      source_quote: step.source_quote ?? null,
-      step_type: step.step_type === 'decision' ? 'decision' : 'action',
-      condition_text: step.step_type === 'decision' ? (step.condition_text ?? null) : null,
-      embedding,
-      frequency_per_month: applyGroundingGuard(step.attributes?.frequency_per_month ?? { value: null, evidence_quote: null }),
-      duration_minutes: applyGroundingGuard(step.attributes?.duration_minutes ?? { value: null, evidence_quote: null }),
-      data_sources: applyGroundingGuard(step.attributes?.data_sources ?? { value: null, evidence_quote: null }) ?? [],
-      rule_based: applyGroundingGuard(step.attributes?.rule_based ?? { value: null, evidence_quote: null }) ?? false,
-      error_rate_percent: applyGroundingGuard(step.attributes?.error_rate_percent ?? { value: null, evidence_quote: null }),
-      media_breaks: applyGroundingGuard(step.attributes?.media_breaks ?? { value: null, evidence_quote: null }) ?? 0,
-    })
-
-    if (error) {
-      console.error('[processEnrichment] DB insert failed:', error.message)
-    }
-  }
 }
 
 // ── LLM prompt for tracker-based description/quote generation ─────────────────
@@ -291,7 +153,13 @@ export async function createProcessStepsFromTracker({
     })
 
     const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
-    const parsed = JSON.parse(cleaned)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(cleaned)
+    } catch (parseErr) {
+      console.error('[createProcessStepsFromTracker] JSON.parse failed. Raw response (truncated):', cleaned.slice(0, 500))
+      throw parseErr
+    }
     if (!Array.isArray(parsed)) throw new Error('Response is not an array')
     descriptions = parsed
   } catch (err) {
@@ -306,11 +174,16 @@ export async function createProcessStepsFromTracker({
     }))
   }
 
-  const descByTitle = new Map(descriptions.map((d) => [d.step_title, d]))
+  if (descriptions.length !== steps.length) {
+    console.warn(
+      `[createProcessStepsFromTracker] description count mismatch: got ${descriptions.length}, expected ${steps.length}. Matching by index.`
+    )
+  }
 
   // ── Insert one process_step per tracker entry ────────────────────────────────
-  for (const step of steps) {
-    const desc = descByTitle.get(step.title)
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]
+    const desc = descriptions[i]
 
     const title = step.title
     const description = desc?.description ?? null
@@ -326,14 +199,12 @@ export async function createProcessStepsFromTracker({
       step_type: desc?.step_type === 'decision' ? 'decision' : 'action',
       condition_text: desc?.step_type === 'decision' ? (desc.condition_text ?? null) : null,
       embedding: embedding as number[],
-      frequency_per_month: (step.slots.frequency_per_month?.value as number) ?? null,
-      duration_minutes: (step.slots.duration_minutes?.value as number) ?? null,
-      rule_based: typeof step.slots.rule_based?.value === 'boolean'
-        ? step.slots.rule_based.value
-        : Boolean(step.slots.rule_based?.value),
+      frequency_per_month: step.slots.frequency_per_month?.value != null ? Math.round(step.slots.frequency_per_month.value as number) : null,
+      duration_minutes: step.slots.duration_minutes?.value != null ? Math.round(step.slots.duration_minutes.value as number) : null,
+      rule_based: coerceRuleBased(step.slots.rule_based?.value),
       data_sources: (step.slots.data_sources?.value as string[]) ?? [],
-      error_rate_percent: (step.slots.error_rate_percent?.value as number) ?? null,
-      media_breaks: (Number(step.slots.media_breaks?.value) || 0),
+      error_rate_percent: step.slots.error_rate_percent?.value != null ? Math.round(step.slots.error_rate_percent.value as number) : null,
+      media_breaks: coerceMediaBreaks(step.slots.media_breaks?.value),
     })
 
     if (error) {

@@ -169,6 +169,50 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(true)
       expect(result.deduplicated).toBe(true)
     })
+
+    it('deduplicates via German process suffix normalization (Mahnwesen vs Mahnprozess)', async () => {
+      // "Mahnwesen" → strip "wesen" → "mahn"
+      // "Mahnprozess" → strip "prozess" → "mahn"
+      // Both normalize to same root → dedup fires
+      const existing = [makeStep({ title: 'Mahnwesen' })]
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: existing }, error: null }),
+      })
+
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.register_step as any).execute({ title: 'Mahnprozess', role: undefined })
+
+      expect(result.success).toBe(true)
+      expect(result.deduplicated).toBe(true)
+    })
+
+    it('does NOT deduplicate when normalized roots differ (≥4 chars)', async () => {
+      // "Rechnungsprüfung" → strip nothing matching → stays "rechnungsprüfung"
+      // "Monatsabschluss" → strip "abschluss" → "monats" — different root
+      const existing = [makeStep({ title: 'Rechnungsprüfung' })]
+      mockAdminFrom
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: existing }, error: null }),
+        })
+        .mockReturnValueOnce({
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        })
+
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.register_step as any).execute({ title: 'Monatsabschluss', role: undefined })
+
+      expect(result.success).toBe(true)
+      // Non-duplicate path does not set deduplicated — step is added to tracker
+      expect(result.deduplicated).toBeUndefined()
+      expect(result.step_tracker).toHaveLength(2)
+    })
   })
 
   // ── record_slot ─────────────────────────────────────────────────────────────
@@ -297,6 +341,54 @@ describe('Tool Handlers', () => {
 
       const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
       expect(updated[0].status).not.toBe('done')
+    })
+
+    it('rejects string value for rule_based (must be boolean)', async () => {
+      const tools = buildTools('iv-1', 'ws-1')
+      const result = await (tools.record_slot as any).execute({
+        step_title: 'Rechnungseingang',
+        slot: 'rule_based',
+        value: 'Zweitfreigabe ab 5.000 EUR',
+        evidence_quote: 'Zweitfreigabe wenn Betrag über 5.000 EUR',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('boolean')
+    })
+
+    it('rejects string value for media_breaks (must be number)', async () => {
+      const tools = buildTools('iv-1', 'ws-1')
+      const result = await (tools.record_slot as any).execute({
+        step_title: 'Rechnungseingang',
+        slot: 'media_breaks',
+        value: 'sehr selten',
+        evidence_quote: 'kommt sehr selten vor',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('ganze Zahl')
+    })
+
+    it('rejects string value for frequency_per_month (must be number)', async () => {
+      const tools = buildTools('iv-1', 'ws-1')
+      const result = await (tools.record_slot as any).execute({
+        step_title: 'Rechnungseingang',
+        slot: 'frequency_per_month',
+        value: 'monatlich',
+        evidence_quote: 'das mache ich monatlich',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Zahl')
+    })
+
+    it('rejects non-array for data_sources', async () => {
+      const tools = buildTools('iv-1', 'ws-1')
+      const result = await (tools.record_slot as any).execute({
+        step_title: 'Rechnungseingang',
+        slot: 'data_sources',
+        value: 'SAP und Excel',
+        evidence_quote: 'SAP und Excel nutze ich dabei',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Array')
     })
   })
 

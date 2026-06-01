@@ -229,8 +229,8 @@ describe('checkLifecycle', () => {
 
 // ─── Farewell-Loop Fallback (Bug-1 Fix) ──────────────────────────────────────
 
-describe('closingQuestionWasAsked — farewell loop fallback', () => {
-  it('triggers completed when agent sent 2+ consecutive farewell messages', () => {
+describe('closingQuestionWasAsked — farewell loop fallback removed', () => {
+  it('stays in wrap_up when agent sent 2+ farewell messages without the canonical question (escape valve handles this separately)', () => {
     const history = [
       { role: 'user' as const, content: 'Ja, das war alles.' },
       { role: 'assistant' as const, content: 'Vielen Dank für das Gespräch! Ich verabschiede mich herzlich.' },
@@ -238,7 +238,7 @@ describe('closingQuestionWasAsked — farewell loop fallback', () => {
       { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
       { role: 'user' as const, content: 'Tschüss.' },
     ]
-    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 5 }), null)).toBe('completed')
+    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 5 }), null)).toBe('wrap_up')
   })
 
   it('stays in wrap_up when agent sent only 1 farewell (loop not yet triggered)', () => {
@@ -249,16 +249,30 @@ describe('closingQuestionWasAsked — farewell loop fallback', () => {
     expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)).toBe('wrap_up')
   })
 
-  it('checkLifecycle returns soft_confirm for farewell loop', () => {
+  it('checkLifecycle returns soft_confirm for farewell loop when analyst has run (non-null briefing)', () => {
     const history = [
       { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
       { role: 'user' as const, content: 'Tschüss.' },
       { role: 'assistant' as const, content: 'Wünsche dir einen schönen Tag! Auf Wiedersehen.' },
       { role: 'user' as const, content: 'Dir auch.' },
     ]
-    const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 4 }), null)
+    // Analyst has run (non-null briefing), no clarification_cards pending → escape valve fires
+    const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 4 }), {})
     expect(result.shouldComplete).toBe(true)
     expect(result.reason).toBe('soft_confirm')
+  })
+
+  it('checkLifecycle does NOT escape when analyst has NOT run yet (null briefing = pre-wrap_up)', () => {
+    // B2 fix: agent said farewell at coverage_check phase before analyst ran.
+    // Escape valve must not fire — let orchestrator advance to wrap_up so analyst runs.
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+      { role: 'assistant' as const, content: 'Wünsche dir einen schönen Tag! Auf Wiedersehen.' },
+      { role: 'user' as const, content: 'Dir auch.' },
+    ]
+    const result = checkLifecycle(baseCtx({ phase: 'coverage_check', history, historyLength: 4 }), null)
+    expect(result.shouldComplete).toBe(false)
   })
 
   it('does NOT trigger farewell loop when messages contain farewell but are not consecutive', () => {
@@ -276,6 +290,8 @@ describe('closingQuestionWasAsked — farewell loop fallback', () => {
 
 describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => {
   it('completes even when Mahnprozess is walkthrough (phase=walkthrough_step)', () => {
+    // B6 scenario: interview was at wrap_up → new step registered → phase pushed back.
+    // Analyst has already run (non-null briefing), no cards pending → escape fires.
     const tracker = [
       makeStep('Rechnungsprüfung', 'done', fullSlots),
       makeStep('Mahnprozess', 'walkthrough', emptySlots),
@@ -288,13 +304,14 @@ describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => 
     ]
     const result = checkLifecycle(
       baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, history, historyLength: 4 }),
-      null,
+      {},
     )
     expect(result.shouldComplete).toBe(true)
     expect(result.reason).toBe('soft_confirm')
   })
 
   it('completes even when step is walkthrough in slot_completion phase', () => {
+    // B6 scenario: analyst has already run (non-null briefing), no cards pending → escape fires.
     const tracker = [makeStep('Mahnprozess', 'walkthrough', emptySlots)]
     const history = [
       { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
@@ -304,7 +321,7 @@ describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => 
     ]
     const result = checkLifecycle(
       baseCtx({ phase: 'slot_completion', stepTracker: tracker, history, historyLength: 4 }),
-      null,
+      {},
     )
     expect(result.shouldComplete).toBe(true)
   })
@@ -318,6 +335,27 @@ describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => 
     const result = checkLifecycle(
       baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, history, historyLength: 2 }),
       null,
+    )
+    expect(result.shouldComplete).toBe(false)
+  })
+
+  // PROJ-23 Regression: farewell escape valve must NOT fire when Analyst has clarification_cards pending.
+  // Scenario: agent said 2× farewell (coverage_check → wrap_up transition), but analyst generated
+  // cards during the wrap_up turn. Without this guard the interview completes before clarification runs.
+  it('does NOT fire when clarification_cards are pending (PROJ-23 regression)', () => {
+    const history = [
+      { role: 'assistant' as const, content: 'Danke für die Einblicke. Vielen Dank für deine Zeit!' },
+      { role: 'user' as const, content: 'Sehr gerne.' },
+      { role: 'assistant' as const, content: 'Das ist sehr hilfreich. Vielen Dank und bis zum nächsten Mal!' },
+      { role: 'user' as const, content: 'Danke auch.' },
+    ]
+    const analystSuggestion = {
+      wrap_up_question_asked: true,
+      clarification_cards: [{ process_step_id: 'step-1', step_title: 'Monatsabschluss', question: 'Wie oft?', options: ['Monatlich', 'Weiß ich nicht'], slot_key: 'error_rate_percent' }],
+    }
+    const result = checkLifecycle(
+      baseCtx({ phase: 'wrap_up', history, historyLength: 4 }),
+      analystSuggestion,
     )
     expect(result.shouldComplete).toBe(false)
   })

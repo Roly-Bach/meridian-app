@@ -40,6 +40,7 @@ export interface EngineProcessStep {
   rule_based: boolean
   error_rate_percent: number | null
   media_breaks: number
+  embedding?: number[] | null
 }
 
 export interface KnowledgeObjectContext {
@@ -410,11 +411,43 @@ export function clusterPainPointsByEmbedding(
 
 // ── Main Engine ───────────────────────────────────────────────────────────────
 
+// Find best anchor step for a pain point: step_ref → cosine sim → first step
+function findBestAnchorStep(
+  interviewId: string,
+  stepRef: string | null | undefined,
+  painEmbedding: number[] | null | undefined,
+  stepsByInterview: Map<string, EngineProcessStep[]>
+): EngineProcessStep | undefined {
+  const candidates = stepsByInterview.get(interviewId) ?? []
+  if (candidates.length === 0) return undefined
+
+  if (stepRef) {
+    const exact = candidates.find(s => s.title === stepRef)
+    if (exact) return exact
+    const fuzzy = candidates.find(s => s.title.toLowerCase().includes(stepRef.toLowerCase()))
+    if (fuzzy) return fuzzy
+  }
+
+  if (painEmbedding && candidates.some(s => s.embedding != null)) {
+    let best: EngineProcessStep | undefined
+    let bestSim = -1
+    for (const s of candidates) {
+      if (!s.embedding) continue
+      const sim = localCosineSim(painEmbedding, s.embedding)
+      if (sim > bestSim) { bestSim = sim; best = s }
+    }
+    if (best) return best
+  }
+
+  return candidates[0]
+}
+
 export function runHeuristicEngine(
   steps: EngineProcessStep[],
   hourlyRate: number,
   knowledgeObjects: KnowledgeObjectContext[] = [],
-  clusters: ClusterContext[] = []
+  clusters: ClusterContext[] = [],
+  qualitativeContext: Map<string, string[]> = new Map()
 ): GeneratedUseCase[] {
   const results: GeneratedUseCase[] = []
 
@@ -537,15 +570,16 @@ export function runHeuristicEngine(
   }
 
   // ── Phase 3: Qualitative Track P1–P3 (pain_point + tool, no ROI) ──────────────
-  const painPointsByInterview = new Map<string, { description: string; severity: string }[]>()
+  interface PainEntry { description: string; severity: string; step_ref?: string | null; embedding?: number[] | null }
+  const painPointsByInterview = new Map<string, PainEntry[]>()
   const toolsByInterview = new Map<string, string[]>()
 
   for (const ko of knowledgeObjects) {
     if (ko.type === 'pain_point') {
-      const c = ko.content as { description?: string; severity?: string }
+      const c = ko.content as { description?: string; severity?: string; step_ref?: string }
       if (!c.description) continue
       const list = painPointsByInterview.get(ko.interview_id) ?? []
-      list.push({ description: c.description, severity: c.severity ?? 'medium' })
+      list.push({ description: c.description, severity: c.severity ?? 'medium', step_ref: c.step_ref ?? null, embedding: ko.embedding })
       painPointsByInterview.set(ko.interview_id, list)
     } else if (ko.type === 'tool') {
       const c = ko.content as { name?: string }
@@ -556,50 +590,68 @@ export function runHeuristicEngine(
     }
   }
 
-  // Per interview: pick the first process_step as anchor for qualitative UCs
+  // Per-interview step lists for anchor resolution (M1)
+  const stepsByInterview = new Map<string, EngineProcessStep[]>()
+  for (const step of steps) {
+    const list = stepsByInterview.get(step.interview_id) ?? []
+    list.push(step)
+    stepsByInterview.set(step.interview_id, list)
+  }
+
+  // stepByInterview still needed for P4 anchor
   const stepByInterview = new Map<string, EngineProcessStep>()
   for (const step of steps) {
-    if (!stepByInterview.has(step.interview_id)) {
-      stepByInterview.set(step.interview_id, step)
-    }
+    if (!stepByInterview.has(step.interview_id)) stepByInterview.set(step.interview_id, step)
   }
 
   const qualitativeKeys = new Set<string>() // deduplicate per interview+type
 
-  for (const [interviewId, anchorStep] of stepByInterview) {
+  for (const interviewId of new Set([...painPointsByInterview.keys(), ...toolsByInterview.keys()])) {
     const painPoints = painPointsByInterview.get(interviewId) ?? []
     const tools = toolsByInterview.get(interviewId) ?? []
+    const qualContext = qualitativeContext.get(interviewId) ?? []
+
+    const qualContextSuffix = qualContext.length > 0
+      ? ` Zusätzlicher Kontext: ${qualContext.join(' | ')}`
+      : ''
 
     // P1 — High-severity pain point → process improvement
     const highPains = painPoints.filter(p => p.severity === 'high')
     if (highPains.length > 0) {
-      const key = `${interviewId}:process_improvement`
-      if (!qualitativeKeys.has(key)) {
-        qualitativeKeys.add(key)
-        results.push(makeQualitativeUC(
-          anchorStep,
-          'process_improvement',
-          `${anchorStep.title} — Prozessverbesserung`,
-          'KI adressiert identifizierte Engpässe und reduziert manuelle Aufwände gezielt.',
-          `Kritischer Engpass: "${highPains[0].description}"`,
-          'medium', 'high',
-        ))
+      const topPain = highPains[0]
+      const anchorStep = findBestAnchorStep(interviewId, topPain.step_ref, topPain.embedding, stepsByInterview)
+      if (anchorStep) {
+        const key = `${interviewId}:process_improvement`
+        if (!qualitativeKeys.has(key)) {
+          qualitativeKeys.add(key)
+          results.push(makeQualitativeUC(
+            anchorStep,
+            'process_improvement',
+            `${anchorStep.title} — Prozessverbesserung`,
+            `KI adressiert identifizierte Engpässe und reduziert manuelle Aufwände gezielt.${qualContextSuffix}`,
+            `Kritischer Engpass: "${topPain.description}"`,
+            'medium', 'high',
+          ))
+        }
       }
     }
 
     // P2 — ≥3 distinct tools → tool consolidation / integration
     if (tools.length >= 3) {
-      const key = `${interviewId}:tool_consolidation`
-      if (!qualitativeKeys.has(key)) {
-        qualitativeKeys.add(key)
-        results.push(makeQualitativeUC(
-          anchorStep,
-          'tool_consolidation',
-          `${anchorStep.title} — Tool-Integration`,
-          `Systemintegration der genutzten Tools (${tools.slice(0, 3).join(', ')}) eliminiert Medienbrüche.`,
-          `${tools.length} verschiedene Systeme identifiziert — Integrationsansatz reduziert manuelle Übergaben.`,
-          'medium', 'medium',
-        ))
+      const anchorStep = stepsByInterview.get(interviewId)?.[0]
+      if (anchorStep) {
+        const key = `${interviewId}:tool_consolidation`
+        if (!qualitativeKeys.has(key)) {
+          qualitativeKeys.add(key)
+          results.push(makeQualitativeUC(
+            anchorStep,
+            'tool_consolidation',
+            `${anchorStep.title} — Tool-Integration`,
+            `Systemintegration der genutzten Tools (${tools.slice(0, 3).join(', ')}) eliminiert Medienbrüche.${qualContextSuffix}`,
+            `${tools.length} verschiedene Systeme identifiziert — Integrationsansatz reduziert manuelle Übergaben.`,
+            'medium', 'medium',
+          ))
+        }
       }
     }
 
@@ -608,17 +660,21 @@ export function runHeuristicEngine(
       MANUAL_KEYWORDS.some(kw => p.description.toLowerCase().includes(kw))
     )
     if (manualPains.length > 0) {
-      const key = `${interviewId}:automation_candidate`
-      if (!qualitativeKeys.has(key)) {
-        qualitativeKeys.add(key)
-        results.push(makeQualitativeUC(
-          anchorStep,
-          'automation_candidate',
-          `${anchorStep.title} — Automatisierungskandidat`,
-          'Manuelle Schritte durch KI-gestützte Automatisierung ersetzen.',
-          `Manueller Aufwand identifiziert: "${manualPains[0].description}"`,
-          'low', 'medium',
-        ))
+      const topManual = manualPains[0]
+      const anchorStep = findBestAnchorStep(interviewId, topManual.step_ref, topManual.embedding, stepsByInterview)
+      if (anchorStep) {
+        const key = `${interviewId}:automation_candidate`
+        if (!qualitativeKeys.has(key)) {
+          qualitativeKeys.add(key)
+          results.push(makeQualitativeUC(
+            anchorStep,
+            'automation_candidate',
+            `${anchorStep.title} — Automatisierungskandidat`,
+            `Manuelle Schritte durch KI-gestützte Automatisierung ersetzen.${qualContextSuffix}`,
+            `Manueller Aufwand identifiziert: "${topManual.description}"`,
+            'low', 'medium',
+          ))
+        }
       }
     }
   }

@@ -7,7 +7,7 @@ import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 
 export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool'
 
-const ALLOWED_TYPES: readonly KnowledgeObjectType[] = ['process_step', 'pain_point', 'tool']
+const ALLOWED_TYPES: readonly KnowledgeObjectType[] = ['pain_point', 'tool']
 
 export interface RawExtraction {
   type: KnowledgeObjectType
@@ -22,53 +22,33 @@ export interface TurnTranscript {
 
 const EXTRACTION_SYSTEM_PROMPT = `Du bist ein Extraktions-Agent für Meridian. Deine Aufgabe: Extrahiere strukturiertes Wissen aus Interview-Transkripten.
 
-Extrahiere ausschließlich diese 3 Typen:
-- process_step: Ein konkreter Prozessschritt oder Arbeitsablauf.
-  Content: {
-    title: string,
-    description: string,
-    role: string,
-    step_type: "action" | "decision",
-    condition_text?: string
-  }
+Extrahiere ausschließlich diese 2 Typen:
 - pain_point: Ein Problem, Engpass oder eine Frustration. Content: { description: string, severity?: "high"|"medium"|"low" }
 - tool: Ein verwendetes Tool, System oder Software. Content: { name: string, purpose: string }
 
 Regeln:
 - source_quote MUSS ein wörtliches Zitat aus dem user_input sein — kein Paraphrasieren
-- Extrahiere NUR aus dem LETZTEN user_input, nicht aus vorherigen Turns
-- Wenn nichts Relevantes im letzten Turn steht, gib ein leeres Array zurück
+- Extrahiere NUR aus dem übergebenen user_input
+- Wenn nichts Relevantes steht, gib ein leeres Array zurück
 - Antworte ausschließlich mit validem JSON — kein erklärender Text davor oder danach
-
-Regeln für process_step step_type:
-- step_type = "decision" NUR wenn der Mitarbeiter eine Entscheidungsverzweigung beschreibt
-  Schlüsselwörter: "wenn", "falls", "je nachdem", "abhängig davon", "manchmal...manchmal", "entweder...oder"
-  condition_text: Bedingung als Prosatext, z.B. "Wenn interne Kapazität vorhanden → intern, sonst → extern"
-- Alle anderen Schritte: step_type = "action", condition_text weglassen (oder null)
 
 Ausgabeformat:
 [
   {
-    "type": "process_step",
-    "content": { "title": "...", "description": "...", "role": "...", "step_type": "action" },
+    "type": "pain_point",
+    "content": { "description": "...", "severity": "high" },
     "source_quote": "exaktes Zitat aus user_input"
   },
   {
-    "type": "process_step",
-    "content": { "title": "...", "description": "...", "role": "...", "step_type": "decision", "condition_text": "Wenn X → Y, sonst → Z" },
+    "type": "tool",
+    "content": { "name": "...", "purpose": "..." },
     "source_quote": "exaktes Zitat aus user_input"
   }
 ]`
 
 function buildExtractionPrompt(transcript: TurnTranscript[]): string {
-  const history = transcript
-    .slice(0, -1)
-    .map((t, i) => `Turn ${i + 1}:\nMitarbeiter: ${t.user_input}\nAgent: ${t.agent_response}`)
-    .join('\n\n')
-
   const lastTurn = transcript[transcript.length - 1]
-
-  return `${history ? `Bisheriges Gespräch:\n${history}\n\n` : ''}Letzter Turn (extrahiere NUR hieraus):\nMitarbeiter: ${lastTurn.user_input}`
+  return `Mitarbeiter: ${lastTurn.user_input}`
 }
 
 export async function extractAndEmbed({
@@ -172,7 +152,7 @@ export async function deduplicateKnowledgeObjects(workspaceId: string): Promise<
     .from('knowledge_objects')
     .select('id, content, embedding, existing_count')
     .eq('workspace_id', workspaceId)
-    .eq('type', 'process_step')
+    .eq('type', 'pain_point')
     .not('embedding', 'is', null)
     .order('created_at', { ascending: true })
 
@@ -190,20 +170,16 @@ export async function deduplicateKnowledgeObjects(workspaceId: string): Promise<
 
   for (let i = 0; i < rows.length; i++) {
     if (toDelete.has(rows[i].id)) continue
-    const roleI = rows[i].content?.role as string | undefined
 
     for (let j = i + 1; j < rows.length; j++) {
       if (toDelete.has(rows[j].id)) continue
-      const roleJ = rows[j].content?.role as string | undefined
-
-      if (roleI !== roleJ) continue
 
       const sim = cosineSim(rows[i].embedding, rows[j].embedding)
       if (sim < DEDUP_THRESHOLD) continue
 
-      const titleI = ((rows[i].content as Record<string, unknown>)?.title as string | undefined) ?? ''
-      const titleJ = ((rows[j].content as Record<string, unknown>)?.title as string | undefined) ?? ''
-      if (levenshtein(titleI.toLowerCase(), titleJ.toLowerCase()) > 8) continue
+      const descI = (rows[i].content?.description as string | undefined) ?? ''
+      const descJ = (rows[j].content?.description as string | undefined) ?? ''
+      if (levenshtein(descI.toLowerCase(), descJ.toLowerCase()) > 8) continue
 
       toDelete.add(rows[j].id)
       const merged = (countUpdates.get(rows[i].id) ?? rows[i].existing_count) + rows[j].existing_count

@@ -132,6 +132,12 @@ describe('POST /api/use-cases/generate', () => {
         eq: vi.fn().mockReturnThis(),
         gte: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
+      // interviews clarification_answers (Promise.all[3])
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        not: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
     const res = await POST(makeRequest({ workspace_id: WORKSPACE_ID }))
     expect(res.status).toBe(200)
     const json = await res.json()
@@ -170,6 +176,12 @@ describe('POST /api/use-cases/generate', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         gte: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+      // interviews clarification_answers (Promise.all[3])
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        not: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
       // fetch existing IDs
       .mockReturnValueOnce({
