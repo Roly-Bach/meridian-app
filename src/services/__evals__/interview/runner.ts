@@ -723,6 +723,8 @@ async function runInterview(
     // calls register_step, same as agent) → inflates step count → interview
     // never completes. At wrap_up, step count no longer drives phase decisions.
     if (orchestratedPhase === 'wrap_up') {
+      // Reload state so Analyst sees slot updates from Talker tool calls this turn.
+      const freshAnalystState = await loadState(interviewId)
       await runAnalyst({
         context: {
           interviewId,
@@ -732,12 +734,12 @@ async function runInterview(
           department: persona.identity.department,
           focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
           phase: orchestratedPhase,
-          timerMinutes: dbState.timerMinutes,
-          topicsCovered: dbState.topicsCovered,
-          topicsOpen: dbState.topicsOpen,
-          extractionsLog: dbState.extractionsLog,
+          timerMinutes: freshAnalystState.timerMinutes,
+          topicsCovered: freshAnalystState.topicsCovered,
+          topicsOpen: freshAnalystState.topicsOpen,
+          extractionsLog: freshAnalystState.extractionsLog,
           maxDurationMinutes: 30,
-          stepTracker: dbState.stepTracker,
+          stepTracker: freshAnalystState.stepTracker,
         },
         history: [...agentHistory, { role: 'assistant', content: agentText }],
         traceCtx,

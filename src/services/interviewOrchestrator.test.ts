@@ -271,3 +271,37 @@ describe('closingQuestionWasAsked — farewell loop fallback', () => {
     expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 4 }), null)).toBe('wrap_up')
   })
 })
+
+// ─── closingQuestionWasAsked — word-split phrase (B1 Regression) ─────────────
+
+describe('closingQuestionWasAsked — word-split gibt-es phrase (B1 regression)', () => {
+  it('detects "Gibt es aus deiner Sicht noch etwas Wichtiges" (words split "gibt es" + "noch etwas")', () => {
+    const history = [
+      { role: 'assistant' as const, content: 'Gibt es aus deiner Sicht noch etwas Wichtiges, das wir für eine vollständige Dokumentation berücksichtigen sollten?' },
+      { role: 'user' as const, content: 'Nein, das war alles.' },
+    ]
+    const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)
+    expect(result.shouldComplete).toBe(true)
+    expect(result.reason).toBe('soft_confirm')
+  })
+
+  it('detects "Gibt es aus Ihrer Sicht noch etwas" (formal address variant)', () => {
+    const history = [
+      { role: 'assistant' as const, content: 'Gibt es aus Ihrer Sicht noch etwas, das wir nicht besprochen haben?' },
+      { role: 'user' as const, content: 'Nein.' },
+    ]
+    const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)
+    expect(result.shouldComplete).toBe(true)
+  })
+
+  it('does NOT fire on unrelated sentences containing "gibt es" and "noch etwas" in distant turns', () => {
+    // "gibt es" and "noch etwas" must be in the SAME assistant turn to match
+    const history = [
+      { role: 'assistant' as const, content: 'Gibt es bei euch ein ERP-System?' },
+      { role: 'user' as const, content: 'Ja, SAP. Gibt es noch etwas anderes?' },
+    ]
+    // User turn doesn't count — only assistant turns are checked
+    const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)
+    expect(result.shouldComplete).toBe(false)
+  })
+})

@@ -56,10 +56,11 @@ function allMandatorySlotsFilled(tracker: StepEntry[]): boolean {
 
 /** Detect if the wrap-up closing question was asked (Iteration 2 heuristic for Trigger B). */
 function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content: string }[]): boolean {
-  const recentAssistant = history.filter((t) => t.role === 'assistant').slice(-3)
+  const allAssistant = history.filter((t) => t.role === 'assistant')
 
-  // Primary: mandatory wrap-up question phrase detected
-  const mandatoryQuestionAsked = recentAssistant.some((t) => {
+  // Primary: search full history — the question may have been asked many turns ago if a new
+  // process was discovered at wrap-up and then explored before the final goodbye.
+  const mandatoryQuestionAsked = allAssistant.some((t) => {
     const lc = t.content.toLowerCase()
     return (
       lc.includes('letzte arbeitswoche') ||
@@ -72,6 +73,7 @@ function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content:
       lc.includes('noch nicht angesprochen') ||
       lc.includes('fehlt noch') ||
       lc.includes('gibt es noch etwas') ||
+      (lc.includes('gibt es') && lc.includes('noch etwas')) ||
       (lc.includes('gibt es etwas') && lc.includes('nicht'))
     )
   })
@@ -79,9 +81,9 @@ function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content:
 
   // Fallback: farewell loop — agent sent 2+ consecutive farewells without new content.
   // Prevents infinite goodbye loops when the agent skips the mandatory question.
-  if (recentAssistant.length >= 2) {
+  const lastTwo = allAssistant.slice(-2)
+  if (lastTwo.length >= 2) {
     const FAREWELL_MARKERS = ['vielen dank', 'auf wiedersehen', 'bis zum nächsten', 'wünsche dir', 'verabschied']
-    const lastTwo = recentAssistant.slice(-2)
     if (lastTwo.every((t) => FAREWELL_MARKERS.some((m) => t.content.toLowerCase().includes(m)))) {
       return true
     }

@@ -350,6 +350,16 @@ export async function POST(
     try {
       const analystHistory = history // includes current user_input as last message
 
+      // Reload step_tracker so Analyst sees slots filled by Talker tools during streaming.
+      // Pre-streaming stepTracker is stale — tools update DB after state was loaded.
+      const adminDb = getSupabaseAdmin()
+      const { data: freshStateRow } = await adminDb
+        .from('interview_state')
+        .select('step_tracker')
+        .eq('interview_id', interview.id)
+        .maybeSingle()
+      const freshStepTracker = (freshStateRow?.step_tracker as StepEntry[] | null) ?? stepTracker
+
       if (needsCatchup && existingTurns.length >= 2) {
         // Catch-up: previous analyst failed, process two turns at once
         const prevUserInput = existingTurns[existingTurns.length - 1]?.user_input ?? ''
@@ -367,7 +377,7 @@ export async function POST(
             topicsOpen: (state?.topics_open as string[] | null) ?? [],
             extractionsLog: currentLog,
             maxDurationMinutes: interview.max_duration_minutes ?? 30,
-            stepTracker,
+            stepTracker: freshStepTracker,
           },
           history: analystHistory,
           previousUserInput: prevUserInput,
@@ -388,7 +398,7 @@ export async function POST(
             topicsOpen: (state?.topics_open as string[] | null) ?? [],
             extractionsLog: currentLog,
             maxDurationMinutes: interview.max_duration_minutes ?? 30,
-            stepTracker,
+            stepTracker: freshStepTracker,
           },
           history: analystHistory,
           traceCtx: { interviewId: interview.id, environment: 'prod' },
