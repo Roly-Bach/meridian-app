@@ -187,7 +187,10 @@ export async function createProcessStepsFromTracker({
 
     const title = step.title
     const description = desc?.description ?? null
-    const embedding = await generateEmbedding(`${title} ${description ?? ''}`.trim(), traceCtx)
+    const dataSources = (step.slots.data_sources?.value as string[] | undefined) ?? []
+    const embeddingInput = [title, description, dataSources.length > 0 ? dataSources.join(' ') : null]
+      .filter(Boolean).join(' ').trim()
+    const embedding = await generateEmbedding(embeddingInput, traceCtx)
 
     const { error } = await supabase.from('process_steps').insert({
       interview_id: interviewId,
@@ -205,6 +208,9 @@ export async function createProcessStepsFromTracker({
       data_sources: (step.slots.data_sources?.value as string[]) ?? [],
       error_rate_percent: step.slots.error_rate_percent?.value != null ? Math.round(step.slots.error_rate_percent.value as number) : null,
       media_breaks: coerceMediaBreaks(step.slots.media_breaks?.value),
+      friction_points: step.friction_points ?? [],
+      friction_tools: step.friction_tools ?? [],
+      walkthrough_steps: step.process_steps ?? [],
     })
 
     if (error) {

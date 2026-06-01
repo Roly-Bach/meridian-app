@@ -9,7 +9,7 @@ async function authorizeStep(id: string, userId: string) {
   const admin = getSupabaseAdmin()
   const { data: step } = await admin
     .from('process_steps')
-    .select('id, workspace_id, title, description, source_quote, data_sources, substeps')
+    .select('id, workspace_id, title, description, source_quote, data_sources, substeps, walkthrough_steps')
     .eq('id', id)
     .single()
 
@@ -59,6 +59,7 @@ export async function POST(_req: Request, { params }: RouteParams) {
       description: step.description,
       sourceQuote: step.source_quote,
       dataSources: (step.data_sources as string[]) ?? [],
+      walkthroughSteps: (step.walkthrough_steps as string[] | undefined) ?? [],
     })
 
     const admin = getSupabaseAdmin()

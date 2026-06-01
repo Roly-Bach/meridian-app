@@ -590,6 +590,17 @@ export function runHeuristicEngine(
     }
   }
 
+  // Also aggregate tools from process_steps.data_sources so P2 sees all tool usage,
+  // not just what the extraction pipeline captured in knowledge_objects.
+  for (const step of steps) {
+    for (const toolName of step.data_sources) {
+      if (!toolName.trim()) continue
+      const list = toolsByInterview.get(step.interview_id) ?? []
+      if (!list.includes(toolName)) list.push(toolName)
+      toolsByInterview.set(step.interview_id, list)
+    }
+  }
+
   // Per-interview step lists for anchor resolution (M1)
   const stepsByInterview = new Map<string, EngineProcessStep[]>()
   for (const step of steps) {
@@ -709,9 +720,7 @@ export function runHeuristicEngine(
       const topPain = sorted[0]
       const maxSeverity = topPain.severity as 'high' | 'medium' | 'low'
 
-      const anchorStep =
-        stepByInterview.get(topPain.interview_id) ??
-        stepByInterview.values().next().value
+      const anchorStep = findBestAnchorStep(topPain.interview_id, null, topPain.embedding, stepsByInterview)
 
       if (!anchorStep) continue
 

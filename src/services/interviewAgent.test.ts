@@ -390,6 +390,7 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('Array')
     })
+
   })
 
   // enter_coverage_check removed in Iteration 2 (PROJ-22) — Orchestrator handles phase transitions.

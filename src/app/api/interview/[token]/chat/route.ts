@@ -381,6 +381,7 @@ export async function POST(
           },
           history: analystHistory,
           previousUserInput: prevUserInput,
+          currentUserInput: user_input,
           traceCtx: { interviewId: interview.id, environment: 'prod' },
         })
       } else {
@@ -401,6 +402,7 @@ export async function POST(
             stepTracker: freshStepTracker,
           },
           history: analystHistory,
+          currentUserInput: user_input,
           traceCtx: { interviewId: interview.id, environment: 'prod' },
         })
       }

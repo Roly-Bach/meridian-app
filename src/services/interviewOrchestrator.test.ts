@@ -50,12 +50,12 @@ function baseCtx(overrides: Partial<OrchestratorContext> = {}): OrchestratorCont
 // ─── intro transitions ────────────────────────────────────────────────────────
 
 describe('decideNextPhase — intro', () => {
-  it('stays in intro before 4 messages', () => {
-    expect(decideNextPhase(baseCtx({ historyLength: 3 }), null)).toBe('intro')
+  it('stays in intro before first agent response (historyLength=1)', () => {
+    expect(decideNextPhase(baseCtx({ historyLength: 1 }), null)).toBe('intro')
   })
 
-  it('advances to process_loop at 4 messages', () => {
-    expect(decideNextPhase(baseCtx({ historyLength: 4 }), null)).toBe('process_loop')
+  it('advances to process_loop after first agent response (historyLength=2)', () => {
+    expect(decideNextPhase(baseCtx({ historyLength: 2 }), null)).toBe('process_loop')
   })
 })
 

@@ -23,6 +23,8 @@ export interface AnalystRunOptions {
   context: InterviewContext
   /** History up to and including the current user turn (WITHOUT Talker's response for this turn) */
   history: TurnMessage[]
+  /** The raw user input for the current turn — enables evidence_quote contamination guard */
+  currentUserInput?: string
   traceCtx?: TraceCtx
 }
 
@@ -133,7 +135,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefi
     suggested_question: '',
   }
 
-  const knowledgeTools = buildTools(interviewId, workspaceId)
+  const knowledgeTools = buildTools(interviewId, workspaceId, opts.currentUserInput)
 
   const produceBriefingTool = tool({
     description: 'Generates the briefing for the next Talker turn. Call LAST, after all knowledge tools. Called exactly once.',

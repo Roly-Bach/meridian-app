@@ -97,8 +97,10 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
 
   switch (ctx.phase) {
     case 'intro':
-      // Advance after 2 full exchanges (≥4 messages including current user turn)
-      return ctx.historyLength >= 4 ? 'process_loop' : 'intro'
+      // Advance after first agent response (≥2 messages) — intro is a single greeting turn.
+      // Previous threshold of ≥4 caused Flash 3.5 to re-greet on Turn 1 because the phase
+      // stayed 'intro' while the methodology still said "Erkläre Gesprächszweck".
+      return ctx.historyLength >= 2 ? 'process_loop' : 'intro'
 
     case 'process_loop':
       // Analyst writes exploring→walkthrough in same run, so Orchestrator reads walkthrough next turn.

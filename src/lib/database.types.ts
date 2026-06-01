@@ -223,6 +223,9 @@ export interface Database {
           condition_text: string | null
           substeps: Json | null
           embedding: number[] | null
+          friction_points: string[]
+          friction_tools: string[]
+          walkthrough_steps: string[]
           created_at: string
         }
         Insert: {
@@ -244,6 +247,9 @@ export interface Database {
           condition_text?: string | null
           substeps?: Json | null
           embedding?: number[] | null
+          friction_points?: string[]
+          friction_tools?: string[]
+          walkthrough_steps?: string[]
           created_at?: string
         }
         Update: {
@@ -262,6 +268,9 @@ export interface Database {
           substeps?: Json | null
           embedding?: number[] | null
           cluster_id?: string | null
+          friction_points?: string[]
+          friction_tools?: string[]
+          walkthrough_steps?: string[]
         }
         Relationships: [
           { foreignKeyName: 'process_steps_interview_id_fkey'; columns: ['interview_id']; referencedRelation: 'interviews'; referencedColumns: ['id'] },

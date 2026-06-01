@@ -87,9 +87,12 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: messages as any,
     // NO TOOLS — Talker is text-only (ADR-011 D3)
+    // thinkingBudget: 512 (not 0) — Flash 3.5 produces empty responses on complex
+    // multi-topic inputs when thinking is fully suppressed (B-QA-1, 2026-06-01).
+    // 512 tokens of thinking prevents empty outputs without meaningfully impacting latency.
     ...(isGoogleModel && {
       providerOptions: {
-        google: { thinkingConfig: { thinkingBudget: 0 } },
+        google: { thinkingConfig: { thinkingBudget: 512 } },
       },
     }),
     experimental_telemetry: buildTraceMetadata('interview.talker', {

@@ -43,14 +43,16 @@ export async function generateSubsteps(params: {
   description: string | null
   sourceQuote: string | null
   dataSources: string[]
+  walkthroughSteps?: string[]
 }): Promise<SubStep[]> {
-  const { title, description, sourceQuote, dataSources } = params
+  const { title, description, sourceQuote, dataSources, walkthroughSteps } = params
 
   const userPrompt = [
     `Prozessschritt: ${title}`,
     description ? `Beschreibung: ${description}` : null,
     sourceQuote ? `Interview-Zitat: "${sourceQuote}"` : null,
     dataSources.length > 0 ? `Verwendete Systeme: ${dataSources.join(', ')}` : null,
+    walkthroughSteps && walkthroughSteps.length > 0 ? `Bekannte Teilschritte aus Interview: ${walkthroughSteps.join(' → ')}` : null,
     '',
     'Zerlege diesen Prozessschritt in atomare Einzelschritte.',
   ].filter(Boolean).join('\n')

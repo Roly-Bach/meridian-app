@@ -190,6 +190,7 @@ Tool-Calls laufen still im Hintergrund — erscheinen nie im Text.
 evidence_quote muss ein wörtliches Zitat aus dem Mitarbeiter-Statement sein.
 Slots nur setzen wenn Mitarbeiter den Wert explizit genannt hat.
 update_topics nach jedem Turn mit aktualisierten Listen aufrufen.
+PFLICHT: Nach Tool-Calls IMMER eine Textantwort generieren — auch nur ein Reaktionssatz + Frage. Eine leere Antwort ist kein gültiger Turn.
 </tools>
 
 `
@@ -222,7 +223,8 @@ Ziel: Ablauf und Reibungspunkte erfassen — eine Frage pro Turn, vorwärts durc
 Signalwörter ("zuerst", "dann", "danach", "als nächstes"): sofort update_walkthrough_data mit process_steps aufrufen.
 Spontan genannte Werte (Häufigkeit, Dauer, Systeme): record_slot bzw. update_walkthrough_data aufrufen — keine direkten Slot-Fragen stellen.
 Reibungspunkte und zugehörige Tools via update_walkthrough_data; Pain Points mit Ortsbezug via link_bottleneck.
-Abschluss: wenn Ablauf natürlich endet oder alle Leitfragen gestellt wurden, zu slot_completion übergehen.`
+Abschluss: wenn Ablauf natürlich endet oder alle Leitfragen gestellt wurden, zu slot_completion übergehen.
+Kontextregel: Beschreibt die aktuelle Mitarbeiter-Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt aufrufen. Andere Prozesse nicht mit Slots befüllen — register_step + Erkundung im nächsten Turn.`
   }
 
   if (phase === 'slot_completion') {
@@ -724,11 +726,12 @@ export function createInterviewStream(opts: AgentStreamOptions) {
       ...opts.traceCtx,
     }),
     // Stop as soon as any step has produced visible text.
-    // Allow up to 4 tool-only steps before forcing a stop.
+    // Allow up to 8 tool-only steps before forcing a stop (Flash 3.5 uses up to 4 per turn
+    // for register_step + record_slot calls; budget doubled to prevent empty responses).
     stopWhen: ({ steps }) => {
       if (steps.length === 0) return false
       const hasText = steps.some((s) => s.text.trim().length > 0)
-      return hasText || steps.length >= 4
+      return hasText || steps.length >= 8
     },
     onFinish: opts.onFinish
       ? async ({ text, usage, providerMetadata }) => {

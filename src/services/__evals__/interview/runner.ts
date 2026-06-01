@@ -30,7 +30,6 @@ import { resolveModel } from '@/lib/llm-provider'
 import { initLangfuse, flushLangfuse } from '@/lib/langfuse'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import {
-  createInterviewStream,
   computeMissingMandatorySlots,
   type Phase,
   type TurnMessage,
@@ -39,6 +38,7 @@ import {
   type ClarificationCard,
   type AnalystBriefing,
 } from '@/services/interviewAgent'
+import { createTalkerStream } from '@/services/interviewTalker'
 import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/services/interviewOrchestrator'
 import { extractAndEmbed, deduplicateKnowledgeObjects, type TurnTranscript, type RawExtraction } from '@/services/extraction'
 import { runAnalyst } from '@/services/interviewAnalyst'
@@ -49,7 +49,7 @@ import type { Persona } from './personas/types'
 import type { Database } from '@/lib/database.types'
 
 type ProcessStepUpdate = Database['public']['Tables']['process_steps']['Update']
-import { runAllScorers, type TurnRecord, type ToolCallRecord, type ScoreSet } from './scorers'
+import { runAllScorers, type TurnRecord, type ScoreSet } from './scorers'
 
 // ─── Persona loader ───────────────────────────────────────────────────────────
 
@@ -542,7 +542,7 @@ async function runInterview(
   const turnRecords: TurnRecord[] = []
 
   // ── Start turn (greeting) ──────────────────────────────────────────────────
-  const startStream = createInterviewStream({
+  const startStream = createTalkerStream({
     context: {
       interviewId,
       workspaceId,
@@ -648,7 +648,7 @@ async function runInterview(
         ? computeMissingMandatorySlots(dbState.stepTracker)
         : undefined
 
-    const agentStream = createInterviewStream({
+    const agentStream = createTalkerStream({
       context: {
         interviewId,
         workspaceId,
@@ -666,19 +666,12 @@ async function runInterview(
         missingSlotsForCoverageCheck,
       },
       history: agentHistory,
+      briefing: analystBriefing,
       userInput: personaResponse,
       traceCtx,
     })
 
     const agentText = await agentStream.text
-
-    // Capture tool calls from AI SDK steps for scorer
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rawToolCalls = ((await (agentStream as any).toolCalls) as Array<{ toolName: string; args: Record<string, unknown> }>) ?? []
-    const toolCallRecords: ToolCallRecord[] = rawToolCalls.map(tc => ({
-      toolName: tc.toolName,
-      args: tc.args,
-    }))
 
     const turnNumber = dbHistory.length / 2 + 1
     turnRecords.push({
@@ -686,7 +679,7 @@ async function runInterview(
       userInput: personaResponse,
       agentText,
       phase: orchestratedPhase,
-      toolCalls: toolCallRecords,
+      toolCalls: [],
     })
 
     console.log(`\n[Agent]: ${agentText}`)
@@ -720,12 +713,10 @@ async function runInterview(
       )
     }
 
-    // Run analyst only at wrap_up to generate clarification cards.
-    // Running at every phase would cause duplicate step_tracker entries (analyst
-    // calls register_step, same as agent) → inflates step count → interview
-    // never completes. At wrap_up, step count no longer drives phase decisions.
-    if (orchestratedPhase === 'wrap_up') {
-      // Reload state so Analyst sees slot updates from Talker tool calls this turn.
+    // Run Analyst every turn — Talker has zero tools so no duplicate step_tracker entries.
+    // Reload state so Analyst sees fresh DB after Talker streamed + turn was saved.
+    // next_briefing written here is picked up by loadAnalystBriefing at the start of the next turn.
+    {
       const freshAnalystState = await loadState(interviewId)
       await runAnalyst({
         context: {
