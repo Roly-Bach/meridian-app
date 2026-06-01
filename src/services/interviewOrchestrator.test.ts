@@ -226,3 +226,48 @@ describe('checkLifecycle', () => {
     expect(result.reason).toBe(null)
   })
 })
+
+// ─── Farewell-Loop Fallback (Bug-1 Fix) ──────────────────────────────────────
+
+describe('closingQuestionWasAsked — farewell loop fallback', () => {
+  it('triggers completed when agent sent 2+ consecutive farewell messages', () => {
+    const history = [
+      { role: 'user' as const, content: 'Ja, das war alles.' },
+      { role: 'assistant' as const, content: 'Vielen Dank für das Gespräch! Ich verabschiede mich herzlich.' },
+      { role: 'user' as const, content: 'Danke auch.' },
+      { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+    ]
+    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 5 }), null)).toBe('completed')
+  })
+
+  it('stays in wrap_up when agent sent only 1 farewell (loop not yet triggered)', () => {
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank für das Gespräch!' },
+      { role: 'user' as const, content: 'Danke.' },
+    ]
+    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)).toBe('wrap_up')
+  })
+
+  it('checkLifecycle returns soft_confirm for farewell loop', () => {
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+      { role: 'assistant' as const, content: 'Wünsche dir einen schönen Tag! Auf Wiedersehen.' },
+      { role: 'user' as const, content: 'Dir auch.' },
+    ]
+    const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 4 }), null)
+    expect(result.shouldComplete).toBe(true)
+    expect(result.reason).toBe('soft_confirm')
+  })
+
+  it('does NOT trigger farewell loop when messages contain farewell but are not consecutive', () => {
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank für die erste Antwort!' },
+      { role: 'user' as const, content: 'Gern.' },
+      { role: 'assistant' as const, content: 'Erzähl mir mehr über den Monatsabschluss.' },
+      { role: 'user' as const, content: 'Da prüfe ich die Konten.' },
+    ]
+    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 4 }), null)).toBe('wrap_up')
+  })
+})

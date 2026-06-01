@@ -5,9 +5,9 @@ import { resolveModel } from '@/lib/llm-provider'
 import { cosineSim } from './processClustering'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 
-export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool' | 'role'
+export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool'
 
-const ALLOWED_TYPES: readonly KnowledgeObjectType[] = ['process_step', 'pain_point', 'tool', 'role']
+const ALLOWED_TYPES: readonly KnowledgeObjectType[] = ['process_step', 'pain_point', 'tool']
 
 export interface RawExtraction {
   type: KnowledgeObjectType
@@ -22,7 +22,7 @@ export interface TurnTranscript {
 
 const EXTRACTION_SYSTEM_PROMPT = `Du bist ein Extraktions-Agent für Meridian. Deine Aufgabe: Extrahiere strukturiertes Wissen aus Interview-Transkripten.
 
-Extrahiere ausschließlich diese 4 Typen:
+Extrahiere ausschließlich diese 3 Typen:
 - process_step: Ein konkreter Prozessschritt oder Arbeitsablauf.
   Content: {
     title: string,
@@ -33,7 +33,6 @@ Extrahiere ausschließlich diese 4 Typen:
   }
 - pain_point: Ein Problem, Engpass oder eine Frustration. Content: { description: string, severity?: "high"|"medium"|"low" }
 - tool: Ein verwendetes Tool, System oder Software. Content: { name: string, purpose: string }
-- role: Eine genannte Rolle oder Verantwortlichkeit. Content: { title: string, responsibilities: string }
 
 Regeln:
 - source_quote MUSS ein wörtliches Zitat aus dem user_input sein — kein Paraphrasieren

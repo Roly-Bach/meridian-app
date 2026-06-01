@@ -249,7 +249,7 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
 
 ## QA Test Results
 
-> **QA Datum:** 2026-05-30 | **Status:** Approved | **Bugs:** 0:0:2
+> **QA Datum:** 2026-05-30 (initial) + **Re-QA 2026-06-01** (post-eval bug fixes) | **Status:** Approved | **Bugs:** 0:0:2
 
 ### Acceptance Criteria — Testergebnis
 
@@ -303,6 +303,26 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
 |----|----------|-------------|
 | QA-22-L1 | Low | `NIEMALS`/`PFLICHT` noch in `buildPhaseMethodology('wrap_up')` — AC1 wording "alle entfernt" nicht erfüllt; funktional sinnvoll (schließt Closing-Question-Gate) |
 | QA-22-L2 | Low | Spec Tech Design Note "thinking_level NOT yet implemented" war veraltet — korrigiert in diesem QA-Lauf |
+
+### Post-Eval Bugs (2026-06-01, Eval-Run buchhalter, gefunden NACH initial QA)
+
+| ID | Severity | Beschreibung | Fix | Status |
+|----|----------|-------------|-----|--------|
+| EVAL-22-B1 | Critical | Closing-Loop: Agent steckte in Abschiedsformeln ohne Interview-Completion; 25 Turns = MAX_TURNS ohne `status=completed` | Farewell-Loop-Detection in `closingQuestionWasAsked` (2 konsekutive Farewell-Messages → `shouldComplete=true`) | ✅ Fixed |
+| EVAL-22-B2 | Medium | Slot-Halluzination: `duration_minutes` wurde gesetzt obwohl Persona Wert 4× verweigerte; `source_quote` unrelated | `record_slot` Tool-Description: explizites Verbot von Self-Inference, Konfidenz-Semantik präzisiert | ✅ Fixed |
+| EVAL-22-B3 | Medium | DB-Constraint-Verletzung: `role`-Type in `extraction.ts` nicht in DB `knowledge_objects_type_check`; 5× Insert-Fehler | `role` aus `KnowledgeObjectType`, `ALLOWED_TYPES`, `EXTRACTION_SYSTEM_PROMPT` entfernt | ✅ Fixed |
+
+### Re-QA 2026-06-01
+
+| Suite | Ergebnis |
+|-------|----------|
+| Vitest Unit (343 Tests, +5 neue) | ✅ 343 passed |
+| Playwright E2E PROJ-22 (9 Tests) | ✅ 9 passed |
+| Playwright E2E gesamt (105 Tests) | ✅ 100 passed, 5 pre-existing skips |
+
+**Neue Tests hinzugefügt:**
+- `interviewOrchestrator.test.ts`: 4 Tests für Farewell-Loop-Fallback (EVAL-22-B1)
+- `extraction.test.ts`: 1 Regression-Test für `role`-Type-Rejection (EVAL-22-B3)
 
 ### Regression
 

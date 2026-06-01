@@ -223,7 +223,7 @@ describe('extractAndEmbed', () => {
 
   it('strips ```json markdown wrapper from LLM response', async () => {
     const objects = [
-      { type: 'role', content: { title: 'Buchhalter', responsibilities: 'Rechnungen' }, source_quote: 'Ich bin Buchhalter' },
+      { type: 'tool', content: { name: 'SAP FI', purpose: 'Buchungen' }, source_quote: 'Ich nutze SAP FI' },
     ]
     vi.mocked(generateText).mockResolvedValue({
       text: '```json\n' + JSON.stringify(objects) + '\n```',
@@ -237,7 +237,26 @@ describe('extractAndEmbed', () => {
     })
 
     expect(mockInsert).toHaveBeenCalledTimes(1)
-    expect(mockInsert.mock.calls[0][0].type).toBe('role')
+    expect(mockInsert.mock.calls[0][0].type).toBe('tool')
+  })
+
+  it('rejects `role` type — removed from allowlist in Bug-3 fix', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const objects = [
+      { type: 'role', content: { title: 'Buchhalter', responsibilities: 'Rechnungen prüfen' }, source_quote: 'ich bin Buchhalter' },
+    ]
+    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(objects) } as never)
+
+    await extractAndEmbed({
+      interviewId: 'iv-1',
+      workspaceId: 'ws-1',
+      turnId: 'turn-1',
+      transcript: MOCK_TRANSCRIPT,
+    })
+
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith('[extraction] Invalid type, skipping:', 'role')
+    errorSpy.mockRestore()
   })
 
   it('calls generateEmbedding even when Jina returns null — still inserts object', async () => {

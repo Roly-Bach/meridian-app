@@ -150,9 +150,6 @@ function formatExtractionsLog(log: RawExtraction[]): string {
     } else if (item.type === 'tool') {
       const c = item.content as Record<string, unknown>
       lines.push(`- [tool] "${c.name}"`)
-    } else if (item.type === 'role') {
-      const c = item.content as Record<string, unknown>
-      lines.push(`- [role] "${c.title}"`)
     }
   }
   return lines.join('\n')
@@ -242,9 +239,9 @@ Stelle keine weiteren Fragen — die Abschlussfragen erscheinen im Interface.`
 
   // wrap_up
   return `## Methodik: wrap_up
-PFLICHT — stelle genau diese Abschlussfrage, bevor du dich verabschiedest:
+Stelle als nächste Frage:
 "Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?"
-Verabschiede dich NIEMALS ohne diese Frage gestellt und beantwortet zu haben.
+Warte auf eine Antwort, bevor du dich verabschiedest.
 Nach der Antwort:
 - Neuer Prozess → register_step aufrufen, explorieren — kein Abschluss.
 - Keine neuen Inhalte → kurz verabschieden.`
@@ -450,7 +447,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. In `walkthrough_step`: Nur aufrufen, wenn der Mitarbeiter den Wert spontan nannte. In `slot_completion` / `coverage_check`: Aktiv nach Werten fragen und erfassen. evidence_quote MUSS wörtliches Zitat sein.',
+      description: 'Füllt einen Slot im Schritt-Tracker. In `walkthrough_step`: Nur aufrufen, wenn der Mitarbeiter den Wert spontan nannte. In `slot_completion` / `coverage_check`: Aktiv nach Werten fragen und erfassen. evidence_quote MUSS wörtliches Zitat sein. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat — auch nicht als estimate. Wenn der Mitarbeiter einen Wert verweigert ("ich weiß nicht", "kann ich nicht sagen", keine Antwort), diesen Slot NICHT füllen. confidence=confirmed: Mitarbeiter nannte exakten Wert. confidence=estimate: Mitarbeiter gab selbst eine Schätzung (Signalwörter: "ungefähr", "circa", "schätze mal", "so etwa"). confidence=unknown: nur wenn Mitarbeiter Wert indirekt erwähnte.',
       inputSchema: z.object({
         step_title: z.string().min(1),
         slot: z.enum(['frequency_per_month', 'duration_minutes', 'rule_based', 'data_sources', 'error_rate_percent', 'media_breaks']),

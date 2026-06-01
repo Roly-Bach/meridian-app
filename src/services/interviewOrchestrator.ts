@@ -57,24 +57,37 @@ function allMandatorySlotsFilled(tracker: StepEntry[]): boolean {
 /** Detect if the wrap-up closing question was asked (Iteration 2 heuristic for Trigger B). */
 function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content: string }[]): boolean {
   const recentAssistant = history.filter((t) => t.role === 'assistant').slice(-3)
-  return recentAssistant.some(
-    (t) => {
-      const lc = t.content.toLowerCase()
-      return (
-        lc.includes('letzte arbeitswoche') ||
-        lc.includes('nicht erwähnt haben') ||
-        lc.includes('wiederkehrend') ||
-        lc.includes('nicht besprochen') ||
-        lc.includes('nicht beleuchtet') ||
-        lc.includes('noch nicht erwähnt') ||
-        lc.includes('noch nicht besprochen') ||
-        lc.includes('noch nicht angesprochen') ||
-        lc.includes('fehlt noch') ||
-        lc.includes('gibt es noch etwas') ||
-        lc.includes('gibt es etwas') && lc.includes('nicht')
-      )
-    },
-  )
+
+  // Primary: mandatory wrap-up question phrase detected
+  const mandatoryQuestionAsked = recentAssistant.some((t) => {
+    const lc = t.content.toLowerCase()
+    return (
+      lc.includes('letzte arbeitswoche') ||
+      lc.includes('nicht erwähnt haben') ||
+      lc.includes('wiederkehrend') ||
+      lc.includes('nicht besprochen') ||
+      lc.includes('nicht beleuchtet') ||
+      lc.includes('noch nicht erwähnt') ||
+      lc.includes('noch nicht besprochen') ||
+      lc.includes('noch nicht angesprochen') ||
+      lc.includes('fehlt noch') ||
+      lc.includes('gibt es noch etwas') ||
+      (lc.includes('gibt es etwas') && lc.includes('nicht'))
+    )
+  })
+  if (mandatoryQuestionAsked) return true
+
+  // Fallback: farewell loop — agent sent 2+ consecutive farewells without new content.
+  // Prevents infinite goodbye loops when the agent skips the mandatory question.
+  if (recentAssistant.length >= 2) {
+    const FAREWELL_MARKERS = ['vielen dank', 'auf wiedersehen', 'bis zum nächsten', 'wünsche dir', 'verabschied']
+    const lastTwo = recentAssistant.slice(-2)
+    if (lastTwo.every((t) => FAREWELL_MARKERS.some((m) => t.content.toLowerCase().includes(m)))) {
+      return true
+    }
+  }
+
+  return false
 }
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
