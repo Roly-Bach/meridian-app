@@ -249,7 +249,7 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
 
 ## QA Test Results
 
-> **QA Datum:** 2026-05-30 (initial) + **Re-QA 2026-06-01** (post-eval bug fixes) | **Status:** Approved | **Bugs:** 0:0:2
+> **QA Datum:** 2026-05-30 (initial) + **Re-QA 2026-06-01** (post-eval bug fixes) + **Re-QA 2026-06-01 (2nd pass)** (B4/B5 fixes) | **Status:** Approved | **Bugs:** 0:0:2
 
 ### Acceptance Criteria — Testergebnis
 
@@ -311,6 +311,8 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
 | EVAL-22-B1 | Critical | Closing-Loop: Agent steckte in Abschiedsformeln ohne Interview-Completion; 25 Turns = MAX_TURNS ohne `status=completed` | Farewell-Loop-Detection in `closingQuestionWasAsked` (2 konsekutive Farewell-Messages → `shouldComplete=true`) | ✅ Fixed |
 | EVAL-22-B2 | Medium | Slot-Halluzination: `duration_minutes` wurde gesetzt obwohl Persona Wert 4× verweigerte; `source_quote` unrelated | `record_slot` Tool-Description: explizites Verbot von Self-Inference, Konfidenz-Semantik präzisiert | ✅ Fixed |
 | EVAL-22-B3 | Medium | DB-Constraint-Verletzung: `role`-Type in `extraction.ts` nicht in DB `knowledge_objects_type_check`; 5× Insert-Fehler | `role` aus `KnowledgeObjectType`, `ALLOWED_TYPES`, `EXTRACTION_SYSTEM_PROMPT` entfernt | ✅ Fixed |
+| EVAL-22-B4 | High | Closing-Question-Heuristic missed word-split phrase: "Gibt es aus deiner Sicht noch etwas" → `includes('gibt es noch etwas')` failed weil "aus deiner Sicht" dazwischen. Agent loopte 5 Farewell-Turns ohne Completion. Eval-Run 2026-06-01-09-53-42 | `closingQuestionWasAsked`: neues OR-Pattern `(lc.includes('gibt es') && lc.includes('noch etwas'))` in `interviewOrchestrator.ts` | ✅ Fixed |
+| EVAL-22-B5 | Medium | Stale stepTracker in `after()`: stepTracker geladen vor Talker-Streaming, Analyst sah Pre-Streaming-Snapshot → `record_slot` für bereits gefüllte Mahnprozess-Slots, `source_quote` = Farewell-Text. Auch: Eval-Runner `loadState` zu früh (vor Talker-Tools) | Reload `step_tracker` aus DB in `after()`-Callback (`route.ts`) + `loadState` nach `agentStream.text` (`runner.ts`) | ✅ Fixed |
 
 ### Re-QA 2026-06-01
 
@@ -323,6 +325,18 @@ All capabilities covered by existing stack: `ai` (AI SDK v6 — `streamText` + `
 **Neue Tests hinzugefügt:**
 - `interviewOrchestrator.test.ts`: 4 Tests für Farewell-Loop-Fallback (EVAL-22-B1)
 - `extraction.test.ts`: 1 Regression-Test für `role`-Type-Rejection (EVAL-22-B3)
+
+### Re-QA 2026-06-01 (2nd pass — B4/B5)
+
+| Suite | Ergebnis |
+|-------|----------|
+| Vitest Unit (348 Tests, +3 neue) | ✅ 348 passed |
+
+**Neue Tests hinzugefügt:**
+- `interviewOrchestrator.test.ts`: 3 Tests für word-split `gibt-es` phrase (EVAL-22-B4)
+  - Detects "Gibt es aus deiner Sicht noch etwas Wichtiges" → `shouldComplete: true`
+  - Detects formal-Sie variant "Gibt es aus Ihrer Sicht noch etwas"
+  - Does NOT fire when "gibt es" / "noch etwas" appear in separate turns
 
 ### Regression
 
