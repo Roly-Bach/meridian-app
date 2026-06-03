@@ -15,7 +15,9 @@
     "test:e2e:ui": "playwright test --ui",
     "test:all": "vitest run && playwright test",
     "eval:interview": "tsx --conditions react-server src/services/__evals__/interview/runner.ts",
-    "eval:interview:compare": "tsx --conditions react-server src/services/__evals__/interview/compare.ts"
+    "eval:interview:compare": "tsx --conditions react-server src/services/__evals__/interview/compare.ts",
+    "eval:replay": "tsx src/services/__evals__/interview/replay/runReplay.ts",
+    "eval:replay:update": "tsx src/services/__evals__/interview/replay/runReplay.ts --update-baseline"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",

@@ -176,13 +176,16 @@ describe('decideNextPhase — wrap_up', () => {
     expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), analystSuggestion)).toBe('clarification')
   })
 
-  it('uses analystSuggestion.wrap_up_question_asked over text heuristic', () => {
+  it('stays in wrap_up when only Analyst flag set but deterministic question not in history (Fix 1: ADR-015)', () => {
+    // Post-Fix-1: wrap_up_question_asked flag is no longer trusted. The
+    // verbatim WRAP_UP_QUESTION_TEXT must appear in history. This test pins
+    // the new deterministic semantics.
     const history = [
       { role: 'assistant' as const, content: 'Irgendwas anderes noch?' },
       { role: 'user' as const, content: 'Nein.' },
     ]
     const analystSuggestion = { wrap_up_question_asked: true }
-    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), analystSuggestion)).toBe('completed')
+    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), analystSuggestion)).toBe('wrap_up')
   })
 })
 
@@ -204,9 +207,14 @@ describe('checkLifecycle', () => {
     expect(result.reason).toBe('hard_stop')
   })
 
-  it('returns soft_confirm in wrap_up after closing question answered', () => {
+  it('returns soft_confirm in wrap_up after the deterministic closing question is answered', () => {
+    // Fix 1 (ADR-015): completion is gated on the verbatim WRAP_UP_QUESTION_TEXT.
     const history = [
-      { role: 'assistant' as const, content: 'Wenn du an deine letzte Arbeitswoche denkst — etwas Wiederkehrendes?' },
+      {
+        role: 'assistant' as const,
+        content:
+          'Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute noch nicht erwähnt haben?',
+      },
       { role: 'user' as const, content: 'Nein, war alles.' },
     ]
     const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)
@@ -368,35 +376,28 @@ describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => 
   })
 })
 
-// ─── closingQuestionWasAsked — word-split phrase (B1 Regression) ─────────────
+// ─── Fix 1 (ADR-015): deterministic wrap-up question semantics ───────────────
 
-describe('closingQuestionWasAsked — word-split gibt-es phrase (B1 regression)', () => {
-  it('detects "Gibt es aus deiner Sicht noch etwas Wichtiges" (words split "gibt es" + "noch etwas")', () => {
+describe('Fix 1 — deterministic wrap-up question (replaces regex heuristic)', () => {
+  it('does NOT complete on a paraphrased closing question (regex heuristic removed)', () => {
+    // Pre-Fix-1: this would have matched via regex on "noch etwas" + "nicht besprochen".
+    // Post-Fix-1: completion requires the verbatim WRAP_UP_QUESTION_TEXT in history.
     const history = [
-      { role: 'assistant' as const, content: 'Gibt es aus deiner Sicht noch etwas Wichtiges, das wir für eine vollständige Dokumentation berücksichtigen sollten?' },
+      {
+        role: 'assistant' as const,
+        content: 'Gibt es aus deiner Sicht noch etwas Wichtiges, das wir nicht besprochen haben?',
+      },
       { role: 'user' as const, content: 'Nein, das war alles.' },
     ]
     const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)
-    expect(result.shouldComplete).toBe(true)
-    expect(result.reason).toBe('soft_confirm')
+    expect(result.shouldComplete).toBe(false)
   })
 
-  it('detects "Gibt es aus Ihrer Sicht noch etwas" (formal address variant)', () => {
-    const history = [
-      { role: 'assistant' as const, content: 'Gibt es aus Ihrer Sicht noch etwas, das wir nicht besprochen haben?' },
-      { role: 'user' as const, content: 'Nein.' },
-    ]
-    const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)
-    expect(result.shouldComplete).toBe(true)
-  })
-
-  it('does NOT fire on unrelated sentences containing "gibt es" and "noch etwas" in distant turns', () => {
-    // "gibt es" and "noch etwas" must be in the SAME assistant turn to match
+  it('does NOT fire on unrelated sentences containing wrap-up-ish keywords', () => {
     const history = [
       { role: 'assistant' as const, content: 'Gibt es bei euch ein ERP-System?' },
       { role: 'user' as const, content: 'Ja, SAP. Gibt es noch etwas anderes?' },
     ]
-    // User turn doesn't count — only assistant turns are checked
     const result = checkLifecycle(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), null)
     expect(result.shouldComplete).toBe(false)
   })

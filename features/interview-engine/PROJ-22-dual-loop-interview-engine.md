@@ -432,3 +432,17 @@ _To be added by /deploy_
 | Vorgeschlagene Regeländerung | — |
 | Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
 | Häufigste Fehlerkategorie im Loop | — |
+
+## Follow-up: Charge 1 Robustness Refactor (2026-06-03)
+
+Diagnostik-Tooling für die in den Eval-Runs 2026-06-03 sichtbaren Multi-Writer- und Whack-a-Mole-Probleme. Kein Verhaltensänderung am Interview, additive only.
+
+**Geliefert:**
+- **Slot-Write-Trail** (`src/services/slotWriteTrail.ts`) — strukturiertes Event pro Slot-Schreibvorgang aus allen drei Pfaden (quick / analyst / update_walkthrough / backfill). Sinks: Langfuse-Span + JSONL-File im Eval-Mode + Debug-Console. Siehe `docs/diagnostics/slot-write-trail.md`.
+- **Replay-Corpus** (`src/services/__evals__/interview/replay/`) — Frozen-Transcript Fixtures aus den 5 PASS-Runs vom 2026-06-03. Scorer-Suite läuft via `npm run eval:replay` offline gegen Baselines, GitHub Action gated PRs gegen `src/services/interview*` und `scorers/`. Siehe `docs/evals/REPLAY.md`.
+- **ADR-015** — Design-Entscheidung (Langfuse+JSONL Sinks; Frozen-Replay statt Live-Replay).
+
+**Folge-Chargen geplant (gleicher Refactor-Plan):**
+- Charge 2 (Punkt 3-5): Single Slot-Writer, Step-Identität via Vector-Cluster, Analyst-Split Online/Catchup
+- Charge 3 (Punkt 6-9): TurnBudgetAllocator, Talker Output-Filter, Late-Topic → Clarification, Downstream-Robustheit
+

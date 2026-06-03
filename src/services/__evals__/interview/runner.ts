@@ -437,6 +437,21 @@ function writeReport(opts: {
   const content = buildReport(opts)
   fs.writeFileSync(filepath, content, 'utf8')
 
+  // Write frozen transcript.json alongside the MD report (ADR-015)
+  const transcriptData = {
+    evalRunId: opts.evalRunId,
+    interviewId: opts.interviewId,
+    model: opts.model,
+    persona: opts.personaName,
+    status: opts.interviewStatus,
+    turns: opts.turns,
+    finalStepTracker: opts.finalStepTracker,
+    scores: opts.scores,
+    generatedAt: now.toISOString(),
+  }
+  const transcriptFilename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}.transcript.json`
+  fs.writeFileSync(path.join(dir, transcriptFilename), JSON.stringify(transcriptData, null, 2), 'utf8')
+
   return filepath
 }
 
@@ -514,6 +529,14 @@ async function runInterview(
 
   const workspaceId = process.env.EVAL_WORKSPACE_ID
   if (!workspaceId) throw new Error('[runner] EVAL_WORKSPACE_ID not set in .env.local')
+
+  // Activate slot-write trail for this eval run (ADR-015)
+  const now = new Date()
+  const evalDateStr = now.toISOString().slice(0, 10)
+  const evalTimeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-')
+  const runDir = path.resolve(process.cwd(), 'docs', 'evals', 'interview', evalDateStr)
+  fs.mkdirSync(runDir, { recursive: true })
+  process.env.SLOT_TRAIL_FILE = path.join(runDir, `${evalDateStr}-${evalTimeStr}-${modelSlug(model)}-${personaName}.slot-trail.jsonl`)
 
   console.log(`\n${'─'.repeat(60)}`)
   console.log(`[eval] model=${model} persona=${personaName} evalRunId=${evalRunId}`)

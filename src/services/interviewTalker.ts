@@ -6,7 +6,6 @@ import {
   type InterviewContext,
   type TurnMessage,
   type AnalystBriefing,
-  type Phase,
 } from './interviewAgent'
 
 // ─── Talker Stream (Iteration 3) ──────────────────────────────────────────────
@@ -40,7 +39,11 @@ Turn 1 (Opener): Kontext + offene Einstiegsfrage.
 Abschluss-Turn: kurze Verabschiedung.
 Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
-Spannen konkretisieren: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser für einen typischen Fall?"
+Spannen NICHT mehr konkretisieren wenn Wert bereits erfasst ist (✓ im Tracker). Nur bei echtem null.
+Ausweichen: Wenn Mitarbeiter keine konkrete Zahl nennen kann ("schwer zu sagen", "variiert stark"):
+→ Einmal nachfragen: "Welcher Wert wäre eine grobe Schätzung?"
+→ Wenn dann immer noch keine Zahl: Slot akzeptieren und weitergehn. KEIN drittes Mal fragen.
+→ Keinen eigenen Durchschnitt vorschlagen. Fehlende Werte werden am Interviewende als Folgefragen erfasst.
 </turn_format>
 
 <verboten>
@@ -51,6 +54,12 @@ NIEMALS nach folgenden Details fragen — sie sind für die Prozesserhebung irre
 - IT-technische Implementierungsdetails (Datenbankfelder, API-Aufrufe, Skripte)
 Frage stattdessen: Was passiert in diesem Schritt? Wie lange dauert es? Wie oft? Wer ist beteiligt?
 </verboten>
+
+<no_repeat>
+HARTE REGEL: Werte unter "Bereits erfasst" oder mit ✓ im Schritt-Tracker / READ_ONLY_STATE dürfen NICHT erneut erfragt werden.
+Wenn du auf einen bekannten Wert eingehen willst, beziehe dich darauf statt nachzufragen ("Du hast vorhin ~100 Rechnungen/Monat genannt — ...").
+Vor jeder Frage prüfen: Steht der Wert schon im Tracker? Wenn ja → andere Frage stellen oder Phase abschließen.
+</no_repeat>
 
 `
 
@@ -94,13 +103,10 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
 
   const isGoogleModel = modelString.startsWith('google/')
 
-  // thinking=512 during exploration prevents phase drift + anchoring violations.
-  // thinking=0 during slot collection / wrap-up enables fast execution within turn budget.
-  const EXPLORATION_PHASES: Phase[] = ['intro', 'process_loop', 'walkthrough_step']
-  const talkerThinkingBudget = EXPLORATION_PHASES.includes(opts.context.phase)
-    ? TALKER_THINKING_BUDGET
-    : 0
-
+  // Fixed thinkingBudget across all phases. Adaptive thinkingBudget=0 in
+  // execution phases caused dialog_naturalness regression (eval 2026-06-03):
+  // Flash 3.5 lost coherence on already-known facts and re-asked questions.
+  // See ADR-014 review (Naturalness 0.78 → 0.42).
   return streamText({
     model,
     temperature: 0.5,
@@ -110,7 +116,7 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
     // NO TOOLS — Talker is text-only (ADR-011 D3)
     ...(isGoogleModel && {
       providerOptions: {
-        google: { thinkingConfig: { thinkingBudget: talkerThinkingBudget } },
+        google: { thinkingConfig: { thinkingBudget: TALKER_THINKING_BUDGET } },
       },
     }),
     experimental_telemetry: buildTraceMetadata('interview.talker', {

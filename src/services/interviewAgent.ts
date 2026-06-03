@@ -4,39 +4,35 @@ import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { RawExtraction } from './extraction'
+import { emitSlotWrite } from './slotWriteTrail'
+import {
+  MANDATORY_SLOTS,
+  OPTIONAL_SLOTS,
+  colonParent,
+  normalizeToken,
+  tokenJaccard,
+  tokenJaccardNorm,
+  groupSemanticSteps,
+  type Phase,
+  type SlotValue,
+  type StepEntry,
+  type SlotName,
+} from './interviewSemantic'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export type Phase = 'intro' | 'process_loop' | 'walkthrough_step' | 'slot_completion' | 'coverage_check' | 'wrap_up' | 'clarification'
-
-export const MANDATORY_SLOTS = ['frequency_per_month', 'duration_minutes', 'rule_based', 'data_sources'] as const
-export const OPTIONAL_SLOTS = ['error_rate_percent', 'media_breaks'] as const
-export type SlotName = typeof MANDATORY_SLOTS[number] | typeof OPTIONAL_SLOTS[number]
-
-export interface SlotValue {
-  value: string | number | boolean | string[]
-  quote: string
-  confidence?: 'confirmed' | 'estimate' | 'unknown'
-  qualifier?: string | null
+// Re-export semantic primitives so existing consumers continue to import from
+// interviewAgent. The actual definitions live in interviewSemantic.ts so they
+// can be imported off-Next.js (eval replay, scripts) without the supabase-admin
+// `server-only` chain.
+export {
+  MANDATORY_SLOTS,
+  OPTIONAL_SLOTS,
+  colonParent,
+  normalizeToken,
+  tokenJaccard,
+  tokenJaccardNorm,
+  groupSemanticSteps,
 }
-
-export interface StepEntry {
-  title: string
-  role?: string | null
-  status: 'exploring' | 'walkthrough' | 'done'
-  slots: {
-    frequency_per_month: SlotValue | null
-    duration_minutes: SlotValue | null
-    rule_based: SlotValue | null
-    data_sources: SlotValue | null
-    error_rate_percent: SlotValue | null
-    media_breaks: SlotValue | null
-  }
-  process_steps?: string[]
-  friction_points?: string[]
-  friction_tools?: string[]
-  pain_point_primary?: string | null
-}
+export type { Phase, SlotValue, StepEntry, SlotName }
 
 export interface MissingSlot {
   step_title: string
@@ -97,95 +93,14 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
   return missing
 }
 
-// Strip common German process noun suffixes from a single token.
-// Applied per-token in normalizedTokenSet to catch morphological variants:
-// "Mahnprozess" → "mahn", "Mahnwesen" → "mahn", "Rechnungsbearbeitung" → "rechnungs"
-export function normalizeToken(t: string): string {
-  return t.replace(/(prozess|wesen|ablauf|vorgang|schritt|bearbeitung|handling|verwaltung|management)$/i, '').trim()
-}
-
-// Normalize step title for semantic deduplication by stripping common German
-// process noun suffixes from the whole string (used for substring-based dedup).
+// Normalize step title for substring-based dedup — strips whole-string
+// process noun suffix. Used only inside interviewAgent for title dedup.
 function normalizeStepTitleForDedup(title: string): string {
   return title
     .trim()
     .toLowerCase()
     .replace(/(prozess|wesen|ablauf|vorgang|schritt|bearbeitung|handling|verwaltung|management)$/, '')
     .trim()
-}
-
-// Extracts the parent from a colon-format title ("Hauptprozess: Sub" → "hauptprozess").
-// Returns null for non-colon titles so callers can fall back to Jaccard.
-export function colonParent(title: string): string | null {
-  const idx = title.indexOf(':')
-  return idx > 2 ? title.slice(0, idx).trim().toLowerCase() : null
-}
-
-// Token-based Jaccard similarity for dedup.
-// Catches German morphological variants that substring/suffix matching misses:
-// "Rechnungsprüfung und Verbuchung" vs "Rechnungsprüfung und -verbuchung" → 1.0
-// "Abstimmung offener Posten (Monatsabschluss)" vs "Monatsabschluss - Abstimmung offener Posten" → 1.0
-export function tokenJaccard(a: string, b: string): number {
-  const STOP = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
-  const tokenize = (s: string) => new Set(
-    s.toLowerCase().replace(/[-().,&/: ]/g, ' ').split(/\s+/).filter(t => t.length >= 4 && !STOP.has(t))
-  )
-  const ta = tokenize(a)
-  const tb = tokenize(b)
-  if (ta.size === 0 || tb.size === 0) return 0
-  let intersection = 0
-  for (const t of ta) if (tb.has(t)) intersection++
-  return intersection / (ta.size + tb.size - intersection)
-}
-
-// Token set with per-token suffix normalization.
-// "Mahnprozess Bearbeitung" → {"mahn"} ("bearbeitung" strips to "" → filtered)
-function normalizedTokenSet(title: string): Set<string> {
-  const STOP = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
-  return new Set(
-    title.toLowerCase().replace(/[-().,&/: ]/g, ' ').split(/\s+/)
-      .map(t => normalizeToken(t))
-      .filter(t => t.length >= 4 && !STOP.has(t))
-  )
-}
-
-// Jaccard similarity using per-token suffix normalization.
-// Stronger than tokenJaccard: catches "Mahnprozess" ~ "Mahnwesen" (both → "mahn").
-export function tokenJaccardNorm(a: string, b: string): number {
-  const ta = normalizedTokenSet(a)
-  const tb = normalizedTokenSet(b)
-  if (ta.size === 0 || tb.size === 0) return 0
-  let intersection = 0
-  for (const t of ta) if (tb.has(t)) intersection++
-  return intersection / (ta.size + tb.size - intersection)
-}
-
-/**
- * Groups semantically equivalent steps into clusters.
- * Single source of truth for step deduplication and semantic grouping.
- *
- * Matching priority:
- * 1. Shared colon-parent (deterministic, convention-based)
- * 2. tokenJaccardNorm ≥ threshold (per-token normalized, catches morphological variants)
- *
- * threshold=0.4 for dedup (register_step, orchestrator phase logic)
- * threshold=0.2 for merging/scoring (more permissive — retroactive fragmentation repair)
- */
-export function groupSemanticSteps(tracker: StepEntry[], threshold = 0.4): StepEntry[][] {
-  const groups: StepEntry[][] = []
-  for (const step of tracker) {
-    const parent = colonParent(step.title)
-    let idx = -1
-    if (parent !== null) {
-      idx = groups.findIndex(g => g.some(s => colonParent(s.title) === parent))
-    }
-    if (idx < 0) {
-      idx = groups.findIndex(g => g.some(s => tokenJaccardNorm(s.title, step.title) >= threshold))
-    }
-    if (idx >= 0) groups[idx].push(step)
-    else groups.push([step])
-  }
-  return groups
 }
 
 // Fuzzy step title lookup for record_slot / update_walkthrough_data.
@@ -514,7 +429,13 @@ ${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologyS
 // Iteration 2: phase-management tools (transition_phase, complete_interview, enter_coverage_check)
 // removed — Orchestrator (interviewOrchestrator.ts) handles all phase transitions deterministically.
 
-export function buildTools(interviewId: string, workspaceId: string, currentUserInput?: string) {
+export function buildTools(
+  interviewId: string,
+  workspaceId: string,
+  currentUserInput?: string,
+  opts?: { source?: 'quick' | 'analyst' },
+) {
+  const writeSource = opts?.source ?? 'analyst'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getSupabaseAdmin() as any
 
@@ -716,6 +637,9 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
             return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel exakt.` }
           }
 
+          const prevSlotValue = current[stepIndex].slots[slot]
+          const isOverwrite = prevSlotValue !== null && prevSlotValue !== undefined
+
           const updated = [...current]
           updated[stepIndex] = {
             ...updated[stepIndex],
@@ -743,6 +667,19 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
             .from('interview_state')
             .update({ step_tracker: updated, updated_at: new Date().toISOString() })
             .eq('interview_id', interviewId)
+
+          // Emit slot-write trail event (ADR-015) — non-blocking, never throws
+          emitSlotWrite({
+            ts: new Date().toISOString(),
+            interviewId,
+            source: writeSource,
+            stepTitle: updated[stepIndex].title,
+            slot,
+            value,
+            overwrite: isOverwrite,
+            sourceTurn: source_turn ?? null,
+            evidence: verbatimQuote,
+          }).catch(() => {})
 
           return { success: true, step_title, slot, value, step_complete: allMandatoryFilled, source_turn: source_turn ?? null }
         } catch (err) {

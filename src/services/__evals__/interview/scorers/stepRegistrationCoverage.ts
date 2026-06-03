@@ -1,5 +1,5 @@
-import { groupSemanticSteps } from '@/services/interviewAgent'
-import type { StepEntry } from '@/services/interviewAgent'
+import { groupSemanticSteps } from '@/services/interviewSemantic'
+import type { StepEntry } from '@/services/interviewSemantic'
 
 /**
  * Measures whether the expected number of distinct main processes were registered.

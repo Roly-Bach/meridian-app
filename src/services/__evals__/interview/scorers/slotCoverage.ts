@@ -1,5 +1,5 @@
-import { MANDATORY_SLOTS, groupSemanticSteps } from '@/services/interviewAgent'
-import type { StepEntry } from '@/services/interviewAgent'
+import { MANDATORY_SLOTS, groupSemanticSteps } from '@/services/interviewSemantic'
+import type { StepEntry } from '@/services/interviewSemantic'
 
 /**
  * Fraction of mandatory slots filled across all registered process steps.

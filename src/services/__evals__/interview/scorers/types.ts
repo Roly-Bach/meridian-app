@@ -1,4 +1,4 @@
-import type { Phase, StepEntry } from '@/services/interviewAgent'
+import type { Phase, StepEntry } from '@/services/interviewSemantic'
 
 export interface ToolCallRecord {
   toolName: string

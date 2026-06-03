@@ -1,5 +1,5 @@
 import type { TurnRecord } from './types'
-import type { Phase } from '@/services/interviewAgent'
+import type { Phase } from '@/services/interviewSemantic'
 
 /**
  * In walkthrough_step phase the agent should NOT re-ask known slot values.

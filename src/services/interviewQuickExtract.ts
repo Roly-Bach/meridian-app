@@ -67,7 +67,7 @@ export async function runQuickExtract(opts: QuickExtractOptions): Promise<StepEn
   const model = resolveModel(modelString)
   const isGoogleModel = modelString.startsWith('google/')
 
-  const knowledgeTools = buildTools(opts.interviewId, opts.workspaceId, opts.userInput)
+  const knowledgeTools = buildTools(opts.interviewId, opts.workspaceId, opts.userInput, { source: 'quick' })
   // Restrict toolset: only filling tools, no register_step.
   const tools = {
     record_slot: knowledgeTools.record_slot,

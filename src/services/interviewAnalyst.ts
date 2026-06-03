@@ -15,6 +15,7 @@ import {
   type SlotName,
 } from './interviewAgent'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { emitSlotWrite } from './slotWriteTrail'
 
 // ─── Analyst (Iteration 3) ────────────────────────────────────────────────────
 // Runs async via after() in chat/route.ts (Vercel Fluid Compute).
@@ -307,7 +308,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
     suggested_question: '',
   }
 
-  const knowledgeTools = buildTools(interviewId, workspaceId, opts.currentUserInput)
+  const knowledgeTools = buildTools(interviewId, workspaceId, opts.currentUserInput, { source: 'analyst' })
 
   const produceBriefingTool = tool({
     description: 'Generates the briefing for the next Talker turn. Call LAST, after all knowledge tools. Called exactly once.',
@@ -430,6 +431,7 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
     .filter((n) => n.length > 0)
 
   let mutated = false
+  const backfillEmits: Array<{ stepTitle: string; value: string[] }> = []
   const updated = tracker.map((step) => {
     if (step.slots.data_sources !== null) return step
 
@@ -439,6 +441,7 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
     if (deduped.length === 0) return step
 
     mutated = true
+    backfillEmits.push({ stepTitle: step.title, value: deduped })
     return {
       ...step,
       slots: {
@@ -460,6 +463,21 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
       updated_at: new Date().toISOString(),
     })
     .eq('interview_id', interviewId)
+
+  // Emit trail events for each backfilled step (ADR-015) — fire-and-forget
+  const now = new Date().toISOString()
+  for (const { stepTitle, value } of backfillEmits) {
+    emitSlotWrite({
+      ts: now,
+      interviewId,
+      source: 'backfill',
+      stepTitle,
+      slot: 'data_sources',
+      value,
+      overwrite: false,
+      evidence: '[auto-backfill aus erwähnten Tools/Systemen]',
+    }).catch(() => {})
+  }
 }
 
 /** Catch-up run: processes two turns at once when previous analyst run failed */

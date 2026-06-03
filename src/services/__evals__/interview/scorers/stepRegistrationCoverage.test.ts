@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase-admin', () => ({
 }))
 
 import { scoreStepRegistrationCoverage } from './stepRegistrationCoverage'
-import type { StepEntry } from '@/services/interviewAgent'
+import type { StepEntry } from '@/services/interviewSemantic'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

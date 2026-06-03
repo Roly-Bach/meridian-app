@@ -10,7 +10,7 @@ import { scoreAnchoringViolations } from './anchoringViolations'
 import { scoreToolCallPlausibility } from './toolCallPlausibility'
 import { scoreCompletionCorrectness } from './completionCorrectness'
 import type { TurnRecord } from './types'
-import type { StepEntry } from '@/services/interviewAgent'
+import type { StepEntry } from '@/services/interviewSemantic'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

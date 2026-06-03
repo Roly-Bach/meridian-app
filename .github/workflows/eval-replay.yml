@@ -1,0 +1,30 @@
+name: Eval Replay
+
+on:
+  pull_request:
+    paths:
+      - 'src/services/__evals__/**'
+      - 'src/services/interview*.ts'
+      - 'src/services/slotWriteTrail.ts'
+
+jobs:
+  replay:
+    name: Frozen-Transcript Replay
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run eval replay
+        run: npm run eval:replay
+        # No Supabase or AI provider secrets needed — offline scorer run only.

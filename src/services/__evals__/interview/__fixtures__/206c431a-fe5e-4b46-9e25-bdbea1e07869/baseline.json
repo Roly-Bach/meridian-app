@@ -1,0 +1,15 @@
+{
+  "evalRunId": "206c431a-fe5e-4b46-9e25-bdbea1e07869",
+  "scores": {
+    "slotCoverage": 0,
+    "dedupSlotCoverage": 0,
+    "phaseAdherence": 1,
+    "phaseProgression": 0,
+    "anchoringViolations": 1,
+    "toolCallPlausibility": 1,
+    "dialogNaturalness": 0,
+    "completionCorrectness": true,
+    "stepRegistrationCoverage": 1
+  },
+  "updatedAt": "2026-06-03T21:19:59.297Z"
+}
