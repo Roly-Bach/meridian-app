@@ -38,10 +38,10 @@ import {
   type ClarificationCard,
   type AnalystBriefing,
 } from '@/services/interviewAgent'
-import { createTalkerStream } from '@/services/interviewTalker'
+import { createTalkerStream, TALKER_THINKING_BUDGET } from '@/services/interviewTalker'
 import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/services/interviewOrchestrator'
 import { extractAndEmbed, deduplicateKnowledgeObjects, type TurnTranscript, type RawExtraction } from '@/services/extraction'
-import { runAnalyst } from '@/services/interviewAnalyst'
+import { runAnalyst, ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/interviewAnalyst'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 import { clusterProcessSteps } from '@/services/processClustering'
 import { type TraceCtx } from '@/services/_telemetry'
@@ -317,6 +317,8 @@ function buildReport(opts: {
   } = opts
 
   const testerModel = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
+  const talkerModel = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
+  const analystModel = process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
   const evalDate = new Date().toISOString().slice(0, 10)
   const langfuseSession = process.env.LANGFUSE_PROJECT_URL
     ? `${process.env.LANGFUSE_PROJECT_URL}/sessions/${interviewId}`
@@ -327,6 +329,10 @@ function buildReport(opts: {
     '---',
     `interview_model: ${model}`,
     `tester_model: ${testerModel}`,
+    `talker_model: ${talkerModel}`,
+    `talker_thinking_budget: ${TALKER_THINKING_BUDGET}`,
+    `analyst_model: ${analystModel}`,
+    `analyst_thinking_budget: ${ANALYST_THINKING_BUDGET}`,
     `eval_date: ${evalDate}`,
     `persona: ${personaName}`,
     `interview_id: ${interviewId}`,
@@ -337,11 +343,14 @@ function buildReport(opts: {
     `baseline_label: ${baselineLabel ?? 'null'}`,
     'scores:',
     `  slot_coverage: ${scores.slotCoverage}`,
+    `  dedup_slot_coverage: ${scores.dedupSlotCoverage}`,
+    `  phase_progression: ${scores.phaseProgression}`,
     `  phase_adherence: ${scores.phaseAdherence}`,
     `  anchoring_violations: ${scores.anchoringViolations}`,
     `  tool_call_plausibility: ${scores.toolCallPlausibility}`,
     `  dialog_naturalness: ${scores.dialogNaturalness}`,
     `  completion_correctness: ${scores.completionCorrectness}`,
+    `  step_registration_coverage: ${scores.stepRegistrationCoverage}`,
     '---',
   ].filter(l => l !== null).join('\n')
 
@@ -352,11 +361,14 @@ function buildReport(opts: {
     '| Metrik | Score | Ziel |',
     '|--------|-------|------|',
     `| slot_coverage | ${scores.slotCoverage} | maximize |`,
+    `| dedup_slot_coverage | ${scores.dedupSlotCoverage} | maximize |`,
+    `| phase_progression | ${scores.phaseProgression} | maximize |`,
     `| phase_adherence | ${scores.phaseAdherence} | maximize |`,
     `| anchoring_violations | ${scores.anchoringViolations} | 0 |`,
     `| tool_call_plausibility | ${scores.toolCallPlausibility} | ≥ 0.95 |`,
     `| dialog_naturalness | ${scores.dialogNaturalness} | maximize |`,
     `| completion_correctness | ${scores.completionCorrectness} | true |`,
+    `| step_registration_coverage | ${scores.stepRegistrationCoverage} | 1.0 |`,
     '',
   ].join('\n')
 
@@ -458,6 +470,7 @@ async function writeLangfuseScores(
     { name: 'tool_call_plausibility', value: scores.toolCallPlausibility, dataType: 'NUMERIC' },
     { name: 'dialog_naturalness', value: scores.dialogNaturalness, dataType: 'NUMERIC' },
     { name: 'completion_correctness', value: scores.completionCorrectness ? 1 : 0, dataType: 'BOOLEAN' },
+    { name: 'step_registration_coverage', value: scores.stepRegistrationCoverage, dataType: 'NUMERIC' },
   ]
 
   for (const entry of scoreEntries) {
@@ -572,7 +585,7 @@ async function runInterview(
   conversationHistory.push({ role: 'assistant', content: greeting })
 
   // ── Interview loop ─────────────────────────────────────────────────────────
-  const MAX_TURNS = 25
+  const MAX_TURNS = 35
   let lastAgentText = greeting
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -586,6 +599,10 @@ async function runInterview(
       loadAnalystBriefing(interviewId),
     ])
 
+    // Simulate elapsed time: eval runs in seconds so real timerMinutes stays ~0.
+    // Proportional to turn count so time-based urgency and hard-stop fire correctly.
+    const simulatedTimerMinutes = Math.floor((turn / MAX_TURNS) * 30)
+
     const agentHistory: TurnMessage[] = [...dbHistory, { role: 'user', content: personaResponse }]
 
     const orchCtx: OrchestratorContext = {
@@ -593,7 +610,7 @@ async function runInterview(
       stepTracker: dbState.stepTracker,
       topicsOpen: dbState.topicsOpen,
       topicsCovered: dbState.topicsCovered,
-      timerMinutes: dbState.timerMinutes,
+      timerMinutes: simulatedTimerMinutes,
       maxDurationMinutes: 30,
       historyLength: agentHistory.length,
       history: agentHistory,
@@ -657,7 +674,7 @@ async function runInterview(
         department: persona.identity.department,
         focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
         phase: orchestratedPhase,
-        timerMinutes: dbState.timerMinutes,
+        timerMinutes: simulatedTimerMinutes,
         topicsCovered: dbState.topicsCovered,
         topicsOpen: dbState.topicsOpen,
         extractionsLog: dbState.extractionsLog,
@@ -674,13 +691,6 @@ async function runInterview(
     const agentText = await agentStream.text
 
     const turnNumber = dbHistory.length / 2 + 1
-    turnRecords.push({
-      turnNumber,
-      userInput: personaResponse,
-      agentText,
-      phase: orchestratedPhase,
-      toolCalls: [],
-    })
 
     console.log(`\n[Agent]: ${agentText}`)
     conversationHistory.push({ role: 'assistant', content: agentText })
@@ -716,9 +726,11 @@ async function runInterview(
     // Run Analyst every turn — Talker has zero tools so no duplicate step_tracker entries.
     // Reload state so Analyst sees fresh DB after Talker streamed + turn was saved.
     // next_briefing written here is picked up by loadAnalystBriefing at the start of the next turn.
+    // Simulate elapsed time proportionally to turn count (eval runs in seconds, real timer stays ~0).
+    let analystToolCalls: AnalystToolCallRecord[] = []
     {
       const freshAnalystState = await loadState(interviewId)
-      await runAnalyst({
+      const analystResult = await runAnalyst({
         context: {
           interviewId,
           workspaceId,
@@ -727,7 +739,7 @@ async function runInterview(
           department: persona.identity.department,
           focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
           phase: orchestratedPhase,
-          timerMinutes: freshAnalystState.timerMinutes,
+          timerMinutes: simulatedTimerMinutes,
           topicsCovered: freshAnalystState.topicsCovered,
           topicsOpen: freshAnalystState.topicsOpen,
           extractionsLog: freshAnalystState.extractionsLog,
@@ -736,8 +748,22 @@ async function runInterview(
         },
         history: [...agentHistory, { role: 'assistant', content: agentText }],
         traceCtx,
-      }).catch(err => console.error('[runner] runAnalyst failed:', err))
+      }).catch(err => { console.error('[runner] runAnalyst failed:', err); return null })
+      analystToolCalls = analystResult?.toolCalls ?? []
+
+      // Log tool calls for eval debugging
+      if (analystToolCalls.length > 0) {
+        console.log(`  [analyst tools] ${analystToolCalls.map(tc => tc.toolName).join(', ')}`)
+      }
     }
+
+    turnRecords.push({
+      turnNumber,
+      userInput: personaResponse,
+      agentText,
+      phase: orchestratedPhase,
+      toolCalls: analystToolCalls,
+    })
 
     const { data: iv } = await supabase
       .from('interviews')
@@ -786,7 +812,7 @@ function printSummary(results: RunSummary[]): void {
   console.log('EVAL SUMMARY')
   console.log('═'.repeat(80))
   console.log(
-    `${'Model'.padEnd(40)} ${'Persona'.padEnd(15)} ${'slot_cov'.padStart(8)} ${'phase_adh'.padStart(9)} ${'anchoring'.padStart(9)} ${'natural'.padStart(8)} ${'complete'.padStart(9)}`,
+    `${'Model'.padEnd(40)} ${'Persona'.padEnd(15)} ${'slot_cov'.padStart(8)} ${'dedup_cov'.padStart(9)} ${'phase_prog'.padStart(10)} ${'anchoring'.padStart(9)} ${'natural'.padStart(8)} ${'complete'.padStart(9)}`,
   )
   console.log('─'.repeat(80))
 
@@ -797,7 +823,7 @@ function printSummary(results: RunSummary[]): void {
     }
     const s = r.scores
     console.log(
-      `${r.model.padEnd(40)} ${r.persona.padEnd(15)} ${String(s.slotCoverage).padStart(8)} ${String(s.phaseAdherence).padStart(9)} ${String(s.anchoringViolations).padStart(9)} ${String(s.dialogNaturalness).padStart(8)} ${String(s.completionCorrectness).padStart(9)}`,
+      `${r.model.padEnd(40)} ${r.persona.padEnd(15)} ${String(s.slotCoverage).padStart(8)} ${String(s.dedupSlotCoverage).padStart(9)} ${String(s.phaseProgression).padStart(10)} ${String(s.anchoringViolations).padStart(9)} ${String(s.dialogNaturalness).padStart(8)} ${String(s.completionCorrectness).padStart(9)}`,
     )
     if (r.reportPath) console.log(`  → ${r.reportPath}`)
   }
@@ -843,6 +869,7 @@ async function main() {
           finalStepTracker: result.finalStepTracker,
           interviewStatus: result.finalInterviewStatus,
           evalModel: model,
+          expectedProcessCount: persona.expectedProcessCount,
         })
 
         const reportPath = writeReport({

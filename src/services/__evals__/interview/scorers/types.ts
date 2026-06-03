@@ -15,11 +15,14 @@ export interface TurnRecord {
 
 export interface ScoreSet {
   slotCoverage: number
+  dedupSlotCoverage: number
   phaseAdherence: number
+  phaseProgression: number
   anchoringViolations: number
   toolCallPlausibility: number
   dialogNaturalness: number
   completionCorrectness: boolean
+  stepRegistrationCoverage: number
 }
 
 export interface ScorerInput {
@@ -27,4 +30,5 @@ export interface ScorerInput {
   finalStepTracker: StepEntry[]
   interviewStatus: string
   evalModel: string
+  expectedProcessCount?: number
 }

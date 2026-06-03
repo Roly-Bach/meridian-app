@@ -38,7 +38,7 @@ export default async function UseCasesPage() {
         ])
         return [ucs ?? [], count ?? 0] as const
       })()
-    : [[], 0] as const
+    : [[], 0]
 
   const totalRoi = useCases.reduce((sum, uc) => sum + (uc.roi_eur_per_year ?? 0), 0)
 

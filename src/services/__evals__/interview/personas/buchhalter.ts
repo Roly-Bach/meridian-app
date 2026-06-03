@@ -1,6 +1,7 @@
 import type { Persona } from './types'
 
 export const buchhalter: Persona = {
+  expectedProcessCount: 2,
   identity: {
     name: 'Andreas Meier',
     role: 'Buchhalter',

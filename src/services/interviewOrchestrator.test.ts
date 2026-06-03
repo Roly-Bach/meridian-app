@@ -81,7 +81,7 @@ describe('decideNextPhase — process_loop', () => {
 
 describe('decideNextPhase — walkthrough_step', () => {
   it('stays in walkthrough_step without enough content', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', emptySlots, { process_steps: ['Schritt A', 'Schritt B'] })]
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', emptySlots, { process_steps: ['Schritt A'] })]
     expect(decideNextPhase(baseCtx({ phase: 'walkthrough_step', stepTracker: tracker }), null)).toBe('walkthrough_step')
   })
 
@@ -104,6 +104,13 @@ describe('decideNextPhase — walkthrough_step', () => {
   it('advances to slot_completion when no active steps remain', () => {
     const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots )]
     expect(decideNextPhase(baseCtx({ phase: 'walkthrough_step', stepTracker: tracker }), null)).toBe('slot_completion')
+  })
+
+  it('advances to slot_completion when step has exactly 2 process_steps (fallback B)', () => {
+    // process_steps = 2, friction_points = 0, pain_point = null → classic sum = 2 (<3)
+    // BUT fallback B: process_steps.length >= 2 → should advance
+    const tracker = [makeStep('X', 'walkthrough', emptySlots, { process_steps: ['A', 'B'] })]
+    expect(decideNextPhase(baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, historyLength: 4 }), null)).toBe('slot_completion')
   })
 })
 

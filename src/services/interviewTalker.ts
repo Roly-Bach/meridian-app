@@ -6,11 +6,16 @@ import {
   type InterviewContext,
   type TurnMessage,
   type AnalystBriefing,
+  type Phase,
 } from './interviewAgent'
 
 // ─── Talker Stream (Iteration 3) ──────────────────────────────────────────────
 // Text-only streaming response. No tools — pure conversation.
 // Analyst runs in parallel via after() in chat/route.ts.
+
+// thinkingBudget: 512 (not 0) — Flash 3.5 produces empty responses on complex
+// multi-topic inputs when fully suppressed (B-QA-1, 2026-06-01).
+export const TALKER_THINKING_BUDGET = 512
 
 export interface TalkerStreamOptions {
   context: InterviewContext
@@ -37,6 +42,15 @@ Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
 Spannen konkretisieren: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser für einen typischen Fall?"
 </turn_format>
+
+<verboten>
+NIEMALS nach folgenden Details fragen — sie sind für die Prozesserhebung irrelevant und verschwenden Budget:
+- SAP-Transaktionscodes (z.B. FBL3N, F150, S_ALR_87012277, FB60, ME21N)
+- Excel-Formeln (SVERWEIS, VLOOKUP, INDEX/MATCH, Pivot-Formeln)
+- Systemspezifische Menüpfade oder Klick-Sequenzen
+- IT-technische Implementierungsdetails (Datenbankfelder, API-Aufrufe, Skripte)
+Frage stattdessen: Was passiert in diesem Schritt? Wie lange dauert es? Wie oft? Wer ist beteiligt?
+</verboten>
 
 `
 
@@ -80,6 +94,13 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
 
   const isGoogleModel = modelString.startsWith('google/')
 
+  // thinking=512 during exploration prevents phase drift + anchoring violations.
+  // thinking=0 during slot collection / wrap-up enables fast execution within turn budget.
+  const EXPLORATION_PHASES: Phase[] = ['intro', 'process_loop', 'walkthrough_step']
+  const talkerThinkingBudget = EXPLORATION_PHASES.includes(opts.context.phase)
+    ? TALKER_THINKING_BUDGET
+    : 0
+
   return streamText({
     model,
     temperature: 0.5,
@@ -87,12 +108,9 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: messages as any,
     // NO TOOLS — Talker is text-only (ADR-011 D3)
-    // thinkingBudget: 512 (not 0) — Flash 3.5 produces empty responses on complex
-    // multi-topic inputs when thinking is fully suppressed (B-QA-1, 2026-06-01).
-    // 512 tokens of thinking prevents empty outputs without meaningfully impacting latency.
     ...(isGoogleModel && {
       providerOptions: {
-        google: { thinkingConfig: { thinkingBudget: 512 } },
+        google: { thinkingConfig: { thinkingBudget: talkerThinkingBudget } },
       },
     }),
     experimental_telemetry: buildTraceMetadata('interview.talker', {

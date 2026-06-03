@@ -19,6 +19,12 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 // + produce_briefing for the next Talker turn.
 // Does NOT generate user-facing text.
 
+// thinkingBudget: 2048 — enables careful analysis before tool calls, reducing
+// impulsive register_step calls. The real fragmentation fix is tokenJaccard dedup
+// in register_step + anti-fragmentation rules in the system prompt below.
+// (At budget=0 fragmentation was worse: 12 steps registered for 2 real processes.)
+export const ANALYST_THINKING_BUDGET = 2048
+
 export interface AnalystRunOptions {
   context: InterviewContext
   /** History up to and including the current user turn (WITHOUT Talker's response for this turn) */
@@ -41,7 +47,11 @@ const ClarificationCardSchema = z.object({
 
 const AnalystBriefingSchema = z.object({
   next_focus: z.string().describe('Which topic or slot should the next Talker turn prioritize'),
-  suggested_question: z.string().describe('A concrete follow-up question for the interviewer to use'),
+  suggested_question: z.string().describe(
+    'A concrete follow-up question for the interviewer to use. ' +
+    'MUST be an open question. MUST NOT contain specific numbers, time values, system names, ' +
+    'or any data point the employee has not yet stated in this conversation.'
+  ),
   wrap_up_question_asked: z.boolean().optional().describe('true if the Talker asked the closing wrap-up question in this turn'),
   clarification_cards: z.array(ClarificationCardSchema).max(8).optional().describe('Only generate when phase=wrap_up and mandatory slots are empty'),
 })
@@ -49,6 +59,11 @@ const AnalystBriefingSchema = z.object({
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
 function buildAnalystSystemPrompt(ctx: InterviewContext): string {
+  const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
+  const activeStepLine = activeStep
+    ? `Aktiv im Walkthrough: "${activeStep.title}" (Status: ${activeStep.status})`
+    : 'Aktiv im Walkthrough: keiner — bereit für neue Step-Registration oder Backfill'
+
   return `Du bist Interview-Analyst für ein laufendes Mitarbeiter-Interview. Deine Aufgabe: strukturierte Wissens-Extraktion nach jedem Mitarbeiter-Turn.
 
 Sprache des Interviews: Deutsch.
@@ -59,16 +74,48 @@ Sprache des Interviews: Deutsch.
 2. Rufe alle relevanten Wissens-Tools auf
 3. Erstelle via produce_briefing eine Handlungsempfehlung für den nächsten Turn
 
-## Tool-Entscheidungsregeln
+## Tool-Aufruf-Priorität (PFLICHT — strikte Reihenfolge)
 
-**register_step**: Wenn der Mitarbeiter einen klar benannten, eigenständigen Prozessschritt beschreibt. Nicht für Varianten oder Ausnahmen eines bestehenden Schritts.
+STUFE 1 — NEUE SCHRITTE (höchste Priorität):
+Beschreibt der Mitarbeiter in diesem Turn einen neuen, eigenständigen Prozess?
+  → register_step SOFORT, vor allen anderen Tool-Calls außer update_topics
+  → produce_briefing.next_focus = dieser neue Schritt
+  → Kein Backfill-Briefing für andere Schritte in diesem Turn
+
+STUFE 2 — AKTIVER WALKTHROUGH:
+Ein Schritt ist als "Aktiv im Walkthrough" markiert (siehe Kontext unten) UND kein neuer Schritt in Stufe 1?
+  → update_walkthrough_data + record_slot NUR für diesen aktiven Schritt
+  → produce_briefing.next_focus = aktiver Schritt-Titel
+  → Backfill für andere Schritte: KEIN produce_briefing-Hinweis in diesem Turn
+
+STUFE 3 — BACKFILL (nur wenn BEIDE Bedingungen erfüllt):
+  a) Phase = slot_completion ODER coverage_check (nicht walkthrough_step)
+  b) Kein neuer Schritt in diesem Turn registriert
+  → record_slot + produce_briefing mit Backfill-Fokus
+  Backfill-Regel: "Wenn frequency_per_month noch null → nachfragen"
+  gilt AUSSCHLIESSLICH in Phase slot_completion oder coverage_check
+  UND nur wenn kein neuer Schritt in diesem Turn registriert wurde.
+
+STUFE 4 — WRAP_UP: Clarification Cards für verbleibende Slot-Lücken
+
+**register_step** — ANTI-FRAGMENTATION PFLICHT VOR JEDEM AUFRUF: Lies den Schritt-Tracker. Gibt es einen Schritt mit demselben Hauptbegriff oder Prozessgegenstand? Wenn ja → record_slot mit dem EXAKTEN bestehenden Titel.
+Faustregel: Ein Mitarbeiter mit 2–3 Hauptaufgaben hat 2–5 Steps im Tracker. Mehr als 6 Steps = Fragmentation.
+NAMING CONVENTION PFLICHT: Nutze Format "Hauptprozess: Tätigkeitsbeschreibung".
+Richtig:  "Rechnungsbearbeitung: Eingang und Prüfung", "Monatsabschluss: Abstimmung offener Posten"
+Falsch:   "Rechnungsprüfung", "Rechnungsprüfung und Kontierung" (kein Parent-Kontext → Fragmentation)
 
 **record_slot**: Für jeden explizit genannten Wert:
 - frequency_per_month: Häufigkeitsangaben (umrechnen auf Monat)
 - duration_minutes: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände)
 - rule_based: Aussagen zur Regelbasierung ("immer gleich", "variiert", "nach Schema")
-- data_sources: Genannte Systeme, Tools, Datenbanken
+- data_sources: Genannte Systeme, Tools, Datenbanken — NUR via record_slot setzen. NIEMALS via update_walkthrough_data. friction_tools ist ein separates Feld und befüllt data_sources NICHT.
 - evidence_quote muss wörtliches Zitat aus dem Mitarbeiter-Statement sein
+- source_turn PFLICHT: Bei jedem record_slot-Call IMMER source_turn setzen (1-indexed Turn-Nummer).
+  - Online-Extraction (aktueller Turn): source_turn = Anzahl bisheriger User-Turns + 1
+  - Catch-up-Extraction aus historischem Kontext: source_turn = Turn-Nr. der User-Message aus der die Evidence stammt
+  Beispiel: Wenn Evidence aus Turn 3 stammt und du jetzt Turn 7 analysierst → source_turn=3
+Nach register_step mit deduplicated=true: ALLE nachfolgenden record_slot-Calls MÜSSEN
+den zurückgegebenen matched_title als step_title verwenden.
 
 **update_walkthrough_data**: Wenn Mitarbeiter Prozessschritte (Signalwörter: "zuerst", "dann", "danach"), Reibungspunkte oder Systeme beschreibt.
 
@@ -87,6 +134,10 @@ Wenn keine Lücken existieren: leeres Array zurückgeben.
 
 ## Halluzinations-Guard
 Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fakten setzen.
+produce_briefing.suggested_question darf KEINE konkreten Zahlen, Zeitangaben, Prozentwerte
+oder Systembezeichnungen enthalten die der Mitarbeiter noch nicht selbst genannt hat.
+Falsch: "Kannst du bestätigen dass du 8 Stunden aufwendest?"
+Richtig: "Wie viele Stunden wendest du pro Monat dafür auf?"
 
 ## Aktueller Kontext
 - Interview ID: ${ctx.interviewId}
@@ -94,6 +145,8 @@ Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fa
 - Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
 - Abteilung: ${ctx.department}
 - Fokusthemen: ${ctx.focusTopics ?? 'keine spezifischen'}
+- Step-Tracker: ${ctx.stepTracker.length} Steps registriert (Hard Cap: 5 — keinen neuen register_step wenn bereits 5 existieren)
+- ${activeStepLine}
 `
 }
 
@@ -115,9 +168,21 @@ function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; sl
   return empty
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface AnalystToolCallRecord {
+  toolName: string
+  args: Record<string, unknown>
+}
+
+export interface AnalystRunResult {
+  briefing: AnalystBriefing
+  toolCalls: AnalystToolCallRecord[]
+}
+
 // ─── Main Analyst Function ────────────────────────────────────────────────────
 
-export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefing> {
+export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunResult> {
   const modelString =
     process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
   const model = resolveModel(modelString)
@@ -172,8 +237,10 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefi
 
   const isGoogleModel = modelString.startsWith('google/')
 
+  let capturedToolCalls: AnalystToolCallRecord[] = []
+
   try {
-    await generateText({
+    const genResult = await generateText({
       model,
       system: systemPrompt,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -182,7 +249,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefi
       stopWhen: stepCountIs(15),
       ...(isGoogleModel && {
         providerOptions: {
-          google: { thinkingConfig: { thinkingBudget: 2048 } },
+          google: { thinkingConfig: { thinkingBudget: ANALYST_THINKING_BUDGET } },
         },
       }),
       experimental_telemetry: buildTraceMetadata('interview.analyst', {
@@ -193,6 +260,14 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefi
         ...opts.traceCtx,
       }),
     })
+
+    capturedToolCalls = genResult.steps.flatMap(step =>
+      (step.toolCalls ?? []).map(tc => ({
+        toolName: tc.toolName,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        args: (tc as any).input ?? (tc as any).args ?? {},
+      }))
+    )
   } catch (err) {
     // Analyst error: set status='failed' so next turn triggers catch-up run
     console.error('[analyst] run failed:', err)
@@ -203,11 +278,11 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystBriefi
     throw err
   }
 
-  return capturedBriefing
+  return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
 }
 
 /** Catch-up run: processes two turns at once when previous analyst run failed */
-export async function runAnalystCatchup(opts: AnalystRunOptions & { previousUserInput: string }): Promise<AnalystBriefing> {
+export async function runAnalystCatchup(opts: AnalystRunOptions & { previousUserInput: string }): Promise<AnalystRunResult> {
   const augmentedHistory: TurnMessage[] = [
     { role: 'user', content: opts.previousUserInput },
     ...opts.history,

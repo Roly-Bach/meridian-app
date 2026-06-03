@@ -107,6 +107,46 @@ function normalizeStepTitleForDedup(title: string): string {
     .trim()
 }
 
+// Extracts the parent from a colon-format title ("Hauptprozess: Sub" → "hauptprozess").
+// Returns null for non-colon titles so callers can fall back to Jaccard.
+export function colonParent(title: string): string | null {
+  const idx = title.indexOf(':')
+  return idx > 2 ? title.slice(0, idx).trim().toLowerCase() : null
+}
+
+// Token-based Jaccard similarity for dedup.
+// Catches German morphological variants that substring/suffix matching misses:
+// "Rechnungsprüfung und Verbuchung" vs "Rechnungsprüfung und -verbuchung" → 1.0
+// "Abstimmung offener Posten (Monatsabschluss)" vs "Monatsabschluss - Abstimmung offener Posten" → 1.0
+export function tokenJaccard(a: string, b: string): number {
+  const STOP = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
+  const tokenize = (s: string) => new Set(
+    s.toLowerCase().replace(/[-().,&/: ]/g, ' ').split(/\s+/).filter(t => t.length >= 4 && !STOP.has(t))
+  )
+  const ta = tokenize(a)
+  const tb = tokenize(b)
+  if (ta.size === 0 || tb.size === 0) return 0
+  let intersection = 0
+  for (const t of ta) if (tb.has(t)) intersection++
+  return intersection / (ta.size + tb.size - intersection)
+}
+
+// Fuzzy step title lookup for record_slot / update_walkthrough_data.
+// Exact match first; falls back to best tokenJaccard ≥ 0.4.
+// Returns index in tracker, or -1 if not found.
+function findStepFuzzy(tracker: StepEntry[], stepTitle: string): number {
+  const normalized = stepTitle.trim().toLowerCase()
+  const exact = tracker.findIndex((s) => s.title.trim().toLowerCase() === normalized)
+  if (exact !== -1) return exact
+  let bestScore = 0
+  let bestIdx = -1
+  for (let i = 0; i < tracker.length; i++) {
+    const score = tokenJaccard(tracker[i].title, stepTitle)
+    if (score > bestScore) { bestScore = score; bestIdx = i }
+  }
+  return bestScore >= 0.4 ? bestIdx : -1
+}
+
 // Strip markdown headings and control characters from LLM-generated strings
 // before injecting them back into the system prompt.
 function sanitizeForPrompt(s: string): string {
@@ -340,9 +380,10 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   // Phase methodology injected per-turn (not in static prompt)
   const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase)}\n</methodology>`
 
-  // Analyst briefing section (Iteration 3 — injected when Analyst has produced a briefing)
+  // Analyst briefing section — advisory, not binding.
+  // Talker may adapt the suggested question if it was already answered in the current turn.
   const briefingSection = briefing && (briefing.next_focus || briefing.suggested_question)
-    ? `\n\n## Briefing (Analyst)\n- Fokus: ${sanitizeForPrompt(briefing.next_focus ?? '—')}\n- Vorgeschlagene Frage: ${sanitizeForPrompt(briefing.suggested_question ?? '—')}`
+    ? `\n\n## NÄCHSTER TURN — Analyst-Empfehlung\nFokus: ${sanitizeForPrompt(briefing.next_focus ?? '—')}\nEmpfohlene Frage (anpassen wenn bereits beantwortet): "${sanitizeForPrompt(briefing.suggested_question ?? '—')}"`
     : ''
 
   return `## Interview-Kontext
@@ -405,8 +446,12 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
 
           const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
 
-          // Deduplicate: exact/substring match OR normalized suffix-stripped match
-          // (e.g. "Mahnprozess" and "Mahnwesen" both normalize to "mahn" → same step)
+          // Deduplicate: three-layer check
+          // 1. exact/substring match
+          // 2. normalized suffix-stripped match ("Mahnprozess" vs "Mahnwesen" → "mahn")
+          // 3. token Jaccard ≥ 0.4 — catches German morphological variants missed by substring
+          //    ("Rechnungsprüfung und Verbuchung" vs "Rechnungsprüfung und -verbuchung",
+          //     word-order variants like "Monatsabschluss - Abstimmung" vs "Abstimmung (Monatsabschluss)")
           const normalizedTitle = title.trim().toLowerCase()
           const normalizedForDedup = normalizeStepTitleForDedup(title)
           const duplicate = current.find((s) => {
@@ -416,11 +461,13 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
             }
             const existingForDedup = normalizeStepTitleForDedup(s.title)
             if (existingForDedup.length >= 4 && normalizedForDedup.length >= 4) {
-              return existingForDedup === normalizedForDedup ||
+              if (existingForDedup === normalizedForDedup ||
                 existingForDedup.includes(normalizedForDedup) ||
-                normalizedForDedup.includes(existingForDedup)
+                normalizedForDedup.includes(existingForDedup)) {
+                return true
+              }
             }
-            return false
+            return tokenJaccard(s.title, title) >= 0.4
           })
           if (duplicate) {
             return {
@@ -429,6 +476,21 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
               matched_title: duplicate.title,
               message: `Schritt bereits vorhanden als "${duplicate.title}" — nutze diesen Titel für record_slot`,
               step_tracker: current,
+              existing_step_titles: current.map((s) => s.title),
+            }
+          }
+
+          // Soft-warning: Jaccard 0.2–0.4 — likely fragmentation, force LLM to confirm
+          const softSimilar = current
+            .map(s => ({ title: s.title, score: tokenJaccard(s.title, title) }))
+            .filter(({ score }) => score >= 0.2 && score < 0.4)
+            .map(({ title: t }) => t)
+          if (softSimilar.length > 0) {
+            return {
+              success: false,
+              soft_warning: true,
+              similar_titles: softSimilar,
+              message: `Ähnliche Schritte gefunden: ${softSimilar.map(t => `"${t}"`).join(', ')}. Nutze record_slot mit einem dieser Titel wenn es derselbe Prozess ist. Nur fortfahren wenn dieser Schritt einen anderen Hauptprozess beschreibt.`,
               existing_step_titles: current.map((s) => s.title),
             }
           }
@@ -471,7 +533,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. In `walkthrough_step`: Nur aufrufen, wenn der Mitarbeiter den Wert spontan nannte. In `slot_completion` / `coverage_check`: Aktiv nach Werten fragen und erfassen. evidence_quote MUSS wörtliches Zitat sein. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat — auch nicht als estimate. Wenn der Mitarbeiter einen Wert verweigert ("ich weiß nicht", "kann ich nicht sagen", keine Antwort), diesen Slot NICHT füllen. confidence=confirmed: Mitarbeiter nannte exakten Wert. confidence=estimate: Mitarbeiter gab selbst eine Schätzung (Signalwörter: "ungefähr", "circa", "schätze mal", "so etwa"). confidence=unknown: nur wenn Mitarbeiter Wert indirekt erwähnte.',
+      description: 'Füllt einen Slot im Schritt-Tracker. In `walkthrough_step`: Nur aufrufen, wenn der Mitarbeiter den Wert spontan nannte. In `slot_completion` / `coverage_check`: Aktiv nach Werten fragen und erfassen. evidence_quote MUSS wörtliches Zitat sein. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat — auch nicht als estimate. Wenn der Mitarbeiter einen Wert verweigert ("ich weiß nicht", "kann ich nicht sagen", keine Antwort), diesen Slot NICHT füllen. confidence=confirmed: Mitarbeiter nannte exakten Wert. confidence=estimate: Mitarbeiter gab selbst eine Schätzung (Signalwörter: "ungefähr", "circa", "schätze mal", "so etwa"). confidence=unknown: nur wenn Mitarbeiter Wert indirekt erwähnte. source_turn: 1-indexed Turn-Nummer aus der die Evidence stammt. PFLICHT bei Catch-up-Extraction aus historischem Kontext. Bei Online-Extraction: aktueller Turn.',
       inputSchema: z.object({
         step_title: z.string().min(1),
         slot: z.enum(['frequency_per_month', 'duration_minutes', 'rule_based', 'data_sources', 'error_rate_percent', 'media_breaks']),
@@ -479,8 +541,9 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
         evidence_quote: z.string().min(3, 'evidence_quote muss ein wörtliches Zitat enthalten'),
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
         qualifier: z.string().nullable().optional(),
+        source_turn: z.number().int().positive().optional(),
       }),
-      execute: async ({ step_title, slot, value, evidence_quote, confidence, qualifier }) => {
+      execute: async ({ step_title, slot, value, evidence_quote, confidence, qualifier, source_turn }) => {
         if (!evidence_quote || evidence_quote.trim().length < 3) {
           return { success: false, error: 'evidence_quote fehlt oder zu kurz. Zitiere wörtlich aus der Mitarbeiter-Antwort.' }
         }
@@ -509,11 +572,11 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
             .maybeSingle()
 
           const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
-          const normalizedTitle = step_title.trim().toLowerCase()
-          const stepIndex = current.findIndex((s) => s.title.trim().toLowerCase() === normalizedTitle)
+          const stepIndex = findStepFuzzy(current, step_title)
 
           if (stepIndex === -1) {
-            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Zuerst register_step aufrufen.` }
+            const available = current.map(s => `"${s.title}"`).join(', ')
+            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel exakt.` }
           }
 
           const updated = [...current]
@@ -544,7 +607,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
             .update({ step_tracker: updated, updated_at: new Date().toISOString() })
             .eq('interview_id', interviewId)
 
-          return { success: true, step_title, slot, value, step_complete: allMandatoryFilled }
+          return { success: true, step_title, slot, value, step_complete: allMandatoryFilled, source_turn: source_turn ?? null }
         } catch (err) {
           console.error('[record_slot] failed:', err)
           return { success: false, error: (err as Error).message }
@@ -622,11 +685,11 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
             .maybeSingle()
 
           const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
-          const normalizedTitle = step_title.trim().toLowerCase()
-          const stepIndex = current.findIndex((s) => s.title.trim().toLowerCase() === normalizedTitle)
+          const stepIndex = findStepFuzzy(current, step_title)
 
           if (stepIndex === -1) {
-            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Zuerst register_step aufrufen.` }
+            const available = current.map(s => `"${s.title}"`).join(', ')
+            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel exakt.` }
           }
 
           const existing = current[stepIndex]

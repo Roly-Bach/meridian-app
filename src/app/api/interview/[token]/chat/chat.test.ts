@@ -28,8 +28,8 @@ vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
 })
 
 vi.mock('@/services/interviewAnalyst', () => ({
-  runAnalyst: vi.fn().mockResolvedValue({}),
-  runAnalystCatchup: vi.fn().mockResolvedValue({}),
+  runAnalyst: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
+  runAnalystCatchup: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
 }))
 
 vi.mock('next/server', async (importOriginal) => {

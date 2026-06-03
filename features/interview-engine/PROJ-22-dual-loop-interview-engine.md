@@ -359,6 +359,65 @@ Getestete Features: PROJ-2 (Interview Backend), PROJ-3 (Chat UI), PROJ-13 (Langf
 
 **YES** — keine Critical/High Bugs offen. Alle Low-Bugs dokumentarisch/funktional-positiv.
 
+---
+
+## QA Test Results (B5-Fixes, 2026-06-03)
+
+> **QA Datum:** 2026-06-03 | **Status:** Approved | **Bugs:** 0:0:2 (1 neue Low, 1 bestehende Low)
+
+### Acceptance Criteria — Testergebnis (B5-Fixes)
+
+| # | Check | Status | Notiz |
+|---|-------|--------|-------|
+| 1 | Vitest Unit (356 Tests vorher) → alle grün | ✅ PASS | 356/356 passed vor neuen Tests |
+| 2 | Neue stepRegistrationCoverage Unit-Tests geschrieben (8 Tests) | ✅ PASS | alle 8 grün; Gesamt 364 Tests |
+| 3 | walkthroughHasContent: 3+ sum → true (Classic-Path) | ✅ PASS | Impl. Zeile 43, Test vorhanden |
+| 4 | walkthroughHasContent: exactly 2 process_steps → true (Fallback B) | ✅ PASS | Impl. Zeile 47, Test vorhanden |
+| 5 | walkthroughHasContent: 1 process_step + 0 friction/pain → false | ✅ PASS | Impl. korrekt, Test vorhanden |
+| 6 | walkthroughHasContent: 1 mandatory slot + 0 process_steps → false | ✅ PASS | Impl. korrekt (>= 2 guard), Test FEHLT (Low) |
+| 7 | walkthroughHasContent: 2 mandatory slots + 0 process_steps → true | ✅ PASS | Impl. korrekt (>= 2), Test FEHLT (Low) |
+| 8 | colonParent: `export function` in interviewAgent.ts | ✅ PASS | Zeile 112 |
+| 9 | interviewOrchestrator.ts: importiert colonParent aus ./interviewAgent | ✅ PASS | Zeile 1 |
+| 10 | stepRegistrationCoverage.ts: importiert colonParent aus @/services/interviewAgent | ✅ PASS | Zeile 1 |
+| 11 | STUFE 1 — NEUE SCHRITTE ist erste Priorität im Analyst-Prompt | ✅ PASS | Zeile 79ff interviewAnalyst.ts |
+| 12 | STUFE 2 — AKTIVER WALKTHROUGH schließt Backfill-Briefing aus | ✅ PASS | "KEIN produce_briefing-Hinweis" explizit |
+| 13 | STUFE 3 — BACKFILL phase-qualifiziert (slot_completion/coverage_check) | ✅ PASS | Bedingung a) in Stufe 3 |
+| 14 | activeStepLine im Prompt-Template verwendet | ✅ PASS | Zeile 145 `- ${activeStepLine}` |
+| 15 | Kein Backfill-Briefing ohne Phasen-Qualifikation | ✅ PASS | nur unter Stufe 3 Bedingungen |
+| 16 | ScoreSet.stepRegistrationCoverage vorhanden (types.ts) | ✅ PASS | Zeile 26 |
+| 17 | runner.ts: Score in Frontmatter | ✅ PASS | Zeile 353 |
+| 18 | runner.ts: Score in Score-Tabelle | ✅ PASS | Zeile 371 |
+| 19 | runner.ts: Score in Langfuse-Entries | ✅ PASS | Zeile 473 |
+| 20 | walkthroughHasContent Fallback: old `any slot !== null` ersetzt durch `>= 2 slots` | ✅ PASS | Zeile 46, `.length >= 2` bestätigt |
+
+### Automatisierte Tests
+
+| Suite | Ergebnis |
+|-------|----------|
+| Vitest Unit (364 Tests, +8 neue) | ✅ 364 passed |
+
+**Neue Tests:**
+- `stepRegistrationCoverage.test.ts` (neu, 8 Tests): Happy Path (same/different colon-parent), Edge Cases (empty, 0, undefined, capped at 1.0), tokenJaccard-Fallback (similar/distinct titles)
+
+### Security Audit (B5-Fixes)
+
+| Check | Status | Notiz |
+|-------|--------|-------|
+| scoreStepRegistrationCoverage: keine externen Inputs | ✅ PASS | pure in-memory, nur interne StepEntry-Daten |
+| colonParent: nur String-Parsing | ✅ PASS | kein Injection-Risiko |
+| Analyst-Prompt-Änderung: reine Prompt-Tuning | ✅ PASS | kein Sicherheitsrisiko |
+| walkthroughHasContent Fallback: keine neue Angriffsfläche | ✅ PASS | reine TypeScript-Logik, keine I/O |
+
+### Bugs (B5-Fixes)
+
+| ID | Severity | Beschreibung |
+|----|----------|-------------|
+| QA-22-L3 | Low | walkthroughHasContent: Test-Case "1 mandatory slot + 0 process_steps → false" und "2 mandatory slots → true" fehlen in interviewOrchestrator.test.ts. Implementierung ist korrekt, aber Fallback-A-Pfad (mandatory slots >= 2) hat keine eigenen Unit-Tests. Fix: 2 Tests hinzufügen. |
+
+### Production-Ready (B5-Fixes)
+
+**YES** — keine Critical/High Bugs. QA-22-L3 ist test-coverage-only, keine Implementierungslücke.
+
 ## Deployment
 _To be added by /deploy_
 

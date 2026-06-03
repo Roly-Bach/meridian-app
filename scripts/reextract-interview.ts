@@ -21,7 +21,7 @@ for (const line of envContent.split('\n')) {
 }
 
 import { extractAndEmbed } from '../src/services/extraction'
-import { enrichProcessSteps } from '../src/services/processEnrichment'
+import { createProcessStepsFromTracker } from '../src/services/processEnrichment'
 import { getSupabaseAdmin } from '../src/lib/supabase-admin'
 
 async function main() {
@@ -86,7 +86,7 @@ async function main() {
 
   if ((koCount ?? 0) > 0) {
     console.log('\nRunning process step enrichment...')
-    await enrichProcessSteps({
+    await createProcessStepsFromTracker({
       interviewId,
       workspaceId: interview.workspace_id,
     })

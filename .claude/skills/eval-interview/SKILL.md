@@ -33,14 +33,20 @@ Führt einen vollständigen Eval-Lauf des Interview-Agenten durch. Seit PROJ-13 
 
 ### Schritt 0: Modell-Konfiguration anzeigen und bestätigen
 
-Lese `.env.local` und extrahiere die vier Modell-Vars (Fallback wenn nicht gesetzt: `google/gemini-3.1-flash-lite`):
+Lese `.env.local` und extrahiere alle Modell-Vars (Fallback in Klammern):
 
 ```
-INTERVIEW_MODEL  = <Wert aus .env.local oder Fallback>
-EXTRACTION_MODEL = <Wert aus .env.local oder Fallback>
-ENRICHMENT_MODEL = <Wert aus .env.local oder Fallback>
-TESTER_MODEL     = <Wert aus .env.local oder Fallback>
+INTERVIEW_MODEL         = <Wert> (fallback: google/gemini-3.1-flash-lite)
+INTERVIEW_TALKER_MODEL  = <Wert> (fallback: INTERVIEW_MODEL)   ← Talker: text-only
+INTERVIEW_ANALYST_MODEL = <Wert> (fallback: INTERVIEW_MODEL)   ← Analyst: tool-calls
+EXTRACTION_MODEL        = <Wert> (fallback: google/gemini-3.1-flash-lite)
+ENRICHMENT_MODEL        = <Wert> (fallback: google/gemini-3.1-flash-lite)
+TESTER_MODEL            = <Wert> (fallback: google/gemini-3.1-flash-lite)
 ```
+
+Thinking-Budgets (hardcoded in Services, nicht via env — Orchestrator ist rule-based, kein LLM):
+- Talker:  `TALKER_THINKING_BUDGET`  (aus `interviewTalker.ts` — aktuell 512)
+- Analyst: `ANALYST_THINKING_BUDGET` (aus `interviewAnalyst.ts` — aktuell 0, war 2048)
 
 Zeige die Liste dem Nutzer und frage via `AskUserQuestion`:
 - Frage: „Passt die Modell-Konfiguration?"
@@ -158,6 +164,10 @@ Ablage: `docs/evals/interview/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-<persona>.md`
 ---
 interview_model: <INTERVIEW_MODEL-Wert>
 tester_model: <TESTER_MODEL-Wert oder "google/gemini-3.1-flash-lite" (default)>
+talker_model: <INTERVIEW_TALKER_MODEL ?? INTERVIEW_MODEL>
+talker_thinking_budget: <TALKER_THINKING_BUDGET aus interviewTalker.ts>
+analyst_model: <INTERVIEW_ANALYST_MODEL ?? INTERVIEW_MODEL>
+analyst_thinking_budget: <ANALYST_THINKING_BUDGET aus interviewAnalyst.ts>
 eval_date: YYYY-MM-DD
 persona: <persona-name>
 interview_id: <interviewId>

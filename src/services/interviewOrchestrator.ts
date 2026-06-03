@@ -1,4 +1,4 @@
-import { computeMissingMandatorySlots } from './interviewAgent'
+import { computeMissingMandatorySlots, MANDATORY_SLOTS, tokenJaccard, colonParent } from './interviewAgent'
 import type { Phase, StepEntry, AnalystBriefing } from './interviewAgent'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -22,6 +22,47 @@ export interface LifecycleDecision {
   reason: 'hard_stop' | 'soft_confirm' | null
 }
 
+// historyLength ≈ 2× turn count (user msg + assistant msg per turn)
+const PROCESS_LOOP_ESCAPE_HL = 20    // force walkthrough_step after ~10 turns
+const WALKTHROUGH_ESCAPE_HL = 28     // force slot_completion after ~14 turns
+const SLOT_COMPLETION_ESCAPE_HL = 32 // force coverage_check after ~16 turns
+const COVERAGE_CHECK_ESCAPE_HL = 40  // force wrap_up after ~20 turns
+
+// MAX_TURNS_HL: total history-length budget (2× turn count). Corresponds to
+// COVERAGE_CHECK_ESCAPE_HL + reserveTurns×2 for farewell/wrap_up buffer.
+const MAX_TURNS_HL = COVERAGE_CHECK_ESCAPE_HL + 10 // = 50 HL ≈ 25 turns
+
+/**
+ * Computes how many history-length units (HL) the current walkthrough step
+ * may still consume before a forced push to slot_completion.
+ *
+ * @param historyLength  Current HL (2× turn count).
+ * @param completedSteps Steps with status 'done' (already finished).
+ * @param totalTopics    Total number of registered topics/steps.
+ */
+function computeStepBudget(historyLength: number, completedSteps: number, totalTopics: number): number {
+  const reserveHL = 10 // 5 turns × 2 for farewell + coverage_check buffer
+  const remainingBudgetHL = MAX_TURNS_HL - historyLength - reserveHL
+  const remainingSteps = Math.max(totalTopics - completedSteps, 1)
+  const budgetHL = Math.floor(remainingBudgetHL / remainingSteps)
+  const MIN_HL_PER_STEP = 6 // Floor: min 3 turns per step (3 turns × 2 HL)
+  return Math.max(budgetHL, MIN_HL_PER_STEP)
+}
+
+/**
+ * Estimates how many HL units have been spent on the current walkthrough step.
+ * Derived from history: HL since phase entered walkthrough_step territory.
+ * Uses PROCESS_LOOP_ESCAPE_HL as approximate walkthrough start boundary.
+ */
+function estimateTurnsUsedOnCurrentStep(historyLength: number, completedSteps: number): number {
+  // Approximate HL consumed in walkthrough phases so far
+  const walkthroughStartHL = PROCESS_LOOP_ESCAPE_HL
+  const walkthroughHL = Math.max(0, historyLength - walkthroughStartHL)
+  // Distribute evenly across completed steps + current step
+  const totalSteps = completedSteps + 1
+  return Math.floor(walkthroughHL / totalSteps)
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function hasStepInStatus(tracker: StepEntry[], status: 'exploring' | 'walkthrough' | 'done'): boolean {
@@ -32,13 +73,57 @@ function walkthroughHasContent(tracker: StepEntry[]): boolean {
   return tracker.some(
     (s) =>
       s.status === 'walkthrough' &&
-      ((s.process_steps?.length ?? 0) + (s.friction_points?.length ?? 0) + (s.pain_point_primary ? 1 : 0)) >= 3,
+      (
+        // Classic path: 3+ walkthrough data items from update_walkthrough_data
+        (s.process_steps?.length ?? 0) + (s.friction_points?.length ?? 0) + (s.pain_point_primary ? 1 : 0) >= 3
+        // Fallback A: at least 1 mandatory slot already filled via record_slot —
+        // avoids deadlock when Analyst extracts slots directly without calling update_walkthrough_data first.
+        // Fix-3 reverted: threshold back to "any slot" (>= 1) to prevent depth-first starvation.
+        || MANDATORY_SLOTS.some(slot => s.slots[slot] !== null)
+        // Fallback B: 2+ process_steps (orthogonally correct, kept from Fix-3)
+        || (s.process_steps?.length ?? 0) >= 2
+      ),
   )
 }
 
 function allStepsDone(tracker: StepEntry[]): boolean {
   if (tracker.length === 0) return false
   return !tracker.some((s) => s.status === 'exploring' || s.status === 'walkthrough')
+}
+
+// Groups semantically equivalent steps and checks whether the union of mandatory
+// slots per group is complete. Resilient to step-name fragmentation.
+//
+// Grouping priority:
+// 1. Shared colon-parent ("Hauptprozess: X" + "Hauptprozess: Y" → same group).
+//    Convention-based, deterministic, generalizes across all personas.
+// 2. tokenJaccard ≥ 0.4 fallback for legacy/non-colon titles.
+function semanticAllStepsDone(tracker: StepEntry[]): boolean {
+  if (tracker.length === 0) return false
+
+  const groups: StepEntry[][] = []
+  for (const step of tracker) {
+    const parent = colonParent(step.title)
+
+    let idx = -1
+    if (parent !== null) {
+      // Convention-based: match by shared colon-parent
+      idx = groups.findIndex(g => g.some(s => colonParent(s.title) === parent))
+    }
+    if (idx < 0) {
+      // Fallback: token similarity (catches pre-convention or colon-less duplicates)
+      idx = groups.findIndex(g => g.some(s => tokenJaccard(s.title, step.title) >= 0.4))
+    }
+
+    if (idx >= 0) groups[idx].push(step)
+    else groups.push([step])
+  }
+
+  return groups.every(group =>
+    MANDATORY_SLOTS.every(slot =>
+      group.some(s => s.slots[slot] !== null)
+    )
+  )
 }
 
 function hasUnexploredFocusTopic(topicsOpen: string[], tracker: StepEntry[]): boolean {
@@ -80,6 +165,29 @@ function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content:
   return mandatoryQuestionAsked
 }
 
+// ─── Phase Invariants ─────────────────────────────────────────────────────────
+
+/**
+ * Asserts phase invariants at the start of each phase decision.
+ * Violations are logged as warnings — no throw. Returns true if a violation
+ * was detected (caller may use this to force-transition).
+ */
+function assertPhaseInvariants(historyLength: number, startedSteps: number, totalTopics: number): boolean {
+  if (historyLength >= COVERAGE_CHECK_ESCAPE_HL - 4) {
+    const expectedMin = Math.max(totalTopics - 1, 1)
+    if (startedSteps < expectedMin) {
+      console.warn('[INVARIANT_VIOLATION] farewell approaching, steps under-started', {
+        historyLength,
+        startedSteps,
+        expectedMin,
+        totalTopics,
+      })
+      return true // violation detected
+    }
+  }
+  return false
+}
+
 // ─── Core Functions ───────────────────────────────────────────────────────────
 
 /**
@@ -95,6 +203,11 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
     return 'wrap_up'
   }
 
+  // Phase invariant check — log violation, potentially force-transition later
+  const startedSteps = ctx.stepTracker.filter(s => s.status !== 'exploring').length
+  const totalTopics = ctx.stepTracker.length
+  const invariantViolated = assertPhaseInvariants(ctx.historyLength, startedSteps, totalTopics)
+
   switch (ctx.phase) {
     case 'intro':
       // Advance after first agent response (≥2 messages) — intro is a single greeting turn.
@@ -108,31 +221,56 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       if (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')) {
         return 'walkthrough_step'
       }
+      // Escape: force walkthrough_step after ~10 turns even without a registered step.
+      if (ctx.historyLength >= PROCESS_LOOP_ESCAPE_HL) return 'walkthrough_step'
       return 'process_loop'
 
-    case 'walkthrough_step':
+    case 'walkthrough_step': {
+      // Per-step turn budget: force push to slot_completion before walkthroughHasContent or escape.
+      // Prevents depth-first starvation (B7): if agent drills one step too long, push forward.
+      const completedSteps = ctx.stepTracker.filter(s => s.status === 'done').length
+      const turnsUsed = estimateTurnsUsedOnCurrentStep(ctx.historyLength, completedSteps)
+      const budget = computeStepBudget(ctx.historyLength, completedSteps, Math.max(totalTopics, 1))
+      if (turnsUsed >= budget) return 'slot_completion'
+
+      // Invariant violation: farewell approaching, force forward regardless of step state
+      if (invariantViolated) return 'slot_completion'
+
       // Walkthrough content threshold reached → move to slot_completion
       if (walkthroughHasContent(ctx.stepTracker)) return 'slot_completion'
       // No active steps remaining → also move to slot_completion
       if (!hasStepInStatus(ctx.stepTracker, 'exploring') && !hasStepInStatus(ctx.stepTracker, 'walkthrough') && ctx.stepTracker.length > 0) {
         return 'slot_completion'
       }
+      // Escape: force slot_completion after ~14 turns to prevent infinite walkthrough loop.
+      if (ctx.historyLength >= WALKTHROUGH_ESCAPE_HL) return 'slot_completion'
       return 'walkthrough_step'
+    }
 
     case 'slot_completion': {
-      if (!allStepsDone(ctx.stepTracker)) return 'slot_completion'
+      if (!semanticAllStepsDone(ctx.stepTracker)) {
+        if (ctx.historyLength >= SLOT_COMPLETION_ESCAPE_HL) return 'coverage_check'
+        return 'slot_completion'
+      }
       if (hasUnexploredFocusTopic(ctx.topicsOpen, ctx.stepTracker)) return 'process_loop'
       return 'coverage_check'
     }
 
     case 'coverage_check':
-      if (allMandatorySlotsFilled(ctx.stepTracker)) return 'wrap_up'
+      if (semanticAllStepsDone(ctx.stepTracker)) return 'wrap_up'
+      if (ctx.historyLength >= COVERAGE_CHECK_ESCAPE_HL) return 'wrap_up'
       return 'coverage_check'
 
     case 'wrap_up': {
-      // If agent registered new steps after asking the closing question → back to exploration
-      if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'walkthrough_step'
-      if (hasStepInStatus(ctx.stepTracker, 'walkthrough')) return 'slot_completion'
+      // Skip push-back once escape valve has already fired — committed to wrap_up.
+      // Without this guard, the push-back defeats the coverage_check escape valve:
+      // wrap_up → walkthrough_step → slot_completion → coverage_check → wrap_up → ∞
+      const escapeAlreadyFired = ctx.historyLength >= COVERAGE_CHECK_ESCAPE_HL
+      // Only push back if there are genuinely uncovered semantic groups (not just fragmented duplicates)
+      if (!escapeAlreadyFired && !semanticAllStepsDone(ctx.stepTracker)) {
+        if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'walkthrough_step'
+        if (hasStepInStatus(ctx.stepTracker, 'walkthrough')) return 'slot_completion'
+      }
 
       // Trigger B: Analyst confirmed (Iteration 3) or text heuristic (Iteration 2)
       const questionAsked =
@@ -194,8 +332,9 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
 
   // Trigger B: Soft-Confirm (wrap_up question asked + user has responded)
   if (ctx.phase === 'wrap_up') {
-    // Don't complete if new steps were registered (new content introduced at wrap-up)
-    if (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')) {
+    // Don't complete if genuinely new (uncovered) steps exist — but fragmented duplicates are fine
+    if (!semanticAllStepsDone(ctx.stepTracker) &&
+        (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough'))) {
       return { shouldComplete: false, reason: null }
     }
 

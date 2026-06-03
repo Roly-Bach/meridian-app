@@ -1,4 +1,5 @@
 import type { TurnRecord } from './types'
+import type { Phase } from '@/services/interviewAgent'
 
 /**
  * In walkthrough_step phase the agent should NOT ask direct slot-fishing questions.
@@ -32,4 +33,31 @@ export function scorePhaseAdherence(turns: TurnRecord[]): number {
   }
 
   return conforming / walkthroughTurns.length
+}
+
+const PHASE_ORDER: Phase[] = ['intro', 'process_loop', 'walkthrough_step', 'slot_completion', 'coverage_check', 'wrap_up']
+
+/**
+ * Measures how far the interview progressed through its phase lifecycle.
+ * Replaces phaseAdherence as primary quality signal — phase_adherence=1.0 is trivially
+ * achieved when stuck in slot_completion; phaseProgression catches this.
+ *
+ * 0.0  stayed in intro/process_loop only
+ * 0.33 reached walkthrough_step
+ * 0.5  reached slot_completion
+ * 0.67 reached coverage_check
+ * 0.83 reached wrap_up
+ * 1.0  reached wrap_up AND interview completed
+ */
+export function scorePhaseProgression(turns: TurnRecord[], interviewCompleted: boolean): number {
+  const phases = new Set(turns.map(t => t.phase))
+  const steps = [
+    phases.has('walkthrough_step'),
+    phases.has('slot_completion'),
+    phases.has('coverage_check'),
+    phases.has('wrap_up'),
+    phases.has('wrap_up') && interviewCompleted,
+  ]
+  const reached = steps.filter(Boolean).length
+  return reached === 0 ? 0 : reached / steps.length
 }

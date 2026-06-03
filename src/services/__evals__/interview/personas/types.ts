@@ -36,4 +36,5 @@ export interface Persona {
   description: string
   style: PersonaStyle
   processKnowledge: PersonaProcessKnowledge
+  expectedProcessCount?: number
 }
