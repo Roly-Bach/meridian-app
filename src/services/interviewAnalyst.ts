@@ -5,11 +5,14 @@ import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import {
   buildTools,
   MANDATORY_SLOTS,
+  OPTIONAL_SLOTS,
+  groupSemanticSteps,
   type InterviewContext,
   type TurnMessage,
   type AnalystBriefing,
   type ClarificationCard,
   type StepEntry,
+  type SlotName,
 } from './interviewAgent'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
@@ -82,19 +85,21 @@ Beschreibt der Mitarbeiter in diesem Turn einen neuen, eigenständigen Prozess?
   → produce_briefing.next_focus = dieser neue Schritt
   → Kein Backfill-Briefing für andere Schritte in diesem Turn
 
-STUFE 2 — AKTIVER WALKTHROUGH:
-Ein Schritt ist als "Aktiv im Walkthrough" markiert (siehe Kontext unten) UND kein neuer Schritt in Stufe 1?
-  → update_walkthrough_data + record_slot NUR für diesen aktiven Schritt
-  → produce_briefing.next_focus = aktiver Schritt-Titel
-  → Backfill für andere Schritte: KEIN produce_briefing-Hinweis in diesem Turn
+STUFE 2 — SLOT-EXTRAKTION (immer, jede Phase):
+Hat der Mitarbeiter in diesem Turn einen Slot-Wert EXPLIZIT genannt (Zahl, System, Ja/Nein)?
+  → record_slot SOFORT, unabhängig von Phase und aktivem Schritt.
+  → NIEMALS warten bis slot_completion. Jeder genannte Wert wird in dem Turn erfasst, in dem er genannt wird.
+  → Gilt auch während walkthrough_step, process_loop, coverage_check, wrap_up.
+  → Spannen ("80 bis 100") → als estimate mit qualifier erfassen (siehe record_slot-Regeln unten).
 
-STUFE 3 — BACKFILL (nur wenn BEIDE Bedingungen erfüllt):
-  a) Phase = slot_completion ODER coverage_check (nicht walkthrough_step)
-  b) Kein neuer Schritt in diesem Turn registriert
-  → record_slot + produce_briefing mit Backfill-Fokus
-  Backfill-Regel: "Wenn frequency_per_month noch null → nachfragen"
-  gilt AUSSCHLIESSLICH in Phase slot_completion oder coverage_check
-  UND nur wenn kein neuer Schritt in diesem Turn registriert wurde.
+STUFE 3 — WALKTHROUGH-DATEN (ergänzend zu Stufe 2):
+Ein Schritt ist aktiv im Walkthrough UND kein neuer Schritt in Stufe 1?
+  → update_walkthrough_data für Prozessschritte, Reibungspunkte, Systeme.
+  → produce_briefing.next_focus = aktiver Schritt-Titel.
+
+STUFE 4 — BACKFILL-BRIEFING (nur in slot_completion / coverage_check):
+Alle noch-null Pflicht-Slots für ALLE registrierten Schritte in produce_briefing adressieren.
+  → produce_briefing.next_focus = fehlender Slot + Schritt-Titel.
 
 STUFE 4 — WRAP_UP: Clarification Cards für verbleibende Slot-Lücken
 
@@ -105,11 +110,13 @@ Richtig:  "Rechnungsbearbeitung: Eingang und Prüfung", "Monatsabschluss: Abstim
 Falsch:   "Rechnungsprüfung", "Rechnungsprüfung und Kontierung" (kein Parent-Kontext → Fragmentation)
 
 **record_slot**: Für jeden explizit genannten Wert:
-- frequency_per_month: Häufigkeitsangaben (umrechnen auf Monat)
-- duration_minutes: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände)
+- Spannen ("80 bis 100", "zwei bis drei Tage") → SOFORT erfassen mit confidence=estimate und qualifier="Spanne: <original>". Mittelwert als value: "80 bis 100" → 90. Zeitspannen in Minuten: "2–3 Tage à 8h" → 1200. NICHT warten bis der Talker nachhakt.
+- frequency_per_month: Häufigkeitsangaben (umrechnen auf Monat); Spannen sofort als estimate erfassen.
+- duration_minutes: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände); Spannen sofort als estimate erfassen.
 - rule_based: Aussagen zur Regelbasierung ("immer gleich", "variiert", "nach Schema")
 - data_sources: Genannte Systeme, Tools, Datenbanken — NUR via record_slot setzen. NIEMALS via update_walkthrough_data. friction_tools ist ein separates Feld und befüllt data_sources NICHT.
-- evidence_quote muss wörtliches Zitat aus dem Mitarbeiter-Statement sein
+- evidence_span (PFLICHT bei Online-Extraction aus aktuellem Turn): kurzer WÖRTLICHER Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Statement, z.B. "100", "5 Minuten", "SAP FI". KEIN Paraphrasieren — exakter Substring. Das System verifiziert die wörtliche Übereinstimmung und erweitert zum vollständigen Satz.
+- evidence_quote (NUR Fallback bei Catch-up aus historischem Turn): vollständiges Zitat + source_turn PFLICHT.
 - source_turn PFLICHT: Bei jedem record_slot-Call IMMER source_turn setzen (1-indexed Turn-Nummer).
   - Online-Extraction (aktueller Turn): source_turn = Anzahl bisheriger User-Turns + 1
   - Catch-up-Extraction aus historischem Kontext: source_turn = Turn-Nr. der User-Message aus der die Evidence stammt
@@ -126,11 +133,20 @@ den zurückgegebenen matched_title als step_title verwenden.
 **produce_briefing**: Als letzten Tool-Call aufrufen. Enthält next_focus, suggested_question und optional wrap_up_question_asked.
 
 ## Clarification Cards (nur bei Phase=wrap_up)
+PFLICHT: Durchsuche ALLE registrierten Schritte im step_tracker systematisch auf null-Pflicht-Slots.
+Dies ist unabhängig davon was im aktuellen Turn besprochen wurde — historische Lücken aus
+früheren Turns MÜSSEN hier erfasst werden.
+
+Prüfschema pro Schritt:
+- Ist frequency_per_month null? → SlotCard generieren.
+- Ist duration_minutes null? → SlotCard generieren.
+- Ist rule_based null? → SlotCard generieren.
+
 Generiere bis zu 8 ClarificationCards via produce_briefing.clarification_cards, priorisiert nach Use-Case-Relevanz:
 1. **SlotCards** (slot_key=frequency_per_month|duration_minutes|rule_based|error_rate_percent): Für jeden registrierten Schritt mit leerem Pflicht-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
 2. **OpenItemCards** (slot_key=open_item): Für erwähnte aber nicht registrierte Prozessschritte. options leer lassen — UI verwendet Ja/Nein/Manchmal.
 3. **QualitativeCards** (slot_key=qualitative, answer_type=multi): Für fehlenden Prozesskontext: Beteiligte, Systeme, Blockaden, Abstimmungsbedarf, Automatisierungspotenzial. options=[2-4 spezifische Antwortoptionen], letzter Eintrag="Weiß ich nicht".
-Wenn keine Lücken existieren: leeres Array zurückgeben.
+Wenn alle Pflicht-Slots gefüllt sind: leeres Array zurückgeben.
 
 ## Halluzinations-Guard
 Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fakten setzen.
@@ -153,7 +169,10 @@ Richtig: "Wie viele Stunden wendest du pro Monat dafür auf?"
 // ─── Clarification Cards Generation ──────────────────────────────────────────
 
 function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
-  return ctx.phase === 'wrap_up'
+  // Only at wrap_up, AND only if there are actually null mandatory slots to fill.
+  // Without the second guard, Analyst can generate empty arrays that suppress PROJ-23.
+  if (ctx.phase !== 'wrap_up') return false
+  return computeEmptyMandatorySlots(ctx.stepTracker).length > 0
 }
 
 function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; slot: string }[] {
@@ -180,6 +199,83 @@ export interface AnalystRunResult {
   toolCalls: AnalystToolCallRecord[]
 }
 
+// ─── Step Merger ──────────────────────────────────────────────────────────────
+
+const STATUS_RANK: Record<StepEntry['status'], number> = { done: 2, walkthrough: 1, exploring: 0 }
+
+/**
+ * Deterministically merges semantically equivalent fragmented steps.
+ * Uses groupSemanticSteps(threshold=0.2) — permissive to catch cross-context duplicates
+ * (e.g. "Debitorenbuchhaltung: Mahnprozess" + "Mahnwesen: Bearbeitung" → one step).
+ *
+ * Merge rules:
+ * - Canonical step = member with most filled mandatory slots (tie: first in group)
+ * - Slots: canonical wins, falls back to any non-null value in group
+ * - status: highest in group (done > walkthrough > exploring)
+ * - process_steps / friction_points / friction_tools: union, deduplicated
+ *
+ * Idempotent: running twice produces the same result.
+ * Called at the start of runAnalyst so the LLM sees a clean tracker.
+ */
+async function mergeFragmentedSteps(
+  interviewId: string,
+  tracker: StepEntry[],
+): Promise<{ merged: StepEntry[]; changed: boolean }> {
+  const groups = groupSemanticSteps(tracker, 0.2)
+  if (groups.every(g => g.length === 1)) return { merged: tracker, changed: false }
+
+  const ALL_SLOTS: SlotName[] = [...MANDATORY_SLOTS, ...OPTIONAL_SLOTS]
+
+  const merged: StepEntry[] = groups.map(group => {
+    if (group.length === 1) return group[0]
+
+    const canonical = group.reduce((best, s) => {
+      const sc = MANDATORY_SLOTS.filter(slot => s.slots[slot] !== null).length
+      const bc = MANDATORY_SLOTS.filter(slot => best.slots[slot] !== null).length
+      return sc > bc ? s : best
+    })
+
+    const slots = { ...canonical.slots }
+    for (const slot of ALL_SLOTS) {
+      if (slots[slot] === null) {
+        for (const s of group) {
+          if (s.slots[slot] !== null) { slots[slot] = s.slots[slot]; break }
+        }
+      }
+    }
+
+    const bestStatus = group.reduce(
+      (best, s) => STATUS_RANK[s.status] > STATUS_RANK[best] ? s.status : best,
+      'exploring' as StepEntry['status'],
+    )
+
+    const allProcessSteps = [...new Set(group.flatMap(s => s.process_steps ?? []))]
+    const allFrictionPoints = [...new Set(group.flatMap(s => s.friction_points ?? []))]
+    const allFrictionTools = [...new Set(group.flatMap(s => s.friction_tools ?? []))]
+
+    return {
+      ...canonical,
+      slots,
+      status: bestStatus,
+      process_steps: allProcessSteps.length > 0 ? allProcessSteps : canonical.process_steps,
+      friction_points: allFrictionPoints.length > 0 ? allFrictionPoints : canonical.friction_points,
+      friction_tools: allFrictionTools.length > 0 ? allFrictionTools : canonical.friction_tools,
+    }
+  })
+
+  const supabase = getSupabaseAdmin()
+  await supabase
+    .from('interview_state')
+    .update({
+      step_tracker: merged as unknown as import('@/lib/database.types').Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('interview_id', interviewId)
+
+  console.log(`[analyst] merged ${tracker.length} → ${merged.length} steps`)
+  return { merged, changed: true }
+}
+
 // ─── Main Analyst Function ────────────────────────────────────────────────────
 
 export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunResult> {
@@ -188,6 +284,17 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
   const model = resolveModel(modelString)
   const supabase = getSupabaseAdmin()
   const { interviewId, workspaceId } = opts.context
+
+  // Merge fragmented steps before building LLM context so the Analyst sees a clean
+  // tracker and generates correct clarification cards.
+  try {
+    const { merged, changed } = await mergeFragmentedSteps(interviewId, opts.context.stepTracker)
+    if (changed) {
+      opts = { ...opts, context: { ...opts.context, stepTracker: merged } }
+    }
+  } catch (err) {
+    console.error('[analyst] mergeFragmentedSteps failed (non-fatal):', err)
+  }
 
   const systemPrompt = buildAnalystSystemPrompt(opts.context)
 
@@ -278,7 +385,81 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
     throw err
   }
 
+  // Post-processing: deterministic data_sources backfill from friction_tools +
+  // extractions_log (type=tool). Analyst frequently forgets data_sources even
+  // when systems are explicitly named (eval 2026-06-03 Monatsabschluss case).
+  try {
+    await backfillDataSourcesFromMentions(interviewId)
+  } catch (err) {
+    console.error('[analyst] data_sources backfill failed:', err)
+  }
+
   return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
+}
+
+/**
+ * Backfill data_sources for steps where it's null but tool/system mentions exist.
+ * Sources (in priority order):
+ *   1. step.friction_tools (most specific)
+ *   2. extractions_log entries of type=tool (less precise — global, not step-scoped)
+ *
+ * Only fills steps where data_sources is null. Existing values are never overwritten.
+ * Sets confidence=unknown so downstream consumers can distinguish from
+ * Analyst-recorded values.
+ */
+async function backfillDataSourcesFromMentions(interviewId: string): Promise<void> {
+  const supabase = getSupabaseAdmin()
+  const { data: row } = await supabase
+    .from('interview_state')
+    .select('step_tracker, extractions_log')
+    .eq('interview_id', interviewId)
+    .maybeSingle()
+
+  if (!row) return
+  const tracker = (row.step_tracker as StepEntry[] | null) ?? []
+  if (tracker.length === 0) return
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extractions = (row.extractions_log as any[] | null) ?? []
+  const globalToolMentions: string[] = extractions
+    .filter((e) => e?.type === 'tool')
+    .map((e) => {
+      const c = e?.content as Record<string, unknown> | undefined
+      return typeof c?.name === 'string' ? (c.name as string) : ''
+    })
+    .filter((n) => n.length > 0)
+
+  let mutated = false
+  const updated = tracker.map((step) => {
+    if (step.slots.data_sources !== null) return step
+
+    const fromFriction = Array.isArray(step.friction_tools) ? step.friction_tools : []
+    const candidates = fromFriction.length > 0 ? fromFriction : globalToolMentions
+    const deduped = Array.from(new Set(candidates.map((s) => s.trim()).filter(Boolean)))
+    if (deduped.length === 0) return step
+
+    mutated = true
+    return {
+      ...step,
+      slots: {
+        ...step.slots,
+        data_sources: {
+          value: deduped,
+          quote: '[auto-backfill aus erwähnten Tools/Systemen]',
+          confidence: 'unknown' as const,
+        },
+      },
+    }
+  })
+
+  if (!mutated) return
+  await supabase
+    .from('interview_state')
+    .update({
+      step_tracker: updated as unknown as import('@/lib/database.types').Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('interview_id', interviewId)
 }
 
 /** Catch-up run: processes two turns at once when previous analyst run failed */

@@ -1,4 +1,4 @@
-import { tokenJaccard, colonParent } from '@/services/interviewAgent'
+import { groupSemanticSteps } from '@/services/interviewAgent'
 import type { StepEntry } from '@/services/interviewAgent'
 
 /**
@@ -13,19 +13,6 @@ export function scoreStepRegistrationCoverage(
   if (!expectedProcessCount || expectedProcessCount === 0) return 1.0
   if (stepTracker.length === 0) return 0
 
-  const groups: StepEntry[][] = []
-  for (const step of stepTracker) {
-    const parent = colonParent(step.title)
-    let idx = -1
-    if (parent !== null) {
-      idx = groups.findIndex(g => g.some(s => colonParent(s.title) === parent))
-    }
-    if (idx < 0) {
-      idx = groups.findIndex(g => g.some(s => tokenJaccard(s.title, step.title) >= 0.4))
-    }
-    if (idx >= 0) groups[idx].push(step)
-    else groups.push([step])
-  }
-
+  const groups = groupSemanticSteps(stepTracker) // default threshold 0.4
   return Math.min(groups.length / expectedProcessCount, 1.0)
 }

@@ -97,8 +97,15 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
   return missing
 }
 
+// Strip common German process noun suffixes from a single token.
+// Applied per-token in normalizedTokenSet to catch morphological variants:
+// "Mahnprozess" → "mahn", "Mahnwesen" → "mahn", "Rechnungsbearbeitung" → "rechnungs"
+export function normalizeToken(t: string): string {
+  return t.replace(/(prozess|wesen|ablauf|vorgang|schritt|bearbeitung|handling|verwaltung|management)$/i, '').trim()
+}
+
 // Normalize step title for semantic deduplication by stripping common German
-// process noun suffixes (e.g. "Mahnprozess" → "mahn", "Mahnwesen" → "mahn").
+// process noun suffixes from the whole string (used for substring-based dedup).
 function normalizeStepTitleForDedup(title: string): string {
   return title
     .trim()
@@ -131,8 +138,58 @@ export function tokenJaccard(a: string, b: string): number {
   return intersection / (ta.size + tb.size - intersection)
 }
 
+// Token set with per-token suffix normalization.
+// "Mahnprozess Bearbeitung" → {"mahn"} ("bearbeitung" strips to "" → filtered)
+function normalizedTokenSet(title: string): Set<string> {
+  const STOP = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
+  return new Set(
+    title.toLowerCase().replace(/[-().,&/: ]/g, ' ').split(/\s+/)
+      .map(t => normalizeToken(t))
+      .filter(t => t.length >= 4 && !STOP.has(t))
+  )
+}
+
+// Jaccard similarity using per-token suffix normalization.
+// Stronger than tokenJaccard: catches "Mahnprozess" ~ "Mahnwesen" (both → "mahn").
+export function tokenJaccardNorm(a: string, b: string): number {
+  const ta = normalizedTokenSet(a)
+  const tb = normalizedTokenSet(b)
+  if (ta.size === 0 || tb.size === 0) return 0
+  let intersection = 0
+  for (const t of ta) if (tb.has(t)) intersection++
+  return intersection / (ta.size + tb.size - intersection)
+}
+
+/**
+ * Groups semantically equivalent steps into clusters.
+ * Single source of truth for step deduplication and semantic grouping.
+ *
+ * Matching priority:
+ * 1. Shared colon-parent (deterministic, convention-based)
+ * 2. tokenJaccardNorm ≥ threshold (per-token normalized, catches morphological variants)
+ *
+ * threshold=0.4 for dedup (register_step, orchestrator phase logic)
+ * threshold=0.2 for merging/scoring (more permissive — retroactive fragmentation repair)
+ */
+export function groupSemanticSteps(tracker: StepEntry[], threshold = 0.4): StepEntry[][] {
+  const groups: StepEntry[][] = []
+  for (const step of tracker) {
+    const parent = colonParent(step.title)
+    let idx = -1
+    if (parent !== null) {
+      idx = groups.findIndex(g => g.some(s => colonParent(s.title) === parent))
+    }
+    if (idx < 0) {
+      idx = groups.findIndex(g => g.some(s => tokenJaccardNorm(s.title, step.title) >= threshold))
+    }
+    if (idx >= 0) groups[idx].push(step)
+    else groups.push([step])
+  }
+  return groups
+}
+
 // Fuzzy step title lookup for record_slot / update_walkthrough_data.
-// Exact match first; falls back to best tokenJaccard ≥ 0.4.
+// Exact match first; falls back to best tokenJaccardNorm ≥ 0.4.
 // Returns index in tracker, or -1 if not found.
 function findStepFuzzy(tracker: StepEntry[], stepTitle: string): number {
   const normalized = stepTitle.trim().toLowerCase()
@@ -141,10 +198,33 @@ function findStepFuzzy(tracker: StepEntry[], stepTitle: string): number {
   let bestScore = 0
   let bestIdx = -1
   for (let i = 0; i < tracker.length; i++) {
-    const score = tokenJaccard(tracker[i].title, stepTitle)
+    const score = tokenJaccardNorm(tracker[i].title, stepTitle)
     if (score > bestScore) { bestScore = score; bestIdx = i }
   }
   return bestScore >= 0.4 ? bestIdx : -1
+}
+
+/**
+ * Deterministically expand a verbatim span (e.g. "100", "5 Minuten") to the
+ * enclosing sentence(s) in the source text. Used by record_slot to derive a
+ * quote from a short LLM-provided span — eliminates LLM paraphrase drift.
+ *
+ * Algorithm: locate the span, walk left/right to the nearest sentence
+ * boundary (./?/!/\n), trim, cap at ~280 chars. Falls back to the raw span
+ * if no boundary is found.
+ */
+export function extractSentenceAroundSpan(text: string, span: string): string {
+  const idx = text.indexOf(span)
+  if (idx < 0) return span
+  const SENTENCE_END = /[.!?\n]/
+  let start = idx
+  while (start > 0 && !SENTENCE_END.test(text[start - 1])) start--
+  let end = idx + span.length
+  while (end < text.length && !SENTENCE_END.test(text[end])) end++
+  if (end < text.length) end++ // include terminator
+  const sentence = text.slice(start, end).trim()
+  if (sentence.length === 0) return span
+  return sentence.length > 280 ? sentence.slice(0, 280) : sentence
 }
 
 // Strip markdown headings and control characters from LLM-generated strings
@@ -163,20 +243,20 @@ function formatStepTracker(steps: StepEntry[]): string {
     const title = sanitizeForPrompt(step.title)
     const role = step.role ? sanitizeForPrompt(step.role) : null
 
+    // Fix 4 (ADR-015): mask raw slot values in the Talker-facing tracker.
+    // Status only — "✓ erfasst" or "fehlt". Prevents anchoring + self-calc.
     function fmtSlot(sv: SlotValue | null, label: string): string {
       if (!sv) return `  ${label}: fehlt`
-      const conf = sv.confidence ? ` [${sv.confidence}]` : ''
-      const qual = sv.qualifier ? ` ("${sv.qualifier}")` : ''
-      return `  ${label}: ${sv.value} ✓${conf}${qual}`
+      return `  ${label}: ✓ erfasst`
     }
 
     const slotLines = [
       fmtSlot(step.slots.frequency_per_month, 'frequency_per_month'),
       fmtSlot(step.slots.duration_minutes,    'duration_minutes   '),
-      `  rule_based:          ${step.slots.rule_based != null && step.slots.rule_based.value !== undefined ? `${step.slots.rule_based.value} ✓` : 'fehlt'}`,
+      `  rule_based:          ${step.slots.rule_based != null && step.slots.rule_based.value !== undefined ? '✓ erfasst' : 'fehlt'}`,
       fmtSlot(step.slots.data_sources,        'data_sources       '),
-      `  error_rate_percent:  ${step.slots.error_rate_percent ? `${step.slots.error_rate_percent.value} ✓` : 'fehlt'}`,
-      `  media_breaks:        ${step.slots.media_breaks ? `${step.slots.media_breaks.value} ✓` : 'fehlt'}`,
+      `  error_rate_percent:  ${step.slots.error_rate_percent ? '✓ erfasst' : 'fehlt'}`,
+      `  media_breaks:        ${step.slots.media_breaks ? '✓ erfasst' : 'fehlt'}`,
     ]
 
     const walkthrough: string[] = []
@@ -273,8 +353,9 @@ Kontextregel: Beschreibt die aktuelle Mitarbeiter-Antwort mehrere Prozesse, reco
 Ziel: Verbleibende Pflichtslots nachfragen (frequency_per_month, duration_minutes, rule_based, data_sources).
 Optional: media_breaks fragen wenn Prozess papier- oder systemintensiv erscheint ("Druckst du etwas aus?" / "Gibt es Schritte wo du zwischen Systemen wechselst?").
 Max. 2–3 fehlende Slots pro Turn — natürlicher Gesprächsfluss, kein Listenformat, keine Ankündigung.
-Spannen vor dem Erfassen konkretisieren. Konfidenz setzen: confirmed / estimate / unknown.
-data_sources-Fallback wenn keine Antwort: leeres Array setzen.`
+Spannen: NICHT mehr nachfragen wenn Slot bereits mit confidence=estimate erfasst ist. Nur bei echtem null.
+data_sources-Fallback wenn keine Antwort: leeres Array setzen.
+rule_based: Wenn nach walkthrough noch null → einmal direkt fragen: "Folgt dieser Prozess bei dir immer dem gleichen Schema, oder entscheidest du von Fall zu Fall?" Wenn Mitarbeiter ausweicht oder unklar antwortet: NICHT nochmals fragen — Clarification Card erledigt das am Ende.`
   }
 
   if (phase === 'coverage_check') {
@@ -322,6 +403,27 @@ const WALKTHROUGH_EXAMPLES = `
 // ─── Dynamic Context Builder ──────────────────────────────────────────────────
 // Exported so interviewTalker.ts (Iteration 3) can call it with Analyst briefing.
 
+// Fix 4 (ADR-015): semantic masking — Talker sees ONLY status labels, not
+// raw values. Prevents two failure modes observed in eval 2026-06-03:
+//   1. Anchoring ("halten wir 100 Rechnungen pro Monat fest")
+//   2. Self-calculation ("100 × 5min = 7.5 min average")
+// Raw values stay in the Analyst context where they are needed for extraction.
+function formatFilledSlotsSnapshot(steps: StepEntry[]): string {
+  const lines: string[] = []
+  for (const step of steps) {
+    const filledLabels: string[] = []
+    for (const [slot, sv] of Object.entries(step.slots) as [string, SlotValue | null][]) {
+      if (sv !== null && sv.value !== undefined && sv.value !== null) {
+        filledLabels.push(slot)
+      }
+    }
+    if (filledLabels.length > 0) {
+      lines.push(`- "${sanitizeForPrompt(step.title)}": ${filledLabels.map(s => `${s} ✓`).join(', ')}`)
+    }
+  }
+  return lines.join('\n')
+}
+
 export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBriefing | null): string {
   const focusLine = ctx.focusTopics
     ? `Fokusthemen (NUR interne Steuerung — im Opener niemals namentlich nennen): ${ctx.focusTopics}`
@@ -355,9 +457,10 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   let stepTrackerSection: string
   if (ctx.phase === 'walkthrough_step') {
     const filledLines = ctx.stepTracker.flatMap((step) => {
+      // Fix 4 (ADR-015): mask raw slot values — only show that the slot is filled.
       const filledSlots = (Object.entries(step.slots) as [string, SlotValue | null][])
         .filter(([, sv]) => sv !== null)
-        .map(([name, sv]) => `  ${name}: ${sv!.value} ✓`)
+        .map(([name]) => `  ${name}: ✓ erfasst`)
       if (filledSlots.length === 0 && !step.process_steps?.length && !step.friction_points?.length) return []
       const header = `[${step.status}] "${sanitizeForPrompt(step.title)}"${step.role ? ` (${sanitizeForPrompt(step.role)})` : ''}`
       const walkLines: string[] = []
@@ -380,6 +483,16 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   // Phase methodology injected per-turn (not in static prompt)
   const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase)}\n</methodology>`
 
+  // Kompakter Lookup für bereits erfasste Slots — in allen Phasen außer walkthrough_step
+  // (dort gibt es bereits den READ_ONLY_STATE Block).
+  let alreadyKnownSection = ''
+  if (ctx.phase !== 'walkthrough_step') {
+    const snapshot = formatFilledSlotsSnapshot(ctx.stepTracker)
+    if (snapshot.length > 0) {
+      alreadyKnownSection = `\n## Bereits erfasste Werte (NICHT erneut fragen)\n${snapshot}`
+    }
+  }
+
   // Analyst briefing section — advisory, not binding.
   // Talker may adapt the suggested question if it was already answered in the current turn.
   const briefingSection = briefing && (briefing.next_focus || briefing.suggested_question)
@@ -394,7 +507,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}
 
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${fewShotSection}${briefingSection}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}`
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
@@ -467,7 +580,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
                 return true
               }
             }
-            return tokenJaccard(s.title, title) >= 0.4
+            return tokenJaccardNorm(s.title, title) >= 0.4
           })
           if (duplicate) {
             return {
@@ -482,7 +595,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
 
           // Soft-warning: Jaccard 0.2–0.4 — likely fragmentation, force LLM to confirm
           const softSimilar = current
-            .map(s => ({ title: s.title, score: tokenJaccard(s.title, title) }))
+            .map(s => ({ title: s.title, score: tokenJaccardNorm(s.title, title) }))
             .filter(({ score }) => score >= 0.2 && score < 0.4)
             .map(({ title: t }) => t)
           if (softSimilar.length > 0) {
@@ -533,19 +646,43 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. In `walkthrough_step`: Nur aufrufen, wenn der Mitarbeiter den Wert spontan nannte. In `slot_completion` / `coverage_check`: Aktiv nach Werten fragen und erfassen. evidence_quote MUSS wörtliches Zitat sein. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat — auch nicht als estimate. Wenn der Mitarbeiter einen Wert verweigert ("ich weiß nicht", "kann ich nicht sagen", keine Antwort), diesen Slot NICHT füllen. confidence=confirmed: Mitarbeiter nannte exakten Wert. confidence=estimate: Mitarbeiter gab selbst eine Schätzung (Signalwörter: "ungefähr", "circa", "schätze mal", "so etwa"). confidence=unknown: nur wenn Mitarbeiter Wert indirekt erwähnte. source_turn: 1-indexed Turn-Nummer aus der die Evidence stammt. PFLICHT bei Catch-up-Extraction aus historischem Kontext. Bei Online-Extraction: aktueller Turn.',
+      description: 'Füllt einen Slot im Schritt-Tracker. EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn, z.B. "100", "5 Minuten", "SAP FI und Excel". Das System erweitert ihn deterministisch zum vollständigen Satz und speichert ihn als Beleg. Wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up aus historischem Kontext), nutze evidence_quote stattdessen + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. confidence=confirmed/estimate/unknown wie gehabt.',
       inputSchema: z.object({
         step_title: z.string().min(1),
         slot: z.enum(['frequency_per_month', 'duration_minutes', 'rule_based', 'data_sources', 'error_rate_percent', 'media_breaks']),
         value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]),
-        evidence_quote: z.string().min(3, 'evidence_quote muss ein wörtliches Zitat enthalten'),
+        evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus dem aktuellen Mitarbeiter-Turn. System extrahiert den umgebenden Satz als Beleg.'),
+        evidence_quote: z.string().min(3).optional().describe('Fallback wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up). Pflicht: source_turn setzen.'),
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
         qualifier: z.string().nullable().optional(),
         source_turn: z.number().int().positive().optional(),
       }),
-      execute: async ({ step_title, slot, value, evidence_quote, confidence, qualifier, source_turn }) => {
-        if (!evidence_quote || evidence_quote.trim().length < 3) {
-          return { success: false, error: 'evidence_quote fehlt oder zu kurz. Zitiere wörtlich aus der Mitarbeiter-Antwort.' }
+      execute: async ({ step_title, slot, value, evidence_span, evidence_quote, confidence, qualifier, source_turn }) => {
+        // Fix 3 (ADR-015): prefer deterministic span-based extraction.
+        const userInputText = currentUserInput?.trim() ?? ''
+        let resolvedQuote: string | null = null
+
+        if (evidence_span && evidence_span.trim().length >= 2) {
+          const span = evidence_span.trim()
+          if (userInputText.length > 0 && userInputText.includes(span)) {
+            // Expand span to the enclosing sentence(s) deterministically.
+            resolvedQuote = extractSentenceAroundSpan(userInputText, span)
+          } else {
+            return {
+              success: false,
+              error: `evidence_span "${span}" wurde nicht wörtlich im aktuellen Mitarbeiter-Turn gefunden. Übergib einen exakten Ausschnitt aus dem aktuellen Statement oder nutze evidence_quote + source_turn für historische Belege.`,
+            }
+          }
+        }
+
+        if (resolvedQuote === null) {
+          if (!evidence_quote || evidence_quote.trim().length < 3) {
+            return {
+              success: false,
+              error: 'Weder gültiges evidence_span noch evidence_quote übergeben. Bevorzugt: evidence_span (kurzer wörtlicher Ausschnitt aus aktuellem Turn).',
+            }
+          }
+          resolvedQuote = evidence_quote.trim()
         }
 
         // Per-slot type guards — return error so LLM corrects the call
@@ -562,7 +699,7 @@ export function buildTools(interviewId: string, workspaceId: string, currentUser
           return { success: false, error: `data_sources erwartet ein String-Array, z.B. ["SAP", "Excel"]. Nicht: "${value}".` }
         }
 
-        const verbatimQuote = currentUserInput?.trim() || evidence_quote
+        const verbatimQuote = resolvedQuote
 
         try {
           const { data: stateRow } = await supabase

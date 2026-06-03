@@ -96,28 +96,32 @@ describe('scorePhaseAdherence', () => {
     expect(scorePhaseAdherence(turns)).toBe(1.0)
   })
 
-  it('marks turn violating when agent asks direct slot question in walkthrough', () => {
+  it('first-time slot question in walkthrough is conforming (not re-asking)', () => {
+    // New semantics: first occurrence of a slot question is exploratory → not a violation.
     const turns = [
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie viele Rechnungen bearbeitest du pro Monat?' }),
+      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert dieser Schritt typischerweise?' }),
     ]
-    expect(scorePhaseAdherence(turns)).toBe(0)
+    expect(scorePhaseAdherence(turns)).toBe(1.0)
   })
 
-  it('detects "welche Systeme" pattern as violation', () => {
+  it('re-asking same slot type twice in walkthrough is a violation', () => {
+    // Second occurrence of the same pattern = re-asking a known slot → violation.
     const turns = [
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Welche Systeme nutzt du dabei?' }),
+      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert dieser Schritt typischerweise?' }),
+      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert das normalerweise?' }),
     ]
-    expect(scorePhaseAdherence(turns)).toBe(0)
+    // Turn 1: first occurrence → conforming. Turn 2: repeat → violating. 1/2 = 0.5
+    expect(scorePhaseAdherence(turns)).toBe(0.5)
   })
 
-  it('calculates mixed conformity correctly', () => {
+  it('calculates mixed conformity correctly — only counts re-asks as violations', () => {
     const turns = [
       makeTurn({ phase: 'walkthrough_step', agentText: 'Erzähl mir wie das abläuft.' }),
       makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert das typischerweise?' }),
       makeTurn({ phase: 'walkthrough_step', agentText: 'Was passiert danach?' }),
     ]
-    // 2 conforming, 1 violating → 2/3
-    expect(scorePhaseAdherence(turns)).toBeCloseTo(0.667, 2)
+    // All 3 turns conforming: no repeated slot patterns → 3/3 = 1.0
+    expect(scorePhaseAdherence(turns)).toBe(1.0)
   })
 })
 
@@ -167,7 +171,28 @@ describe('scoreToolCallPlausibility', () => {
     expect(scoreToolCallPlausibility(turns)).toBe(1.0)
   })
 
-  it('returns 1.0 when evidence_quote found in user input', () => {
+  it('returns 1.0 when evidence_quote found verbatim in user input (with source_turn)', () => {
+    const turns = [
+      makeTurn({
+        userInput: 'Ich bearbeite etwa 80 bis 100 Rechnungen pro Monat.',
+        toolCalls: [
+          {
+            toolName: 'record_slot',
+            args: {
+              step_title: 'Rechnungsprüfung',
+              slot: 'frequency_per_month',
+              value: 90,
+              evidence_quote: '80 bis 100 Rechnungen pro Monat',
+              source_turn: 1,
+            },
+          },
+        ],
+      }),
+    ]
+    expect(scoreToolCallPlausibility(turns)).toBe(1.0)
+  })
+
+  it('applies 0.9 penalty when source_turn missing but verbatim match found', () => {
     const turns = [
       makeTurn({
         userInput: 'Ich bearbeite etwa 80 bis 100 Rechnungen pro Monat.',
@@ -184,7 +209,30 @@ describe('scoreToolCallPlausibility', () => {
         ],
       }),
     ]
-    expect(scoreToolCallPlausibility(turns)).toBe(1.0)
+    expect(scoreToolCallPlausibility(turns)).toBe(0.9)
+  })
+
+  it('gives partial credit for paraphrased quote via token overlap', () => {
+    const turns = [
+      makeTurn({
+        userInput: 'Ich bearbeite etwa 80 bis 100 Rechnungen pro Monat aus unseren Eingangskanälen.',
+        toolCalls: [
+          {
+            toolName: 'record_slot',
+            args: {
+              step_title: 'Rechnungsprüfung',
+              slot: 'frequency_per_month',
+              value: 90,
+              evidence_quote: '100 Rechnungen Monat',
+              source_turn: 1,
+            },
+          },
+        ],
+      }),
+    ]
+    const score = scoreToolCallPlausibility(turns)
+    expect(score).toBeGreaterThan(0.3)
+    expect(score).toBeLessThan(1.0)
   })
 
   it('returns 0.0 when evidence_quote not in user input', () => {
@@ -216,18 +264,18 @@ describe('scoreToolCallPlausibility', () => {
     expect(scoreToolCallPlausibility(turns)).toBe(1.0)
   })
 
-  it('calculates partial plausibility across multiple calls', () => {
+  it('calculates partial plausibility across multiple calls (with source_turn)', () => {
     const turns = [
       makeTurn({
         userInput: 'Ich arbeite mit SAP FI und DocuWare.',
         toolCalls: [
           {
             toolName: 'record_slot',
-            args: { step_title: 'Step', slot: 'data_sources', value: 'SAP FI', evidence_quote: 'SAP FI' },
+            args: { step_title: 'Step', slot: 'data_sources', value: 'SAP FI', evidence_quote: 'SAP FI', source_turn: 1 },
           },
           {
             toolName: 'record_slot',
-            args: { step_title: 'Step', slot: 'rule_based', value: 'ja', evidence_quote: 'nie gesagt' },
+            args: { step_title: 'Step', slot: 'rule_based', value: 'ja', evidence_quote: 'nie gesagt', source_turn: 1 },
           },
         ],
       }),

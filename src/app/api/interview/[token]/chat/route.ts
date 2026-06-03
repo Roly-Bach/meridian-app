@@ -9,9 +9,16 @@ import {
   type StepEntry,
   type AnalystBriefing,
 } from '@/services/interviewAgent'
-import { decideNextPhase, checkLifecycle, type OrchestratorContext } from '@/services/interviewOrchestrator'
+import {
+  decideNextPhase,
+  checkLifecycle,
+  shouldInjectWrapUpQuestion,
+  WRAP_UP_QUESTION_TEXT,
+  type OrchestratorContext,
+} from '@/services/interviewOrchestrator'
 import { createTalkerStream } from '@/services/interviewTalker'
 import { runAnalyst, runAnalystCatchup } from '@/services/interviewAnalyst'
+import { runQuickExtract } from '@/services/interviewQuickExtract'
 import { extractAndEmbed, deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 import { clusterProcessSteps } from '@/services/processClustering'
@@ -232,10 +239,54 @@ export async function POST(
       .eq('interview_id', interview.id)
   }
 
+  // ── Fix 1 (ADR-015): Deterministic wrap_up question injection ───────────────
+  // When transitioning into wrap_up for the first time, skip the Talker and
+  // write the verbatim closing question as agent_response. This guarantees the
+  // question is asked exactly once and exactly as designed — no LLM paraphrase,
+  // no regex heuristic, no Analyst-flag race.
+  if (shouldInjectWrapUpQuestion(orchestratedPhase, history)) {
+    const agentText = WRAP_UP_QUESTION_TEXT
+    await supabase.from('turns').insert({
+      interview_id: interview.id,
+      turn_number: nextTurnNumber,
+      user_input,
+      agent_response: agentText,
+    })
+    // Stream the constant text back to the client without invoking the LLM.
+    const encoder = new TextEncoder()
+    const injectedStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(agentText))
+        controller.close()
+      },
+    })
+    return new Response(injectedStream, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+  }
+
+  // ── Fix 2 (ADR-015): Synchronous Pre-Talker Quick-Extract ─────────────────
+  // Closes the 1-turn race between Analyst (post-Talker, async) and the next
+  // Talker turn. Runs only when steps are already registered so it can never
+  // fragment the tracker. Failures are non-fatal — the full Analyst still runs.
+  // runQuickExtract returns fresh tracker when it made tool calls, null otherwise.
+  // Eliminates an extra DB round-trip on every turn.
+  let freshStepTracker = stepTracker
+  if (stepTracker.length > 0) {
+    const qeTracker = await runQuickExtract({
+      interviewId: interview.id,
+      workspaceId: interview.workspace_id,
+      userInput: user_input,
+      stepTracker,
+      currentTurnNumber: nextTurnNumber,
+    })
+    if (qeTracker !== null) freshStepTracker = qeTracker
+  }
+
   // ── Compute missing slots for slot_completion / coverage_check ──────────────
   const missingSlotsForCoverageCheck =
     orchestratedPhase === 'coverage_check' || orchestratedPhase === 'slot_completion'
-      ? computeMissingMandatorySlots(stepTracker)
+      ? computeMissingMandatorySlots(freshStepTracker)
       : undefined
 
   // ── Catch-up run detection (analyst_status='failed') ───────────────────────
@@ -263,7 +314,7 @@ export async function POST(
       topicsOpen: (state?.topics_open as string[] | null) ?? [],
       extractionsLog: currentLog,
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
-      stepTracker,
+      stepTracker: freshStepTracker,
       missingSlotsForCoverageCheck,
     },
     history,

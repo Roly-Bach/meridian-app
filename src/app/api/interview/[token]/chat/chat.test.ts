@@ -32,6 +32,10 @@ vi.mock('@/services/interviewAnalyst', () => ({
   runAnalystCatchup: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
 }))
 
+vi.mock('@/services/interviewQuickExtract', () => ({
+  runQuickExtract: vi.fn().mockResolvedValue(null),
+}))
+
 vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>()
   return {

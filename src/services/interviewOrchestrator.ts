@@ -1,4 +1,4 @@
-import { computeMissingMandatorySlots, MANDATORY_SLOTS, tokenJaccard, colonParent } from './interviewAgent'
+import { computeMissingMandatorySlots, MANDATORY_SLOTS, groupSemanticSteps } from './interviewAgent'
 import type { Phase, StepEntry, AnalystBriefing } from './interviewAgent'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,11 +26,31 @@ export interface LifecycleDecision {
 const PROCESS_LOOP_ESCAPE_HL = 20    // force walkthrough_step after ~10 turns
 const WALKTHROUGH_ESCAPE_HL = 28     // force slot_completion after ~14 turns
 const SLOT_COMPLETION_ESCAPE_HL = 32 // force coverage_check after ~16 turns
-const COVERAGE_CHECK_ESCAPE_HL = 40  // force wrap_up after ~20 turns
+const COVERAGE_CHECK_ESCAPE_HL_BASE = 40  // force wrap_up after ~20 turns (2 steps)
 
 // MAX_TURNS_HL: total history-length budget (2× turn count). Corresponds to
-// COVERAGE_CHECK_ESCAPE_HL + reserveTurns×2 for farewell/wrap_up buffer.
-const MAX_TURNS_HL = COVERAGE_CHECK_ESCAPE_HL + 10 // = 50 HL ≈ 25 turns
+// COVERAGE_CHECK_ESCAPE_HL_BASE + reserveTurns×2 for farewell/wrap_up buffer.
+const MAX_TURNS_HL_BASE = COVERAGE_CHECK_ESCAPE_HL_BASE + 10 // = 50 HL ≈ 25 turns
+
+/**
+ * Fix 5 (ADR-015): scale the coverage/wrap escape thresholds by the number of
+ * registered steps. Each step beyond the baseline of 2 buys 6 extra HL (≈3
+ * turns) so newly-discovered processes (e.g. Mahnwesen surfaced at wrap_up)
+ * still get a fair walkthrough budget before the timer-based hard stop.
+ *
+ * Cap: never exceeds the timer-based hard stop (maxDurationMinutes drives it,
+ * not historyLength), so this only matters before the timer fires.
+ */
+function dynamicCoverageEscapeHL(stepCount: number): number {
+  const baselineSteps = 2
+  const extraSteps = Math.max(0, stepCount - baselineSteps)
+  const extraHL = Math.min(extraSteps * 6, 20) // cap at +10 turns
+  return COVERAGE_CHECK_ESCAPE_HL_BASE + extraHL
+}
+
+function dynamicMaxTurnsHL(stepCount: number): number {
+  return dynamicCoverageEscapeHL(stepCount) + 10
+}
 
 /**
  * Computes how many history-length units (HL) the current walkthrough step
@@ -42,7 +62,7 @@ const MAX_TURNS_HL = COVERAGE_CHECK_ESCAPE_HL + 10 // = 50 HL ≈ 25 turns
  */
 function computeStepBudget(historyLength: number, completedSteps: number, totalTopics: number): number {
   const reserveHL = 10 // 5 turns × 2 for farewell + coverage_check buffer
-  const remainingBudgetHL = MAX_TURNS_HL - historyLength - reserveHL
+  const remainingBudgetHL = dynamicMaxTurnsHL(totalTopics) - historyLength - reserveHL
   const remainingSteps = Math.max(totalTopics - completedSteps, 1)
   const budgetHL = Math.floor(remainingBudgetHL / remainingSteps)
   const MIN_HL_PER_STEP = 6 // Floor: min 3 turns per step (3 turns × 2 HL)
@@ -92,34 +112,10 @@ function allStepsDone(tracker: StepEntry[]): boolean {
 }
 
 // Groups semantically equivalent steps and checks whether the union of mandatory
-// slots per group is complete. Resilient to step-name fragmentation.
-//
-// Grouping priority:
-// 1. Shared colon-parent ("Hauptprozess: X" + "Hauptprozess: Y" → same group).
-//    Convention-based, deterministic, generalizes across all personas.
-// 2. tokenJaccard ≥ 0.4 fallback for legacy/non-colon titles.
+// slots per group is complete. Uses groupSemanticSteps (single source of truth).
 function semanticAllStepsDone(tracker: StepEntry[]): boolean {
   if (tracker.length === 0) return false
-
-  const groups: StepEntry[][] = []
-  for (const step of tracker) {
-    const parent = colonParent(step.title)
-
-    let idx = -1
-    if (parent !== null) {
-      // Convention-based: match by shared colon-parent
-      idx = groups.findIndex(g => g.some(s => colonParent(s.title) === parent))
-    }
-    if (idx < 0) {
-      // Fallback: token similarity (catches pre-convention or colon-less duplicates)
-      idx = groups.findIndex(g => g.some(s => tokenJaccard(s.title, step.title) >= 0.4))
-    }
-
-    if (idx >= 0) groups[idx].push(step)
-    else groups.push([step])
-  }
-
-  return groups.every(group =>
+  return groupSemanticSteps(tracker).every(group =>
     MANDATORY_SLOTS.every(slot =>
       group.some(s => s.slots[slot] !== null)
     )
@@ -139,30 +135,44 @@ function allMandatorySlotsFilled(tracker: StepEntry[]): boolean {
   return tracker.length > 0 && computeMissingMandatorySlots(tracker).length === 0
 }
 
-/** Detect if the wrap-up closing question was asked (Iteration 2 heuristic for Trigger B). */
-function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content: string }[]): boolean {
-  const allAssistant = history.filter((t) => t.role === 'assistant')
+/**
+ * Deterministic wrap-up closing question. Injected verbatim by the orchestrator
+ * when the interview transitions into wrap_up — replaces LLM-generated wording.
+ * Constant exported so callers (route handler, eval runner) can write it as the
+ * agent_response of the question-turn without invoking the Talker.
+ */
+export const WRAP_UP_QUESTION_TEXT =
+  'Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute noch nicht erwähnt haben?'
 
-  // Primary: search full history — the question may have been asked many turns ago if a new
-  // process was discovered at wrap-up and then explored before the final goodbye.
-  const mandatoryQuestionAsked = allAssistant.some((t) => {
-    const lc = t.content.toLowerCase()
-    return (
-      lc.includes('letzte arbeitswoche') ||
-      lc.includes('nicht erwähnt haben') ||
-      lc.includes('wiederkehrend') ||
-      lc.includes('nicht besprochen') ||
-      lc.includes('nicht beleuchtet') ||
-      lc.includes('noch nicht erwähnt') ||
-      lc.includes('noch nicht besprochen') ||
-      lc.includes('noch nicht angesprochen') ||
-      lc.includes('fehlt noch') ||
-      lc.includes('gibt es noch etwas') ||
-      (lc.includes('gibt es') && lc.includes('noch etwas')) ||
-      (lc.includes('gibt es etwas') && lc.includes('nicht'))
-    )
-  })
-  return mandatoryQuestionAsked
+/**
+ * True iff the deterministic wrap-up question has been written to history.
+ * Replaces the previous regex heuristic that scanned for paraphrases.
+ * Match is exact (substring containment) on the constant above.
+ */
+export function wrapUpQuestionAlreadyAsked(
+  history: { role: 'user' | 'assistant'; content: string }[],
+): boolean {
+  const marker = WRAP_UP_QUESTION_TEXT.slice(0, 60) // tolerate trailing decoration
+  return history.some((t) => t.role === 'assistant' && t.content.includes(marker))
+}
+
+/**
+ * Decision whether the next turn should be a deterministic wrap-up question
+ * injection (no Talker call) or a normal Talker stream.
+ *
+ * Returns 'inject_question' iff:
+ *   - the resolved next phase is 'wrap_up'
+ *   - the deterministic question has NOT yet been written to history
+ *   - the most recent message in history is a user message (we owe a response)
+ */
+export function shouldInjectWrapUpQuestion(
+  nextPhase: ExtendedPhase,
+  history: { role: 'user' | 'assistant'; content: string }[],
+): boolean {
+  if (nextPhase !== 'wrap_up') return false
+  if (wrapUpQuestionAlreadyAsked(history)) return false
+  if (history.length === 0) return false
+  return history[history.length - 1].role === 'user'
 }
 
 // ─── Phase Invariants ─────────────────────────────────────────────────────────
@@ -173,7 +183,7 @@ function closingQuestionWasAsked(history: { role: 'user' | 'assistant'; content:
  * was detected (caller may use this to force-transition).
  */
 function assertPhaseInvariants(historyLength: number, startedSteps: number, totalTopics: number): boolean {
-  if (historyLength >= COVERAGE_CHECK_ESCAPE_HL - 4) {
+  if (historyLength >= dynamicCoverageEscapeHL(totalTopics) - 4) {
     const expectedMin = Math.max(totalTopics - 1, 1)
     if (startedSteps < expectedMin) {
       console.warn('[INVARIANT_VIOLATION] farewell approaching, steps under-started', {
@@ -258,23 +268,24 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
 
     case 'coverage_check':
       if (semanticAllStepsDone(ctx.stepTracker)) return 'wrap_up'
-      if (ctx.historyLength >= COVERAGE_CHECK_ESCAPE_HL) return 'wrap_up'
+      if (ctx.historyLength >= dynamicCoverageEscapeHL(totalTopics)) return 'wrap_up'
       return 'coverage_check'
 
     case 'wrap_up': {
       // Skip push-back once escape valve has already fired — committed to wrap_up.
       // Without this guard, the push-back defeats the coverage_check escape valve:
       // wrap_up → walkthrough_step → slot_completion → coverage_check → wrap_up → ∞
-      const escapeAlreadyFired = ctx.historyLength >= COVERAGE_CHECK_ESCAPE_HL
+      const escapeAlreadyFired = ctx.historyLength >= dynamicCoverageEscapeHL(totalTopics)
       // Only push back if there are genuinely uncovered semantic groups (not just fragmented duplicates)
       if (!escapeAlreadyFired && !semanticAllStepsDone(ctx.stepTracker)) {
         if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'walkthrough_step'
         if (hasStepInStatus(ctx.stepTracker, 'walkthrough')) return 'slot_completion'
       }
 
-      // Trigger B: Analyst confirmed (Iteration 3) or text heuristic (Iteration 2)
-      const questionAsked =
-        analystSuggestion?.wrap_up_question_asked === true || closingQuestionWasAsked(ctx.history)
+      // Trigger B: deterministic check — the orchestrator-injected wrap-up
+      // question must be present in history. wrap_up_question_asked flag from
+      // Analyst is no longer trusted (was fragile; Analyst could lie or forget).
+      const questionAsked = wrapUpQuestionAlreadyAsked(ctx.history)
 
       if (questionAsked && ctx.history.length > 0 && ctx.history[ctx.history.length - 1].role === 'user') {
         // Amendment A: if Analyst produced clarification_cards → clarification phase
@@ -338,8 +349,7 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
       return { shouldComplete: false, reason: null }
     }
 
-    const questionAsked =
-      analystSuggestion?.wrap_up_question_asked === true || closingQuestionWasAsked(ctx.history)
+    const questionAsked = wrapUpQuestionAlreadyAsked(ctx.history)
 
     if (questionAsked && ctx.history.length > 0 && ctx.history[ctx.history.length - 1].role === 'user') {
       // Don't complete if Analyst generated clarification_cards — go to clarification phase instead
