@@ -62,10 +62,10 @@ export function computeTurnBudget(maxDurationMinutes: number, stepCount = 2): Tu
 /**
  * Computes how many HL the current walkthrough step may consume before forced push.
  */
-function computeStepBudget(historyLength: number, completedSteps: number, budget: TurnBudget): number {
+function computeStepBudget(historyLength: number, completedSteps: number, totalTopics: number, budget: TurnBudget): number {
   const reserveHL = 10
   const remainingBudgetHL = budget.maxTurnsHL - historyLength - reserveHL
-  const remainingSteps = Math.max(budget.maxTurnsHL - completedSteps, 1)
+  const remainingSteps = Math.max(totalTopics - completedSteps, 1)
   const budgetHL = Math.floor(remainingBudgetHL / remainingSteps)
   const MIN_HL_PER_STEP = 6
   return Math.max(budgetHL, MIN_HL_PER_STEP)
@@ -237,7 +237,7 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       // Prevents depth-first starvation (B7): if agent drills one step too long, push forward.
       const completedSteps = ctx.stepTracker.filter(s => s.status === 'done').length
       const turnsUsed = estimateTurnsUsedOnCurrentStep(ctx.historyLength, completedSteps, budget)
-      const stepBudgetHL = computeStepBudget(ctx.historyLength, completedSteps, budget)
+      const stepBudgetHL = computeStepBudget(ctx.historyLength, completedSteps, Math.max(totalTopics, 1), budget)
       if (turnsUsed >= stepBudgetHL) return 'slot_completion'
 
       // Invariant violation: farewell approaching, force forward regardless of step state

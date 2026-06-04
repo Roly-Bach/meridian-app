@@ -238,7 +238,7 @@ PFLICHT: Nach Tool-Calls IMMER eine Textantwort generieren — auch nur ein Reak
 // Iteration 1 (ADR-011 D7): Max. 5 Zeilen pro Phase, taktisches Briefing.
 // Injected per-turn in buildDynamicContext so static prompt stays cacheable.
 
-function buildPhaseMethodology(phase: Phase): string {
+function buildPhaseMethodology(phase: Phase, hasExploringSteps = false): string {
   if (phase === 'intro') {
     return `## Methodik: intro
 Erkläre kurz den Gesprächszweck (Prozesswissen dokumentieren, vertraulich behandelt) und stelle eine offene Einstiegsfrage.
@@ -284,6 +284,14 @@ Neu genannte Prozesse direkt aufnehmen und explorieren.`
   }
 
   if (phase === 'clarification') {
+    if (hasExploringSteps) {
+      // Pt8: Late-topic routing — exploring steps exist, no clarification cards.
+      // Ask 1-2 targeted questions about the late-discovered topic, then wind down.
+      return `## Methodik: clarification (late topic)
+Ein neu genannter Prozessschritt wurde entdeckt. Stelle 1–2 gezielte Fragen dazu: Häufigkeit, Dauer, genutzte Systeme.
+Kein vollständiger Walkthrough nötig — kurze direkte Fragen, max. 2 Turns.
+Danach kurz verabschieden.`
+    }
     return `## Methodik: clarification
 Sage genau einmal: "Danke! Ich habe noch ein paar kurze Abschlussfragen für dich."
 Stelle keine weiteren Fragen — die Abschlussfragen erscheinen im Interface.`
@@ -426,7 +434,8 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   const fewShotSection = ctx.phase === 'walkthrough_step' ? WALKTHROUGH_EXAMPLES : ''
 
   // Phase methodology injected per-turn (not in static prompt)
-  const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase)}\n</methodology>`
+  const hasExploringSteps = ctx.stepTracker.some(s => s.status === 'exploring')
+  const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, hasExploringSteps)}\n</methodology>`
 
   // Kompakter Lookup für bereits erfasste Slots — in allen Phasen außer walkthrough_step
   // (dort gibt es bereits den READ_ONLY_STATE Block).
