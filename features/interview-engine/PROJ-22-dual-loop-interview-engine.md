@@ -573,7 +573,14 @@ Charge 3 Punkte 6–9 (Commit 73d00fd):
 | QA-C3-M1 | **Medium** | **Pt8 clarification-Methodik inkompatibel**: `buildPhaseMethodology('clarification')` sagt "Abschlussfragen erscheinen im Interface" (PROJ-23 Design). Late-discovered `exploring` Topics (Pt8-Pfad) haben keine clarification_cards → Talker sagt "Karten erscheinen" aber keine Karten vorhanden. Fix: Methodik konditionell auf Card-Vorhandensein oder separater Phase-Text für `late_topic`-Kontext. |
 | QA-C3-L1 | **Low** | **Anchoring-Check ignoriert `next_focus`**: `extractNumericTokens` läuft nur auf `briefing.suggested_question`, nicht auf `next_focus`. Zahlen in `next_focus` lösen keine Anchoring-Warnung aus. Low impact (next_focus selten mit rohen Zahlen). |
 
+### Re-QA nach Bug-Fixes (2026-06-04)
+
+| ID | Fix | Status |
+|----|-----|--------|
+| QA-C3-H1 | `computeStepBudget`: `totalTopics` Parameter ergänzt, Divisor korrekt. `stepBudgetHL(30min, 2steps, HL=22)` = 9 (war: 6) | ✅ Fixed |
+| QA-C3-M1 | `buildPhaseMethodology('clarification', hasExploringSteps=true)` → late-topic Methodik | ✅ Fixed |
+
 ### Production-Ready
 
-**NO** — QA-C3-H1 (High) offen: `computeStepBudget` Dynamic Budget defekt. Alle walkthrough Steps limitiert auf 3 Turns (MIN), unabhängig von Interview-Länge oder Step-Anzahl. Muss vor Deploy gefixt werden.
+**YES** — keine Critical/High Bugs offen. QA-C3-L1 (Low: `next_focus` anchoring) ist Beobachtungs-Gap, kein Fehler.
 
