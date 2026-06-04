@@ -646,6 +646,7 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
           value: deduped,
           quote: '[auto-backfill aus erwähnten Tools/Systemen]',
           confidence: 'unknown' as const,
+          writeSource: 'backfill' as const,
         },
       },
     }

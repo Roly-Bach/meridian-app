@@ -40,6 +40,8 @@ export interface SlotWriteEvent {
   sourceTurn?: number | null
   /** Short evidence quote / span if available */
   evidence?: string | null
+  /** True when a higher-priority source already owns this slot — write was rejected */
+  blocked?: boolean
 }
 
 // ── Langfuse singleton ──────────────────────────────────────────────────────

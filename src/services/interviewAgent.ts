@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { RawExtraction } from './extraction'
 import { emitSlotWrite } from './slotWriteTrail'
+import { canOverwrite, type WriteSource } from './slotConflictResolver'
 import {
   MANDATORY_SLOTS,
   OPTIONAL_SLOTS,
@@ -433,13 +434,17 @@ export function buildTools(
   interviewId: string,
   workspaceId: string,
   currentUserInput?: string,
-  opts?: { source?: 'quick' | 'analyst' },
+  opts?: {
+    source?: 'quick' | 'analyst' | 'analyst_online' | 'analyst_catchup'
+    /** When set, only tools whose names are in this list are included in the returned object. */
+    allowedTools?: string[]
+  },
 ) {
   const writeSource = opts?.source ?? 'analyst'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getSupabaseAdmin() as any
 
-  return {
+  const allTools = {
     update_topics: tool({
       description: 'Aktualisiert die Liste der abgedeckten und offenen Themen nach einem Turn.',
       inputSchema: z.object({
@@ -640,6 +645,27 @@ export function buildTools(
           const prevSlotValue = current[stepIndex].slots[slot]
           const isOverwrite = prevSlotValue !== null && prevSlotValue !== undefined
 
+          // Priority conflict check (ADR-016): block lower-priority writers
+          if (isOverwrite && !canOverwrite(prevSlotValue?.writeSource, writeSource as WriteSource)) {
+            emitSlotWrite({
+              ts: new Date().toISOString(),
+              interviewId,
+              source: writeSource,
+              stepTitle: current[stepIndex].title,
+              slot,
+              value,
+              prevValue: prevSlotValue?.value,
+              overwrite: true,
+              blocked: true,
+              sourceTurn: source_turn ?? null,
+              evidence: verbatimQuote,
+            }).catch(() => {})
+            return {
+              success: false,
+              error: `Slot "${slot}" already owned by higher-priority source "${prevSlotValue?.writeSource ?? 'unknown'}". Current source "${writeSource}" may not overwrite it.`,
+            }
+          }
+
           const updated = [...current]
           updated[stepIndex] = {
             ...updated[stepIndex],
@@ -649,6 +675,7 @@ export function buildTools(
               [slot]: {
                 value,
                 quote: verbatimQuote,
+                writeSource: writeSource as WriteSource,
                 ...(confidence !== undefined ? { confidence } : {}),
                 ...(qualifier !== undefined ? { qualifier } : {}),
               },
@@ -676,6 +703,7 @@ export function buildTools(
             stepTitle: updated[stepIndex].title,
             slot,
             value,
+            prevValue: prevSlotValue?.value,
             overwrite: isOverwrite,
             sourceTurn: source_turn ?? null,
             evidence: verbatimQuote,
@@ -790,7 +818,19 @@ export function buildTools(
       },
     }),
   }
+
+  // When allowedTools is specified, filter the returned tool map to only the requested tools.
+  // This lets analyst_catchup expose only record_slot + produce_briefing.
+  if (opts?.allowedTools) {
+    const allowed = new Set(opts.allowedTools)
+    return Object.fromEntries(
+      Object.entries(allTools).filter(([name]) => allowed.has(name))
+    ) as typeof allTools
+  }
+
+  return allTools
 }
+
 
 // ─── Stream Factory ───────────────────────────────────────────────────────────
 // Used by chat/start/reconnect routes (Iterations 1+2) and start/reconnect in Iteration 3.

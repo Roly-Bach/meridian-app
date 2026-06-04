@@ -23,6 +23,8 @@ export interface SlotValue {
   quote: string
   confidence?: 'confirmed' | 'estimate' | 'unknown'
   qualifier?: string | null
+  /** Which write path last successfully wrote this slot — used for conflict resolution */
+  writeSource?: 'analyst_catchup' | 'analyst_online' | 'quick' | 'backfill' | 'analyst'
 }
 
 export interface StepEntry {
