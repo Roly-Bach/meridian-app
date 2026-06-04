@@ -514,3 +514,66 @@ Charge 2 Punkte 3, 4, 5 + Charge 1 (Langfuse-Singleton-Hotfix):
 
 **YES** — keine Critical/High Bugs. QA-C2-M1 und QA-C2-M2 sind bekannte Designlimitierungen, kein Datenverlust. QA-C2-L1/L2 haben Graceful-Degradation.
 
+---
+
+## QA Test Results — Charge 3 Stability Hardening (2026-06-04)
+
+> **QA Datum:** 2026-06-04 | **Status:** In Review (High Bug offen) | **Bugs:** 1:1:1
+
+### Scope
+
+Charge 3 Punkte 6–9 (Commit 73d00fd):
+
+| Punkt | Inhalt |
+|-------|--------|
+| Pt6 | `computeTurnBudget` — alle HL-Schwellenwerte aus `maxDurationMinutes` |
+| Pt7 | Anchoring-Detect: `extractNumericTokens` + `detectNumberAnchoring` + Prompt-Injection |
+| Pt8 | Late-Topic (exploring in wrap_up) → `clarification` statt `walkthrough_step` |
+| Pt9 | `generateObject`+Zod in `createProcessStepsFromTracker`; null-embedding guard in `processClustering` |
+
+### Acceptance Criteria — Testergebnis
+
+| # | Check | Status | Notiz |
+|---|-------|--------|-------|
+| 1 | Pt6: 30-min Budget identisch mit alten Konstanten (20/28/32/40/50) | ✅ PASS | Exakter Match durch Ratio-Berechnung |
+| 2 | Pt6: 15-min und 45-min Budgets skalieren proportional | ✅ PASS | 6 Unit-Tests alle grün |
+| 3 | Pt6: `computeStepBudget` nutzt dynamisches Per-Step-Budget | ❌ FAIL | **Bug H1** — `remainingSteps` nutzt `budget.maxTurnsHL` statt `totalTopics` |
+| 4 | Pt7: `extractNumericTokens` extrahiert Integer + Dezimalzahlen | ✅ PASS | 6 Unit-Tests |
+| 5 | Pt7: `detectNumberAnchoring` erkennt Zahlen-Re-Quote in Fragen | ✅ PASS | 5 Unit-Tests |
+| 6 | Pt7: Anchoring-Warnung in `buildDynamicContext` bei Briefing-Zahlen | ✅ PASS | Prompt-Injection korrekt |
+| 7 | Pt7: `onFinish` loggt Anchoring-Verletzungen | ✅ PASS | Console.warn ausgelöst |
+| 8 | Pt8: wrap_up + exploring → `clarification` (nicht `walkthrough_step`) | ✅ PASS | 2 Regression-Tests grün |
+| 9 | Pt8: `clarification`-Methodik für late-topic tauglich | ❌ FAIL | **Bug M1** — Methodik sagt "Karten erscheinen im Interface", aber keine Cards vorhanden |
+| 10 | Pt9: `generateObject`+Zod ersetzt `generateText`+JSON.parse | ✅ PASS | Zod-Schema validiert output |
+| 11 | Pt9: `generateObject` Fallback bei API-Fehler | ✅ PASS | `try/catch` → null description |
+| 12 | Pt9: null-embedding guard in `processClustering` | ✅ PASS | `filter` vor `computeCentroid` |
+| 13 | Vitest: 436 Tests grün (+11 neue) | ✅ PASS | 35 Test-Files |
+
+### Neue Tests (Charge 3 QA)
+
+| Datei | Tests | Abdeckung |
+|-------|-------|-----------|
+| `interviewAgent.test.ts` (+11) | 11 | `extractNumericTokens` (6), `detectNumberAnchoring` (5) |
+| `interviewOrchestrator.test.ts` (+8) | 8 | Pt8 Late-Topic (2), Pt6 TurnBudget (6) |
+
+### Security Audit (Charge 3)
+
+| Check | Status |
+|-------|--------|
+| `computeTurnBudget`: nur serverside, kein Client-Input | ✅ |
+| `detectNumberAnchoring`: pure function, kein I/O | ✅ |
+| `generateObject` + Zod: Schema validiert LLM-Output vor DB-Insert | ✅ |
+| `anchorWarning` im Prompt: nur Advisory-Text, kein Control-Flow | ✅ |
+
+### Bugs (Charge 3)
+
+| ID | Severity | Beschreibung |
+|----|----------|-------------|
+| QA-C3-H1 | **High** | **`computeStepBudget` Bug**: Zeile 68 `interviewOrchestrator.ts` nutzt `budget.maxTurnsHL` (=50) statt `totalTopics` (=2) als `remainingSteps`-Divisor. Effekt: Für 30-min/2-Step-Interview `budgetHL = floor(18/50) = 0 → MIN=6 HL` statt korrekt `floor(18/2) = 9 HL`. Dynamic Per-Step-Budget komplett inaktiv; immer MIN=3 Turns/Step. Eingeführt beim Pt6-Refactoring. Fix: `computeStepBudget` braucht `totalTopics`-Parameter. |
+| QA-C3-M1 | **Medium** | **Pt8 clarification-Methodik inkompatibel**: `buildPhaseMethodology('clarification')` sagt "Abschlussfragen erscheinen im Interface" (PROJ-23 Design). Late-discovered `exploring` Topics (Pt8-Pfad) haben keine clarification_cards → Talker sagt "Karten erscheinen" aber keine Karten vorhanden. Fix: Methodik konditionell auf Card-Vorhandensein oder separater Phase-Text für `late_topic`-Kontext. |
+| QA-C3-L1 | **Low** | **Anchoring-Check ignoriert `next_focus`**: `extractNumericTokens` läuft nur auf `briefing.suggested_question`, nicht auf `next_focus`. Zahlen in `next_focus` lösen keine Anchoring-Warnung aus. Low impact (next_focus selten mit rohen Zahlen). |
+
+### Production-Ready
+
+**NO** — QA-C3-H1 (High) offen: `computeStepBudget` Dynamic Budget defekt. Alle walkthrough Steps limitiert auf 3 Turns (MIN), unabhängig von Interview-Länge oder Step-Anzahl. Muss vor Deploy gefixt werden.
+

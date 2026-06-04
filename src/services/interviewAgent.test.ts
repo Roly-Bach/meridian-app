@@ -12,6 +12,8 @@ import {
   computeMissingMandatorySlots,
   MANDATORY_SLOTS,
   buildTools,
+  extractNumericTokens,
+  detectNumberAnchoring,
   type StepEntry,
 } from './interviewAgent'
 
@@ -49,6 +51,65 @@ function makeFilledStep(overrides: Partial<StepEntry> = {}): StepEntry {
     ...overrides,
   })
 }
+
+// ─── extractNumericTokens + detectNumberAnchoring (Pt7) ──────────────────────
+
+describe('extractNumericTokens', () => {
+  it('extracts standalone integers', () => {
+    expect(extractNumericTokens('Wie oft? Etwa 20 mal pro Monat.')).toEqual(['20'])
+  })
+
+  it('extracts decimal numbers with dot', () => {
+    expect(extractNumericTokens('ca. 1.5 Stunden')).toContain('1.5')
+  })
+
+  it('extracts decimal numbers with comma (German locale)', () => {
+    expect(extractNumericTokens('ca. 1,5 Stunden')).toContain('1,5')
+  })
+
+  it('deduplicates repeated numbers', () => {
+    const result = extractNumericTokens('20 Rechnungen oder 20 Vorgänge')
+    expect(result.filter(n => n === '20').length).toBe(1)
+  })
+
+  it('returns empty array for text without numbers', () => {
+    expect(extractNumericTokens('Wie oft passiert das?')).toEqual([])
+  })
+
+  it('returns empty array for empty string', () => {
+    expect(extractNumericTokens('')).toEqual([])
+  })
+})
+
+describe('detectNumberAnchoring', () => {
+  it('detects when Talker re-quotes a briefing number in a question', () => {
+    const talker = 'Du hast vorhin den Prozess beschrieben. Passiert das etwa 20 mal pro Monat?'
+    const briefing = 'Frage nach Häufigkeit — ca. 20 mal pro Monat'
+    expect(detectNumberAnchoring(talker, briefing)).toContain('20')
+  })
+
+  it('does NOT flag number that appears only in a statement, not a question', () => {
+    const talker = 'Du hast 20 Vorgänge erwähnt. Wie oft passiert das genau?'
+    const briefing = 'Häufigkeit: ca. 20 mal'
+    // "20" appears in a non-question sentence
+    expect(detectNumberAnchoring(talker, briefing)).toEqual([])
+  })
+
+  it('returns empty array when briefing has no numbers', () => {
+    const talker = 'Wie oft machst du das pro Monat?'
+    expect(detectNumberAnchoring(talker, 'Frage nach Häufigkeit des Prozesses')).toEqual([])
+  })
+
+  it('returns empty array when Talker does not re-quote the number', () => {
+    const talker = 'Wie oft passiert das ungefähr?'
+    expect(detectNumberAnchoring(talker, 'ca. 15 mal pro Woche')).toEqual([])
+  })
+
+  it('does NOT flag when Talker asks open question without number', () => {
+    const talker = 'Wie lange dauert dieser Schritt in der Regel?'
+    expect(detectNumberAnchoring(talker, 'Dauer ca. 30 Minuten')).toEqual([])
+  })
+})
 
 // ─── computeMissingMandatorySlots ─────────────────────────────────────────────
 
