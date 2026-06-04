@@ -24,12 +24,15 @@ vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
     ...actual,
     checkLifecycle: vi.fn().mockReturnValue({ shouldComplete: false, reason: null }),
     decideNextPhase: vi.fn().mockImplementation((ctx: import('@/services/interviewOrchestrator').OrchestratorContext) => ctx.phase),
+    decideNextPhaseWithMeta: vi.fn().mockImplementation((ctx: import('@/services/interviewOrchestrator').OrchestratorContext) => ({ phase: ctx.phase, phaseJustEntered: null })),
   }
 })
 
 vi.mock('@/services/interviewAnalyst', () => ({
   runAnalyst: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
+  runAnalystOnline: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
   runAnalystCatchup: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
+  runAnalystFailureRetry: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
 }))
 
 vi.mock('@/services/interviewQuickExtract', () => ({

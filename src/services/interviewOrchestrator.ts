@@ -305,6 +305,28 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
   }
 }
 
+export interface PhaseDecisionMeta {
+  phase: ExtendedPhase
+  /**
+   * The phase that was just entered this turn (i.e. the previous phase differed
+   * from the resolved phase). Null when the phase stays the same.
+   */
+  phaseJustEntered: Phase | null
+}
+
+/**
+ * Wrapper around decideNextPhase that also signals when a phase transition
+ * happened. Used by the route handler to trigger analyst_catchup on
+ * coverage_check / wrap_up entry.
+ */
+export function decideNextPhaseWithMeta(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): PhaseDecisionMeta {
+  const phase = decideNextPhase(ctx, analystSuggestion)
+  const phaseJustEntered = (phase !== ctx.phase && phase !== 'completed')
+    ? (phase as Phase)
+    : null
+  return { phase, phaseJustEntered }
+}
+
 /**
  * Decides whether the interview should be completed this turn.
  * Returns shouldComplete=true for both Hard-Stop (timer) and Soft-Confirm (wrap-up heuristic).

@@ -10,14 +10,14 @@ import {
   type AnalystBriefing,
 } from '@/services/interviewAgent'
 import {
-  decideNextPhase,
+  decideNextPhaseWithMeta,
   checkLifecycle,
   shouldInjectWrapUpQuestion,
   WRAP_UP_QUESTION_TEXT,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
 import { createTalkerStream } from '@/services/interviewTalker'
-import { runAnalyst, runAnalystCatchup } from '@/services/interviewAnalyst'
+import { runAnalystOnline, runAnalystCatchup, runAnalystFailureRetry } from '@/services/interviewAnalyst'
 import { runQuickExtract } from '@/services/interviewQuickExtract'
 import { extractAndEmbed, deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
@@ -227,7 +227,7 @@ export async function POST(
   }
 
   // Decide phase for this turn
-  const nextPhaseDecision = decideNextPhase(orchestratorCtx, analystBriefing)
+  const { phase: nextPhaseDecision, phaseJustEntered } = decideNextPhaseWithMeta(orchestratorCtx, analystBriefing)
   // 'completed' means lifecycle.shouldComplete should have caught it above; treat as wrap_up for safety
   const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
 
@@ -414,7 +414,7 @@ export async function POST(
       if (needsCatchup && existingTurns.length >= 2) {
         // Catch-up: previous analyst failed, process two turns at once
         const prevUserInput = existingTurns[existingTurns.length - 1]?.user_input ?? ''
-        await runAnalystCatchup({
+        await runAnalystFailureRetry({
           context: {
             interviewId: interview.id,
             workspaceId: interview.workspace_id,
@@ -436,29 +436,54 @@ export async function POST(
           traceCtx: { interviewId: interview.id, environment: 'prod' },
         })
       } else {
-        await runAnalyst({
-          context: {
-            interviewId: interview.id,
-            workspaceId: interview.workspace_id,
-            employeeName: interview.employee_name,
-            employeeRole: interview.employee_role,
-            department: interview.department,
-            focusTopics: interview.focus_topics,
-            phase: orchestratedPhase,
-            timerMinutes,
-            topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-            topicsOpen: (state?.topics_open as string[] | null) ?? [],
-            extractionsLog: currentLog,
-            maxDurationMinutes: interview.max_duration_minutes ?? 30,
-            stepTracker: freshStepTracker,
-          },
+        const sharedContext = {
+          interviewId: interview.id,
+          workspaceId: interview.workspace_id,
+          employeeName: interview.employee_name,
+          employeeRole: interview.employee_role,
+          department: interview.department,
+          focusTopics: interview.focus_topics,
+          phase: orchestratedPhase,
+          timerMinutes,
+          topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+          topicsOpen: (state?.topics_open as string[] | null) ?? [],
+          extractionsLog: currentLog,
+          maxDurationMinutes: interview.max_duration_minutes ?? 30,
+          stepTracker: freshStepTracker,
+        }
+
+        // Online analyst: extracts from current turn only
+        await runAnalystOnline({
+          context: sharedContext,
           history: analystHistory,
           currentUserInput: user_input,
           traceCtx: { interviewId: interview.id, environment: 'prod' },
         })
+
+        // History catchup: runs once when entering coverage_check or wrap_up.
+        // Fills slots mentioned in earlier turns but not yet recorded.
+        // Idempotency: phaseJustEntered is non-null only on the turn where the
+        // phase changes — so this fires at most once per phase transition.
+        const shouldRunCatchup =
+          phaseJustEntered === 'coverage_check' || phaseJustEntered === 'wrap_up'
+        if (shouldRunCatchup) {
+          // Reload step_tracker after online analyst to get freshest slots
+          const { data: postOnlineStateRow } = await adminDb
+            .from('interview_state')
+            .select('step_tracker')
+            .eq('interview_id', interview.id)
+            .maybeSingle()
+          const postOnlineTracker = (postOnlineStateRow?.step_tracker as StepEntry[] | null) ?? freshStepTracker
+
+          await runAnalystCatchup({
+            context: { ...sharedContext, stepTracker: postOnlineTracker },
+            history: analystHistory,
+            currentUserInput: user_input,
+            traceCtx: { interviewId: interview.id, environment: 'prod' },
+          })
+        }
       }
     } catch (err) {
-      // runAnalyst already writes analyst_status='failed' on error
       console.error('[analyst] background run error:', err)
     }
   })

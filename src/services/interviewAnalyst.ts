@@ -62,13 +62,27 @@ const AnalystBriefingSchema = z.object({
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
-function buildAnalystSystemPrompt(ctx: InterviewContext): string {
+/**
+ * Online mode addition: prepended to the standard prompt to restrict the Analyst
+ * to extracting only from the current (latest) user turn.
+ */
+const ONLINE_MODE_PREFIX = `ONLINE-MODUS — strikte Regeln:
+- Extrahiere NUR aus dem aktuellen (letzten) Mitarbeiter-Statement.
+- KEINE Catch-up-Extraktion aus früheren Turns.
+- evidence_quote MUSS ein wörtlicher Ausschnitt aus dem AKTUELLEN Statement sein.
+- Bevorzuge evidence_span — kurzer wörtlicher Span aus dem aktuellen Turn.
+
+`
+
+function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' | 'default' = 'default'): string {
   const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
   const activeStepLine = activeStep
     ? `Aktiv im Walkthrough: "${activeStep.title}" (Status: ${activeStep.status})`
     : 'Aktiv im Walkthrough: keiner — bereit für neue Step-Registration oder Backfill'
 
-  return `Du bist Interview-Analyst für ein laufendes Mitarbeiter-Interview. Deine Aufgabe: strukturierte Wissens-Extraktion nach jedem Mitarbeiter-Turn.
+  const modePrefix = mode === 'online' ? ONLINE_MODE_PREFIX : ''
+
+  return `${modePrefix}Du bist Interview-Analyst für ein laufendes Mitarbeiter-Interview. Deine Aufgabe: strukturierte Wissens-Extraktion nach jedem Mitarbeiter-Turn.
 
 Sprache des Interviews: Deutsch.
 
@@ -277,27 +291,81 @@ async function mergeFragmentedSteps(
   return { merged, changed: true }
 }
 
-// ─── Main Analyst Function ────────────────────────────────────────────────────
+// ─── Catchup System Prompt ────────────────────────────────────────────────────
 
-export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunResult> {
+function buildCatchupSystemPrompt(ctx: InterviewContext): string {
+  const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
+  const activeStepLine = activeStep
+    ? `Aktiv im Walkthrough: "${activeStep.title}" (Status: ${activeStep.status})`
+    : 'Aktiv im Walkthrough: keiner'
+
+  return `Du bist Interview-Analyst im Catch-up-Modus. Deine Aufgabe: nachzuholende Slots aus dem GESAMTEN Gesprächsverlauf extrahieren.
+
+CATCHUP-MODUS — strikte Regeln:
+- Analysiere alle User-Turns in der History auf verpasste Slot-Werte.
+- Jeder record_slot-Call MUSS evidence_quote UND source_turn enthalten (source_turn = 1-indexed Nummer des User-Turns aus dem die Evidence stammt).
+- evidence_span ist NICHT gültig im Catchup — nutze stets evidence_quote + source_turn.
+- KEINE register_step-Calls — nur record_slot und produce_briefing sind verfügbar.
+- KEINE update_walkthrough_data — nur record_slot und produce_briefing.
+- KEIN update_topics — wird nicht benötigt.
+- Extrahiere nur explizit genannte Werte, keine Inferenzen.
+
+## Tool-Aufruf-Reihenfolge
+1. record_slot für jeden verpassten Slot in chronologischer Turn-Reihenfolge
+2. produce_briefing als letzter Call
+
+## Aktueller Kontext
+- Interview ID: ${ctx.interviewId}
+- Phase: ${ctx.phase}
+- Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
+- Abteilung: ${ctx.department}
+- Step-Tracker: ${ctx.stepTracker.length} Steps registriert
+- ${activeStepLine}
+`
+}
+
+// ─── Internal Core ────────────────────────────────────────────────────────────
+
+interface RunAnalystCoreOptions extends AnalystRunOptions {
+  /** Prompt mode: 'online' restricts extraction to the current turn; 'default' is unrestricted. */
+  promptMode?: 'online' | 'default'
+  /** Source marker written to the slot-write trail. */
+  writeSource?: 'analyst' | 'analyst_online' | 'analyst_catchup'
+  /** When set, only these tools are exposed to the LLM (allowedTools filter). */
+  allowedTools?: string[]
+  /** When true, skip step-merger (catchup mode should not mutate tracker before history scan). */
+  skipMerge?: boolean
+}
+
+/**
+ * Core analyst runner — shared implementation. Public variants (runAnalystOnline,
+ * runAnalystCatchup, runAnalyst) call this with appropriate options.
+ */
+async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunResult> {
   const modelString =
     process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
   const model = resolveModel(modelString)
   const supabase = getSupabaseAdmin()
   const { interviewId, workspaceId } = opts.context
+  const promptMode = opts.promptMode ?? 'default'
+  const writeSource = opts.writeSource ?? 'analyst'
 
-  // Merge fragmented steps before building LLM context so the Analyst sees a clean
-  // tracker and generates correct clarification cards.
-  try {
-    const { merged, changed } = await mergeFragmentedSteps(interviewId, opts.context.stepTracker)
-    if (changed) {
-      opts = { ...opts, context: { ...opts.context, stepTracker: merged } }
+  if (!opts.skipMerge) {
+    // Merge fragmented steps before building LLM context so the Analyst sees a clean
+    // tracker and generates correct clarification cards.
+    try {
+      const { merged, changed } = await mergeFragmentedSteps(interviewId, opts.context.stepTracker)
+      if (changed) {
+        opts = { ...opts, context: { ...opts.context, stepTracker: merged } }
+      }
+    } catch (err) {
+      console.error('[analyst] mergeFragmentedSteps failed (non-fatal):', err)
     }
-  } catch (err) {
-    console.error('[analyst] mergeFragmentedSteps failed (non-fatal):', err)
   }
 
-  const systemPrompt = buildAnalystSystemPrompt(opts.context)
+  const systemPrompt = promptMode === 'default'
+    ? buildAnalystSystemPrompt(opts.context, 'default')
+    : buildAnalystSystemPrompt(opts.context, 'online')
 
   // Messages: full history as analyst context
   const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
@@ -308,7 +376,10 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
     suggested_question: '',
   }
 
-  const knowledgeTools = buildTools(interviewId, workspaceId, opts.currentUserInput, { source: 'analyst' })
+  const knowledgeTools = buildTools(interviewId, workspaceId, opts.currentUserInput, {
+    source: writeSource,
+    allowedTools: opts.allowedTools,
+  })
 
   const produceBriefingTool = tool({
     description: 'Generates the briefing for the next Talker turn. Call LAST, after all knowledge tools. Called exactly once.',
@@ -398,6 +469,131 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
   return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Online analyst — default path, runs after every user turn.
+ * Extracts knowledge ONLY from the current user statement.
+ * System prompt explicitly forbids catch-up extraction from prior turns.
+ * evidence_quote must be a verbatim span from the current user input.
+ */
+export async function runAnalystOnline(opts: AnalystRunOptions): Promise<AnalystRunResult> {
+  return runAnalystCore({ ...opts, promptMode: 'online', writeSource: 'analyst_online' })
+}
+
+/**
+ * Catchup analyst — triggered on phase entry of coverage_check or wrap_up.
+ * Scans the full conversation history for missed slot values.
+ * Only record_slot and produce_briefing are available (no register_step, no update_walkthrough_data).
+ * Every record_slot call MUST include evidence_quote + source_turn.
+ */
+export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<AnalystRunResult> {
+  const { interviewId, workspaceId } = opts.context
+  const modelString =
+    process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
+  const model = resolveModel(modelString)
+  const supabase = getSupabaseAdmin()
+  const isGoogleModel = modelString.startsWith('google/')
+
+  const systemPrompt = buildCatchupSystemPrompt(opts.context)
+  const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
+
+  let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
+
+  // Catchup only gets record_slot + produce_briefing — no structural tools
+  const knowledgeTools = buildTools(interviewId, workspaceId, undefined, {
+    source: 'analyst_catchup',
+    allowedTools: ['record_slot'],
+  })
+
+  const produceBriefingTool = tool({
+    description: 'Generates the briefing for the next Talker turn. Call LAST. Called exactly once.',
+    inputSchema: AnalystBriefingSchema,
+    execute: async (briefing) => {
+      capturedBriefing = briefing as AnalystBriefing
+      const shouldHaveCards = shouldGenerateClarificationCards(opts.context)
+      if (!shouldHaveCards) {
+        capturedBriefing = { ...capturedBriefing, clarification_cards: undefined }
+      }
+      try {
+        await supabase
+          .from('interviews')
+          .update({
+            next_briefing: capturedBriefing as unknown as import('@/lib/database.types').Json,
+            analyst_status: 'done',
+          })
+          .eq('id', interviewId)
+      } catch (err) {
+        console.error('[analyst:catchup] produce_briefing DB write failed:', err)
+      }
+      return { success: true }
+    },
+  })
+
+  const catchupTools = { ...knowledgeTools, produce_briefing: produceBriefingTool }
+
+  let capturedToolCalls: AnalystToolCallRecord[] = []
+
+  try {
+    const genResult = await generateText({
+      model,
+      system: systemPrompt,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      messages: messages as any,
+      tools: catchupTools,
+      stopWhen: stepCountIs(15),
+      ...(isGoogleModel && {
+        providerOptions: {
+          google: { thinkingConfig: { thinkingBudget: ANALYST_THINKING_BUDGET } },
+        },
+      }),
+      experimental_telemetry: buildTraceMetadata('interview.analyst', {
+        interviewId,
+        model: modelString,
+        environment: (opts.traceCtx?.environment ?? 'prod') as 'prod' | 'eval',
+        component: 'analyst_catchup',
+        ...opts.traceCtx,
+      }),
+    })
+
+    capturedToolCalls = genResult.steps.flatMap(step =>
+      (step.toolCalls ?? []).map(tc => ({
+        toolName: tc.toolName,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        args: (tc as any).input ?? (tc as any).args ?? {},
+      }))
+    )
+  } catch (err) {
+    console.error('[analyst:catchup] run failed:', err)
+    // Don't set analyst_status=failed — catchup is supplementary, not critical
+    throw err
+  }
+
+  return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
+}
+
+/**
+ * Legacy analyst — backward-compatible wrapper used by the eval runner.
+ * Behaves identically to the previous runAnalyst: no online/catchup mode split.
+ * New code should prefer runAnalystOnline.
+ */
+export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunResult> {
+  return runAnalystCore({ ...opts, writeSource: 'analyst' })
+}
+
+/**
+ * Failure-retry run: processes two turns at once when previous analyst run failed.
+ * Renamed from the old runAnalystCatchup (which was semantically different from
+ * the new history-scan runAnalystCatchup).
+ */
+export async function runAnalystFailureRetry(opts: AnalystRunOptions & { previousUserInput: string }): Promise<AnalystRunResult> {
+  const augmentedHistory: TurnMessage[] = [
+    { role: 'user', content: opts.previousUserInput },
+    ...opts.history,
+  ]
+  return runAnalystOnline({ ...opts, history: augmentedHistory })
+}
+
 /**
  * Backfill data_sources for steps where it's null but tool/system mentions exist.
  * Sources (in priority order):
@@ -480,11 +676,3 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
   }
 }
 
-/** Catch-up run: processes two turns at once when previous analyst run failed */
-export async function runAnalystCatchup(opts: AnalystRunOptions & { previousUserInput: string }): Promise<AnalystRunResult> {
-  const augmentedHistory: TurnMessage[] = [
-    { role: 'user', content: opts.previousUserInput },
-    ...opts.history,
-  ]
-  return runAnalyst({ ...opts, history: augmentedHistory })
-}

@@ -23,7 +23,7 @@ export interface SlotWriteEvent {
   /** Current turn at the time of the write (1-indexed) */
   turn?: number
   /** Which write path produced this event */
-  source: 'analyst' | 'quick' | 'backfill' | 'update_walkthrough'
+  source: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'quick' | 'backfill' | 'update_walkthrough'
   /** Step identifier (slug or UUID) if known — falls back to stepTitle */
   stepId?: string | null
   /** Step title the slot was written to */
