@@ -43,6 +43,8 @@ export interface StepEntry {
   friction_points?: string[]
   friction_tools?: string[]
   pain_point_primary?: string | null
+  /** Cached Jina v3 embedding of the step title — populated on register_step, used for semantic dedup */
+  embedding?: number[]
 }
 
 export const MANDATORY_SLOTS = [

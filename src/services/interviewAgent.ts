@@ -6,6 +6,8 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { RawExtraction } from './extraction'
 import { emitSlotWrite } from './slotWriteTrail'
 import { canOverwrite, type WriteSource } from './slotConflictResolver'
+import { generateEmbedding } from './embeddings'
+import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD, SOFT_THRESHOLD } from './stepIdentity'
 import {
   MANDATORY_SLOTS,
   OPTIONAL_SLOTS,
@@ -483,17 +485,12 @@ export function buildTools(
             .eq('interview_id', interviewId)
             .maybeSingle()
 
-          const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
+          let current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
 
-          // Deduplicate: three-layer check
-          // 1. exact/substring match
-          // 2. normalized suffix-stripped match ("Mahnprozess" vs "Mahnwesen" → "mahn")
-          // 3. token Jaccard ≥ 0.4 — catches German morphological variants missed by substring
-          //    ("Rechnungsprüfung und Verbuchung" vs "Rechnungsprüfung und -verbuchung",
-          //     word-order variants like "Monatsabschluss - Abstimmung" vs "Abstimmung (Monatsabschluss)")
+          // ── Layer 1: exact / substring match (free, always runs) ──────────
           const normalizedTitle = title.trim().toLowerCase()
           const normalizedForDedup = normalizeStepTitleForDedup(title)
-          const duplicate = current.find((s) => {
+          const exactDuplicate = current.find((s) => {
             const existing = s.title.trim().toLowerCase()
             if (existing === normalizedTitle || existing.includes(normalizedTitle) || normalizedTitle.includes(existing)) {
               return true
@@ -506,31 +503,82 @@ export function buildTools(
                 return true
               }
             }
-            return tokenJaccardNorm(s.title, title) >= 0.4
+            return false
           })
-          if (duplicate) {
+          if (exactDuplicate) {
             return {
               success: true,
               deduplicated: true,
-              matched_title: duplicate.title,
-              message: `Schritt bereits vorhanden als "${duplicate.title}" — nutze diesen Titel für record_slot`,
+              matched_title: exactDuplicate.title,
+              message: `Schritt bereits vorhanden als "${exactDuplicate.title}" — nutze diesen Titel für record_slot`,
               step_tracker: current,
               existing_step_titles: current.map((s) => s.title),
             }
           }
 
-          // Soft-warning: Jaccard 0.2–0.4 — likely fragmentation, force LLM to confirm
-          const softSimilar = current
-            .map(s => ({ title: s.title, score: tokenJaccardNorm(s.title, title) }))
-            .filter(({ score }) => score >= 0.2 && score < 0.4)
-            .map(({ title: t }) => t)
-          if (softSimilar.length > 0) {
-            return {
-              success: false,
-              soft_warning: true,
-              similar_titles: softSimilar,
-              message: `Ähnliche Schritte gefunden: ${softSimilar.map(t => `"${t}"`).join(', ')}. Nutze record_slot mit einem dieser Titel wenn es derselbe Prozess ist. Nur fortfahren wenn dieser Schritt einen anderen Hauptprozess beschreibt.`,
-              existing_step_titles: current.map((s) => s.title),
+          // ── Layer 2: embedding-based cosine similarity (Jina v3) ──────────
+          // Falls back to Layer 3 (Jaccard) when JINA_API_KEY is unset.
+          const titleEmbedding = await generateEmbedding(title)
+          if (titleEmbedding) {
+            // Lazily populate embeddings for existing steps that lack one.
+            // Save back to DB only when at least one was generated.
+            const hydrated = await generateMissingEmbeddings(current)
+            const anyNew = hydrated.some((s, i) => s.embedding && !current[i].embedding)
+            if (anyNew) {
+              current = hydrated
+              await supabase
+                .from('interview_state')
+                .update({ step_tracker: current, updated_at: new Date().toISOString() })
+                .eq('interview_id', interviewId)
+            }
+
+            const match = classifyStepSimilarity(titleEmbedding, current)
+            if (match?.zone === 'hard') {
+              return {
+                success: true,
+                deduplicated: true,
+                matched_title: match.step.title,
+                similarity_score: Math.round(match.score * 100) / 100,
+                message: `Schritt semantisch identisch mit "${match.step.title}" (score=${match.score.toFixed(2)}) — nutze diesen Titel für record_slot`,
+                step_tracker: current,
+                existing_step_titles: current.map((s) => s.title),
+              }
+            }
+            if (match?.zone === 'soft') {
+              return {
+                success: false,
+                soft_warning: true,
+                similar_titles: [match.step.title],
+                similarity_score: Math.round(match.score * 100) / 100,
+                message: `Semantisch ähnlicher Schritt: "${match.step.title}" (score=${match.score.toFixed(2)}, threshold=${HARD_THRESHOLD}). Nutze record_slot mit diesem Titel wenn es derselbe Prozess ist. Nur fortfahren wenn dieser Schritt einen anderen Hauptprozess beschreibt.`,
+                existing_step_titles: current.map((s) => s.title),
+              }
+            }
+          } else {
+            // ── Layer 3: Token Jaccard fallback (no JINA_API_KEY) ────────────
+            const jaccardDuplicate = current.find((s) => tokenJaccardNorm(s.title, title) >= 0.4)
+            if (jaccardDuplicate) {
+              return {
+                success: true,
+                deduplicated: true,
+                matched_title: jaccardDuplicate.title,
+                message: `Schritt bereits vorhanden als "${jaccardDuplicate.title}" — nutze diesen Titel für record_slot`,
+                step_tracker: current,
+                existing_step_titles: current.map((s) => s.title),
+              }
+            }
+            const softSimilar = current
+              .map(s => ({ title: s.title, score: tokenJaccardNorm(s.title, title) }))
+              .filter(({ score }) => score >= 0.2 && score < 0.4)
+              .map(({ title: t }) => t)
+            if (softSimilar.length > 0) {
+              return {
+                success: false,
+                soft_warning: true,
+                similar_titles: softSimilar,
+                message: `Ähnliche Schritte gefunden: ${softSimilar.map(t => `"${t}"`).join(', ')}. Nutze record_slot mit einem dieser Titel wenn es derselbe Prozess ist. Nur fortfahren wenn dieser Schritt einen anderen Hauptprozess beschreibt.`,
+                existing_step_titles: current.map((s) => s.title),
+              }
             }
           }
 
@@ -538,6 +586,7 @@ export function buildTools(
             title: title.trim(),
             role: role ?? null,
             status: 'exploring',
+            ...(titleEmbedding ? { embedding: titleEmbedding } : {}),
             slots: {
               frequency_per_month: null,
               duration_minutes: null,
