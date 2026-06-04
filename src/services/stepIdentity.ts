@@ -43,6 +43,8 @@ export function classifyStepSimilarity(
 
   for (const step of tracker) {
     if (!step.embedding || step.embedding.length === 0) continue
+    // Guard against corrupted JSONB data (non-numeric values from stale/migrated rows)
+    if (typeof step.embedding[0] !== 'number') continue
     const score = cosineSim(titleEmbedding, step.embedding)
     if (score < SOFT_THRESHOLD) continue
 

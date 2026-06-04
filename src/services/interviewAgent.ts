@@ -621,7 +621,7 @@ export function buildTools(
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn, z.B. "100", "5 Minuten", "SAP FI und Excel". Das System erweitert ihn deterministisch zum vollständigen Satz und speichert ihn als Beleg. Wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up aus historischem Kontext), nutze evidence_quote stattdessen + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. confidence=confirmed/estimate/unknown wie gehabt.',
+      description: 'Füllt einen Slot im Schritt-Tracker. EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn, z.B. "100", "5 Minuten", "SAP FI und Excel". Das System erweitert ihn deterministisch zum vollständigen Satz und speichert ihn als Beleg. Wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up aus historischem Kontext), nutze evidence_quote stattdessen + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. confidence=confirmed/estimate/unknown wie gehabt. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert (z.B. "eigentlich sind es 15, nicht 10") — hebt Prioritäts-Sperre auf.',
       inputSchema: z.object({
         step_title: z.string().min(1),
         slot: z.enum(['frequency_per_month', 'duration_minutes', 'rule_based', 'data_sources', 'error_rate_percent', 'media_breaks']),
@@ -631,8 +631,9 @@ export function buildTools(
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
         qualifier: z.string().nullable().optional(),
         source_turn: z.number().int().positive().optional(),
+        is_correction: z.boolean().optional().describe('Setze auf true wenn der Mitarbeiter einen früher genannten Wert explizit widerspricht oder korrigiert. Hebt Prioritäts-Konflikt-Sperre auf.'),
       }),
-      execute: async ({ step_title, slot, value, evidence_span, evidence_quote, confidence, qualifier, source_turn }) => {
+      execute: async ({ step_title, slot, value, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
         // Fix 3 (ADR-015): prefer deterministic span-based extraction.
         const userInputText = currentUserInput?.trim() ?? ''
         let resolvedQuote: string | null = null
@@ -694,8 +695,10 @@ export function buildTools(
           const prevSlotValue = current[stepIndex].slots[slot]
           const isOverwrite = prevSlotValue !== null && prevSlotValue !== undefined
 
-          // Priority conflict check (ADR-016): block lower-priority writers
-          if (isOverwrite && !canOverwrite(prevSlotValue?.writeSource, writeSource as WriteSource)) {
+          // Priority conflict check (ADR-016): block lower-priority writers.
+          // is_correction=true bypasses the check when the user explicitly corrects a prior value.
+          const priorityBlocked = isOverwrite && !is_correction && !canOverwrite(prevSlotValue?.writeSource, writeSource as WriteSource)
+          if (priorityBlocked) {
             emitSlotWrite({
               ts: new Date().toISOString(),
               interviewId,
@@ -711,7 +714,7 @@ export function buildTools(
             }).catch(() => {})
             return {
               success: false,
-              error: `Slot "${slot}" already owned by higher-priority source "${prevSlotValue?.writeSource ?? 'unknown'}". Current source "${writeSource}" may not overwrite it.`,
+              error: `Slot "${slot}" already owned by higher-priority source "${prevSlotValue?.writeSource ?? 'unknown'}". Current source "${writeSource}" may not overwrite it. Use is_correction=true only if the interviewee explicitly corrected this value.`,
             }
           }
 

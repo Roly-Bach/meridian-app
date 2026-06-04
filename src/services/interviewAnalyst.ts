@@ -305,14 +305,13 @@ CATCHUP-MODUS — strikte Regeln:
 - Analysiere alle User-Turns in der History auf verpasste Slot-Werte.
 - Jeder record_slot-Call MUSS evidence_quote UND source_turn enthalten (source_turn = 1-indexed Nummer des User-Turns aus dem die Evidence stammt).
 - evidence_span ist NICHT gültig im Catchup — nutze stets evidence_quote + source_turn.
-- KEINE register_step-Calls — nur record_slot und produce_briefing sind verfügbar.
-- KEINE update_walkthrough_data — nur record_slot und produce_briefing.
-- KEIN update_topics — wird nicht benötigt.
+- NUR record_slot ist verfügbar. Kein register_step, kein produce_briefing, kein update_walkthrough_data.
 - Extrahiere nur explizit genannte Werte, keine Inferenzen.
+- Wenn keine verpassten Slots gefunden: sofort stoppen (keine Dummy-Calls nötig).
 
 ## Tool-Aufruf-Reihenfolge
 1. record_slot für jeden verpassten Slot in chronologischer Turn-Reihenfolge
-2. produce_briefing als letzter Call
+2. Fertig — kein weiterer Call nötig
 
 ## Aktueller Kontext
 - Interview ID: ${ctx.interviewId}
@@ -498,39 +497,15 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
   const systemPrompt = buildCatchupSystemPrompt(opts.context)
   const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
 
-  let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
-
-  // Catchup only gets record_slot + produce_briefing — no structural tools
-  const knowledgeTools = buildTools(interviewId, workspaceId, undefined, {
+  // Catchup only gets record_slot — no produce_briefing, no structural tools.
+  // The online analyst's next_briefing is preserved: catchup fills missed slots
+  // but does not regenerate the conversation briefing (M2 fix).
+  const catchupTools = buildTools(interviewId, workspaceId, undefined, {
     source: 'analyst_catchup',
     allowedTools: ['record_slot'],
   })
 
-  const produceBriefingTool = tool({
-    description: 'Generates the briefing for the next Talker turn. Call LAST. Called exactly once.',
-    inputSchema: AnalystBriefingSchema,
-    execute: async (briefing) => {
-      capturedBriefing = briefing as AnalystBriefing
-      const shouldHaveCards = shouldGenerateClarificationCards(opts.context)
-      if (!shouldHaveCards) {
-        capturedBriefing = { ...capturedBriefing, clarification_cards: undefined }
-      }
-      try {
-        await supabase
-          .from('interviews')
-          .update({
-            next_briefing: capturedBriefing as unknown as import('@/lib/database.types').Json,
-            analyst_status: 'done',
-          })
-          .eq('id', interviewId)
-      } catch (err) {
-        console.error('[analyst:catchup] produce_briefing DB write failed:', err)
-      }
-      return { success: true }
-    },
-  })
-
-  const catchupTools = { ...knowledgeTools, produce_briefing: produceBriefingTool }
+  let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
 
   let capturedToolCalls: AnalystToolCallRecord[] = []
 
@@ -541,7 +516,7 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       messages: messages as any,
       tools: catchupTools,
-      stopWhen: stepCountIs(15),
+      stopWhen: stepCountIs(10),
       ...(isGoogleModel && {
         providerOptions: {
           google: { thinkingConfig: { thinkingBudget: ANALYST_THINKING_BUDGET } },

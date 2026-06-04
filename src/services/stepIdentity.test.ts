@@ -119,6 +119,16 @@ describe('classifyStepSimilarity', () => {
     expect(result!.step.title).toBe('Rechnungsprüfung')
     expect(mockCosineSim).toHaveBeenCalledTimes(1)
   })
+
+  it('skips steps with non-numeric embedding values (L2 JSONB corruption guard)', () => {
+    // Simulate corrupted JSONB: embedding field contains strings instead of numbers
+    const corruptedStep = makeStep('Korrupter Schritt', ['not', 'a', 'number'] as unknown as number[])
+    const validStep = makeStep('Gültiger Schritt', DUMMY_EMB)
+    mockCosineSim.mockReturnValue(0.90)
+    const result = classifyStepSimilarity(DUMMY_QUERY, [corruptedStep, validStep])
+    expect(result!.step.title).toBe('Gültiger Schritt')
+    expect(mockCosineSim).toHaveBeenCalledTimes(1)  // only called for valid step
+  })
 })
 
 describe('generateMissingEmbeddings', () => {
