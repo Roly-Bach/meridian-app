@@ -22,63 +22,60 @@ export interface LifecycleDecision {
   reason: 'hard_stop' | 'soft_confirm' | null
 }
 
-// historyLength ≈ 2× turn count (user msg + assistant msg per turn)
-const PROCESS_LOOP_ESCAPE_HL = 20    // force walkthrough_step after ~10 turns
-const WALKTHROUGH_ESCAPE_HL = 28     // force slot_completion after ~14 turns
-const SLOT_COMPLETION_ESCAPE_HL = 32 // force coverage_check after ~16 turns
-const COVERAGE_CHECK_ESCAPE_HL_BASE = 40  // force wrap_up after ~20 turns (2 steps)
-
-// MAX_TURNS_HL: total history-length budget (2× turn count). Corresponds to
-// COVERAGE_CHECK_ESCAPE_HL_BASE + reserveTurns×2 for farewell/wrap_up buffer.
-const MAX_TURNS_HL_BASE = COVERAGE_CHECK_ESCAPE_HL_BASE + 10 // = 50 HL ≈ 25 turns
-
 /**
- * Fix 5 (ADR-015): scale the coverage/wrap escape thresholds by the number of
- * registered steps. Each step beyond the baseline of 2 buys 6 extra HL (≈3
- * turns) so newly-discovered processes (e.g. Mahnwesen surfaced at wrap_up)
- * still get a fair walkthrough budget before the timer-based hard stop.
+ * TurnBudgetAllocator (Pt6): derive all HL escape thresholds from maxDurationMinutes.
  *
- * Cap: never exceeds the timer-based hard stop (maxDurationMinutes drives it,
- * not historyLength), so this only matters before the timer fires.
+ * Previously the thresholds were hardcoded for 30-minute interviews:
+ *   PROCESS_LOOP_ESCAPE_HL=20 (40% of 50), WALKTHROUGH=28 (56%), SLOT_COMPLETION=32 (64%),
+ *   COVERAGE_CHECK_BASE=40 (80%), MAX_TURNS=50.
+ * These ratios are correct but break for non-30-min interviews (15 min, 45 min etc.)
+ *
+ * Now: totalBudgetHL = maxDurationMinutes × 2 - 10 (buffer for first/last turns).
+ * For 30 min: 50 — matches old constants exactly. All escape valves scale proportionally.
+ *
+ * stepCount extends the coverage/wrap budget: each extra step beyond baseline=2
+ * buys 6 HL (≈3 turns) for fair walkthrough coverage. Cap: +10 turns.
  */
-function dynamicCoverageEscapeHL(stepCount: number): number {
+export interface TurnBudget {
+  processLoopEscapeHL: number
+  walkthroughEscapeHL: number
+  slotCompletionEscapeHL: number
+  coverageCheckEscapeHL: number
+  maxTurnsHL: number
+}
+
+export function computeTurnBudget(maxDurationMinutes: number, stepCount = 2): TurnBudget {
+  const total = Math.max(maxDurationMinutes * 2 - 10, 20) // floor at 20 HL for very short interviews
   const baselineSteps = 2
   const extraSteps = Math.max(0, stepCount - baselineSteps)
-  const extraHL = Math.min(extraSteps * 6, 20) // cap at +10 turns
-  return COVERAGE_CHECK_ESCAPE_HL_BASE + extraHL
-}
-
-function dynamicMaxTurnsHL(stepCount: number): number {
-  return dynamicCoverageEscapeHL(stepCount) + 10
+  const stepBonus = Math.min(extraSteps * 6, 20) // cap at +10 turns
+  const coverageHL = Math.round(total * 0.80) + stepBonus
+  return {
+    processLoopEscapeHL:    Math.round(total * 0.40),
+    walkthroughEscapeHL:    Math.round(total * 0.56),
+    slotCompletionEscapeHL: Math.round(total * 0.64),
+    coverageCheckEscapeHL:  coverageHL,
+    maxTurnsHL:             coverageHL + 10,
+  }
 }
 
 /**
- * Computes how many history-length units (HL) the current walkthrough step
- * may still consume before a forced push to slot_completion.
- *
- * @param historyLength  Current HL (2× turn count).
- * @param completedSteps Steps with status 'done' (already finished).
- * @param totalTopics    Total number of registered topics/steps.
+ * Computes how many HL the current walkthrough step may consume before forced push.
  */
-function computeStepBudget(historyLength: number, completedSteps: number, totalTopics: number): number {
-  const reserveHL = 10 // 5 turns × 2 for farewell + coverage_check buffer
-  const remainingBudgetHL = dynamicMaxTurnsHL(totalTopics) - historyLength - reserveHL
-  const remainingSteps = Math.max(totalTopics - completedSteps, 1)
+function computeStepBudget(historyLength: number, completedSteps: number, budget: TurnBudget): number {
+  const reserveHL = 10
+  const remainingBudgetHL = budget.maxTurnsHL - historyLength - reserveHL
+  const remainingSteps = Math.max(budget.maxTurnsHL - completedSteps, 1)
   const budgetHL = Math.floor(remainingBudgetHL / remainingSteps)
-  const MIN_HL_PER_STEP = 6 // Floor: min 3 turns per step (3 turns × 2 HL)
+  const MIN_HL_PER_STEP = 6
   return Math.max(budgetHL, MIN_HL_PER_STEP)
 }
 
 /**
- * Estimates how many HL units have been spent on the current walkthrough step.
- * Derived from history: HL since phase entered walkthrough_step territory.
- * Uses PROCESS_LOOP_ESCAPE_HL as approximate walkthrough start boundary.
+ * Estimates HL spent on the current walkthrough step.
  */
-function estimateTurnsUsedOnCurrentStep(historyLength: number, completedSteps: number): number {
-  // Approximate HL consumed in walkthrough phases so far
-  const walkthroughStartHL = PROCESS_LOOP_ESCAPE_HL
-  const walkthroughHL = Math.max(0, historyLength - walkthroughStartHL)
-  // Distribute evenly across completed steps + current step
+function estimateTurnsUsedOnCurrentStep(historyLength: number, completedSteps: number, budget: TurnBudget): number {
+  const walkthroughHL = Math.max(0, historyLength - budget.processLoopEscapeHL)
   const totalSteps = completedSteps + 1
   return Math.floor(walkthroughHL / totalSteps)
 }
@@ -182,8 +179,8 @@ export function shouldInjectWrapUpQuestion(
  * Violations are logged as warnings — no throw. Returns true if a violation
  * was detected (caller may use this to force-transition).
  */
-function assertPhaseInvariants(historyLength: number, startedSteps: number, totalTopics: number): boolean {
-  if (historyLength >= dynamicCoverageEscapeHL(totalTopics) - 4) {
+function assertPhaseInvariants(historyLength: number, startedSteps: number, totalTopics: number, budget: TurnBudget): boolean {
+  if (historyLength >= budget.coverageCheckEscapeHL - 4) {
     const expectedMin = Math.max(totalTopics - 1, 1)
     if (startedSteps < expectedMin) {
       console.warn('[INVARIANT_VIOLATION] farewell approaching, steps under-started', {
@@ -192,7 +189,7 @@ function assertPhaseInvariants(historyLength: number, startedSteps: number, tota
         expectedMin,
         totalTopics,
       })
-      return true // violation detected
+      return true
     }
   }
   return false
@@ -213,10 +210,11 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
     return 'wrap_up'
   }
 
-  // Phase invariant check — log violation, potentially force-transition later
-  const startedSteps = ctx.stepTracker.filter(s => s.status !== 'exploring').length
+  // Compute all HL escape thresholds from maxDurationMinutes (Pt6 TurnBudgetAllocator)
   const totalTopics = ctx.stepTracker.length
-  const invariantViolated = assertPhaseInvariants(ctx.historyLength, startedSteps, totalTopics)
+  const budget = computeTurnBudget(ctx.maxDurationMinutes, totalTopics)
+  const startedSteps = ctx.stepTracker.filter(s => s.status !== 'exploring').length
+  const invariantViolated = assertPhaseInvariants(ctx.historyLength, startedSteps, totalTopics, budget)
 
   switch (ctx.phase) {
     case 'intro':
@@ -231,17 +229,16 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       if (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')) {
         return 'walkthrough_step'
       }
-      // Escape: force walkthrough_step after ~10 turns even without a registered step.
-      if (ctx.historyLength >= PROCESS_LOOP_ESCAPE_HL) return 'walkthrough_step'
+      if (ctx.historyLength >= budget.processLoopEscapeHL) return 'walkthrough_step'
       return 'process_loop'
 
     case 'walkthrough_step': {
       // Per-step turn budget: force push to slot_completion before walkthroughHasContent or escape.
       // Prevents depth-first starvation (B7): if agent drills one step too long, push forward.
       const completedSteps = ctx.stepTracker.filter(s => s.status === 'done').length
-      const turnsUsed = estimateTurnsUsedOnCurrentStep(ctx.historyLength, completedSteps)
-      const budget = computeStepBudget(ctx.historyLength, completedSteps, Math.max(totalTopics, 1))
-      if (turnsUsed >= budget) return 'slot_completion'
+      const turnsUsed = estimateTurnsUsedOnCurrentStep(ctx.historyLength, completedSteps, budget)
+      const stepBudgetHL = computeStepBudget(ctx.historyLength, completedSteps, budget)
+      if (turnsUsed >= stepBudgetHL) return 'slot_completion'
 
       // Invariant violation: farewell approaching, force forward regardless of step state
       if (invariantViolated) return 'slot_completion'
@@ -252,14 +249,13 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       if (!hasStepInStatus(ctx.stepTracker, 'exploring') && !hasStepInStatus(ctx.stepTracker, 'walkthrough') && ctx.stepTracker.length > 0) {
         return 'slot_completion'
       }
-      // Escape: force slot_completion after ~14 turns to prevent infinite walkthrough loop.
-      if (ctx.historyLength >= WALKTHROUGH_ESCAPE_HL) return 'slot_completion'
+      if (ctx.historyLength >= budget.walkthroughEscapeHL) return 'slot_completion'
       return 'walkthrough_step'
     }
 
     case 'slot_completion': {
       if (!semanticAllStepsDone(ctx.stepTracker)) {
-        if (ctx.historyLength >= SLOT_COMPLETION_ESCAPE_HL) return 'coverage_check'
+        if (ctx.historyLength >= budget.slotCompletionEscapeHL) return 'coverage_check'
         return 'slot_completion'
       }
       if (hasUnexploredFocusTopic(ctx.topicsOpen, ctx.stepTracker)) return 'process_loop'
@@ -268,17 +264,19 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
 
     case 'coverage_check':
       if (semanticAllStepsDone(ctx.stepTracker)) return 'wrap_up'
-      if (ctx.historyLength >= dynamicCoverageEscapeHL(totalTopics)) return 'wrap_up'
+      if (ctx.historyLength >= budget.coverageCheckEscapeHL) return 'wrap_up'
       return 'coverage_check'
 
     case 'wrap_up': {
       // Skip push-back once escape valve has already fired — committed to wrap_up.
       // Without this guard, the push-back defeats the coverage_check escape valve:
       // wrap_up → walkthrough_step → slot_completion → coverage_check → wrap_up → ∞
-      const escapeAlreadyFired = ctx.historyLength >= dynamicCoverageEscapeHL(totalTopics)
+      const escapeAlreadyFired = ctx.historyLength >= budget.coverageCheckEscapeHL
       // Only push back if there are genuinely uncovered semantic groups (not just fragmented duplicates)
       if (!escapeAlreadyFired && !semanticAllStepsDone(ctx.stepTracker)) {
-        if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'walkthrough_step'
+        // Late-discovered topics (exploring at wrap_up) go to clarification, not full
+        // walkthrough reentry — avoids disruptive phase regression mid-farewell (Pt8).
+        if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'clarification'
         if (hasStepInStatus(ctx.stepTracker, 'walkthrough')) return 'slot_completion'
       }
 

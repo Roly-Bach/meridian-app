@@ -3,6 +3,7 @@ import { streamText } from 'ai'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import {
   buildDynamicContext,
+  detectNumberAnchoring,
   type InterviewContext,
   type TurnMessage,
   type AnalystBriefing,
@@ -142,6 +143,20 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
               null,
           }
           console.log('[token-usage] talker', usageData)
+
+          // Pt7: Anchoring detection — log violations for eval analysis.
+          // No re-prompt (streaming architecture); prevention is via prompt injection in buildDynamicContext.
+          const suggestedQ = opts.briefing?.suggested_question ?? ''
+          if (suggestedQ) {
+            const anchored = detectNumberAnchoring(text, suggestedQ)
+            if (anchored.length > 0) {
+              console.warn('[talker:anchoring] number re-quote detected', {
+                numbers: anchored,
+                interviewId: opts.context.interviewId,
+              })
+            }
+          }
+
           await opts.onFinish!(text)
         }
       : undefined,

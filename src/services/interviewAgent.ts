@@ -342,6 +342,33 @@ function formatFilledSlotsSnapshot(steps: StepEntry[]): string {
   return lines.join('\n')
 }
 
+/**
+ * Pt7: Extract standalone numeric tokens from a string.
+ * Used to detect analyst-extracted numbers in briefing.suggested_question
+ * so the Talker can be warned not to re-quote them (anchoring prevention).
+ */
+export function extractNumericTokens(text: string): string[] {
+  const matches = text.match(/\b\d+(?:[.,]\d+)?\b/g) ?? []
+  return [...new Set(matches)]
+}
+
+/**
+ * Pt7: Detect whether a Talker response re-quotes numeric values from the briefing.
+ * Returns matched numbers if anchoring is found, empty array otherwise.
+ * Used in onFinish for observability logging.
+ */
+export function detectNumberAnchoring(talkerText: string, suggestedQuestion: string): string[] {
+  const numbers = extractNumericTokens(suggestedQuestion)
+  if (numbers.length === 0) return []
+  // Only flag if the number appears inside a question (ends with ?)
+  const sentences = talkerText.split(/[.!]\s+/)
+  const questionSentences = sentences.filter(s => s.includes('?'))
+  return numbers.filter(n => questionSentences.some(q => {
+    const re = new RegExp(`\\b${n.replace('.', '\\.')}\\b`)
+    return re.test(q)
+  }))
+}
+
 export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBriefing | null): string {
   const focusLine = ctx.focusTopics
     ? `Fokusthemen (NUR interne Steuerung — im Opener niemals namentlich nennen): ${ctx.focusTopics}`
@@ -413,8 +440,15 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 
   // Analyst briefing section — advisory, not binding.
   // Talker may adapt the suggested question if it was already answered in the current turn.
+  // Pt7: When suggested_question contains numeric values, inject an explicit no-anchor reminder
+  // to prevent the Talker from re-quoting analyst-extracted numbers back to the user.
+  const suggestedQ = briefing?.suggested_question ?? ''
+  const anchoringNumbers = extractNumericTokens(suggestedQ)
+  const anchorWarning = anchoringNumbers.length > 0
+    ? `\n⚠️ ANKER-SPERRE: Diese Zahlen stammen aus der Analyst-Extraktion — NICHT in einer Frage nennen: ${anchoringNumbers.join(', ')}. Frage offen: "Wie oft?" / "Wie lange?" ohne Vorgabe.`
+    : ''
   const briefingSection = briefing && (briefing.next_focus || briefing.suggested_question)
-    ? `\n\n## NÄCHSTER TURN — Analyst-Empfehlung\nFokus: ${sanitizeForPrompt(briefing.next_focus ?? '—')}\nEmpfohlene Frage (anpassen wenn bereits beantwortet): "${sanitizeForPrompt(briefing.suggested_question ?? '—')}"`
+    ? `\n\n## NÄCHSTER TURN — Analyst-Empfehlung\nFokus: ${sanitizeForPrompt(briefing.next_focus ?? '—')}\nEmpfohlene Frage (anpassen wenn bereits beantwortet): "${sanitizeForPrompt(suggestedQ)}"${anchorWarning}`
     : ''
 
   return `## Interview-Kontext

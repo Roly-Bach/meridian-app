@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: vi.fn() }),
 }))
 
-import { decideNextPhase, checkLifecycle, type OrchestratorContext } from './interviewOrchestrator'
+import { decideNextPhase, checkLifecycle, computeTurnBudget, type OrchestratorContext } from './interviewOrchestrator'
 import type { StepEntry } from './interviewAgent'
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -176,6 +176,18 @@ describe('decideNextPhase — wrap_up', () => {
     expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), analystSuggestion)).toBe('clarification')
   })
 
+  it('Pt8: late-discovered topic (exploring) in wrap_up goes to clarification, not walkthrough_step', () => {
+    // Pre-Pt8: would return 'walkthrough_step' — disruptive mid-farewell reentry.
+    // Post-Pt8: returns 'clarification' for targeted follow-up without full walkthrough.
+    const lateStep = makeStep('Reisekostenabrechnung', 'exploring')
+    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', historyLength: 10, stepTracker: [lateStep] }), null)).toBe('clarification')
+  })
+
+  it('Pt8: walkthrough step in wrap_up still goes to slot_completion (unchanged)', () => {
+    const walkthroughStep = makeStep('Rechnungsprüfung', 'walkthrough')
+    expect(decideNextPhase(baseCtx({ phase: 'wrap_up', historyLength: 10, stepTracker: [walkthroughStep] }), null)).toBe('slot_completion')
+  })
+
   it('stays in wrap_up when only Analyst flag set but deterministic question not in history (Fix 1: ADR-015)', () => {
     // Post-Fix-1: wrap_up_question_asked flag is no longer trusted. The
     // verbatim WRAP_UP_QUESTION_TEXT must appear in history. This test pins
@@ -186,6 +198,52 @@ describe('decideNextPhase — wrap_up', () => {
     ]
     const analystSuggestion = { wrap_up_question_asked: true }
     expect(decideNextPhase(baseCtx({ phase: 'wrap_up', history, historyLength: 2 }), analystSuggestion)).toBe('wrap_up')
+  })
+})
+
+// ─── computeTurnBudget (Pt6) ──────────────────────────────────────────────────
+
+describe('computeTurnBudget — Pt6 TurnBudgetAllocator', () => {
+  it('30-min budget matches old hardcoded constants exactly', () => {
+    const b = computeTurnBudget(30, 2)
+    expect(b.processLoopEscapeHL).toBe(20)
+    expect(b.walkthroughEscapeHL).toBe(28)
+    expect(b.slotCompletionEscapeHL).toBe(32)
+    expect(b.coverageCheckEscapeHL).toBe(40)
+    expect(b.maxTurnsHL).toBe(50)
+  })
+
+  it('15-min budget scales to half the 30-min values', () => {
+    const b = computeTurnBudget(15, 2)
+    expect(b.processLoopEscapeHL).toBeLessThan(20)
+    expect(b.walkthroughEscapeHL).toBeLessThan(28)
+    expect(b.maxTurnsHL).toBeLessThan(50)
+  })
+
+  it('45-min budget is larger than 30-min', () => {
+    const b30 = computeTurnBudget(30, 2)
+    const b45 = computeTurnBudget(45, 2)
+    expect(b45.processLoopEscapeHL).toBeGreaterThan(b30.processLoopEscapeHL)
+    expect(b45.coverageCheckEscapeHL).toBeGreaterThan(b30.coverageCheckEscapeHL)
+  })
+
+  it('extra steps beyond baseline increase coverage budget', () => {
+    const b2 = computeTurnBudget(30, 2)
+    const b5 = computeTurnBudget(30, 5)
+    expect(b5.coverageCheckEscapeHL).toBeGreaterThan(b2.coverageCheckEscapeHL)
+    expect(b5.maxTurnsHL).toBeGreaterThan(b2.maxTurnsHL)
+  })
+
+  it('step bonus caps at +10 turns (+20 HL)', () => {
+    const b2 = computeTurnBudget(30, 2)
+    const b20 = computeTurnBudget(30, 20)
+    expect(b20.coverageCheckEscapeHL - b2.coverageCheckEscapeHL).toBeLessThanOrEqual(20)
+  })
+
+  it('very short interview (5 min) has minimum budget floor', () => {
+    const b = computeTurnBudget(5, 2)
+    expect(b.processLoopEscapeHL).toBeGreaterThan(0)
+    expect(b.maxTurnsHL).toBeGreaterThan(b.coverageCheckEscapeHL)
   })
 })
 

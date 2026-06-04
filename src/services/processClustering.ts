@@ -37,7 +37,8 @@ async function updateClusterCentroid(clusterId: string): Promise<void> {
 
   if (error || !members || members.length === 0) return
 
-  const embeddings = members.map(m => m.embedding as number[])
+  const embeddings = members.map(m => m.embedding).filter((e): e is number[] => Array.isArray(e) && e.length > 0)
+  if (embeddings.length === 0) return
   const centroid = computeCentroid(embeddings)
 
   const { error: updateErr } = await supabase

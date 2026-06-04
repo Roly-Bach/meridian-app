@@ -1,4 +1,5 @@
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
+import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
 import { generateEmbedding } from './embeddings'
@@ -136,14 +137,24 @@ export async function createProcessStepsFromTracker({
     }))
   )
 
-  // ── LLM: generate description + source_quote only ───────────────────────────
+  // ── LLM: generate description + source_quote only (Pt9: generateObject+Zod) ──
+  const TrackerDescriptionSchema = z.object({
+    steps: z.array(z.object({
+      step_title: z.string(),
+      description: z.string().nullable(),
+      source_quote: z.string().nullable(),
+      step_type: z.enum(['action', 'decision']),
+      condition_text: z.string().nullable(),
+    }))
+  })
+
   let descriptions: TrackerDescriptionOutput[] = []
   try {
-    const { text } = await generateText({
+    const { object } = await generateObject({
       model: resolveModel(process.env.ENRICHMENT_MODEL),
+      schema: TrackerDescriptionSchema,
       system: TRACKER_DESCRIPTION_PROMPT,
       prompt: `Vollständiges Transkript:\n${transcript}\n\nProzessschritte:\n${stepsInput}`,
-      maxOutputTokens: 2000,
       experimental_telemetry: buildTraceMetadata('processEnrichment.createProcessStepsFromTracker', {
         interviewId,
         model: process.env.ENRICHMENT_MODEL ?? 'google/gemini-3.1-flash-lite',
@@ -151,17 +162,7 @@ export async function createProcessStepsFromTracker({
         ...traceCtx,
       }),
     })
-
-    const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(cleaned)
-    } catch (parseErr) {
-      console.error('[createProcessStepsFromTracker] JSON.parse failed. Raw response (truncated):', cleaned.slice(0, 500))
-      throw parseErr
-    }
-    if (!Array.isArray(parsed)) throw new Error('Response is not an array')
-    descriptions = parsed
+    descriptions = object.steps
   } catch (err) {
     console.error('[createProcessStepsFromTracker] LLM call failed:', err)
     // Fallback: insert with null description/source_quote — slot values still correct

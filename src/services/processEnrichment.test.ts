@@ -13,7 +13,7 @@ vi.mock('@ai-sdk/anthropic', () => ({
 }))
 
 vi.mock('ai', () => ({
-  generateText: vi.fn(),
+  generateObject: vi.fn(),
 }))
 
 vi.mock('./embeddings', () => ({
@@ -21,7 +21,7 @@ vi.mock('./embeddings', () => ({
 }))
 
 import { applyGroundingGuard, createProcessStepsFromTracker } from './processEnrichment'
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
 import { generateEmbedding } from './embeddings'
 
 // ─── applyGroundingGuard (pure function) ──────────────────────────────────────
@@ -128,7 +128,7 @@ describe('createProcessStepsFromTracker', () => {
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
-    expect(generateText).not.toHaveBeenCalled()
+    expect(generateObject).not.toHaveBeenCalled()
     expect(generateEmbedding).not.toHaveBeenCalled()
   })
 
@@ -139,7 +139,7 @@ describe('createProcessStepsFromTracker', () => {
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
-    expect(generateText).not.toHaveBeenCalled()
+    expect(generateObject).not.toHaveBeenCalled()
   })
 
   it('returns early when step_tracker is empty', async () => {
@@ -149,7 +149,7 @@ describe('createProcessStepsFromTracker', () => {
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
-    expect(generateText).not.toHaveBeenCalled()
+    expect(generateObject).not.toHaveBeenCalled()
   })
 
   it('inserts process_step with slot values from tracker (no LLM rounding)', async () => {
@@ -161,7 +161,7 @@ describe('createProcessStepsFromTracker', () => {
       .mockReturnValueOnce(makeChain({ data: [{ turn_number: 1, user_input: 'Test', agent_response: 'Test' }], error: null }))
       .mockReturnValueOnce(insertChain)
 
-    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(MOCK_LLM_DESCRIPTION_RESPONSE) } as never)
+    vi.mocked(generateObject).mockResolvedValue({ object: { steps: MOCK_LLM_DESCRIPTION_RESPONSE } } as never)
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
@@ -190,7 +190,7 @@ describe('createProcessStepsFromTracker', () => {
       .mockReturnValueOnce(makeChain({ data: [], error: null }))
       .mockReturnValueOnce(insertChain)
 
-    vi.mocked(generateText).mockRejectedValue(new Error('LLM timeout'))
+    vi.mocked(generateObject).mockRejectedValue(new Error('LLM timeout'))
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
@@ -208,7 +208,7 @@ describe('createProcessStepsFromTracker', () => {
     errorSpy.mockRestore()
   })
 
-  it('fallback when LLM returns non-array', async () => {
+  it('fallback to null description when generateObject throws (schema/network error)', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const insertChain = makeChain({ error: null })
 
@@ -218,34 +218,19 @@ describe('createProcessStepsFromTracker', () => {
       .mockReturnValueOnce(makeChain({ data: [], error: null }))
       .mockReturnValueOnce(insertChain)
 
-    vi.mocked(generateText).mockResolvedValue({ text: '{"not": "an array"}' } as never)
+    vi.mocked(generateObject).mockRejectedValue(new Error('schema validation failed'))
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
-    expect(errorSpy).toHaveBeenCalled()
-    expect(insertChain.insert).toHaveBeenCalledOnce()
-
-    errorSpy.mockRestore()
-  })
-
-  it('strips markdown code fences from LLM response', async () => {
-    const insertChain = makeChain({ error: null })
-
-    mockFrom
-      .mockReturnValueOnce(makeChain({ count: 0, data: null, error: null }))
-      .mockReturnValueOnce(makeChain({ data: { step_tracker: [MOCK_STEP_WALKTHROUGH] }, error: null }))
-      .mockReturnValueOnce(makeChain({ data: [], error: null }))
-      .mockReturnValueOnce(insertChain)
-
-    vi.mocked(generateText).mockResolvedValue({
-      text: '```json\n' + JSON.stringify(MOCK_LLM_DESCRIPTION_RESPONSE) + '\n```',
-    } as never)
-
-    await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
-
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[createProcessStepsFromTracker] LLM call failed:'),
+      expect.anything()
+    )
     expect(insertChain.insert).toHaveBeenCalledOnce()
     const arg = (insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
-    expect(arg.description).toBe('Kundenanfragen per E-Mail oder Anruf entgegennehmen.')
+    expect(arg.description).toBeNull()
+
+    errorSpy.mockRestore()
   })
 
   it('filters out exploring steps, only inserts walkthrough/done steps', async () => {
@@ -260,7 +245,7 @@ describe('createProcessStepsFromTracker', () => {
       .mockReturnValueOnce(makeChain({ data: [], error: null }))
       .mockReturnValueOnce(insertChain)
 
-    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(MOCK_LLM_DESCRIPTION_RESPONSE) } as never)
+    vi.mocked(generateObject).mockResolvedValue({ object: { steps: MOCK_LLM_DESCRIPTION_RESPONSE } } as never)
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
@@ -287,7 +272,7 @@ describe('createProcessStepsFromTracker', () => {
       .mockReturnValueOnce(makeChain({ data: [], error: null }))
       .mockReturnValueOnce(insertChain)
 
-    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(paraphrasedResponse) } as never)
+    vi.mocked(generateObject).mockResolvedValue({ object: { steps: paraphrasedResponse } } as never)
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
@@ -315,7 +300,7 @@ describe('createProcessStepsFromTracker', () => {
       .mockReturnValueOnce(makeChain({ data: [], error: null }))
       .mockReturnValueOnce(insertChain)
 
-    vi.mocked(generateText).mockResolvedValue({ text: JSON.stringify(decisionResponse) } as never)
+    vi.mocked(generateObject).mockResolvedValue({ object: { steps: decisionResponse } } as never)
 
     await createProcessStepsFromTracker({ interviewId: INTERVIEW_ID, workspaceId: WORKSPACE_ID })
 
