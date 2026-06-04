@@ -446,3 +446,71 @@ Diagnostik-Tooling für die in den Eval-Runs 2026-06-03 sichtbaren Multi-Writer-
 - Charge 2 (Punkt 3-5): Single Slot-Writer, Step-Identität via Vector-Cluster, Analyst-Split Online/Catchup
 - Charge 3 (Punkt 6-9): TurnBudgetAllocator, Talker Output-Filter, Late-Topic → Clarification, Downstream-Robustheit
 
+---
+
+## QA Test Results — Charge 2 Robustness Refactor (2026-06-04)
+
+> **QA Datum:** 2026-06-04 | **Status:** Approved | **Bugs:** 0:2:2
+
+### Scope
+
+Charge 2 Punkte 3, 4, 5 + Charge 1 (Langfuse-Singleton-Hotfix):
+
+| Commit | Inhalt |
+|--------|--------|
+| f96a6bc | Pt5 — Analyst Online/Catchup Split (ADR-014 B6) |
+| 2b43f32 | Pt3 — Single Slot-Writer, Priority Conflict Resolver (ADR-016) |
+| c890a4e | Pt4 — Embedding-based Step Identity at register_step |
+
+### Acceptance Criteria — Testergebnis
+
+| # | Check | Status | Notiz |
+|---|-------|--------|-------|
+| 1 | `runAnalystOnline` extrahiert nur aus aktuellem Turn | ✅ PASS | `promptMode='online'` + currentUserInput übergeben |
+| 2 | `runAnalystCatchup` scannt History, nur `record_slot` + `produce_briefing` | ✅ PASS | `allowedTools: ['record_slot']` in `buildTools` |
+| 3 | Catchup läuft nur einmal pro Phase-Transition (Idempotenz via `phaseJustEntered`) | ✅ PASS | non-null nur auf Transition-Turn |
+| 4 | Catchup erzwingt `evidence_quote` + `source_turn` (kein `evidence_span`) | ✅ PASS | `currentUserInput=undefined` → span-check schlägt fehl → LLM nutzt quote+source_turn |
+| 5 | `analyst_catchup` hat höchste Slot-Schreib-Priorität (4) | ✅ PASS | `canOverwrite('analyst_online', 'analyst_catchup') === true` |
+| 6 | `analyst_online` kann `analyst_catchup`-Slot nicht überschreiben | ✅ PASS | `canOverwrite('analyst_catchup', 'analyst_online') === false` |
+| 7 | `writeSource` in `SlotValue` gespeichert (JSONB) | ✅ PASS | `record_slot` schreibt `writeSource` in Slot-Objekt |
+| 8 | Blocked-Write emittiert Trail-Event mit `blocked: true` | ✅ PASS | Trail-Sink empfängt Event vor DB-Skip |
+| 9 | `backfillDataSourcesFromMentions` setzt `writeSource='backfill'` | ✅ PASS | Zeile 645 in `interviewAnalyst.ts` |
+| 10 | `register_step` Layer 1 (exact/substring) läuft vor Embedding | ✅ PASS | Fallback-free exact-check zuerst |
+| 11 | `register_step` Layer 2 (Embedding cosine ≥ 0.84 = hard block) | ✅ PASS | `classifyStepSimilarity` returns zone='hard' |
+| 12 | `register_step` Layer 2 (0.75–0.84 = soft warning) | ✅ PASS | zone='soft' → `soft_warning: true` response |
+| 13 | Embedding im `StepEntry` gespeichert (kein DB-Schema-Change) | ✅ PASS | JSONB extra field |
+| 14 | Lazy hydration: bestehende Steps ohne Embedding werden beim ersten `register_step` hydratiert | ✅ PASS | `generateMissingEmbeddings` + DB-Schreib-Zurück |
+| 15 | Jaccard-Fallback wenn `JINA_API_KEY` nicht gesetzt | ✅ PASS | `generateEmbedding` → null → Jaccard-Pfad |
+| 16 | Graceful: `generateMissingEmbeddings` lässt Steps unverändert bei API-Fehler | ✅ PASS | null-Return → Step unchanged |
+| 17 | Vitest: 417 Tests grün (+38 neue) | ✅ PASS | 35 Test-Files |
+
+### Neue Tests
+
+| Datei | Tests | Abdeckung |
+|-------|-------|-----------|
+| `slotConflictResolver.test.ts` | 22 | Alle Priority-Kombinationen, unknown source, leerer Slot |
+| `stepIdentity.test.ts` | 16 | classifyStepSimilarity (alle Zonen), generateMissingEmbeddings (happy/fail/parallel), Threshold-Konstanten |
+
+### Security Audit (Charge 2)
+
+| Check | Status |
+|-------|--------|
+| `canOverwrite`: kein Client-Input in Priority-Check | ✅ |
+| `writeSource` im Slot-Objekt: kein LLM-kontrollierbares Feld (gesetzt server-side aus `buildTools`-opts) | ✅ |
+| `embedding` in JSONB: nur Lesen/Schreiben, kein Injection-Pfad | ✅ |
+| Jina API-Key nur server-side via env var | ✅ |
+| Blocked-Trail: loggt nur, kein Side-Effect | ✅ |
+
+### Bugs (Charge 2)
+
+| ID | Severity | Beschreibung |
+|----|----------|-------------|
+| QA-C2-M1 | Medium | **User-Correction nach Catchup blockiert**: Nach `analyst_catchup`-Schreib auf Slot (Prio 4) kann `analyst_online` (Prio 3) den Slot nicht mehr korrigieren, selbst wenn der User einen Fehler korrigiert ("eigentlich 15, nicht 10"). Der blocked-Trail erscheint, aber der neue Wert wird nicht gespeichert. Fix: `analyst_online` sollte bei expliziter User-Korrektur (Signal: user negiert vorherigen Wert) erlaubt sein zu überschreiben — erfordert Korrektur-Signal im `record_slot`-Schema oder Prio-Level-Erweiterung. |
+| QA-C2-M2 | Medium | **`runAnalystCatchup` überschreibt `next_briefing` von `runAnalystOnline`**: Catchup schreibt `analyst_status='done'` + neues `next_briefing` nach dem Online-Run. Wenn Catchup LLM kein `produce_briefing` aufruft (z.B. keine missed slots gefunden), bleibt das Online-Briefing erhalten (korrekt). Wenn Catchup `produce_briefing` aufruft, überschreibt es. Catchup hat mehr Kontext → vermutlich besseres Briefing, aber nicht garantiert. Low-risk für jetzt. |
+| QA-C2-L1 | Low | **N parallele Jina API-Calls bei Lazy Hydration**: Bei N bestehenden Steps ohne Embedding werden N simultane `generateEmbedding`-Calls via `Promise.all` gemacht. Bei N > 5 und Jina-Rate-Limit könnte das zu langsamen Antworten führen (graceful degradation → Jaccard vorhanden). |
+| QA-C2-L2 | Low | **Keine Runtime-Validierung von `StepEntry.embedding` aus JSONB**: Wenn JSONB-Daten korrumiert sind (nicht number[]), wird `cosineSim` mit ungültigen Daten aufgerufen. `classifyStepSimilarity` prüft `step.embedding.length === 0` aber nicht ob Elemente tatsächlich Zahlen sind. |
+
+### Production-Ready
+
+**YES** — keine Critical/High Bugs. QA-C2-M1 und QA-C2-M2 sind bekannte Designlimitierungen, kein Datenverlust. QA-C2-L1/L2 haben Graceful-Degradation.
+
