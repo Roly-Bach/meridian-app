@@ -770,7 +770,11 @@ export function buildTools(
               ? value.length === prevVal.length && value.every((v, i) => v === (prevVal as string[])[i])
               : value === prevVal
             if (same) {
-              return { success: true, step_title, slot, value, step_complete: false, skipped: true }
+              return {
+                success: true,
+                skipped: true,
+                message: `Slot "${slot}" für "${step_title}" enthält bereits diesen Wert. STOPP — kein weiterer record_slot-Aufruf für diesen Slot nötig. Fahre mit dem nächsten fehlenden Slot fort.`,
+              }
             }
           }
 
