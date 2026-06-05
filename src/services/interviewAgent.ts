@@ -559,6 +559,29 @@ export function buildTools(
             }
           }
 
+          // ── Layer 1b: colon-parent guard ───────────────────────────────────
+          // Prevents sub-step fragmentation: "Rechnungsprüfung: Archivierung"
+          // when no parent "Rechnungsprüfung" exists yet. Forces the LLM to
+          // register the top-level process first, preserving semantic breadth.
+          const parent = colonParent(title)
+          if (parent && parent !== title) {
+            const parentAlreadyRegistered = current.some((s) => {
+              const ex = s.title.trim().toLowerCase()
+              const p = parent.toLowerCase()
+              return ex === p || ex.includes(p) || p.includes(ex)
+            })
+            if (!parentAlreadyRegistered) {
+              return {
+                success: false,
+                soft_warning: true,
+                colon_parent_missing: true,
+                suggested_parent: parent,
+                message: `Registriere zuerst den übergeordneten Prozess "${parent}" mit register_step, bevor du den Teilschritt "${title}" anlegst. Der übergeordnete Prozess ist die korrekte Einheit für die Wissenserhebung.`,
+                existing_step_titles: current.map((s) => s.title),
+              }
+            }
+          }
+
           // ── Layer 2: embedding-based cosine similarity (Jina v3) ──────────
           // Falls back to Layer 3 (Jaccard) when JINA_API_KEY is unset.
           const titleEmbedding = await generateEmbedding(title)
@@ -737,6 +760,19 @@ export function buildTools(
 
           const prevSlotValue = current[stepIndex].slots[slot]
           const isOverwrite = prevSlotValue !== null && prevSlotValue !== undefined
+
+          // Idempotency: skip DB write when value is identical to existing (Pt11).
+          // Prevents analyst churn (same slot written 5× with same value).
+          // is_correction bypasses this check — user explicitly correcting a value.
+          if (isOverwrite && !is_correction) {
+            const prevVal = prevSlotValue?.value
+            const same = Array.isArray(value) && Array.isArray(prevVal)
+              ? value.length === prevVal.length && value.every((v, i) => v === (prevVal as string[])[i])
+              : value === prevVal
+            if (same) {
+              return { success: true, step_title, slot, value, step_complete: false, skipped: true }
+            }
+          }
 
           // Priority conflict check (ADR-016): block lower-priority writers.
           // is_correction=true bypasses the check when the user explicitly corrects a prior value.

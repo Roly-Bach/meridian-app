@@ -293,17 +293,26 @@ async function mergeFragmentedSteps(
 
 // ─── Catchup System Prompt ────────────────────────────────────────────────────
 
-function buildCatchupSystemPrompt(ctx: InterviewContext): string {
+function buildCatchupSystemPrompt(ctx: InterviewContext, history: TurnMessage[]): string {
   const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
   const activeStepLine = activeStep
     ? `Aktiv im Walkthrough: "${activeStep.title}" (Status: ${activeStep.status})`
     : 'Aktiv im Walkthrough: keiner'
 
+  // Numbered turn index: only user turns (1-indexed) for unambiguous source_turn attribution.
+  // Catchup LLM was consistently misattributing source_turn without this index (Pt12).
+  const userTurns = history.filter(t => t.role === 'user')
+  const turnIndex = userTurns.length > 0
+    ? '\n## Mitarbeiter-Turns (für source_turn)\n' +
+      userTurns.map((t, i) => `Turn ${i + 1}: "${t.content.slice(0, 120)}${t.content.length > 120 ? '…' : ''}"`).join('\n')
+    : ''
+
   return `Du bist Interview-Analyst im Catch-up-Modus. Deine Aufgabe: nachzuholende Slots aus dem GESAMTEN Gesprächsverlauf extrahieren.
 
 CATCHUP-MODUS — strikte Regeln:
-- Analysiere alle User-Turns in der History auf verpasste Slot-Werte.
-- Jeder record_slot-Call MUSS evidence_quote UND source_turn enthalten (source_turn = 1-indexed Nummer des User-Turns aus dem die Evidence stammt).
+- Analysiere alle User-Turns im Turn-Index unten auf verpasste Slot-Werte.
+- Jeder record_slot-Call MUSS evidence_quote UND source_turn enthalten.
+- source_turn = exakte 1-indexed Nummer des User-Turns (aus dem Turn-Index unten — NICHT schätzen).
 - evidence_span ist NICHT gültig im Catchup — nutze stets evidence_quote + source_turn.
 - NUR record_slot ist verfügbar. Kein register_step, kein produce_briefing, kein update_walkthrough_data.
 - Extrahiere nur explizit genannte Werte, keine Inferenzen.
@@ -320,6 +329,7 @@ CATCHUP-MODUS — strikte Regeln:
 - Abteilung: ${ctx.department}
 - Step-Tracker: ${ctx.stepTracker.length} Steps registriert
 - ${activeStepLine}
+${turnIndex}
 `
 }
 
@@ -494,7 +504,7 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
   const supabase = getSupabaseAdmin()
   const isGoogleModel = modelString.startsWith('google/')
 
-  const systemPrompt = buildCatchupSystemPrompt(opts.context)
+  const systemPrompt = buildCatchupSystemPrompt(opts.context, opts.history)
   const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
 
   // Catchup only gets record_slot — no produce_briefing, no structural tools.
