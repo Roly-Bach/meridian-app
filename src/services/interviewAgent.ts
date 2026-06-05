@@ -784,21 +784,6 @@ export function buildTools(
             }
           }
           resolvedQuote = evidence_quote.trim()
-
-          // F2: Validate evidence_quote against source_turn content when userTurns available.
-          // Forces verbatim/near-verbatim quoting, improving tool_call_plausibility scorer.
-          if (opts?.userTurns && source_turn) {
-            const turnContent = opts.userTurns[source_turn - 1] ?? ''
-            if (turnContent.length > 0) {
-              const overlap = tokenJaccard(resolvedQuote, turnContent)
-              if (overlap < 0.3) {
-                return {
-                  success: false,
-                  error: `evidence_quote "${resolvedQuote.slice(0, 60)}" stimmt nicht ausreichend mit Turn ${source_turn} überein (Übereinstimmung: ${Math.round(overlap * 100)}%, Minimum: 30%). Nutze einen wörtlicheren Ausschnitt aus Turn ${source_turn}: "${turnContent.slice(0, 100)}"`,
-                }
-              }
-            }
-          }
         }
 
         // Per-slot type guards — return error so LLM corrects the call
