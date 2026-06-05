@@ -529,6 +529,8 @@ export function buildTools(
     source?: 'quick' | 'analyst' | 'analyst_online' | 'analyst_catchup'
     /** When set, only tools whose names are in this list are included in the returned object. */
     allowedTools?: string[]
+    /** User turn texts indexed 0-based. When provided, evidence_quote is validated against source_turn. */
+    userTurns?: string[]
   },
 ) {
   const writeSource = opts?.source ?? 'analyst'
@@ -605,24 +607,35 @@ export function buildTools(
             }
           }
 
-          // ── Layer 1b: colon-parent guard ───────────────────────────────────
-          // Prevents sub-step fragmentation: "Rechnungsprüfung: Archivierung"
-          // when no parent "Rechnungsprüfung" exists yet. Forces the LLM to
-          // register the top-level process first, preserving semantic breadth.
+          // ── Layer 1b: colon-parent guard (F1) ─────────────────────────────
+          // Sub-step "X: Y" handling has two cases:
+          // Case A — parent not registered: tell LLM to register parent first
+          // Case B — parent already registered: redirect directly, skip this call
           const parent = colonParent(title)
           if (parent && parent !== title) {
-            const parentAlreadyRegistered = current.some((s) => {
+            const parentMatch = current.find((s) => {
               const ex = s.title.trim().toLowerCase()
               const p = parent.toLowerCase()
               return ex === p || ex.includes(p) || p.includes(ex)
             })
-            if (!parentAlreadyRegistered) {
+            if (!parentMatch) {
+              // Case A: parent missing → register parent first
               return {
                 success: false,
                 soft_warning: true,
                 colon_parent_missing: true,
                 suggested_parent: parent,
-                message: `Registriere zuerst den übergeordneten Prozess "${parent}" mit register_step, bevor du den Teilschritt "${title}" anlegst. Der übergeordnete Prozess ist die korrekte Einheit für die Wissenserhebung.`,
+                message: `Registriere zuerst den übergeordneten Prozess "${parent}" mit register_step. Danach nutze "${parent}" direkt als step_title für record_slot — rufe register_step für "${title}" NICHT nochmals auf.`,
+                existing_step_titles: current.map((s) => s.title),
+              }
+            } else {
+              // Case B: parent exists → redirect directly, no new step needed
+              return {
+                success: true,
+                deduplicated: true,
+                matched_title: parentMatch.title,
+                message: `Teilschritt-Registrierung übersprungen. Nutze direkt "${parentMatch.title}" als step_title für record_slot. KEIN weiterer register_step-Aufruf nötig.`,
+                step_tracker: current,
                 existing_step_titles: current.map((s) => s.title),
               }
             }
@@ -771,6 +784,21 @@ export function buildTools(
             }
           }
           resolvedQuote = evidence_quote.trim()
+
+          // F2: Validate evidence_quote against source_turn content when userTurns available.
+          // Forces verbatim/near-verbatim quoting, improving tool_call_plausibility scorer.
+          if (opts?.userTurns && source_turn) {
+            const turnContent = opts.userTurns[source_turn - 1] ?? ''
+            if (turnContent.length > 0) {
+              const overlap = tokenJaccard(resolvedQuote, turnContent)
+              if (overlap < 0.3) {
+                return {
+                  success: false,
+                  error: `evidence_quote "${resolvedQuote.slice(0, 60)}" stimmt nicht ausreichend mit Turn ${source_turn} überein (Übereinstimmung: ${Math.round(overlap * 100)}%, Minimum: 30%). Nutze einen wörtlicheren Ausschnitt aus Turn ${source_turn}: "${turnContent.slice(0, 100)}"`,
+                }
+              }
+            }
+          }
         }
 
         // Per-slot type guards — return error so LLM corrects the call

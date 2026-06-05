@@ -305,7 +305,7 @@ function buildCatchupSystemPrompt(ctx: InterviewContext, history: TurnMessage[])
   const userTurns = history.filter(t => t.role === 'user')
   const turnIndex = userTurns.length > 0
     ? '\n## Mitarbeiter-Turns (für source_turn)\n' +
-      userTurns.map((t, i) => `Turn ${i + 1}: "${t.content.slice(0, 120)}${t.content.length > 120 ? '…' : ''}"`).join('\n')
+      userTurns.map((t, i) => `Turn ${i + 1}: "${t.content.slice(0, 300)}${t.content.length > 300 ? '…' : ''}"`).join('\n')
     : ''
 
   return `Du bist Interview-Analyst im Catch-up-Modus. Deine Aufgabe: nachzuholende Slots aus dem GESAMTEN Gesprächsverlauf extrahieren.
@@ -511,9 +511,12 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
   // Catchup only gets record_slot — no produce_briefing, no structural tools.
   // The online analyst's next_briefing is preserved: catchup fills missed slots
   // but does not regenerate the conversation briefing (M2 fix).
+  // F2: Pass user turn texts for evidence_quote Jaccard validation in record_slot
+  const userTurns = opts.history.filter(t => t.role === 'user').map(t => t.content)
   const catchupTools = buildTools(interviewId, workspaceId, undefined, {
     source: 'analyst_catchup',
     allowedTools: ['record_slot'],
+    userTurns,
   })
 
   let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }

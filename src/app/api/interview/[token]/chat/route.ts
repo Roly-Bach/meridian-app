@@ -143,7 +143,17 @@ export async function POST(
   // ── Read Analyst briefing from previous turn ────────────────────────────────
   const analystStatus = interview.analyst_status ?? 'idle'
   const analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
-  const usedFillerPhrases: string[] = analystBriefing?.usedFillerPhrases ?? []
+  // F3: Seed filler phrase list with common German fillers from Turn 1 onward.
+  // Prevents "Das ist..." / "Vielen Dank" from appearing even on first turns.
+  const SEED_FILLERS = [
+    'Das ist ein', 'Das ist eine', 'Das klingt', 'Das macht',
+    'Vielen Dank', 'Danke', 'Ich danke', 'Sehr gut',
+    'Interessant', 'Gut,', 'Alles klar',
+  ]
+  const persistedFillers = analystBriefing?.usedFillerPhrases ?? []
+  const usedFillerPhrases: string[] = persistedFillers.length === 0
+    ? SEED_FILLERS
+    : persistedFillers
 
   // ── Iteration 2: Orchestrator decides phase ─────────────────────────────────
   const orchestratorCtx: OrchestratorContext = {
