@@ -4,10 +4,12 @@ import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import {
   buildDynamicContext,
   detectNumberAnchoring,
+  detectFillerPhrases,
   type InterviewContext,
   type TurnMessage,
   type AnalystBriefing,
 } from './interviewAgent'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 // ─── Talker Stream (Iteration 3) ──────────────────────────────────────────────
 // Text-only streaming response. No tools — pure conversation.
@@ -154,6 +156,32 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
                 numbers: anchored,
                 interviewId: opts.context.interviewId,
               })
+            }
+          }
+
+          // Pt13: Filler phrase tracking — persist detected opening phrases into
+          // interviews.next_briefing.usedFillerPhrases (existing JSONB, no schema change).
+          const fillers = detectFillerPhrases(text)
+          if (fillers.length > 0) {
+            try {
+              const supabase = getSupabaseAdmin()
+              const { data: interview } = await supabase
+                .from('interviews')
+                .select('next_briefing')
+                .eq('id', opts.context.interviewId)
+                .maybeSingle()
+              const currentBriefing = (interview?.next_briefing as Record<string, unknown> | null) ?? {}
+              const existing = (currentBriefing['usedFillerPhrases'] as string[] | undefined) ?? []
+              // Cap at 20 total; dedup; newest last
+              const merged = [...new Set([...existing, ...fillers])].slice(-20)
+              await supabase
+                .from('interviews')
+                .update({
+                  next_briefing: { ...currentBriefing, usedFillerPhrases: merged } as unknown as import('@/lib/database.types').Json,
+                })
+                .eq('id', opts.context.interviewId)
+            } catch (err) {
+              console.error('[talker:filler-tracking] failed (non-fatal):', err)
             }
           }
 

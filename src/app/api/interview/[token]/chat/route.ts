@@ -143,6 +143,7 @@ export async function POST(
   // ── Read Analyst briefing from previous turn ────────────────────────────────
   const analystStatus = interview.analyst_status ?? 'idle'
   const analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
+  const usedFillerPhrases: string[] = analystBriefing?.usedFillerPhrases ?? []
 
   // ── Iteration 2: Orchestrator decides phase ─────────────────────────────────
   const orchestratorCtx: OrchestratorContext = {
@@ -202,6 +203,7 @@ export async function POST(
       extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
       stepTracker,
+      usedFillerPhrases,
     }
 
     const farewellBriefing: AnalystBriefing = {
@@ -316,6 +318,7 @@ export async function POST(
       maxDurationMinutes: interview.max_duration_minutes ?? 30,
       stepTracker: freshStepTracker,
       missingSlotsForCoverageCheck,
+      usedFillerPhrases,
     },
     history,
     briefing: analystBriefing,

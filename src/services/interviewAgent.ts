@@ -57,6 +57,8 @@ export interface InterviewContext {
   maxDurationMinutes: number
   stepTracker: StepEntry[]
   missingSlotsForCoverageCheck?: MissingSlot[]
+  /** Opening phrases the Talker already used — injected as avoidance list to prevent repetition */
+  usedFillerPhrases?: string[]
 }
 
 export interface TurnMessage {
@@ -80,6 +82,8 @@ export interface AnalystBriefing {
   suggested_question?: string
   wrap_up_question_asked?: boolean
   clarification_cards?: ClarificationCard[]
+  /** Accumulated opening phrases the Talker has used — stored in next_briefing for cross-turn tracking */
+  usedFillerPhrases?: string[]
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -377,6 +381,42 @@ export function detectNumberAnchoring(talkerText: string, suggestedQuestion: str
   }))
 }
 
+/**
+ * Pt13: Detect formulaic acknowledgment phrases in Talker output.
+ * Extracts the opening clause of each sentence that matches known filler patterns.
+ * Stored in interview_state and injected back as an avoidance list each turn.
+ */
+const FILLER_PATTERNS = [
+  /^Das ist (ein|eine|einer|eines|kein|keine|sehr|ein sehr)\b/i,
+  /^Das klingt\b/i,
+  /^Das macht\b/i,
+  /^Das sind\b/i,
+  /^Das war\b/i,
+  /^Vielen Dank\b/i,
+  /^Danke\b/i,
+  /^Ich danke\b/i,
+  /^Gut[,.]?\s/i,
+  /^Schön[,.]?\s/i,
+  /^Sehr gut\b/i,
+  /^Interessant\b/i,
+  /^Verstanden[,.]?\s/i,
+  /^Alles klar\b/i,
+]
+
+export function detectFillerPhrases(text: string): string[] {
+  // Check only the FIRST sentence (reaction sentence before the question)
+  const firstSentence = text.split(/[.!?]\s+/)[0]?.trim() ?? ''
+  const matched: string[] = []
+  for (const pattern of FILLER_PATTERNS) {
+    if (pattern.test(firstSentence)) {
+      // Store just the opening clause (first 50 chars) as the avoidance token
+      matched.push(firstSentence.slice(0, 50))
+      break
+    }
+  }
+  return matched
+}
+
 export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBriefing | null): string {
   const focusLine = ctx.focusTopics
     ? `Fokusthemen (NUR interne Steuerung — im Opener niemals namentlich nennen): ${ctx.focusTopics}`
@@ -460,6 +500,12 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     ? `\n\n## NÄCHSTER TURN — Analyst-Empfehlung\nFokus: ${sanitizeForPrompt(briefing.next_focus ?? '—')}\nEmpfohlene Frage (anpassen wenn bereits beantwortet): "${sanitizeForPrompt(suggestedQ)}"${anchorWarning}`
     : ''
 
+  // Filler avoidance: inject list of already-used opening phrases (Pt13)
+  const recentFillers = ctx.usedFillerPhrases?.slice(-8) ?? []
+  const fillerAvoidance = recentFillers.length > 0
+    ? `\nVARIANZ-GEBOT: Diese Einstiegsphrasen wurden bereits genutzt — NICHT wiederholen: ${recentFillers.map(p => `"${p}"`).join(' | ')}`
+    : ''
+
   return `## Interview-Kontext
 - Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
 - Abteilung: ${ctx.department}
@@ -468,7 +514,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}
 
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}`
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
