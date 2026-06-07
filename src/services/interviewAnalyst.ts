@@ -94,6 +94,14 @@ Sprache des Interviews: Deutsch.
 
 ## Tool-Aufruf-Priorität (PFLICHT — strikte Reihenfolge)
 
+STUFE 0 — TURN-1 PROZESS-INVENTAR (PFLICHT bei erstem Mitarbeiter-Turn):
+Wenn dies der ERSTE Mitarbeiter-Turn ist (history.user-Turns.length === 1) UND der Mitarbeiter MEHRERE Prozesse/Aufgaben nennt:
+  → register_step für JEDEN genannten Hauptprozess SOFORT, einer nach dem anderen.
+  → Status bleibt automatisch "exploring" (Walkthrough beginnt erst wenn Mitarbeiter Details liefert).
+  → Beispiel: Persona sagt "ich mache Rechnungsprüfung und Monatsabschluss" → ZWEI register_step Calls.
+  → Step-Registration-Coverage-Score misst dies — fehlende Steps = harter Fail.
+  → Erst danach STUFE 1+2.
+
 STUFE 1 — NEUE SCHRITTE (höchste Priorität):
 Beschreibt der Mitarbeiter in diesem Turn einen neuen, eigenständigen Prozess?
   → register_step SOFORT, vor allen anderen Tool-Calls außer update_topics

@@ -59,6 +59,10 @@ export interface InterviewContext {
   missingSlotsForCoverageCheck?: MissingSlot[]
   /** Opening phrases the Talker already used — injected as avoidance list to prevent repetition */
   usedFillerPhrases?: string[]
+  /** Last 4 assistant messages — used for drill-stop detection (F1). */
+  recentAssistantTurns?: string[]
+  /** Last user message — used for refuse-detect (F1b). */
+  lastUserTurn?: string
 }
 
 export interface TurnMessage {
@@ -238,6 +242,84 @@ PFLICHT: Nach Tool-Calls IMMER eine Textantwort generieren — auch nur ein Reak
 `
 }
 
+// ─── F1: Drill-Stop Detection ────────────────────────────────────────────────
+// Counts how often the agent has questioned each slot-category in the recent
+// assistant turns. When the same null slot has been targeted >= 2 times in the
+// last 4 turns, inject a hard skip-rule to break the retry storm.
+
+type DrillSlotKind = 'duration_minutes' | 'frequency_per_month' | 'error_rate_percent' | 'rule_based'
+
+const DRILL_PATTERNS: Record<DrillSlotKind, RegExp> = {
+  duration_minutes: /(minuten|stunden|wie lange|wie viel(?:e)? zeit|wie viel(?:e)? tag|dauer|aufwand|aufwendest)/i,
+  frequency_per_month: /(wie oft|häufigkeit|anzahl|wie viele.*(rechnung|fall|konten|posten|vorgäng|tickets|aufträge)|pro (woche|monat|tag))/i,
+  error_rate_percent: /(fehlerquote|fehleranteil|prozent.*(fehler|unstimmig|korrektur)|wie hoch.*anteil.*fehler|anteil.*korrigier)/i,
+  rule_based: /(immer.*gleich(en)?.*schema|festes schema|nach.*regel(werk)?|von fall zu fall|wenn-dann|strengen.*regeln)/i,
+}
+
+// F1b: detect persona-refuse patterns. When the persona explicitly declines
+// to give a number and the agent has already asked once for that slot kind,
+// trigger drill-stop after a single attempt instead of waiting for the second.
+const REFUSE_PATTERNS: RegExp[] = [
+  /kann ich (nicht|keine|kein|nichts|hier|dazu)?\s*\b(exakt|präzise|genau|nennen|beziffern|sagen|angeben)\b/i,
+  /lässt sich (nicht|keine|kein|kaum)?\s*(pauschal|allgemein|exakt|präzise|verlässlich|genau)?\s*(beziffern|festlegen|nennen|sagen|bestimmen|erfassen)/i,
+  /keine (exakte|präzise|verlässliche|allgemeingültige|allgemein\s*gültige|statistische|starre|pauschale|feste) (zahl|minutenzahl|prozentzahl|stundenzahl|angabe|erfassung|auswertung|aussage|aufzeichnung)/i,
+  /schwer zu (sagen|beziffern|nennen|bestimmen|schätzen)/i,
+  /variiert (stark|sehr|deutlich|monatlich|erheblich)/i,
+  /(hängt|abhängig).*(stark|maßgeblich|unmittelbar)/i,
+  /führe ich keine (statistik|aufzeichnung|erfassung)/i,
+  /habe ich (keine|dazu keine|hierzu keine|leider keine)/i,
+  /liegt mir (keine|hierzu keine|dazu keine)/i,
+  /nicht in (einer|eine) (festen?|starren?) (stunden|minuten|zeit)/i,
+]
+
+export function detectPersonaRefuse(text: string | undefined): boolean {
+  if (!text) return false
+  return REFUSE_PATTERNS.some(p => p.test(text))
+}
+
+export function detectDrillStops(
+  recentAssistantTurns: string[] | undefined,
+  stepTracker: StepEntry[],
+  lastUserTurn?: string,
+): string[] {
+  if (!recentAssistantTurns || recentAssistantTurns.length === 0) return []
+  const lastFour = recentAssistantTurns.slice(-4)
+  const counts: Record<DrillSlotKind, number> = {
+    duration_minutes: 0,
+    frequency_per_month: 0,
+    error_rate_percent: 0,
+    rule_based: 0,
+  }
+  for (const turn of lastFour) {
+    for (const kind of Object.keys(DRILL_PATTERNS) as DrillSlotKind[]) {
+      if (DRILL_PATTERNS[kind].test(turn)) counts[kind] += 1
+    }
+  }
+
+  // Active step = the one currently being walked through (walkthrough > exploring).
+  const activeStep =
+    stepTracker.find(s => s.status === 'walkthrough') ??
+    stepTracker.find(s => s.status === 'exploring')
+  if (!activeStep) return []
+
+  // F1b: when persona refused on last turn, threshold drops to 1 — early skip.
+  const refused = detectPersonaRefuse(lastUserTurn)
+  const threshold = refused ? 1 : 2
+
+  const warnings: string[] = []
+  for (const kind of Object.keys(counts) as DrillSlotKind[]) {
+    if (counts[kind] >= threshold && activeStep.slots[kind] === null) {
+      const reason = refused
+        ? `Mitarbeiter hat im letzten Turn ausgewichen (Refuse-Pattern erkannt)`
+        : `${counts[kind]}× in den letzten ${lastFour.length} Turns nachgefragt ohne Wert`
+      warnings.push(
+        `Slot "${kind}" für Schritt "${activeStep.title}": ${reason}. NICHT erneut fragen — Slot bleibt offen, Clarification Card am Ende erfasst ihn. Wechsle SOFORT zu einem anderen Slot/Schritt.`,
+      )
+    }
+  }
+  return warnings
+}
+
 // ─── Phase Methodology Sections ───────────────────────────────────────────────
 // Iteration 1 (ADR-011 D7): Max. 5 Zeilen pro Phase, taktisches Briefing.
 // Injected per-turn in buildDynamicContext so static prompt stays cacheable.
@@ -403,15 +485,31 @@ const FILLER_PATTERNS = [
   /^Alles klar\b/i,
 ]
 
+// F1c: question-template fillers — repetitive estimation prompts that tank
+// naturalness when used >2× in a run. Scanned across the FULL text (not just
+// opener) and tracked alongside opener fillers so the avoidance list catches
+// both kinds.
+const QUESTION_TEMPLATE_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /welcher wert wäre (eine|deine)? ?grobe schätzung/i, label: 'Welcher Wert wäre eine grobe Schätzung' },
+  { pattern: /kannst du.*grobe schätzung/i, label: 'Kannst du eine grobe Schätzung geben' },
+  { pattern: /wie viel(e)? .*im durchschnitt/i, label: 'Wie viel im Durchschnitt' },
+  { pattern: /wie viel(e)? .*pro (rechnung|vorgang|beleg|fall)/i, label: 'Wie viel pro Vorgang' },
+]
+
 export function detectFillerPhrases(text: string): string[] {
-  // Check only the FIRST sentence (reaction sentence before the question)
-  const firstSentence = text.split(/[.!?]\s+/)[0]?.trim() ?? ''
   const matched: string[] = []
+  // Opener fillers — first sentence only
+  const firstSentence = text.split(/[.!?]\s+/)[0]?.trim() ?? ''
   for (const pattern of FILLER_PATTERNS) {
     if (pattern.test(firstSentence)) {
-      // Store just the opening clause (first 50 chars) as the avoidance token
       matched.push(firstSentence.slice(0, 50))
       break
+    }
+  }
+  // F1c: Question-template fillers — full-text scan
+  for (const { pattern, label } of QUESTION_TEMPLATE_PATTERNS) {
+    if (pattern.test(text)) {
+      matched.push(label)
     }
   }
   return matched
@@ -506,6 +604,13 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     ? `\nVARIANZ-GEBOT: Diese Einstiegsphrasen wurden bereits genutzt — NICHT wiederholen: ${recentFillers.map(p => `"${p}"`).join(' | ')}`
     : ''
 
+  // F1: Drill-Stop — break retry storms on unanswerable quant slots.
+  // F1b: refuse-detect on last user turn lowers threshold to 1.
+  const drillWarnings = detectDrillStops(ctx.recentAssistantTurns, ctx.stepTracker, ctx.lastUserTurn)
+  const drillStopSection = drillWarnings.length > 0
+    ? `\n\n## ⛔ DRILL-STOP (PFLICHT)\n${drillWarnings.map(w => `- ${w}`).join('\n')}`
+    : ''
+
   return `## Interview-Kontext
 - Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
 - Abteilung: ${ctx.department}
@@ -514,7 +619,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}
 
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${drillStopSection}`
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
@@ -1046,7 +1151,17 @@ export function createInterviewStream(opts: AgentStreamOptions) {
   const model = resolveModel(modelString)
 
   const staticPart = buildStaticPrompt()
-  const dynamicPart = buildDynamicContext(opts.context, opts.briefing)
+  // F1: feed last assistant turns into context for drill-stop detection.
+  // F1b: also feed last user turn for refuse-detect.
+  const recentAssistantTurns = opts.history
+    .filter((t) => t.role === 'assistant')
+    .slice(-4)
+    .map((t) => t.content)
+  const lastUserTurn = [...opts.history].reverse().find((t) => t.role === 'user')?.content
+  const dynamicPart = buildDynamicContext(
+    { ...opts.context, recentAssistantTurns, lastUserTurn },
+    opts.briefing,
+  )
 
   type PlainMessage = { role: 'user' | 'assistant'; content: string }
   type RichMessage = { role: 'user' | 'assistant'; content: string | Array<{ type: 'text'; text: string }> }

@@ -301,6 +301,49 @@ async function generatePersonaResponse(
   return text.trim()
 }
 
+// ─── Trail metrics ────────────────────────────────────────────────────────────
+
+export interface TrailMetrics {
+  totalWrites: number
+  blockedWrites: number
+  /** blocked_writes / total_writes — target < 0.10 */
+  blockedRate: number
+  /** non-blocked overwrites / total_writes — target < 0.20 */
+  overwriteChurn: number
+}
+
+/**
+ * Parse the slot-write trail JSONL and compute diagnostic metrics.
+ * These measure write-path health independent of interview quality.
+ */
+function computeTrailMetrics(trailFile: string): TrailMetrics | null {
+  try {
+    if (!fs.existsSync(trailFile)) return null
+    const lines = fs.readFileSync(trailFile, 'utf8').split('\n').filter(Boolean)
+    if (lines.length === 0) return null
+
+    let blockedWrites = 0
+    let nonBlockedOverwrites = 0
+    for (const line of lines) {
+      const event = JSON.parse(line) as { blocked?: boolean; overwrite?: boolean }
+      if (event.blocked) {
+        blockedWrites++
+      } else if (event.overwrite) {
+        nonBlockedOverwrites++
+      }
+    }
+    const totalWrites = lines.length
+    return {
+      totalWrites,
+      blockedWrites,
+      blockedRate: Math.round((blockedWrites / totalWrites) * 100) / 100,
+      overwriteChurn: Math.round((nonBlockedOverwrites / totalWrites) * 100) / 100,
+    }
+  } catch {
+    return null
+  }
+}
+
 // ─── Report writer ────────────────────────────────────────────────────────────
 
 function modelSlug(model: string): string {
@@ -317,10 +360,11 @@ function buildReport(opts: {
   finalStepTracker: StepEntry[]
   interviewStatus: string
   scores: ScoreSet
+  trailMetrics?: TrailMetrics | null
 }): string {
   const {
     model, personaName, interviewId, evalRunId, baselineLabel,
-    turns, finalStepTracker, interviewStatus, scores,
+    turns, finalStepTracker, interviewStatus, scores, trailMetrics,
   } = opts
 
   const testerModel = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
@@ -330,7 +374,16 @@ function buildReport(opts: {
   const langfuseSession = process.env.LANGFUSE_PROJECT_URL
     ? `${process.env.LANGFUSE_PROJECT_URL}/sessions/${interviewId}`
     : null
-  const status = scores.completionCorrectness ? 'PASS' : 'FAIL'
+  // F6: PASS gate retuned — completionCorrectness alone is too weak.
+  // Real PASS requires: all steps registered, naturalness solid, no churn,
+  // phases progressed cleanly. Otherwise FAIL surfaces regressions explicitly.
+  const passed =
+    scores.completionCorrectness === true &&
+    scores.stepRegistrationCoverage >= 0.8 &&
+    scores.dialogNaturalness >= 0.7 &&
+    scores.phaseProgression >= 0.8 &&
+    (trailMetrics?.blockedRate ?? 0) < 0.1
+  const status = passed ? 'PASS' : 'FAIL'
 
   const frontmatter = [
     '---',
@@ -358,6 +411,11 @@ function buildReport(opts: {
     `  dialog_naturalness: ${scores.dialogNaturalness}`,
     `  completion_correctness: ${scores.completionCorrectness}`,
     `  step_registration_coverage: ${scores.stepRegistrationCoverage}`,
+    trailMetrics ? 'trail:' : null,
+    trailMetrics ? `  total_writes: ${trailMetrics.totalWrites}` : null,
+    trailMetrics ? `  blocked_writes: ${trailMetrics.blockedWrites}` : null,
+    trailMetrics ? `  blocked_rate: ${trailMetrics.blockedRate}` : null,
+    trailMetrics ? `  overwrite_churn: ${trailMetrics.overwriteChurn}` : null,
     '---',
   ].filter(l => l !== null).join('\n')
 
@@ -376,8 +434,10 @@ function buildReport(opts: {
     `| dialog_naturalness | ${scores.dialogNaturalness} | maximize |`,
     `| completion_correctness | ${scores.completionCorrectness} | true |`,
     `| step_registration_coverage | ${scores.stepRegistrationCoverage} | 1.0 |`,
+    trailMetrics ? `| blocked_rate | ${trailMetrics.blockedRate} | < 0.10 |` : null,
+    trailMetrics ? `| overwrite_churn | ${trailMetrics.overwriteChurn} | < 0.20 |` : null,
     '',
-  ].join('\n')
+  ].filter(l => l !== null).join('\n')
 
   const conversationLog = [
     '## Gesprächsverlauf',
@@ -434,7 +494,11 @@ function writeReport(opts: {
   const filename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}.md`
   const filepath = path.join(dir, filename)
 
-  const content = buildReport(opts)
+  const trailMetrics = process.env.SLOT_TRAIL_FILE
+    ? computeTrailMetrics(process.env.SLOT_TRAIL_FILE)
+    : null
+
+  const content = buildReport({ ...opts, trailMetrics })
   fs.writeFileSync(filepath, content, 'utf8')
 
   // Write frozen transcript.json alongside the MD report (ADR-015)

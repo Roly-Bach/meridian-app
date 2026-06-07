@@ -44,9 +44,10 @@ Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
 Spannen NICHT mehr konkretisieren wenn Wert bereits erfasst ist (✓ im Tracker). Nur bei echtem null.
 Ausweichen: Wenn Mitarbeiter keine konkrete Zahl nennen kann ("schwer zu sagen", "variiert stark"):
-→ Einmal nachfragen: "Welcher Wert wäre eine grobe Schätzung?"
-→ Wenn dann immer noch keine Zahl: Slot akzeptieren und weitergehn. KEIN drittes Mal fragen.
-→ Keinen eigenen Durchschnitt vorschlagen. Fehlende Werte werden am Interviewende als Folgefragen erfasst.
+→ Slot SOFORT akzeptieren und weitergehn — nicht mehr nachfragen.
+→ Akzeptanz-Phrasen-Varianz (NIE doppelt verwenden): "Verstanden, halten wir das offen — gehen wir weiter zu...", "Notiere ich als variabel. Nächster Punkt:...", "Klar, das holen wir später nach. Erzähl mir...".
+→ Falls eine Spanne genannt wurde ("ein bis zwei Tage"): NICHT mehr konkretisieren — Spanne reicht.
+→ Keinen eigenen Durchschnitt vorschlagen. Floskeln wie "Welcher Wert wäre eine grobe Schätzung" sind verboten — Repetition tankt Naturalness.
 </turn_format>
 
 <verboten>
@@ -71,7 +72,17 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
   const modelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(modelString)
 
-  const dynamicPart = buildDynamicContext(opts.context, opts.briefing)
+  // F1: feed last assistant turns into context for drill-stop detection.
+  // F1b: also feed last user turn for refuse-detect.
+  const recentAssistantTurns = opts.history
+    .filter((t) => t.role === 'assistant')
+    .slice(-4)
+    .map((t) => t.content)
+  const lastUserTurn = [...opts.history].reverse().find((t) => t.role === 'user')?.content
+  const dynamicPart = buildDynamicContext(
+    { ...opts.context, recentAssistantTurns, lastUserTurn },
+    opts.briefing,
+  )
 
   type PlainMessage = { role: 'user' | 'assistant'; content: string }
   type RichMessage = { role: 'user' | 'assistant'; content: string | Array<{ type: 'text'; text: string }> }

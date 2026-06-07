@@ -285,12 +285,14 @@ export async function POST(
   // Eliminates an extra DB round-trip on every turn.
   let freshStepTracker = stepTracker
   if (stepTracker.length > 0) {
+    const activeStep = stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
     const qeTracker = await runQuickExtract({
       interviewId: interview.id,
       workspaceId: interview.workspace_id,
       userInput: user_input,
       stepTracker,
       currentTurnNumber: nextTurnNumber,
+      activeStepTitle: activeStep?.title ?? null,
     })
     if (qeTracker !== null) freshStepTracker = qeTracker
   }

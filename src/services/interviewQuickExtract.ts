@@ -27,12 +27,19 @@ export interface QuickExtractOptions {
   userInput: string
   stepTracker: StepEntry[]
   currentTurnNumber: number
+  /** Title of the step currently being explored/walked through. Restricts writes to prevent cross-step contamination. */
+  activeStepTitle?: string | null
   traceCtx?: TraceCtx
 }
 
 const QUICK_EXTRACT_SYSTEM_PROMPT = `Du bist ein schneller Slot-Extraktor für ein laufendes Interview.
 
 AUFGABE: Aus dem letzten Mitarbeiter-Statement Werte für BEREITS registrierte Prozessschritte ableiten. Nur wenn explizit genannt — keine Inferenz.
+
+STEP-ROUTING REGEL (KRITISCH)
+- Wenn ein aktiver Schritt angegeben ist: schreibe AUSSCHLIESSLICH in diesen Schritt.
+- Abweichung nur wenn das Statement einen anderen registrierten Schritt EXPLIZIT beim Namen nennt (z.B. "Beim Monatsabschluss..."). In diesem Fall NUR Werte für den explizit genannten Schritt schreiben, nicht für den aktiven.
+- Spricht das Statement über einen neuen, noch nicht registrierten Prozess → KEINE Slots schreiben. Der Analyst registriert den neuen Schritt.
 
 REGELN
 - Nur record_slot und update_walkthrough_data nutzen.
@@ -45,6 +52,10 @@ REGELN
 - evidence_span (PFLICHT bei record_slot): kurzer wörtlicher Ausschnitt (5–60 Zeichen) AUS DEM AKTUELLEN STATEMENT, z.B. "100", "5 Minuten", "SAP FI und Excel", "80 bis 100". Nicht paraphrasieren — exakter Substring.
 - source_turn = aktuelle Turn-Nummer.
 - Mehrere Slots in einem Statement → mehrere record_slot Calls.
+
+SLOT-GUARD (KRITISCH)
+- Slot bereits mit Wert gefüllt (in Schritt-Tracker mit "✓") → KEIN record_slot Aufruf. Nie überschreiben.
+- Nur NULL-Slots befüllen.
 
 NICHT TUN
 - Keine Briefings, keine Phasenwechsel, keine Diskussion.
@@ -75,10 +86,26 @@ export async function runQuickExtract(opts: QuickExtractOptions): Promise<StepEn
   }
 
   const stepSummary = opts.stepTracker
-    .map((s) => `- "${s.title}" [${s.status}]`)
+    .map((s) => {
+      const filledSlots = Object.entries(s.slots)
+        .filter(([, v]) => v !== null)
+        .map(([k]) => k)
+        .join(', ')
+      const nullSlots = Object.entries(s.slots)
+        .filter(([, v]) => v === null)
+        .map(([k]) => k)
+        .join(', ')
+      const filledLine = filledSlots ? '\n  Bereits gefüllt (KEIN record_slot): ' + filledSlots : ''
+      const nullLine = nullSlots ? '\n  Noch null (schreibbar): ' + nullSlots : ''
+      return '- "' + s.title + '" [' + s.status + ']' + filledLine + nullLine
+    })
     .join('\n')
 
-  const userMessage = `## Bereits registrierte Schritte\n${stepSummary}\n\n## Letztes Mitarbeiter-Statement (Turn ${opts.currentTurnNumber})\n${opts.userInput}\n\nExtrahiere konkrete Slot-Werte. Nutze source_turn=${opts.currentTurnNumber}.`
+  const activeStepLine = opts.activeStepTitle
+    ? `\n## Aktiv explorierter Schritt (STEP-ROUTING)\nSchreibe NUR in diesen Schritt: "${opts.activeStepTitle}"\nAusnahme: Statement nennt explizit einen anderen registrierten Schritt beim Namen.\n`
+    : ''
+
+  const userMessage = `## Bereits registrierte Schritte\n${stepSummary}\n${activeStepLine}\n## Letztes Mitarbeiter-Statement (Turn ${opts.currentTurnNumber})\n${opts.userInput}\n\nExtrahiere konkrete Slot-Werte. Nutze source_turn=${opts.currentTurnNumber}.`
 
   let madeToolCalls = false
   try {

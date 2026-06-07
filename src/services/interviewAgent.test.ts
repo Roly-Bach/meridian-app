@@ -14,6 +14,9 @@ import {
   buildTools,
   extractNumericTokens,
   detectNumberAnchoring,
+  detectDrillStops,
+  detectPersonaRefuse,
+  detectFillerPhrases,
   type StepEntry,
 } from './interviewAgent'
 
@@ -594,6 +597,117 @@ describe('Tool Handlers', () => {
         type: 'pain_point',
         content: expect.objectContaining({ step_ref: 'Rechnungseingang' }),
       })
+    })
+  })
+
+  describe('detectDrillStops (F1)', () => {
+    it('returns empty when no recent turns', () => {
+      const step = makeStep({ status: 'walkthrough' })
+      expect(detectDrillStops(undefined, [step])).toEqual([])
+      expect(detectDrillStops([], [step])).toEqual([])
+    })
+
+    it('returns empty when no active step', () => {
+      const step = makeStep({ status: 'done' })
+      const turns = ['Wie lange dauert das?', 'Wie viele Minuten brauchst du?']
+      expect(detectDrillStops(turns, [step])).toEqual([])
+    })
+
+    it('returns empty when slot has been filled', () => {
+      const step = makeStep({
+        status: 'walkthrough',
+        slots: {
+          frequency_per_month: null,
+          duration_minutes: { value: 30, quote: '30min', confidence: 'estimate', writeSource: 'analyst' },
+          rule_based: null,
+          data_sources: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      })
+      const turns = ['Wie lange dauert das?', 'Wie viele Minuten benötigst du?']
+      expect(detectDrillStops(turns, [step])).toEqual([])
+    })
+
+    it('warns when same duration slot is targeted twice in recent turns', () => {
+      const step = makeStep({ status: 'walkthrough' })
+      const turns = [
+        'Wie viele Minuten dauert dieser Schritt?',
+        'Welcher Wert wäre eine grobe Schätzung für die Dauer pro Rechnung?',
+      ]
+      const result = detectDrillStops(turns, [step])
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatch(/duration_minutes/)
+      expect(result[0]).toMatch(/NICHT erneut fragen/)
+    })
+
+    it('warns on repeated frequency question', () => {
+      const step = makeStep({ status: 'walkthrough' })
+      const turns = [
+        'Wie viele Konten gleichst du ab?',
+        'Welcher Wert wäre eine grobe Schätzung für die Anzahl?',
+        'Wie viele Konten typischerweise pro Monat?',
+      ]
+      const result = detectDrillStops(turns, [step])
+      expect(result.some(w => w.includes('frequency_per_month'))).toBe(true)
+    })
+
+    it('does not warn when only one turn matches a slot', () => {
+      const step = makeStep({ status: 'walkthrough' })
+      const turns = ['Wie lange dauert das?', 'Welche Systeme nutzt du dafür?']
+      expect(detectDrillStops(turns, [step])).toEqual([])
+    })
+
+    it('F1b: triggers after 1 question when persona refused', () => {
+      const step = makeStep({ status: 'walkthrough' })
+      const turns = ['Wie viele Minuten dauert das im Durchschnitt?']
+      const refuse = 'Eine exakte Minutenzahl lässt sich nicht festlegen, da der Aufwand stark variiert.'
+      const result = detectDrillStops(turns, [step], refuse)
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatch(/Refuse-Pattern erkannt/)
+    })
+
+    it('F1b: still requires 1 question — no warn if zero asked', () => {
+      const step = makeStep({ status: 'walkthrough' })
+      const turns = ['Welche Systeme nutzt du?']
+      const refuse = 'Das kann ich nicht exakt sagen, variiert stark.'
+      expect(detectDrillStops(turns, [step], refuse)).toEqual([])
+    })
+  })
+
+  describe('detectPersonaRefuse (F1b)', () => {
+    it('detects "lässt sich nicht beziffern"', () => {
+      expect(detectPersonaRefuse('Das lässt sich nicht pauschal beziffern.')).toBe(true)
+    })
+    it('detects "keine exakte Zahl"', () => {
+      expect(detectPersonaRefuse('Hierzu führe ich keine exakte Aufzeichnung.')).toBe(true)
+    })
+    it('detects "variiert stark"', () => {
+      expect(detectPersonaRefuse('Der Aufwand variiert stark je nach Belegqualität.')).toBe(true)
+    })
+    it('does not flag normal answers', () => {
+      expect(detectPersonaRefuse('Ich bearbeite ca. 100 Rechnungen pro Monat.')).toBe(false)
+    })
+    it('handles undefined', () => {
+      expect(detectPersonaRefuse(undefined)).toBe(false)
+    })
+  })
+
+  describe('detectFillerPhrases (F1c question templates)', () => {
+    it('detects "Welcher Wert wäre eine grobe Schätzung"', () => {
+      const fillers = detectFillerPhrases('Welcher Wert wäre eine grobe Schätzung für die Dauer?')
+      expect(fillers).toContain('Welcher Wert wäre eine grobe Schätzung')
+    })
+    it('detects opener + question template combined', () => {
+      const text = 'Verstanden, das variiert. Welcher Wert wäre eine grobe Schätzung für die Anzahl?'
+      const fillers = detectFillerPhrases(text)
+      expect(fillers.length).toBeGreaterThanOrEqual(2)
+      expect(fillers.some(f => f.includes('Verstanden'))).toBe(true)
+      expect(fillers).toContain('Welcher Wert wäre eine grobe Schätzung')
+    })
+    it('does not flag non-template questions', () => {
+      const fillers = detectFillerPhrases('Wie genau beginnt der Prozess für dich?')
+      expect(fillers).toEqual([])
     })
   })
 })
