@@ -494,6 +494,15 @@ const QUESTION_TEMPLATE_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /kannst du.*grobe schätzung/i, label: 'Kannst du eine grobe Schätzung geben' },
   { pattern: /wie viel(e)? .*im durchschnitt/i, label: 'Wie viel im Durchschnitt' },
   { pattern: /wie viel(e)? .*pro (rechnung|vorgang|beleg|fall)/i, label: 'Wie viel pro Vorgang' },
+  // F1d: acceptance-phrase templates — track so the avoidance list rotates them.
+  { pattern: /notiere ich als variabel/i, label: 'Notiere ich als variabel' },
+  { pattern: /notiere ich mit \d/i, label: 'Notiere ich mit Zahl' },
+  { pattern: /halten wir das offen/i, label: 'halten wir das offen' },
+  { pattern: /halten wir .* fest/i, label: 'halten wir das fest' },
+  { pattern: /das nehme ich so auf/i, label: 'Das nehme ich so auf' },
+  { pattern: /das halten wir so fest/i, label: 'Das halten wir so fest' },
+  { pattern: /gehen wir weiter zu/i, label: 'gehen wir weiter zu' },
+  { pattern: /nächster punkt/i, label: 'Nächster Punkt' },
 ]
 
 export function detectFillerPhrases(text: string): string[] {

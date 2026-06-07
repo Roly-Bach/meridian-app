@@ -709,5 +709,20 @@ describe('Tool Handlers', () => {
       const fillers = detectFillerPhrases('Wie genau beginnt der Prozess für dich?')
       expect(fillers).toEqual([])
     })
+
+    it('F1d: detects "Notiere ich als variabel"', () => {
+      const fillers = detectFillerPhrases('Notiere ich als variabel. Wie geht es weiter?')
+      expect(fillers).toContain('Notiere ich als variabel')
+    })
+    it('F1d: detects "halten wir das offen"', () => {
+      const fillers = detectFillerPhrases('Verstanden, halten wir das offen — gehen wir weiter zu Schritt 2.')
+      expect(fillers).toContain('halten wir das offen')
+      expect(fillers).toContain('gehen wir weiter zu')
+    })
+    it('F1d: detects "Nächster Punkt"', () => {
+      const fillers = detectFillerPhrases('Notiere ich als variabel. Nächster Punkt: Wie sieht der Abschluss aus?')
+      expect(fillers).toContain('Notiere ich als variabel')
+      expect(fillers).toContain('Nächster Punkt')
+    })
   })
 })
