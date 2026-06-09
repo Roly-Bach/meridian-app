@@ -156,8 +156,11 @@ den zurückgegebenen matched_title als step_title verwenden.
 
 **produce_briefing**: Als letzten Tool-Call aufrufen. Enthält next_focus, suggested_question und optional wrap_up_question_asked.
 
-## Clarification Cards (nur bei Phase=wrap_up)
-PFLICHT: Durchsuche ALLE registrierten Schritte im step_tracker systematisch auf null-Pflicht-Slots.
+## Clarification Cards (ab Phase=coverage_check oder wrap_up)
+PFLICHT: Sobald Phase coverage_check oder wrap_up erreicht ist, durchsuche ALLE registrierten
+Schritte im step_tracker systematisch auf null-Pflicht-Slots. Cards landen in next_briefing
+und werden vom Orchestrator erst bei wrap_up-Abschluss in die Clarification-Phase aktiviert —
+mid-interview generierte Cards sind also sicher und werden bei späteren Turns aktualisiert.
 Dies ist unabhängig davon was im aktuellen Turn besprochen wurde — historische Lücken aus
 früheren Turns MÜSSEN hier erfasst werden.
 
@@ -193,9 +196,20 @@ Richtig: "Wie viele Stunden wendest du pro Monat dafür auf?"
 // ─── Clarification Cards Generation ──────────────────────────────────────────
 
 function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
-  // Only at wrap_up, AND only if there are actually null mandatory slots to fill.
-  // Without the second guard, Analyst can generate empty arrays that suppress PROJ-23.
-  if (ctx.phase !== 'wrap_up') return false
+  // 2026-06-08 fix — phase guard dropped. Analyst runs in `after()` parallel to Talker,
+  // so ctx.phase here is the PREVIOUS phase (set before Talker). When orchestrator
+  // transitions to wrap_up at iter N+1, analyst at iter N still sees phase=coverage_check
+  // and the old guard "phase !== 'wrap_up'" suppressed cards. Cards never landed in DB.
+  //
+  // Safe to drop because orchestrator double-gates clarification routing:
+  //   - decideNextPhase wrap_up: only routes to clarification when wrap_up_question_asked
+  //     AND last message is user response (line 286–291)
+  //   - checkLifecycle farewell-detect / soft-confirm: cards block completion only when
+  //     analyst already ran, never premature
+  // Mid-interview cards therefore never trigger clarification phase prematurely.
+  //
+  // Tracker must have at least one step — empty trackers can't have missing slots.
+  if (ctx.stepTracker.length === 0) return false
   return computeEmptyMandatorySlots(ctx.stepTracker).length > 0
 }
 
