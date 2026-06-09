@@ -374,14 +374,15 @@ function buildReport(opts: {
   const langfuseSession = process.env.LANGFUSE_PROJECT_URL
     ? `${process.env.LANGFUSE_PROJECT_URL}/sessions/${interviewId}`
     : null
-  // F6: PASS gate retuned — completionCorrectness alone is too weak.
-  // Real PASS requires: all steps registered, naturalness solid, no churn,
-  // phases progressed cleanly. Otherwise FAIL surfaces regressions explicitly.
+  // 2026-06-08 retune — phase_progression dropped from gate, replaced by dedup_slot_coverage.
+  // Phase progression penalized short efficient interviews (buchhalter 17 turns, perfect data → FAIL).
+  // The real PASS signal is data quality: completion + all steps registered + slots filled +
+  // dialog still natural + no race-condition data loss.
   const passed =
     scores.completionCorrectness === true &&
+    scores.dedupSlotCoverage >= 0.75 &&
     scores.stepRegistrationCoverage >= 0.8 &&
     scores.dialogNaturalness >= 0.7 &&
-    scores.phaseProgression >= 0.8 &&
     (trailMetrics?.blockedRate ?? 0) < 0.1
   const status = passed ? 'PASS' : 'FAIL'
 
