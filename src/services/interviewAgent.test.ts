@@ -10,6 +10,7 @@ vi.mock('@/lib/supabase-admin', () => ({
 
 import {
   computeMissingMandatorySlots,
+  computeWalkthroughSlotTarget,
   MANDATORY_SLOTS,
   buildTools,
   extractNumericTokens,
@@ -161,6 +162,65 @@ describe('computeMissingMandatorySlots', () => {
 
   it('returns empty array for empty step_tracker', () => {
     expect(computeMissingMandatorySlots([])).toHaveLength(0)
+  })
+})
+
+// ─── computeWalkthroughSlotTarget (L1) ────────────────────────────────────────
+
+describe('computeWalkthroughSlotTarget', () => {
+  it('returns null when no active step', () => {
+    const steps: StepEntry[] = [makeFilledStep({ status: 'done' })]
+    expect(computeWalkthroughSlotTarget(steps)).toBeNull()
+  })
+
+  it('returns null when tracker empty', () => {
+    expect(computeWalkthroughSlotTarget([])).toBeNull()
+  })
+
+  it('returns null when active step has all mandatory slots filled', () => {
+    const steps: StepEntry[] = [makeFilledStep({ status: 'walkthrough' })]
+    expect(computeWalkthroughSlotTarget(steps)).toBeNull()
+  })
+
+  it('prefers walkthrough over exploring as active step', () => {
+    const steps: StepEntry[] = [
+      makeStep({ title: 'Explorier-Step', status: 'exploring' }),
+      makeStep({ title: 'Walkthrough-Step', status: 'walkthrough' }),
+    ]
+    const target = computeWalkthroughSlotTarget(steps)
+    expect(target?.step_title).toBe('Walkthrough-Step')
+  })
+
+  it('picks slots in canonical MANDATORY_SLOTS order', () => {
+    const steps: StepEntry[] = [
+      makeStep({
+        status: 'walkthrough',
+        slots: {
+          frequency_per_month: { value: 5, quote: 'fünfmal' },
+          duration_minutes: null,
+          rule_based: null,
+          data_sources: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      }),
+    ]
+    const target = computeWalkthroughSlotTarget(steps)
+    expect(target?.slot).toBe('duration_minutes')
+  })
+
+  it('returns target for exploring step when no walkthrough step exists', () => {
+    const steps: StepEntry[] = [makeStep({ status: 'exploring' })]
+    const target = computeWalkthroughSlotTarget(steps)
+    expect(target?.slot).toBe('frequency_per_month')
+  })
+
+  it('ignores done steps when picking active', () => {
+    const steps: StepEntry[] = [
+      makeFilledStep({ title: 'Done', status: 'done' }),
+      makeStep({ title: 'Live', status: 'walkthrough' }),
+    ]
+    expect(computeWalkthroughSlotTarget(steps)?.step_title).toBe('Live')
   })
 })
 

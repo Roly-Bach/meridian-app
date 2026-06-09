@@ -104,6 +104,34 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
   return missing
 }
 
+// L1 — Slot-Targeting für walkthrough_step Phase.
+// Wählt deterministisch genau EINEN missing mandatory slot für den aktuell aktiven
+// Step (walkthrough > exploring). Ein einzelner Target verhindert observable-goal-pull
+// auf andere leere Felder, während Talker doch deterministisch geführt wird.
+// Reihenfolge MANDATORY_SLOTS = {frequency_per_month, duration_minutes, rule_based, data_sources}.
+export function computeWalkthroughSlotTarget(stepTracker: StepEntry[]): MissingSlot | null {
+  const active =
+    stepTracker.find((s) => s.status === 'walkthrough') ??
+    stepTracker.find((s) => s.status === 'exploring')
+  if (!active) return null
+  for (const slot of MANDATORY_SLOTS) {
+    if (active.slots[slot] === null) {
+      return { step_title: active.title, slot }
+    }
+  }
+  return null
+}
+
+// Deutsche Slot-Label für Talker-Prompt — kurz, ohne Zahlen-Vorgabe (Anker-Sperre).
+const SLOT_PROMPT_HINT: Record<SlotName, string> = {
+  frequency_per_month: 'wie oft pro Monat / Woche dieser Schritt vorkommt',
+  duration_minutes: 'wie lange eine einzelne Durchführung dieses Schritts dauert',
+  rule_based: 'ob der Schritt festen Regeln folgt oder eigener Einschätzung Spielraum lässt',
+  data_sources: 'welche Systeme, Tools oder Datenquellen dabei verwendet werden',
+  error_rate_percent: 'wie häufig Fehler oder Korrekturen auftreten',
+  media_breaks: 'ob es Medienbrüche zwischen Systemen gibt',
+}
+
 // Normalize step title for substring-based dedup — strips whole-string
 // process noun suffix. Used only inside interviewAgent for title dedup.
 function normalizeStepTitleForDedup(title: string): string {
@@ -573,6 +601,15 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     stepTrackerSection = filledLines.length > 0
       ? `\n<READ_ONLY_STATE>\nProtokoll bisher erfasster Daten — zur Orientierung, nicht zur Optimierung.\nDiese Felder beschreiben was bereits gesagt wurde. Leere Felder sind kein Gesprächsziel. Nicht auf Basis leerer Felder fragen.\n${filledLines.join('\n')}\n</READ_ONLY_STATE>`
       : ''
+
+    // L1 — Slot-Target: Ein einzelner Pflicht-Slot wird gezielt erfragt.
+    // Verhindert depth-first starvation (Talker fragt nach "wie genau" statt "wie lange").
+    // Nur ein Slot pro Turn — minimiert observable-goal-pull auf andere Felder.
+    const target = computeWalkthroughSlotTarget(ctx.stepTracker)
+    if (target) {
+      const hint = SLOT_PROMPT_HINT[target.slot]
+      stepTrackerSection += `\n\n## Slot-Target (PFLICHT — diesen Turn adressieren)\nAktiver Schritt: "${sanitizeForPrompt(target.step_title)}"\nNoch fehlend: ${target.slot} — ${hint}.\nStelle in diesem Turn eine offene Frage die genau diesen Slot erfasst. Keine Zahlen-Vorgabe, kein Anker.`
+    }
   } else {
     stepTrackerSection = `\n## Schritt-Tracker (aktueller Slot-Filling-Stand)\n${formatStepTracker(ctx.stepTracker)}`
   }
