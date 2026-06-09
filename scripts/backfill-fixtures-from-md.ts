@@ -43,9 +43,15 @@ function round2(n: number): number {
 
 function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['scores'] {
   const completionCorrectness = scoreCompletionCorrectness(fixture.status)
+  const slotCoverage = round2(scoreSlotCoverage(fixture.finalStepTracker))
+  const dedupSlotCoverage = round2(scoreDedupCoverage(fixture.finalStepTracker))
   return {
-    slotCoverage: round2(scoreSlotCoverage(fixture.finalStepTracker)),
-    dedupSlotCoverage: round2(scoreDedupCoverage(fixture.finalStepTracker)),
+    slotCoverage,
+    dedupSlotCoverage,
+    // L9: no clarification snapshot in legacy fixtures → final == pre, delta = 0
+    slotCoveragePreClarification: slotCoverage,
+    dedupSlotCoveragePreClarification: dedupSlotCoverage,
+    clarificationCoverageDelta: 0,
     phaseAdherence: round2(scorePhaseAdherence(fixture.turns)),
     phaseProgression: round2(scorePhaseProgression(fixture.turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(fixture.turns),

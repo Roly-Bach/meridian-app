@@ -404,6 +404,9 @@ function buildReport(opts: {
     'scores:',
     `  slot_coverage: ${scores.slotCoverage}`,
     `  dedup_slot_coverage: ${scores.dedupSlotCoverage}`,
+    `  slot_coverage_pre_clarification: ${scores.slotCoveragePreClarification}`,
+    `  dedup_slot_coverage_pre_clarification: ${scores.dedupSlotCoveragePreClarification}`,
+    `  clarification_coverage_delta: ${scores.clarificationCoverageDelta}`,
     `  phase_progression: ${scores.phaseProgression}`,
     `  phase_adherence: ${scores.phaseAdherence}`,
     `  anchoring_violations: ${scores.anchoringViolations}`,
@@ -427,6 +430,9 @@ function buildReport(opts: {
     '|--------|-------|------|',
     `| slot_coverage | ${scores.slotCoverage} | maximize |`,
     `| dedup_slot_coverage | ${scores.dedupSlotCoverage} | maximize |`,
+    `| slot_coverage_pre_clarification | ${scores.slotCoveragePreClarification} | maximize |`,
+    `| dedup_slot_coverage_pre_clarification | ${scores.dedupSlotCoveragePreClarification} | maximize |`,
+    `| clarification_coverage_delta | ${scores.clarificationCoverageDelta} | > 0 wenn Clarification ran |`,
     `| phase_progression | ${scores.phaseProgression} | maximize |`,
     `| phase_adherence | ${scores.phaseAdherence} | maximize |`,
     `| anchoring_violations | ${scores.anchoringViolations} | 0 |`,
@@ -576,6 +582,8 @@ interface InterviewResult {
   baselineLabel: string | null
   turnRecords: TurnRecord[]
   finalStepTracker: StepEntry[]
+  /** L9: tracker snapshot right before clarification phase ran. Null if clarification did not run. */
+  preClarificationStepTracker: StepEntry[] | null
   finalInterviewStatus: string
 }
 
@@ -647,6 +655,7 @@ async function runInterview(
 
   const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
   const turnRecords: TurnRecord[] = []
+  let preClarificationSnapshot: StepEntry[] | null = null
 
   // ── Start turn (greeting) ──────────────────────────────────────────────────
   const startStream = createTalkerStream({
@@ -738,6 +747,9 @@ async function runInterview(
     if (orchestratedPhase === 'clarification') {
       const cards = analystBriefing?.clarification_cards ?? []
       console.log(`\n[eval] Clarification phase: ${cards.length} cards — submitting synthetic answers`)
+      // L9: snapshot tracker BEFORE synthetic answers land — used by scorer to
+      // measure how much coverage the clarification phase contributes.
+      preClarificationSnapshot = JSON.parse(JSON.stringify(dbState.stepTracker)) as StepEntry[]
       const syntheticAnswers = buildSyntheticClarificationAnswers(cards)
       for (const a of syntheticAnswers) {
         console.log(`  [card] ${a.slot_key} → ${JSON.stringify(a.answer)}`)
@@ -919,6 +931,7 @@ async function runInterview(
     baselineLabel,
     turnRecords,
     finalStepTracker: finalState.stepTracker,
+    preClarificationStepTracker: preClarificationSnapshot,
     finalInterviewStatus,
   }
 }
@@ -993,6 +1006,7 @@ async function main() {
         const scores = await runAllScorers({
           turns: result.turnRecords,
           finalStepTracker: result.finalStepTracker,
+          preClarificationStepTracker: result.preClarificationStepTracker ?? undefined,
           interviewStatus: result.finalInterviewStatus,
           evalModel: model,
           expectedProcessCount: persona.expectedProcessCount,

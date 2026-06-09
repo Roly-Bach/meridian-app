@@ -46,9 +46,15 @@ function runOfflineScorers(
   expectedProcessCount?: number,
 ): Partial<ScoreSet> {
   const completionCorrectness = scoreCompletionCorrectness(interviewStatus)
+  const slotCoverage = round2(scoreSlotCoverage(finalStepTracker))
+  const dedupSlotCoverage = round2(scoreDedupCoverage(finalStepTracker))
   return {
-    slotCoverage: round2(scoreSlotCoverage(finalStepTracker)),
-    dedupSlotCoverage: round2(scoreDedupCoverage(finalStepTracker)),
+    slotCoverage,
+    dedupSlotCoverage,
+    // L9: replay has no clarification snapshot — final == pre, delta = 0
+    slotCoveragePreClarification: slotCoverage,
+    dedupSlotCoveragePreClarification: dedupSlotCoverage,
+    clarificationCoverageDelta: 0,
     phaseAdherence: round2(scorePhaseAdherence(turns)),
     phaseProgression: round2(scorePhaseProgression(turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(turns),
@@ -158,6 +164,9 @@ async function main() {
         scores: {
           slotCoverage: scores.slotCoverage ?? 0,
           dedupSlotCoverage: scores.dedupSlotCoverage ?? 0,
+          slotCoveragePreClarification: scores.slotCoveragePreClarification ?? scores.slotCoverage ?? 0,
+          dedupSlotCoveragePreClarification: scores.dedupSlotCoveragePreClarification ?? scores.dedupSlotCoverage ?? 0,
+          clarificationCoverageDelta: scores.clarificationCoverageDelta ?? 0,
           phaseAdherence: scores.phaseAdherence ?? 0,
           phaseProgression: scores.phaseProgression ?? 0,
           anchoringViolations: scores.anchoringViolations ?? 0,

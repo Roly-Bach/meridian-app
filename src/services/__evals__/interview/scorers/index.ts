@@ -27,9 +27,21 @@ export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
   ])
 
   const completionCorrectness = scoreCompletionCorrectness(input.interviewStatus)
+  const slotCoverage = round2(scoreSlotCoverage(input.finalStepTracker))
+  const dedupSlotCoverage = round2(scoreDedupCoverage(input.finalStepTracker))
+
+  // L9: pre-clarification snapshot. Falls back to final tracker when clarification
+  // did not run (delta then 0 — neither penalty nor credit to recovery path).
+  const preTracker = input.preClarificationStepTracker ?? input.finalStepTracker
+  const slotCoveragePreClarification = round2(scoreSlotCoverage(preTracker))
+  const dedupSlotCoveragePreClarification = round2(scoreDedupCoverage(preTracker))
+
   return {
-    slotCoverage: round2(scoreSlotCoverage(input.finalStepTracker)),
-    dedupSlotCoverage: round2(scoreDedupCoverage(input.finalStepTracker)),
+    slotCoverage,
+    dedupSlotCoverage,
+    slotCoveragePreClarification,
+    dedupSlotCoveragePreClarification,
+    clarificationCoverageDelta: round2(dedupSlotCoverage - dedupSlotCoveragePreClarification),
     phaseAdherence: round2(scorePhaseAdherence(input.turns)),
     phaseProgression: round2(scorePhaseProgression(input.turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(input.turns),
