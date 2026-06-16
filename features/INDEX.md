@@ -40,33 +40,18 @@
 | PROJ-22 | Dual-Loop Interview Engine (ADR-011) | Revision | Interview Engine | PROJ-2 | Approved | [spec](interview-engine/PROJ-22-dual-loop-interview-engine.md) | P1 | L | 0:3:5 |
 | PROJ-23 | Adaptive Clarification Questions | Extension | Interview Engine | PROJ-2 | Approved | [spec](interview-engine/PROJ-23-adaptive-clarification-questions.md) | P1 | M | 0:0:0 |
 | PROJ-24 | Cluster-aware Use Case Generation + Detail View | Extension | Use Case Engine | PROJ-6 | Approved | [spec](use-case-engine/PROJ-24-cluster-aware-use-case-generation.md) | P1 | L | 0:0:0 |
-| PROJ-25 | Prozesswissens-Schema O1–O5 | Revision | Wissensbank | PROJ-20 | Roadmap | [BL-E1.1](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-004 | P1 | L | — |
+| PROJ-25 | Prozesswissens-Schema (O1–O5 + Governance) | Revision | Wissensbank | PROJ-20 | Roadmap | [BL-E1.1+E1.6](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-004/022 | P1 | L | — |
 | PROJ-26 | Getypte Abhängigkeitskanten | Extension | Wissensbank | PROJ-20 | Roadmap | [BL-E1.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-006 | P1 | M | — |
-| PROJ-27 | Schema-Bindung + Konformitätsrate | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E1.3](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-003 | P1 | M | — |
-| PROJ-28 | Stabile IDs + JSON-Patch-Revision | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E1.4](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-005 | P1 | M | — |
-| PROJ-29 | Lost-Update-Race-Fix | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E1.5](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-015 | P1 | M | — |
-| PROJ-30 | Governance-Feld je Schritt | Extension | Wissensbank | PROJ-20 | Roadmap | [BL-E1.6](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-022 | P2 | S | — |
-| PROJ-31 | Nicht-Befund-/Verweigerungs-Marker | Extension | Interview Engine | PROJ-22 | Roadmap | [BL-E2.1](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-013 | P1 | S | — |
-| PROJ-32 | Konfidenz steuert Nachfrage | Revision | Interview Engine | PROJ-23 | Roadmap | [BL-E2.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-019 | P1 | M | — |
-| PROJ-33 | Semantischer Ambiguitäts-Auslöser | Extension | Interview Engine | PROJ-23 | Roadmap | [BL-E3.1](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-016 | P1 | M | — |
-| PROJ-34 | Ausnahme- + Ziel-/Kontextsteuerung | Extension | Interview Engine | PROJ-23 | Roadmap | [BL-E3.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-002/024 | P2 | M | — |
-| PROJ-35 | Konzept-verankerte Nachfrage | Extension | Interview Engine | PROJ-23 | Roadmap | [BL-E3.3](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-017 | P2 | S | — |
-| PROJ-36 | Laddering / Abstraktions-Vertiefung | Extension | Interview Engine | PROJ-23 | Roadmap | [BL-E3.4](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-025 | P2 | M | — |
-| PROJ-37 | Maieutische Schärfung | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E3.5](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-001 | P2 | S | — |
-| PROJ-38 | Profil-adaptives Framing | Extension | Interview Engine | PROJ-22 | Roadmap | [BL-E3.6](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-026 | P2 | S | — |
-| PROJ-39 | Lösungssperre / Ist-Fokus | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E3.7](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-027 | P2 | S | — |
-| PROJ-40 | Trennung Bewertung / Formalisierung | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E4.1](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021/024 | P2 | M | — |
-| PROJ-41 | Preparator / Vorbereitung | Extension | Interview Engine | PROJ-2 | Roadmap | [BL-E4.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021 (offen) | P2 | — | — |
-| PROJ-42 | Tiefe-/O10-Metrik | Revision | Interview Engine | PROJ-21 | Roadmap | [BL-E5.1](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-012 | P1 | L | — |
-| PROJ-43 | Judge-Disziplin | Revision | Interview Engine | PROJ-21 | Roadmap | [BL-E5.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-009/010/011 | P1 | M | — |
-| PROJ-44 | Persona-Perturbation | Extension | Interview Engine | PROJ-21 | Roadmap | [BL-E5.3](../../meridian-ma/requirements/build-backlog-etappe2.md) · E5 | P2 | M | — |
-| PROJ-45 | Mehrfach-Läufe + Seed | Extension | Interview Engine | PROJ-21 | Roadmap | [BL-E5.4](../../meridian-ma/requirements/build-backlog-etappe2.md) · EVAL-D-11/12 | P2 | S | — |
-| PROJ-46 | Paraphrasen-Robustheits-Test | Extension | Interview Engine | PROJ-21 | Roadmap | [BL-E5.5](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-014 | P2 | M | — |
-| PROJ-47 | SME-in-the-loop | Feature | Interview Engine | PROJ-21 | Roadmap | [BL-E5.6](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-012 | P2 | M | — |
+| PROJ-27 | Schema-Bindung + verlustfreie Speicherung | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E1.3–E1.5](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-003/005/015 | P1 | L | — |
+| PROJ-28 | Extraktions-Zuverlässigkeit | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E2.1+E2.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-013/019 | P1 | M | — |
+| PROJ-29 | Gesprächsführungs-Revision | Revision | Interview Engine | PROJ-23 | Roadmap | [BL-E3.1–E3.7](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-001/002/016/017/024–027 | P1 | L | — |
+| PROJ-30 | Tiefe-/O10-Metrik | Revision | Interview Engine | PROJ-21 | Roadmap | [BL-E5.1](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-012 | P1 | L | — |
+| PROJ-31 | Eval-Schärfung (Judge, Perturbation, Robustheit, SME) | Revision | Interview Engine | PROJ-21 | Roadmap | [BL-E5.2–E5.6](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-009–012/014 | P1 | L | — |
+| PROJ-32 | Agenten-Architektur (Trennung, Preparator; vertagt) | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E4.1+E4.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021/024 | P2 | M | — |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-48
+## Next Available ID: PROJ-33
 
 ## Known Issues
 
@@ -78,6 +63,18 @@
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
+
+### Etappe 2 (Build-Backlog, ab 2026-06-16)
+Schema zuerst (Fundament, blockt den Rest): PROJ-25 → PROJ-26 → PROJ-27.
+Darauf aufbauend: PROJ-28 (Extraktion) und PROJ-29 (Gesprächsführung).
+Parallel und laufend mitmessend: PROJ-30 (Tiefe-Metrik) und PROJ-31 (Eval-Schärfung).
+Vertagt (TF3): PROJ-32.
+
+Hinweis: PROJ-25 trägt die offene Bau-ADR (ein gemeinsames Schema vs. zwei verknüpfte Ebenen;
+Verwerfen des bestehenden Slot-Substrats bleibt zulässig). Vor dem Bau als ADR in meridian-ma
+entscheiden, nicht implizit in der Spec. Die acht Einheiten bündeln 23 Einzel-Befunde aus dem
+[Build-Backlog](../../meridian-ma/requirements/build-backlog-etappe2.md); jede Spec listet ihre
+BL-E-Items und REQs (Traceability).
 
 ## Architecture Notes
 
