@@ -70,10 +70,13 @@ Darauf aufbauend: PROJ-28 (Extraktion) und PROJ-29 (Gesprächsführung).
 Parallel und laufend mitmessend: PROJ-30 (Tiefe-Metrik) und PROJ-31 (Eval-Schärfung).
 Vertagt (TF3): PROJ-32.
 
-Hinweis: PROJ-25 trägt die offene Bau-ADR (ein gemeinsames Schema vs. zwei verknüpfte Ebenen;
-Verwerfen des bestehenden Slot-Substrats bleibt zulässig). Vor dem Bau als ADR in meridian-ma
-entscheiden, nicht implizit in der Spec. Die acht Einheiten bündeln 23 Einzel-Befunde aus dem
-[Build-Backlog](../../meridian-ma/requirements/build-backlog-etappe2.md); jede Spec listet ihre
+Hinweis: Die Bau-ADR zu PROJ-25 ist entschieden ([ADR-T016](../../meridian-ma/decisions/ADR-T016-prozesswissens-schema-integration.md),
+2026-06-16): ein gemeinsames Schema mit getrennt getypter quantitativer `potenzial`-Facette im selben
+Dokument (nicht zwei verknüpfte Ebenen); das bestehende Slot-Substrat wird behalten und erweitert
+(nicht verworfen). Ziel-Schema: [`schemas/prozessschritt-schema.json`](../../meridian-ma/schemas/prozessschritt-schema.json)
++ [Spec v1.1](../../meridian-ma/knowledge-base/prozessschritt-schema-spec.md). `/write-spec PROJ-25`
+realisiert dagegen, entscheidet die Architektur nicht neu. Die acht Einheiten bündeln 23 Einzel-Befunde
+aus dem [Build-Backlog](../../meridian-ma/requirements/build-backlog-etappe2.md); jede Spec listet ihre
 BL-E-Items und REQs (Traceability).
 
 ## Architecture Notes
