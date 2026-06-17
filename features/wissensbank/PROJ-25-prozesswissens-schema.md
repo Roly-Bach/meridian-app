@@ -280,7 +280,7 @@ Coverage-Werte sinken nach Deploy systematisch (9 statt 4 Felder, O2–O5 initia
 | 35 | Atomic (BEGIN/COMMIT) | ✅ PASS |
 | 36 | DOWN script present | ✅ PASS |
 | 37 | Idempotent (`is_legacy` check) | ✅ PASS |
-| 38 | Empty arrays `[]` normalized to `value: null, nicht_befund_typ: null` | ❌ **FAIL** — see BUG-M1 |
+| 38 | Empty arrays `[]` normalized to `value: null, nicht_befund_typ: null` | ✅ PASS (fixed post-QA) |
 
 #### Schutzgut / Regressions-Guard
 | # | Criterion | Result |
@@ -313,19 +313,13 @@ const result = normalizeStepEntry(legacy, 1)
 
 **Impact:** Low in practice (record_slot rejects empty arrays at runtime; old entries rarely had `[]`), but violates explicit spec AC.
 
-**Fix location:** `interviewSemantic.ts` in `normalizeStepEntry` — add guard: `value: Array.isArray(val) && val.length > 0 ? val : null`. SQL migration needs analogous CASE for empty array check.
+**Fix:** `normalizeArraySlot()` helper added in `interviewSemantic.ts`, called for all 4 TaziteSlotArray pass-through slots. Legacy path also fixed: `Array.isArray(val) && val.length > 0 ? val : ...`. SQL migration: added `jsonb_array_length() = 0 → 'null'::jsonb` guard. **Fixed 2026-06-17.**
 
 ---
 
-#### BUG-L1 (Low) — Misleading comment in `processEnrichment.ts`
+#### BUG-L1 (Low) — Misleading comment in `processEnrichment.ts` ✅ Fixed
 
-**Location:** `processEnrichment.ts:193`
-
-**Comment:** `// Read data_sources / hilfsmittel: prefer new location (slots.hilfsmittel), fall back to potenzial for old entries`
-
-**Problem:** "fall back to potenzial" is incorrect — `potenzial` never contained `data_sources`/`hilfsmittel`. The code only reads `step.slots.hilfsmittel` (which is correct after `normalizeStepEntry`). No functional bug — the comment is just misleading.
-
-**Fix:** Update comment to: `// hilfsmittel from slots (normalizeStepEntry maps legacy data_sources here)`
+**Fixed 2026-06-17:** Comment updated to `// hilfsmittel from slots (normalizeStepEntry maps legacy data_sources here)`.
 
 ### Security Audit
 

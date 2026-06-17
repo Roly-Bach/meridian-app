@@ -27,17 +27,68 @@ export interface SlotValue {
   writeSource?: 'analyst_catchup' | 'analyst_online' | 'quick' | 'backfill' | 'analyst'
 }
 
+export type NichtBefundTyp = 'nicht_zutreffend' | 'unbekannt' | 'verweigert' | null
+
+/** Taziter Einzel-Slot: wörtlicher Beleg + nicht_befund_typ für Coverage-Bewertung */
+export interface TaziteSlot {
+  value: string | null
+  quote: string | null
+  confidence?: 'confirmed' | 'estimate' | 'unknown'
+  nicht_befund_typ: NichtBefundTyp
+}
+
+/** Taziter Mehrwert-Slot (leeres Array [] ist ungültig → value: null + nicht_befund_typ setzen) */
+export interface TaziteSlotArray {
+  value: string[] | null
+  quote: string | null
+  confidence?: 'confirmed' | 'estimate' | 'unknown'
+  nicht_befund_typ: NichtBefundTyp
+}
+
+/** Governance-Objekt: organisationale Einbettung eines Prozessschritts */
+export interface GovernanceSlot {
+  rolle: string | null
+  organisationseinheit: string | null
+  systeme: string[] | null
+  nicht_befund_typ: NichtBefundTyp
+}
+
+/** Placeholder-Typ für Abhängigkeitskanten — PROJ-26 schärft diesen Typ */
+export interface PlaceholderDependencies {
+  depends_on: unknown[]
+  influences: unknown[]
+  nicht_befund_typ: NichtBefundTyp
+}
+
 export interface StepEntry {
   title: string
-  role?: string | null
-  status: 'exploring' | 'walkthrough' | 'done'
-  slots: {
+  /** 1-based position in step_tracker array (O1) — set by register_step */
+  reihenfolge: number
+  /** Replaces free-text role field */
+  governance: GovernanceSlot | null
+  /** O6 dependency placeholder — PROJ-26 implements typed edges */
+  abhaengigkeiten: PlaceholderDependencies | null
+  /** Quantitative KI-Potenzial fields (moved from slots) */
+  potenzial: {
     frequency_per_month: SlotValue | null
     duration_minutes: SlotValue | null
-    rule_based: SlotValue | null
-    data_sources: SlotValue | null
     error_rate_percent: SlotValue | null
     media_breaks: SlotValue | null
+  }
+  status: 'exploring' | 'walkthrough' | 'done'
+  slots: {
+    /** O2 Entscheidungslogik (was: rule_based boolean) */
+    entscheidungslogik: TaziteSlot | null
+    /** O2 Tazite Cues / implizites Erfahrungswissen */
+    tazite_cues: TaziteSlotArray | null
+    /** O3 Ausnahmen und Sonderfälle */
+    ausnahmen: TaziteSlotArray | null
+    /** O4 Inputs */
+    inputs: TaziteSlotArray | null
+    /** O4 Outputs */
+    outputs: TaziteSlotArray | null
+    /** O5 Hilfsmittel / Systeme (was: data_sources) */
+    hilfsmittel: TaziteSlotArray | null
   }
   process_steps?: string[]
   friction_points?: string[]
@@ -47,6 +98,158 @@ export interface StepEntry {
   embedding?: number[]
 }
 
+/** Legacy JSONB shape (pre-PROJ-25) — used by normalizeStepEntry for backward compat */
+interface LegacyStepEntry {
+  title: string
+  role?: string | null
+  status: 'exploring' | 'walkthrough' | 'done'
+  slots: {
+    frequency_per_month?: SlotValue | null
+    duration_minutes?: SlotValue | null
+    rule_based?: SlotValue | null
+    data_sources?: SlotValue | null
+    error_rate_percent?: SlotValue | null
+    media_breaks?: SlotValue | null
+    // new tazite fields may already be present in partially-migrated entries
+    entscheidungslogik?: TaziteSlot | null
+    tazite_cues?: TaziteSlotArray | null
+    ausnahmen?: TaziteSlotArray | null
+    inputs?: TaziteSlotArray | null
+    outputs?: TaziteSlotArray | null
+    hilfsmittel?: TaziteSlotArray | null
+  }
+  potenzial?: {
+    frequency_per_month?: SlotValue | null
+    duration_minutes?: SlotValue | null
+    error_rate_percent?: SlotValue | null
+    media_breaks?: SlotValue | null
+  } | null
+  reihenfolge?: number
+  governance?: GovernanceSlot | null
+  abhaengigkeiten?: PlaceholderDependencies | null
+  process_steps?: string[]
+  friction_points?: string[]
+  friction_tools?: string[]
+  pain_point_primary?: string | null
+  embedding?: number[]
+}
+
+/** Normalizes a TaziteSlotArray: empty value:[] → value:null (spec: [] is invalid). */
+function normalizeArraySlot(slot: TaziteSlotArray | null | undefined): TaziteSlotArray | null {
+  if (slot == null) return null
+  if (Array.isArray(slot.value) && slot.value.length === 0) {
+    return { ...slot, value: null }
+  }
+  return slot
+}
+
+/**
+ * Normalizes a raw JSONB step entry into the current StepEntry shape.
+ * Handles both pre-PROJ-25 (flat slots) and post-PROJ-25 (potenzial + tazite slots).
+ * Call at all JSONB read points so old sessions remain readable without a code-side migration.
+ */
+export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): StepEntry {
+  const r = raw as LegacyStepEntry
+
+  // Determine if this is a legacy entry (quantitative fields still in slots)
+  const isLegacy =
+    r.potenzial == null &&
+    (r.slots?.frequency_per_month !== undefined ||
+      r.slots?.duration_minutes !== undefined ||
+      r.slots?.rule_based !== undefined ||
+      r.slots?.data_sources !== undefined ||
+      r.slots?.error_rate_percent !== undefined ||
+      r.slots?.media_breaks !== undefined)
+
+  let potenzial: StepEntry['potenzial']
+  let entscheidungslogik: TaziteSlot | null
+  let hilfsmittel: TaziteSlotArray | null
+
+  if (isLegacy) {
+    // Move quantitative fields from slots to potenzial
+    potenzial = {
+      frequency_per_month: r.slots?.frequency_per_month ?? null,
+      duration_minutes: r.slots?.duration_minutes ?? null,
+      error_rate_percent: r.slots?.error_rate_percent ?? null,
+      media_breaks: r.slots?.media_breaks ?? null,
+    }
+
+    // rule_based (boolean SlotValue) → entscheidungslogik (TaziteSlot)
+    const ruleBasedSlot = r.slots?.rule_based
+    if (ruleBasedSlot != null) {
+      entscheidungslogik = {
+        value: `rule_based: ${String(ruleBasedSlot.value)}`,
+        quote: ruleBasedSlot.quote,
+        confidence: ruleBasedSlot.confidence,
+        nicht_befund_typ: null,
+      }
+    } else {
+      entscheidungslogik = r.slots?.entscheidungslogik ?? null
+    }
+
+    // data_sources (string[] SlotValue) → hilfsmittel (TaziteSlotArray)
+    const dataSourcesSlot = r.slots?.data_sources
+    if (dataSourcesSlot != null) {
+      const val = dataSourcesSlot.value
+      hilfsmittel = {
+        value: Array.isArray(val) && val.length > 0 ? val : val != null && !Array.isArray(val) ? [String(val)] : null,
+        quote: dataSourcesSlot.quote,
+        confidence: dataSourcesSlot.confidence,
+        nicht_befund_typ: null,
+      }
+    } else {
+      hilfsmittel = r.slots?.hilfsmittel ?? null
+    }
+  } else {
+    potenzial = {
+      frequency_per_month: r.potenzial?.frequency_per_month ?? null,
+      duration_minutes: r.potenzial?.duration_minutes ?? null,
+      error_rate_percent: r.potenzial?.error_rate_percent ?? null,
+      media_breaks: r.potenzial?.media_breaks ?? null,
+    }
+    entscheidungslogik = r.slots?.entscheidungslogik ?? null
+    hilfsmittel = r.slots?.hilfsmittel ?? null
+  }
+
+  // Governance: migrate free-text role if governance not yet set
+  let governance: GovernanceSlot | null = r.governance ?? null
+  if (governance == null && r.role != null) {
+    governance = {
+      rolle: r.role,
+      organisationseinheit: null,
+      systeme: null,
+      nicht_befund_typ: null,
+    }
+  }
+
+  return {
+    title: r.title,
+    reihenfolge: r.reihenfolge ?? fallbackReihenfolge,
+    governance,
+    abhaengigkeiten: r.abhaengigkeiten ?? null,
+    potenzial,
+    status: r.status,
+    slots: {
+      entscheidungslogik,
+      tazite_cues: normalizeArraySlot(r.slots?.tazite_cues),
+      ausnahmen: normalizeArraySlot(r.slots?.ausnahmen),
+      inputs: normalizeArraySlot(r.slots?.inputs),
+      outputs: normalizeArraySlot(r.slots?.outputs),
+      hilfsmittel,
+    },
+    process_steps: r.process_steps,
+    friction_points: r.friction_points,
+    friction_tools: r.friction_tools,
+    pain_point_primary: r.pain_point_primary ?? null,
+    embedding: r.embedding,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Slot name constants
+// ---------------------------------------------------------------------------
+
+/** Legacy quantitative slots — kept for backward compat with existing callers */
 export const MANDATORY_SLOTS = [
   'frequency_per_month',
   'duration_minutes',
@@ -56,7 +259,48 @@ export const MANDATORY_SLOTS = [
 
 export const OPTIONAL_SLOTS = ['error_rate_percent', 'media_breaks'] as const
 
+/** @deprecated Use TAZITE_SLOT_NAMES + POTENZIAL_SLOT_NAMES instead */
 export type SlotName = (typeof MANDATORY_SLOTS)[number] | (typeof OPTIONAL_SLOTS)[number]
+
+/** Writable tazite slot keys (O2–O5) passed to record_slot */
+export const TAZITE_SLOT_NAMES = [
+  'entscheidungslogik',
+  'tazite_cues',
+  'ausnahmen',
+  'inputs',
+  'outputs',
+  'hilfsmittel',
+] as const
+
+export type TaziteSlotName = (typeof TAZITE_SLOT_NAMES)[number]
+
+/** Writable quantitative slot keys passed to record_slot */
+export const POTENZIAL_SLOT_NAMES = [
+  'frequency_per_month',
+  'duration_minutes',
+  'error_rate_percent',
+  'media_breaks',
+] as const
+
+export type PotenzialSlotName = (typeof POTENZIAL_SLOT_NAMES)[number]
+
+/**
+ * O1–O6 coverage fields (9 total). Scored by slotCoverage.ts.
+ * NOTE: potenzial-fields and governance are NOT in this list.
+ */
+export const COVERAGE_FIELDS = [
+  'bezeichnung',       // O1 — maps to StepEntry.title
+  'reihenfolge',       // O1 — maps to StepEntry.reihenfolge
+  'entscheidungslogik', // O2 — maps to StepEntry.slots.entscheidungslogik
+  'tazite_cues',       // O2 — maps to StepEntry.slots.tazite_cues
+  'ausnahmen',         // O3 — maps to StepEntry.slots.ausnahmen
+  'inputs',            // O4 — maps to StepEntry.slots.inputs
+  'outputs',           // O4 — maps to StepEntry.slots.outputs
+  'hilfsmittel',       // O5 — maps to StepEntry.slots.hilfsmittel
+  'abhaengigkeiten',   // O6 — maps to StepEntry.abhaengigkeiten
+] as const
+
+export type CoverageField = (typeof COVERAGE_FIELDS)[number]
 
 const STEP_STOPWORDS = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
 
