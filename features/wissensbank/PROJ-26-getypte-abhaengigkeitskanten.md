@@ -1,13 +1,13 @@
 # PROJ-26: Getypte Abhängigkeitskanten
 
-## Status: In Progress
+## Status: Approved
 **Type:** Extension
 **Domain:** Wissensbank
 **Extends:** PROJ-20
 **Appetite:** M
-**Bugs:** —
+**Bugs:** 0:1:1
 **Created:** 2026-06-16
-**Last Updated:** 2026-06-16
+**Last Updated:** 2026-06-17
 
 ## Kontext
 
@@ -247,7 +247,83 @@ befüllt wenn depends_on.length ≥ 1 OR influences.length ≥ 1 OR nicht_befund
 PROJ-26 definiert diese Formel nicht neu — nur Tests gegen getypte Kanten verifizieren sie.
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-06-17
+**Status:** Approved
+**Bugs:** 0:1:1
+
+### Acceptance Criteria
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| TS-1 | `AbhaengigkeitsKante` defined with correct shape | ✅ PASS |
+| TS-2 | `EinflussKante` defined with correct shape | ✅ PASS |
+| TS-3 | `Abhaengigkeiten` defined with correct shape | ✅ PASS |
+| TS-4 | `StepEntry.abhaengigkeiten` is `Abhaengigkeiten \| null` | ✅ PASS |
+| TS-5 | All three types in `interviewSemantic.ts` (no server-only import) | ✅ PASS |
+| TS-6 | `schritt_id` uses S001 format (Zod regex `/^S[0-9]{3}$/`) | ✅ PASS |
+| RD-1 | Tool `record_dependency` exists with all required params | ✅ PASS |
+| RD-2 | Typ-Validierung: depends_on → voraussetzung/ressource/ausloeser only | ✅ PASS |
+| RD-3 | Typ-Validierung: influences → beeinflusst/terminierung only | ✅ PASS |
+| RD-4 | Writes via TOCTOU-safe `patch_interview_step_field` RPC | ✅ PASS |
+| RD-5 | Idempotent: dedup by schritt_id + typ, returns success + skipped:true | ✅ PASS |
+| RD-6 | Error when source_step_id not in step_tracker | ✅ PASS |
+| RD-7 | Error when target_step_id not in step_tracker | ✅ PASS |
+| RD-8 | Error when source_step_id === target_step_id | ✅ PASS |
+| NB-1 | Nicht-Befund-Modus sets `abhaengigkeiten.nicht_befund_typ` | ✅ PASS |
+| NB-2 | Both modes simultaneously → error | ✅ PASS |
+| NB-3 | `nicht_befund_typ` without edges counts as filled for Coverage | ✅ PASS |
+| COV-1 | Coverage logic unchanged from PROJ-25 | ✅ PASS |
+| COV-2 | slotCoverage.test.ts: AbhaengigkeitsKante → filled | ✅ PASS |
+| COV-3 | slotCoverage.test.ts: EinflussKante → filled | ✅ PASS |
+| COV-4 | slotCoverage.test.ts: empty arrays + null nicht_befund_typ → unfilled | ✅ PASS |
+| COV-5 | slotCoverage.test.ts: nicht_befund_typ set → filled | ✅ PASS |
+| COV-6 | slotCoverage.test.ts: PROJ-25 unknown[] elements tolerated (no crash) | ✅ PASS |
+| PROMPT-1 | `formatStepTracker` shows `abhaengigkeiten: fehlt` when empty | ✅ PASS |
+| PROMPT-2 | `formatStepTracker` shows Kanten count when present | ✅ PASS |
+| PROMPT-3 | `formatStepTracker` shows `nicht_befund: <typ>` when set | ✅ PASS |
+| PROMPT-4 | System prompt mentions `record_dependency` in tool list | ✅ PASS |
+| REG-1 | `npm test` green after type sharpening (530/530) | ✅ PASS |
+| REG-2 | Backward-compat: PROJ-25 unknown[] elements read without crash | ✅ PASS |
+
+### Bugs Found
+
+**B1 — Medium: No unit tests for `record_dependency` tool logic**
+
+All other tools in `interviewAgent.ts` (`record_slot`, `link_bottleneck`, `update_walkthrough_data`, `record_governance`) have unit tests in `interviewAgent.test.ts`. `record_dependency` has zero.
+
+The validation logic — phantom-ref check, self-reference guard, typ/richtung mismatch, idempotency, nicht_befund_modus, both-modes-simultaneously error — is implemented correctly (verified by code review) but unguarded against future regressions.
+
+_Steps to repro gap:_ `grep -c "record_dependency" src/services/interviewAgent.test.ts` → 0
+
+_Fix:_ Add a `describe('record_dependency', ...)` block in `interviewAgent.test.ts` covering: edge mode success (depends_on + influences), nicht_befund_modus success, phantom source → error, phantom target → error, self-reference → error, type mismatch (influences type given to depends_on) → error, idempotency → skipped:true.
+
+---
+
+**B2 — Low: Pre-existing `npm run lint` failures (carried from PROJ-27, not introduced by PROJ-26)**
+
+`tsc --noEmit` reports 5 errors:
+- `scripts/backfill-fixtures-from-md.ts:48` — `schemaConformanceRate` missing in ScoreSet literal
+- `src/services/__evals__/interview/replay/runReplay.ts:164` — same
+- `src/services/interviewAgent.test.ts:455,493` — `p_sub_path`/`p_value` on typed `{}` mock
+
+These pre-date PROJ-26 (present in `git show f1b4131`). PROJ-26 did not introduce or fix them.
+
+### Security Audit
+
+No attack surface added. `record_dependency` runs server-side only (interviewAgent.ts), protected by Supabase RLS and workspace auth inherited from the existing interview context. No new input reaches the client.
+
+S001 format enforced by Zod regex — no injection vector via step IDs.
+
+### Regression
+
+All 530 unit tests pass. E2E suite (164 pass, 9 skipped, 13 did not run — all pre-existing PROJ-3/11/23/24). No regression.
+
+### Production-Ready Decision
+
+**YES — ready to deploy.**
+
+No Critical or High bugs. B1 (Medium) is a testing gap, not a functionality defect. B2 (Low) pre-dates this feature.
 
 ## Deployment
 _To be added by /deploy_
