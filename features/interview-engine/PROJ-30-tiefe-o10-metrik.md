@@ -15,7 +15,7 @@ ADR-T011 definiert die G.1-Metrik als zweidimensional: Coverage (deterministisch
 
 Das Konstrukt "Tiefe" misst, ob eine extrahierte Aussage über die bloße Benennung eines Sachverhalts hinausgeht und erklärende Struktur enthält (Bedingungen, Kausalität, Ausnahmen, tazite Aspekte, die durch konversationelles Nachfragen sichtbar wurden). Ein reiner Slot-Zähler (`slot_coverage`) erfüllt diese Anforderung strukturell nicht — REQ-012.
 
-Der Scorer ist schemaagnostisch: er urteilt über den Inhalt (`evidence_quote` + Slot-Wert) jedes befüllten Slots, unabhängig davon, ob das neue O1-O5-Schema (PROJ-25) bereits deployed ist. Sobald PROJ-25 die O1-O5-Felder hinzufügt, verbessert sich die Extraktionsqualität als Input; der Scorer selbst muss nicht geändert werden.
+Der Scorer ist schemaagnostisch: er urteilt über den Inhalt jedes befüllten Slots (`evidence_quote` + Slot-Wert, ergänzt um die zugehörigen Schritt-Turns für die Stufe-3-Beurteilung), unabhängig davon, ob das neue O1-O5-Schema (PROJ-25) bereits deployed ist. Sobald PROJ-25 die O1-O5-Felder hinzufügt, verbessert sich die Extraktionsqualität als Input; der Scorer selbst muss nicht geändert werden.
 
 ## Dependencies
 
@@ -37,10 +37,11 @@ Der Scorer ist schemaagnostisch: er urteilt über den Inhalt (`evidence_quote` +
 
 - [ ] Neuer Scorer `slotDepth.ts` in `src/services/__evals__/interview/scorers/`. Signatur: `async (transcript: Turn[], state: InterviewState, toolCalls: ToolCallRecord[]) => SlotDepthResult`.
 - [ ] `SlotDepthResult` enthält: `depth_score: number` (float 1.0–3.0, Durchschnitt aller befüllten Slots) und `depth_distribution: { p1: number; p2: number; p3: number }` (Anteil Slots bei Stufe 1/2/3, Summe = 1.0, float 0–1).
-- [ ] Judge läuft **pro Schritt im Batch**: ein LLM-API-Call pro Schritt gibt eine JSON-Liste mit Stufen (1–3) für alle Slots des Schritts zurück.
+- [ ] Judge läuft **pro Schritt im Batch**: ein LLM-API-Call pro Schritt bewertet genau ein Kriterium (Tiefe) über alle befüllten Slots des Schritts und gibt eine JSON-Liste zurück, deren Elemente je Slot `{ slot, begruendung, stufe }` tragen, `begruendung` vor `stufe` (REQ-010: Anteil Scores ohne Begründung = 0). Der Batch bündelt Slots, nicht Kriterien; die Kriterienisolation (ein Kriterium je Aufruf, REQ-010/EVAL-J-03) bleibt gewahrt.
 - [ ] Judge ist Cross-Vendor: wenn das Eval-Modell ein Gemini-Modell ist → Anthropic Claude Haiku 4.5 als Judge; sonst → Gemini Flash-Lite. Gleiche Logik wie `dialogNaturalness.ts`.
-- [ ] Judge-Prompt auf Deutsch, enthält die drei Rubrik-Anker aus ADR-T011 wörtlich, bewertet genau ein Kriterium (Tiefe), schreibt Begründung vor Score (Chain-of-Thought) gemäß REQ-010.
+- [ ] Judge-Prompt auf Deutsch, gibt die drei Rubrik-Anker aus ADR-T011 wörtlich wieder und urteilt je Slot unabhängig: die Begründung eines Slots verweist nicht auf das Urteil der Nachbar-Slots im selben Batch, um Halo-Effekte innerhalb des Schritts zu dämpfen.
 - [ ] Leere Slots (null-Wert) werden aus dem Tiefe-Urteil ausgeschlossen und fließen weder in Zähler noch Nenner ein.
+- [ ] Der Judge-Input je Schritt enthält neben `evidence_quote` + Slot-Wert die zugehörigen Befragten- und Engine-Turns des Schritts, soweit die Stufe-3-Anker es verlangen (ADR-T011: „taziter Aspekt, der durch konversationelles Nachfragen sichtbar wurde" ist aus der `evidence_quote` allein nicht beurteilbar; Kausalstruktur und Ausnahmefall schon).
 - [ ] Wenn der Judge-API-Call für einen Schritt fehlschlägt (Timeout, Rate-Limit, invalider JSON), werden die Slots dieses Schritts mit Stufe-Fallback `null` markiert und aus der Aggregation ausgeschlossen. Der Scorer läuft für die restlichen Schritte weiter. `depth_score` gibt `null` zurück wenn kein einziger Schritt erfolgreich bewertet wurde.
 - [ ] `slotDepth` ist in `scorers/index.ts` in `runAllScorers()` integriert.
 
@@ -50,7 +51,7 @@ Der Scorer ist schemaagnostisch: er urteilt über den Inhalt (`evidence_quote` +
 - [ ] **Monotonie-Test** (Unit-Test, deterministisch): `slotDepth(deep) > slotDepth(adequate) > slotDepth(shallow)` — drei Fixtures werden sortiert und die Reihenfolge geprüft.
 - [ ] **Adversarial-Test** (Unit-Test): Eine Shallow-Fixture erhält triviale Phrasen-Anhänge an jeden Slot-Wert (z.B. "Das geht gut.", "Kein Problem."). `slotDepth` muss für diese Variante dasselbe Ergebnis wie die Original-Shallow-Fixture liefern (Abweichung ≤ 0,2 Punkte).
 - [ ] **Konstrukt-Unabhängigkeit** (Unit-Test): Coverage-Score der Deep-Fixture = Coverage-Score der Shallow-Fixture (beide haben gleich viele befüllte Slots). Beweist dass Coverage und Tiefe unabhängig sind.
-- [ ] **Reproduzierbarkeits-Test**: Zwei sequenzielle Aufrufe auf derselben Fixture weichen ≤ 5 % voneinander ab (LLM-Judge bei `temperature: 0`).
+- [ ] **Reproduzierbarkeits-Test**: Zwei sequenzielle Aufrufe auf derselben Fixture weichen ≤ 5 % voneinander ab (LLM-Judge bei `temperature: 0`). Die Slot-Reihenfolge im Batch ist deterministisch fixiert; die Order-Unabhängigkeit (Positionsbias-Swap, EVAL-J-02) prüft PROJ-31, nicht dieser Scorer.
 
 ### Runner- und Report-Integration
 
