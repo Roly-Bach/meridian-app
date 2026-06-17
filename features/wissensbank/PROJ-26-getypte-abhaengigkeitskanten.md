@@ -11,24 +11,31 @@
 
 ## Kontext
 
-Die bestehende `StepEntry`-Struktur hat kein Feld für Abhängigkeiten zwischen Prozessschritten — nur
-`cluster_id` und Freitext. PROJ-25 ergänzt `abhaengigkeiten` als placeholder-typed (`unknown[]`),
-damit der Coverage-Scorer das Feld zählen kann. PROJ-26 schärft den Typ zu konkreten,
-maschinell auswertbaren Kanten und führt das `record_dependency`-Tool ein, mit dem der
-Interview-Agent Abhängigkeiten während der Erhebung einträgt (O6, REQ-006).
+Auf `StepEntry` selbst gibt es heute kein Abhängigkeitsfeld. Abhängigkeiten werden nur indirekt
+über die prozessweite `cluster_id` (`processClustering.ts`) und die Freitext-Referenz `step_ref`
+(pain_point → Schritt, `interviewAgent.ts:1083`) angenähert. PROJ-25 ergänzt `abhaengigkeiten` als
+strukturierten Placeholder `{ depends_on: unknown[]; influences: unknown[]; nicht_befund_typ: ... | null } | null`
+(initial `null`), damit der Coverage-Scorer das Feld zählen kann. PROJ-26 schärft die Element-Typen
+der beiden Arrays zu konkreten, maschinell auswertbaren Kanten und führt das `record_dependency`-Tool
+ein, mit dem der Interview-Agent Abhängigkeiten während der Erhebung einträgt (O6, REQ-006).
 
 Kanten als Daten im JSON-Dokument, keine Graph-Datenbank (ADR-T008 Entscheidung 2).
 O7 (prozessübergreifende Muster) ist für den Pilot vertagt (App-ADR-012 Deferred).
+Die konkrete Feldrealisierung (`depends_on`/`influences`, Kantentypen) ist ADR-T008-Designhypothese
+und im Zielschema `prozessschritt-schema.json` (Definitionen `Abhaengigkeiten`/`AbhaengigkeitsKante`/
+`EinflussKante`) realisiert; REQ-006 selbst ist seit dem Neutralitäts-Audit (ADR-T014, 2026-06-15)
+feldneutral formuliert.
 
-BL-Item: BL-E1.2. REQ: REQ-006.
+BL-Item: BL-E1.2. REQ: REQ-006. Schema: `prozessschritt-schema.json` v1.2.
 
 ## Dependencies
 
-- Requires: PROJ-25 (Prozesswissens-Schema) — führt `abhaengigkeiten: unknown[] | null` als
-  placeholder in `StepEntry` ein; Coverage-Scorer zählt das Feld bereits
-- Requires: PROJ-27 (Schema-Bindung + verlustfreie Speicherung) — stabile Schritt-IDs (S001-Format)
+- Requires: PROJ-25 (Prozesswissens-Schema): führt `abhaengigkeiten` als strukturierten Placeholder
+  `{ depends_on: unknown[]; influences: unknown[]; nicht_befund_typ: ... | null } | null` in `StepEntry`
+  ein; Coverage-Scorer wertet das Feld bereits
+- Requires: PROJ-27 (Schema-Bindung + verlustfreie Speicherung): stabile Schritt-IDs (S001-Format)
   müssen existieren, damit Kanten-Referenzen keine Phantom-IDs enthalten
-- Enables: PROJ-28 (Extraktions-Zuverlässigkeit) — kann Kanten-Felder in Grounding-Check einbeziehen
+- Enables: PROJ-28 (Extraktions-Zuverlässigkeit): kann Kanten-Felder in Grounding-Check einbeziehen
 
 > **Build-Reihenfolge:** PROJ-25 → PROJ-27 → PROJ-26 (umgestellt 2026-06-16).
 > Ursprüngliche Reihenfolge war PROJ-25 → PROJ-26 → PROJ-27; die Umstellung vermeidet
@@ -66,7 +73,9 @@ BL-Item: BL-E1.2. REQ: REQ-006.
   `{ schritt_id: string; typ: 'beeinflusst' | 'terminierung'; beschreibung: string | null }`
 - [ ] `Abhaengigkeiten` definiert:
   `{ depends_on: AbhaengigkeitsKante[]; influences: EinflussKante[]; nicht_befund_typ: 'nicht_zutreffend' | 'unbekannt' | 'verweigert' | null }`
-- [ ] `StepEntry.abhaengigkeiten` ist `Abhaengigkeiten | null` (ersetzt den PROJ-25-placeholder `unknown[]`)
+- [ ] `StepEntry.abhaengigkeiten` ist `Abhaengigkeiten | null`; schärft den PROJ-25-Placeholder, indem die
+  Element-Typen von `depends_on`/`influences` von `unknown` zu `AbhaengigkeitsKante`/`EinflussKante`
+  konkretisiert werden (die Objektstruktur `{ depends_on; influences; nicht_befund_typ }` steht bereits aus PROJ-25)
 - [ ] Alle drei Typen sind in `interviewSemantic.ts` definiert (side-effect-free, kein server-only-Import)
 - [ ] `schritt_id` verwendet das S001-Format aus PROJ-27; kein enum — Werte sind zur Laufzeit dynamisch
 
@@ -88,17 +97,21 @@ BL-Item: BL-E1.2. REQ: REQ-006.
 
 ### Nicht-Befund-Pfad
 
-- [ ] Agent kann `record_slot(slot_name='abhaengigkeiten', nicht_befund_typ='nicht_zutreffend')` setzen,
-  wenn ein Schritt keine nachweisbaren Abhängigkeiten hat
+- [ ] `abhaengigkeiten` ist **kein** `SlotName` (PROJ-25 Z. 82), daher läuft der Nicht-Befund **nicht** über
+  `record_slot`, sondern über den dedizierten Schreibpfad: `record_dependency` erhält einen Nicht-Befund-Modus
+  (Aufruf ohne `target_step_id`/`richtung`/`typ`, mit `nicht_befund_typ='nicht_zutreffend' | 'unbekannt' | 'verweigert'`),
+  der `step_tracker[source_step_id].abhaengigkeiten.nicht_befund_typ` setzt. `/architecture` entscheidet, ob das als
+  Modus von `record_dependency` oder als eigenes Markierungs-Tool realisiert wird (analog Governance-Schreibpfad, PROJ-25 Z. 98)
 - [ ] `nicht_befund_typ` ohne Kanten zählt als befüllt für Coverage (REQ-007)
 
 ### Coverage-Interaktion
 
-- [ ] `slotCoverage` (von PROJ-25) zählt `abhaengigkeiten` als befüllt:
-  `depends_on.length ≥ 1 OR influences.length ≥ 1 OR nicht_befund_typ != null`
-- [ ] Leere Arrays `[]` bei `nicht_befund_typ: null` → unbefüllt (O8-Lücke)
-- [ ] `slotCoverage.test.ts` enthält Testfälle: Kante vorhanden → befüllt; leere Arrays → unbefüllt;
-  nicht_befund_typ gesetzt → befüllt; placeholder `unknown[]` toleriert → kein Crash
+- [ ] Die Befüllt-Logik für `abhaengigkeiten` bleibt unverändert aus PROJ-25 (Z. 89, kanonische Heimat):
+  befüllt, wenn `depends_on.length ≥ 1` ODER `influences.length ≥ 1` ODER `nicht_befund_typ != null`.
+  PROJ-26 definiert die Formel nicht neu, sondern verifiziert sie gegen die jetzt getypten Kanten
+- [ ] Leere Arrays `[]` bei `nicht_befund_typ: null` zählen als unbefüllt (O8-Lücke)
+- [ ] `slotCoverage.test.ts` erhält Testfälle für die getypten Kanten: Kante vorhanden → befüllt; leere Arrays
+  → unbefüllt; `nicht_befund_typ` gesetzt → befüllt; alter PROJ-25-Placeholder (`unknown[]`-Elemente) wird beim Lesen toleriert (kein Crash)
 
 ### Agent-Prompt
 
@@ -124,7 +137,7 @@ BL-Item: BL-E1.2. REQ: REQ-006.
 - **Mehrere Kanten zum selben Ziel mit unterschiedlichem Typ:** gültig. S001 kann
   `voraussetzung` und `ressource`-Beziehung zu S002 gleichzeitig haben.
 - **Kante vor PROJ-27-IDs:** verhindert durch Build-Reihenfolge (PROJ-27 vor PROJ-26).
-  Wenn somehow ein Schritt ohne S-ID-Format im step_tracker landet: Tool wirft Validierungsfehler.
+  Falls dennoch ein Schritt ohne S-ID-Format im step_tracker landet: Tool wirft Validierungsfehler.
 - **Zu viele Kanten:** kein Limit für MVP; leeres Objekt `{ depends_on: [], influences: [],
   nicht_befund_typ: null }` gilt weiterhin als unbefüllt.
 - **Rückwärtskompatibilität mit altem placeholder:** Sessions aus PROJ-25-Ära haben
@@ -134,9 +147,10 @@ BL-Item: BL-E1.2. REQ: REQ-006.
 ## Technical Requirements
 
 - Typen in `interviewSemantic.ts` — kein server-only-Import, damit Eval-Runner importieren kann
-- `record_dependency` in `interviewAgent.ts`, schreibt atomar auf `step_tracker` JSONB
-  (kein konkurrierender Writer zu dem, was PROJ-27 für Race-Fix löst — Kanten sind ein neues
-  Schreib-Target, das Race-Verhalten ist via PROJ-27 gesichert)
+- `record_dependency` in `interviewAgent.ts` schreibt über denselben TOCTOU-sicheren Schreibpfad wie PROJ-27
+  (read-prev → check → gezieltes `jsonb_set` auf den Array-Pfad `abhaengigkeiten.depends_on`/`.influences`),
+  nicht als Voll-Dokument-Read-Modify-Write. Damit unterliegt das Anhängen zweier Kanten an denselben Schritt
+  nicht der Lost-Update-Klasse, die PROJ-27 (REQ-015) für Slot-Writes behebt
 - Kein neuer Supabase-Migration-Bedarf: Kanten leben im bestehenden `step_tracker`-JSONB-Feld
 
 ---

@@ -49,7 +49,7 @@ Alle drei setzen PROJ-25 voraus (neues `StepEntry`-Schema mit O1–O6-Feldern). 
 ### BL-E1.4 — Stabile Schritt-IDs
 
 - [ ] `StepEntry` (`interviewSemantic.ts`) erhält neues Feld `id?: string` (Format `^S[0-9]{3}$`)
-- [ ] `register_step` vergibt `id` automatisch beim Anlegen: `S${String(tracker.length + 1).padStart(3, '0')}` (S001, S002, ..., S999)
+- [ ] `register_step` vergibt `id` automatisch beim Anlegen: `S${String(tracker.length + 1).padStart(3, '0')}` (S001, S002, ..., S999); `reihenfolge` wird parallel aus derselben 1-basierten Position gesetzt (Feld-Eigentum PROJ-25, dort spezifiziert)
 - [ ] `id` wird in `step_tracker`-JSONB persistiert (Teil des `StepEntry`-Objekts)
 - [ ] `record_slot` erhält neuen optionalen Parameter `step_id?: string` (z.B. "S001")
 - [ ] Lookup-Priorität in `record_slot`: `step_id`-Match → `findStepFuzzy`-Fallback (für Sessions ohne `id`)
@@ -95,7 +95,9 @@ Alle drei setzen PROJ-25 voraus (neues `StepEntry`-Schema mit O1–O6-Feldern). 
 - [ ] `toGrenzobjekt(step: StepEntry): Schritt` — Mapping der App-internen Form auf die Ziel-Schema-Form (`prozessschritt-schema.json`, deutsche Feldnamen). PROJ-25 hat diese Bindung explizit an PROJ-27 delegiert:
   - `title` → `bezeichnung` (SlotString); `reihenfolge` → `reihenfolge`
   - O2–O5 `slots.*` → `entscheidungslogik`/`tazite_cues`/`ausnahmen`/`inputs`/`outputs`/`hilfsmittel`; je Slot `value` → `wert`, `confidence`-Enum → numerische `konfidenz` (feste Abbildung `confirmed`=0.9 / `estimate`=0.6 / `unknown`=0.3, deckt sich mit der `konfidenz`-Steuertabelle der Schema-Spec; `/architecture` darf die Werte verfeinern), `nicht_befund_typ` übernehmen; `quote` ist app-intern und nicht Teil der Export-Form
-  - `potenzial.*` englische → deutsche Keys (`frequency_per_month` → `haeufigkeit_pro_monat` etc., SlotNumber); `governance`-Objekt übernehmen; `abhaengigkeiten` (PROJ-26-Typ, in PROJ-27 placeholder)
+  - `potenzial.*` englische → deutsche Keys (`frequency_per_month` → `haeufigkeit_pro_monat` etc., SlotNumber); `abhaengigkeiten` von PROJ-26 übernehmen (in PROJ-27 noch Placeholder-Element-Typen)
+  - **Null-Normalisierung der schema-pflichtigen Felder.** Das Zielschema verlangt `bezeichnung`, `reihenfolge`, `entscheidungslogik`, `tazite_cues`, `ausnahmen`, `inputs`, `outputs`, `hilfsmittel`, `abhaengigkeiten` in **jedem** Schritt präsent, und jedes Slot-/Kanten-Objekt muss ein Objekt sein (kein `null`-Union). Ein in `StepEntry` noch `null`-er O2–O5-Slot wird daher auf das leere, aber gültige Objekt abgebildet: SlotString → `{ wert: null, konfidenz: null, nicht_befund_typ: null }`, SlotStringArray analog, `abhaengigkeiten: null` → `{ depends_on: [], influences: [], nicht_befund_typ: null }`. Ohne diese Normalisierung scheitert die Konformität frisch registrierter Schritte (REQ-003), deren O2–O5 initial `null` sind.
+  - **Optionale Felder nicht als `null` emittieren.** `potenzial`, `governance` und `revisions_meta` sind schema-optional und haben **keinen** `null`-Union (`additionalProperties: false`). Sind sie in `StepEntry` `null`, wird der Key **ausgelassen** (nicht `null` geschrieben); sonst das Objekt übernehmen.
   - `id` muss gesetzt sein (BL-E1.4); fehlt sie (Alt-Session), wird sie beim Mappen vergeben
 - [ ] Das kanonische `prozessschritt-schema.json` (v1.2; SSoT liegt in meridian-ma) wird in die App vendored (kopiert, **nicht** handgepflegt). Ein Guard-Test/Kommentar hält fest, dass die Kopie der meridian-ma-Quelle entspricht (manueller Sync bei Schema-Änderung), damit das Schema die einzige Regelquelle bleibt.
 
@@ -106,7 +108,7 @@ Alle drei setzen PROJ-25 voraus (neues `StepEntry`-Schema mit O1–O6-Feldern). 
   - Score: Anteil konformer Schritte je Session (0.0–1.0), Ziel ≥ 0.95 (REQ-003-Erfolgskriterium)
   - erfasst Verletzungen strukturiert aus den ajv-Errors (welcher Schritt, welches Feld, welche Constraint)
 - [ ] Scorer ist in `scorers/index.ts` + `runner.ts` + Langfuse-Entries integriert
-- [ ] `schemaConformanceRate.test.ts`: happy path (alle Felder konform) + je 1 Verletzungsfall pro Feldtyp (SlotString/`bezeichnung`, SlotStringArray, GovernanceSlot, Potenzial-SlotNumber, `id`-Muster `^S[0-9]{3}$`)
+- [ ] `schemaConformanceRate.test.ts`: happy path (alle Felder konform) + frisch registrierter Schritt (O2–O5 und `abhaengigkeiten` initial `null`) ist nach `toGrenzobjekt`-Normalisierung konform + Schritt mit `potenzial`/`governance` = `null` (Key ausgelassen, konform) + je 1 Verletzungsfall pro Feldtyp (SlotString/`bezeichnung`, SlotStringArray, GovernanceSlot, Potenzial-SlotNumber, `id`-Muster `^S[0-9]{3}$`)
 - [ ] Runtime-Logging: `record_slot` logt Konformitätsverletzungen per `console.warn` + Langfuse-Span-Attribut `conformanceViolation: true` — kein Hard-Error, Interview läuft weiter (Schutz für REQ-015: schemafremde Nennungen werden nicht verworfen)
 - [ ] Neue Abhängigkeit `ajv` (kleines Standard-Package) zugelassen. Begründung: ein externer JSON-Schema-Validator gegen das Ziel-Schema (Build-Backlog BL-E1.3, REQ-003-Messvorschrift); das Schema bleibt Single Source of Truth statt in Zod dupliziert zu werden. Die bestehende Zod-Prüfung an der Tool-Grenze bleibt (Eingangs-Türsteher), ajv kommt für die Ziel-Schema-Konformität hinzu.
 

@@ -96,6 +96,7 @@ REQ: REQ-004, REQ-022.
 
 - [ ] `record_slot` akzeptiert die neuen schreibbaren `SlotName` der O2–O5-Felder (`entscheidungslogik`, `tazite_cues`, `ausnahmen`, `inputs`, `outputs`, `hilfsmittel`); der bestehende `evidence_span`/`evidence_quote`-Grounding-Pfad (`interviewAgent.ts:900-934`) bleibt unverändert und schreibt `quote` in den taziten Slot
 - [ ] `governance` ist **kein** `SlotName` (anderes Objektformat als ein Slot). Es wird über einen eigenen Schreibpfad gesetzt: entweder ein dediziertes `record_governance`-Tool oder ein governance-Zweig, der das `GovernanceSlot`-Objekt nach `StepEntry.governance` schreibt (nicht nach `slots`). `/architecture` entscheidet die Tool-Granularität
+- [ ] `register_step` setzt bei Neuanlage `reihenfolge` aus der 1-basierten Array-Position (`tracker.length + 1`), damit auch nach dem Deploy angelegte Schritte das Feld tragen. Sonst hält die Coverage-Annahme „`reihenfolge` immer befüllt" (siehe Coverage-Scorer) nur für migrierte, nicht für neu registrierte Schritte; ein Schritt ohne `reihenfolge` wäre zudem beim Schema-Export (PROJ-27 `toGrenzobjekt`) nicht konform (`reihenfolge` ist Schema-Pflichtfeld)
 - [ ] `formatStepTracker` zeigt die neuen taziten Felder und `governance` im Prompt-Kontext an (damit Agent weiß, was noch fehlt)
 - [ ] `SLOT_PROMPT_HINT` (`interviewAgent.ts:126`) deckt die neuen Slot-Keys ab
 - [ ] Minimales Prompt-Update: Analyst kennt die neuen schreibbaren Felder; volle Gesprächsführungs-Revision ist PROJ-29
