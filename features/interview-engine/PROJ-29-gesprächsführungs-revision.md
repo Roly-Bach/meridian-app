@@ -1,6 +1,6 @@
 # PROJ-29: Gesprächsführungs-Revision
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-23
@@ -365,11 +365,22 @@ Keine Security-Relevanz — reine Service-Layer/Prompt-Änderung. Kein neuer API
 - `coverage_check`-Phase: unverändert ✅
 - 545 bestehende Tests (pre-PROJ-29): alle bestanden ✅
 
+### Bug-Fixes (post-QA)
+
+**B1 — GESCHLOSSEN** (fix(PROJ-29): close QA bugs B1–B2, commit f14f742)
+`wasRecentlyRecontextualized` in `buildDynamicContext` eingehängt. `recontextCapSection` wird injiziert wenn Re-Kontextualisierung in letzten 3 Assistant-Turns erkannt. AC E3.2-3 erfüllt.
+
+**B2 — GESCHLOSSEN** (selber Commit)
+`detectAmbiguity` erhält neuen Parameter `priorUserTurns`. `extractNegatedConcepts` extrahiert "kein X"-Patterns aus Prior-Turns; positive Erwähnung von X im Current Turn triggert Ambiguitäts-Direktive. 4 neue Tests.
+
+**B3 — Won't Fix (Low, by design)**
+History-basierter Streak ohne Topic-Reset: Im Normalfall korrekt. Falsch-positiver ABBRUCH tritt nur auf wenn User konsekutive Blockade-Turns über Topicgrenzen gibt — seltenes, akzeptables Randverhalten. `next_briefing`-Counter ist PROJ-30/31-Scope.
+
 ### Produktion-Readiness
 
-**STATUS: NICHT BEREIT** — B1 (Medium) ist AC-Failure: E3.2-3 nicht erfüllt.
+**STATUS: BEREIT** — Keine Critical/High Bugs. B3 (Low) als Known Issue akzeptiert.
 
-Empfehlung: B1 zuerst fixen (klein), dann Re-QA. B2 und B3 können nach Deploy als Known Issues weitergeführt werden.
+**Re-QA Ergebnis:** 24/24 AC Pass (nach B1/B2-Fix), 571/571 Tests grün.
 
 ## Deployment
 _To be added by /deploy_
