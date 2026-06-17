@@ -174,6 +174,7 @@ async function main() {
           dialogNaturalness: 0, // not computed in replay
           completionCorrectness: scores.completionCorrectness ?? false,
           stepRegistrationCoverage: scores.stepRegistrationCoverage ?? 0,
+          schemaConformanceRate: scores.schemaConformanceRate ?? 0,
         },
         updatedAt: new Date().toISOString(),
       }

@@ -451,8 +451,8 @@ describe('Tool Handlers', () => {
       // PROJ-27: 'done' status written via separate rpc call (may precede by 'walkthrough' call)
       const doneStatusCall = mockAdminRpc.mock.calls.find(
         (call: unknown[]) => {
-          const p = call[1]
-          return Array.isArray(p?.p_sub_path) && p.p_sub_path.join('.') === 'status' && p.p_value === JSON.stringify('done')
+          const p = call[1] as Record<string, unknown>
+          return Array.isArray(p?.p_sub_path) && (p.p_sub_path as string[]).join('.') === 'status' && p.p_value === JSON.stringify('done')
         }
       )
       expect(doneStatusCall).toBeDefined()
@@ -490,8 +490,9 @@ describe('Tool Handlers', () => {
       // PROJ-27: no 'done' status rpc call should have been made
       const doneCall = mockAdminRpc.mock.calls.find(
         (call: unknown[]) => {
-          const sub = call[1]?.p_sub_path
-          return Array.isArray(sub) && sub.join('.') === 'status' && call[1]?.p_value?.includes('done')
+          const p = call[1] as Record<string, unknown>
+          const sub = p?.p_sub_path
+          return Array.isArray(sub) && (sub as string[]).join('.') === 'status' && (p?.p_value as string)?.includes('done')
         }
       )
       expect(doneCall).toBeUndefined()
@@ -691,6 +692,160 @@ describe('Tool Handlers', () => {
         type: 'pain_point',
         content: expect.objectContaining({ step_ref: 'Rechnungseingang' }),
       })
+    })
+  })
+
+  // ── record_dependency (PROJ-26) ─────────────────────────────────────────────
+
+  describe('record_dependency', () => {
+    function makeTrackerWithIds(): StepEntry[] {
+      return [
+        makeStep({ id: 'S001', title: 'Schritt A' }),
+        makeStep({ id: 'S002', title: 'Schritt B', reihenfolge: 2 }),
+      ]
+    }
+
+    function mockWithTracker(tracker: StepEntry[]) {
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
+      })
+      mockAdminRpc.mockResolvedValue({ data: null, error: null })
+    }
+
+    it('records depends_on edge between two known steps', async () => {
+      mockWithTracker(makeTrackerWithIds())
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S001',
+        target_step_id: 'S002',
+        richtung: 'depends_on',
+        typ: 'voraussetzung',
+        beschreibung: 'S002 muss zuerst abgeschlossen sein',
+      })
+      expect(result.success).toBe(true)
+      expect(result.abhaengigkeiten.depends_on).toHaveLength(1)
+      expect(result.abhaengigkeiten.depends_on[0].schritt_id).toBe('S002')
+      expect(result.abhaengigkeiten.depends_on[0].typ).toBe('voraussetzung')
+      expect(mockAdminRpc).toHaveBeenCalledWith('patch_interview_step_field', expect.objectContaining({
+        p_sub_path: ['abhaengigkeiten'],
+      }))
+    })
+
+    it('records influences edge between two known steps', async () => {
+      mockWithTracker(makeTrackerWithIds())
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S001',
+        target_step_id: 'S002',
+        richtung: 'influences',
+        typ: 'beeinflusst',
+        beschreibung: null,
+      })
+      expect(result.success).toBe(true)
+      expect(result.abhaengigkeiten.influences).toHaveLength(1)
+      expect(result.abhaengigkeiten.influences[0].typ).toBe('beeinflusst')
+    })
+
+    it('sets nicht_befund_typ in Nicht-Befund-Modus', async () => {
+      mockWithTracker(makeTrackerWithIds())
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S001',
+        nicht_befund_typ: 'nicht_zutreffend',
+      })
+      expect(result.success).toBe(true)
+      expect(result.abhaengigkeiten.nicht_befund_typ).toBe('nicht_zutreffend')
+      expect(result.abhaengigkeiten.depends_on).toHaveLength(0)
+    })
+
+    it('rejects self-reference (source_step_id === target_step_id)', async () => {
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S001',
+        target_step_id: 'S001',
+        richtung: 'depends_on',
+        typ: 'voraussetzung',
+        beschreibung: null,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Selbstreferenz')
+    })
+
+    it('rejects phantom source (source_step_id not in step_tracker)', async () => {
+      mockWithTracker(makeTrackerWithIds())
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S099',
+        target_step_id: 'S001',
+        richtung: 'depends_on',
+        typ: 'voraussetzung',
+        beschreibung: null,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('S099')
+    })
+
+    it('rejects phantom target (target_step_id not in step_tracker)', async () => {
+      mockWithTracker(makeTrackerWithIds())
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S001',
+        target_step_id: 'S099',
+        richtung: 'depends_on',
+        typ: 'voraussetzung',
+        beschreibung: null,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('S099')
+    })
+
+    it('rejects type mismatch (influences-type passed to depends_on)', async () => {
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S001',
+        target_step_id: 'S002',
+        richtung: 'depends_on',
+        typ: 'beeinflusst',
+        beschreibung: null,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('beeinflusst')
+    })
+
+    it('is idempotent: duplicate edge returns skipped:true without re-inserting', async () => {
+      const withExistingEdge: StepEntry[] = [
+        makeStep({
+          id: 'S001',
+          title: 'Schritt A',
+          abhaengigkeiten: {
+            depends_on: [{ schritt_id: 'S002', typ: 'voraussetzung', beschreibung: null }],
+            influences: [],
+            nicht_befund_typ: null,
+          },
+        }),
+        makeStep({ id: 'S002', title: 'Schritt B', reihenfolge: 2 }),
+      ]
+      mockWithTracker(withExistingEdge)
+      const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_dependency as any).execute({
+        source_step_id: 'S001',
+        target_step_id: 'S002',
+        richtung: 'depends_on',
+        typ: 'voraussetzung',
+        beschreibung: null,
+      })
+      expect(result.success).toBe(true)
+      expect(result.skipped).toBe(true)
     })
   })
 
