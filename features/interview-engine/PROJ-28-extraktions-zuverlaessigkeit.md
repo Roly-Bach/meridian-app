@@ -215,6 +215,11 @@ Kein UI, keine API-Route, keine DB-Migration. Abwärtskompatibel — Alt-Einträ
 
 ### Tally: `0:1:2` (Critical:Medium:Low)
 
+### Bug Fixes (2026-06-17)
+- B1 fixed: `nicht_befund_typ`-Instruktionen in Analyst-Prompt (`interviewAnalyst.ts`) hinzugefügt
+- B2 fixed: Staler Kommentar `interviewAgent.ts:440` aktualisiert
+- B3 fixed: `computeEmptyMandatorySlots` nutzt jetzt explizite Filled-Check-Pattern
+
 ## Deployment
 _To be added by /deploy_
 

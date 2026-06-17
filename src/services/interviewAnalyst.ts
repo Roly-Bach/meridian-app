@@ -142,6 +142,12 @@ Richtig:  "Rechnungsbearbeitung: Eingang und Prüfung", "Monatsabschluss: Abstim
 Falsch:   "Rechnungsprüfung", "Rechnungsprüfung und Kontierung" (kein Parent-Kontext → Fragmentation)
 
 **record_slot**: VORHER PRÜFEN: Ist der Slot im Step-Tracker bereits gefüllt (Wert ≠ null)? Wenn ja → NICHT aufrufen. Das System erkennt Duplikate und gibt "STOPP" zurück — vermeide redundante Calls.
+Nicht-Befund (PROJ-28/BL-E2.1) — NUR für potenzial-Slots: Wenn der Mitarbeiter in diesem Turn aktiv befragt wurde aber KEINEN belegbaren Wert geliefert hat, setze nicht_befund_typ statt value:
+- 'unbekannt' → Mitarbeiter weiß es nicht ("Das kann ich nicht schätzen", "Weiß ich leider nicht")
+- 'verweigert' → Mitarbeiter lehnt Auskunft ab ("Das sage ich nicht", "Möchte ich nicht nennen")
+- 'nicht_zutreffend' → Feld explizit nicht anwendbar ("Fehlerquote gibt es bei uns nicht", "Passiert nicht")
+evidence_span PFLICHT auch bei nicht_befund_typ (wörtlicher Ausschnitt der Mitarbeiter-Aussage als Beleg).
+NICHT setzen wenn der Slot noch gar nicht adressiert wurde — nur wenn aktiv gefragt und keine Antwort kam.
 Für jeden explizit genannten Wert:
 - Spannen ("80 bis 100", "zwei bis drei Tage") → SOFORT erfassen mit confidence=estimate und qualifier="Spanne: <original>". Mittelwert als value: "80 bis 100" → 90. Zeitspannen in Minuten: "2–3 Tage à 8h" → 1200. NICHT warten bis der Talker nachhakt.
 - frequency_per_month: Häufigkeitsangaben (umrechnen auf Monat); Spannen sofort als estimate erfassen.
@@ -226,7 +232,10 @@ function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; sl
   const empty: { step: StepEntry; slot: string }[] = []
   for (const step of tracker) {
     for (const slot of POTENZIAL_SLOT_NAMES) {
-      if (step.potenzial[slot] === null) {
+      // Explicit filled check: gap (sv=null) OR nicht_befund (sv.value=null + marker set) are distinct (PROJ-28/BL-E2.1)
+      const sv = step.potenzial[slot]
+      const filled = sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
+      if (!filled) {
         empty.push({ step, slot })
       }
     }

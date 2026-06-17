@@ -437,7 +437,7 @@ export function detectDrillStops(
       : activeStep.slots[kind as TaziteSlotName]
     const slotEmpty = slotVal == null || (
       typeof slotVal === 'object' && 'value' in slotVal && slotVal.value == null &&
-      // nicht_befund_typ exists on TaziteSlot/TaziteSlotArray but not on SlotValue
+      // slot is empty only when value=null AND no nicht_befund_typ set (PROJ-28: SlotValue now also carries nicht_befund_typ)
       (!('nicht_befund_typ' in slotVal) || (slotVal as TaziteSlot).nicht_befund_typ == null)
     )
     if (counts[kind] >= threshold && slotEmpty) {
