@@ -248,6 +248,101 @@ describe('computeWalkthroughSlotTarget', () => {
     ]
     expect(computeWalkthroughSlotTarget(steps)?.step_title).toBe('Live')
   })
+
+  // PROJ-28/BL-E2.1 — nicht_befund_typ on potenzial slots
+  it('does not target potenzial slot with nicht_befund_typ set (addressed, no value)', () => {
+    const steps: StepEntry[] = [
+      makeFilledStep({
+        status: 'walkthrough',
+        potenzial: {
+          frequency_per_month: { value: null, quote: 'weiß ich nicht', nicht_befund_typ: 'unbekannt' },
+          duration_minutes: { value: 15, quote: 'ca. 15 min' },
+          error_rate_percent: { value: 2, quote: '2 Prozent' },
+          media_breaks: { value: 1, quote: 'einmal' },
+        },
+      }),
+    ]
+    // All potenzial filled (one as nicht_befund), all tazite filled → null
+    expect(computeWalkthroughSlotTarget(steps)).toBeNull()
+  })
+
+  it('reports reason=missing for null potenzial gap', () => {
+    const steps: StepEntry[] = [makeStep({ status: 'walkthrough' })]
+    const target = computeWalkthroughSlotTarget(steps)
+    expect(target?.reason).toBe('missing')
+  })
+
+  // PROJ-28/BL-E2.2 — low_confidence pass
+  it('targets estimate potenzial slot as low_confidence after all null gaps filled', () => {
+    const estimateSlot = { value: 20, quote: 'ungefähr 20', confidence: 'estimate' as const }
+    const steps: StepEntry[] = [
+      makeFilledStep({
+        status: 'walkthrough',
+        potenzial: {
+          frequency_per_month: estimateSlot,
+          duration_minutes: { value: 15, quote: 'ca. 15 min', confidence: 'confirmed' as const },
+          error_rate_percent: { value: 2, quote: '2%', confidence: 'confirmed' as const },
+          media_breaks: { value: 1, quote: 'einmal', confidence: 'confirmed' as const },
+        },
+      }),
+    ]
+    const target = computeWalkthroughSlotTarget(steps)
+    expect(target?.slot).toBe('frequency_per_month')
+    expect(target?.reason).toBe('low_confidence')
+  })
+
+  it('does not target confirmed potenzial slot in low_confidence pass', () => {
+    const steps: StepEntry[] = [makeFilledStep({ status: 'walkthrough' })]
+    // makeFilledStep has all slots filled, all confidence undefined (treated as confirmed)
+    expect(computeWalkthroughSlotTarget(steps)).toBeNull()
+  })
+
+  it('prioritises missing tazite over low_confidence potenzial', () => {
+    const estimateSlot = { value: 20, quote: 'ungefähr 20', confidence: 'estimate' as const }
+    const steps: StepEntry[] = [
+      makeStep({
+        status: 'walkthrough',
+        potenzial: {
+          frequency_per_month: estimateSlot,
+          duration_minutes: { value: 15, quote: '15 min', confidence: 'confirmed' as const },
+          error_rate_percent: { value: 2, quote: '2%', confidence: 'confirmed' as const },
+          media_breaks: { value: 1, quote: '1', confidence: 'confirmed' as const },
+        },
+        // tazite slots all null (missing)
+      }),
+    ]
+    const target = computeWalkthroughSlotTarget(steps)
+    expect(target?.reason).toBe('missing')
+    expect(target?.slot).toBe('entscheidungslogik')
+  })
+})
+
+// ─── computeMissingMandatorySlots — PROJ-28 ──────────────────────────────────
+
+describe('computeMissingMandatorySlots — PROJ-28/BL-E2.1', () => {
+  it('does not count potenzial slot with nicht_befund_typ as missing', () => {
+    const steps: StepEntry[] = [
+      makeFilledStep({
+        potenzial: {
+          frequency_per_month: { value: null, quote: 'weiß nicht', nicht_befund_typ: 'unbekannt' },
+          duration_minutes: { value: 15, quote: '15 min' },
+          error_rate_percent: { value: 2, quote: '2%' },
+          media_breaks: { value: 1, quote: '1' },
+        },
+      }),
+    ]
+    const missing = computeMissingMandatorySlots(steps)
+    expect(missing.map((m) => m.slot)).not.toContain('frequency_per_month')
+  })
+
+  it('counts potenzial slot with value:null and nicht_befund_typ:null as missing', () => {
+    const steps: StepEntry[] = [
+      makeStep({ status: 'walkthrough' }),
+    ]
+    const missing = computeMissingMandatorySlots(steps)
+    expect(missing.map((m) => m.slot)).toContain('frequency_per_month')
+    expect(missing.find((m) => m.slot === 'frequency_per_month')?.reason).toBe('missing')
+  })
 })
 
 // ─── Tool Handlers ────────────────────────────────────────────────────────────

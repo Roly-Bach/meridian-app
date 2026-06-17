@@ -1,6 +1,6 @@
 # PROJ-28: Extraktions-Zuverlässigkeit
 
-## Status: Planned
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
@@ -8,6 +8,7 @@
 **Bugs:** —
 **Created:** 2026-06-17
 **Last Updated:** 2026-06-17
+**Implementation:** 2026-06-17
 
 ## Traceability
 - BL-E2.1 (Nicht-Befund-Marker) · REQ-013

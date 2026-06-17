@@ -57,6 +57,8 @@ export type { Phase, SlotValue, StepEntry, SlotName, TaziteSlotName, PotenzialSl
 export interface MissingSlot {
   step_title: string
   slot: TaziteSlotName | PotenzialSlotName
+  /** 'missing' = null gap; 'low_confidence' = estimate/unknown value needs confirmation (PROJ-28/BL-E2.2) */
+  reason?: 'missing' | 'low_confidence'
 }
 
 export interface InterviewContext {
@@ -112,10 +114,12 @@ export interface AnalystBriefing {
 export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingSlot[] {
   const missing: MissingSlot[] = []
   for (const step of stepTracker) {
-    // Potenzial (quantitative) slots
+    // Potenzial (quantitative) slots — explicit filled check (PROJ-28/BL-E2.1)
     for (const slot of POTENZIAL_SLOT_NAMES) {
-      if (step.potenzial[slot] === null) {
-        missing.push({ step_title: step.title, slot })
+      const sv = step.potenzial[slot]
+      const filled = sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
+      if (!filled) {
+        missing.push({ step_title: step.title, slot, reason: 'missing' })
       }
     }
     // Tazite (qualitative) slots
@@ -123,7 +127,7 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
       const sv = step.slots[slot]
       const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
       if (!filled) {
-        missing.push({ step_title: step.title, slot })
+        missing.push({ step_title: step.title, slot, reason: 'missing' })
       }
     }
   }
@@ -132,27 +136,47 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
 
 // L1 — Slot-Targeting für walkthrough_step Phase.
 // Wählt deterministisch genau EINEN missing slot für den aktuell aktiven
-// Step (walkthrough > exploring). Potenzial-Slots zuerst (quantitativ), dann tazite.
+// Step (walkthrough > exploring). Zwei-Pass-Priorität (PROJ-28/BL-E2.2):
+//   Pass 1: echte Lücken (null-Slots) — potenzial zuerst, dann tazite
+//   Pass 2: unsicher belegte Slots (estimate/unknown) — für Bestätigungs-Rückfrage
 // Volle Gesprächsführungs-Revision ist PROJ-29.
 export function computeWalkthroughSlotTarget(stepTracker: StepEntry[]): MissingSlot | null {
   const active =
     stepTracker.find((s) => s.status === 'walkthrough') ??
     stepTracker.find((s) => s.status === 'exploring')
   if (!active) return null
-  // Potenzial slots first (frequency, duration — most impactful for KI Use Case scoring)
+
+  // Pass 1: real gaps — potenzial null-Lücken first
   for (const slot of POTENZIAL_SLOT_NAMES) {
-    if (active.potenzial[slot] === null) {
-      return { step_title: active.title, slot }
+    const sv = active.potenzial[slot]
+    const filled = sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
+    if (!filled) {
+      return { step_title: active.title, slot, reason: 'missing' }
     }
   }
-  // Then tazite slots
+  // Pass 1 cont: tazite null-Lücken
   for (const slot of TAZITE_SLOT_NAMES) {
     const sv = active.slots[slot]
     const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
     if (!filled) {
-      return { step_title: active.title, slot }
+      return { step_title: active.title, slot, reason: 'missing' }
     }
   }
+
+  // Pass 2: low-confidence slots need confirmation (estimate/unknown)
+  for (const slot of POTENZIAL_SLOT_NAMES) {
+    const sv = active.potenzial[slot]
+    if (sv != null && sv.value != null && (sv.confidence === 'estimate' || sv.confidence === 'unknown')) {
+      return { step_title: active.title, slot, reason: 'low_confidence' }
+    }
+  }
+  for (const slot of TAZITE_SLOT_NAMES) {
+    const sv = active.slots[slot]
+    if (sv != null && sv.value != null && (sv.confidence === 'estimate' || sv.confidence === 'unknown')) {
+      return { step_title: active.title, slot, reason: 'low_confidence' }
+    }
+  }
+
   return null
 }
 
@@ -465,7 +489,7 @@ Kontextregel: Beschreibt die aktuelle Mitarbeiter-Antwort mehrere Prozesse, reco
 Ziel: Verbleibende Pflichtslots nachfragen — Potenzial (frequency_per_month, duration_minutes) und tazite O2–O5 (entscheidungslogik, inputs, outputs, hilfsmittel).
 Optional: error_rate_percent, media_breaks wenn Prozess fehlerträchtig oder systemintensiv wirkt.
 Max. 2–3 fehlende Slots pro Turn — natürlicher Gesprächsfluss, kein Listenformat, keine Ankündigung.
-Spannen: NICHT mehr nachfragen wenn Slot bereits mit confidence=estimate erfasst ist. Nur bei echtem null.
+Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → unsicher belegt, kurze Bestätigung einholen (max. 1–2 Versuche pro Slot). confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen.
 entscheidungslogik: "Folgt dieser Prozess bei dir immer dem gleichen Schema, oder entscheidest du von Fall zu Fall?" Wenn unklar: NICHT nochmals fragen — Clarification Card erledigt das am Ende.
 governance: record_governance aufrufen wenn Mitarbeiter Rolle oder OE nennt — auch fragmentarisch.
 abhaengigkeiten: record_dependency aufrufen wenn Mitarbeiter nennt, welcher Schritt einen anderen voraussetzt oder beeinflusst.`
@@ -697,7 +721,11 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     const target = computeWalkthroughSlotTarget(ctx.stepTracker)
     if (target) {
       const hint = SLOT_PROMPT_HINT[target.slot]
-      stepTrackerSection += `\n\n## Slot-Target (PFLICHT — diesen Turn adressieren)\nAktiver Schritt: "${sanitizeForPrompt(target.step_title)}"\nNoch fehlend: ${target.slot} — ${hint}.\nStelle in diesem Turn eine offene Frage die genau diesen Slot erfasst. Keine Zahlen-Vorgabe, kein Anker.`
+      const isLowConf = target.reason === 'low_confidence'
+      const targetLabel = isLowConf
+        ? `Unsicher belegt (estimate/unknown): ${target.slot} — ${hint}. Kurze Bestätigung einholen, kein vollständiger Neu-Anlauf.`
+        : `Noch fehlend: ${target.slot} — ${hint}.`
+      stepTrackerSection += `\n\n## Slot-Target (PFLICHT — diesen Turn adressieren)\nAktiver Schritt: "${sanitizeForPrompt(target.step_title)}"\n${targetLabel}\nStelle in diesem Turn eine offene Frage die genau diesen Slot erfasst. Keine Zahlen-Vorgabe, kein Anker.`
     }
   } else {
     stepTrackerSection = `\n## Schritt-Tracker (aktueller Slot-Filling-Stand)\n${formatStepTracker(ctx.stepTracker)}`
@@ -1002,7 +1030,7 @@ export function buildTools(
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency_per_month, duration_minutes, error_rate_percent, media_breaks) und tazite O2–O5 (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert.',
+      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency_per_month, duration_minutes, error_rate_percent, media_breaks) und tazite O2–O5 (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert. Nicht-Befund (PROJ-28): Für potenzial-Slots kann statt value ein nicht_befund_typ gesetzt werden wenn der Mitarbeiter keine Angabe machen konnte.',
       inputSchema: z.object({
         step_id: z.string().regex(/^S[0-9]{3}$/).optional().describe('Stabiler Schritt-ID (z.B. S001). Bevorzugt gegenüber step_title. Aus register_step-Antwort.'),
         step_title: z.string().min(1),
@@ -1012,7 +1040,8 @@ export function buildTools(
           // Tazite O2–O5 (qualitativ)
           'entscheidungslogik', 'tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel',
         ]),
-        value: z.union([z.string(), z.number(), z.array(z.string())]).describe('String für tazite Einzel-Slots (entscheidungslogik), String-Array für Mehrwert-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel), Zahl für potenzial-Slots.'),
+        value: z.union([z.string(), z.number(), z.array(z.string())]).optional().describe('String für tazite Einzel-Slots (entscheidungslogik), String-Array für Mehrwert-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel), Zahl für potenzial-Slots. Optional wenn nicht_befund_typ gesetzt.'),
+        nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Nur für potenzial-Slots: Setze wenn Mitarbeiter keine belegbare Angabe machen konnte. unbekannt=weiß nicht, verweigert=Auskunft abgelehnt, nicht_zutreffend=nicht anwendbar. Nicht setzen wenn value vorhanden.'),
         evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus dem aktuellen Mitarbeiter-Turn. System extrahiert den umgebenden Satz als Beleg.'),
         evidence_quote: z.string().min(3).optional().describe('Fallback wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up). Pflicht: source_turn setzen.'),
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
@@ -1020,7 +1049,7 @@ export function buildTools(
         source_turn: z.number().int().positive().optional(),
         is_correction: z.boolean().optional().describe('Setze auf true wenn der Mitarbeiter einen früher genannten Wert explizit widerspricht oder korrigiert. Hebt Prioritäts-Konflikt-Sperre auf.'),
       }),
-      execute: async ({ step_id, step_title, slot, value, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
+      execute: async ({ step_id, step_title, slot, value, nicht_befund_typ, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
         // Fix 3 (ADR-015): prefer deterministic span-based extraction.
         const userInputText = currentUserInput?.trim() ?? ''
         let resolvedQuote: string | null = null
@@ -1051,23 +1080,36 @@ export function buildTools(
         const isPotenzial = (POTENZIAL_SLOT_NAMES as readonly string[]).includes(slot)
         const isTaziteArray = ((['tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel'] as const) as readonly string[]).includes(slot)
 
-        if (isPotenzial) {
-          if (slot === 'media_breaks' && typeof value !== 'number') {
-            return { success: false, error: `media_breaks erwartet eine ganze Zahl (Anzahl Medienbrüche pro Durchlauf, z.B. 0, 1, 2), nicht "${value}".` }
+        // PROJ-28/BL-E2.1 — Nicht-Befund mode: only for potenzial slots, no value required
+        const isNichtBefundMode = nicht_befund_typ !== undefined && value === undefined
+        if (isNichtBefundMode) {
+          if (!isPotenzial) {
+            return { success: false, error: `nicht_befund_typ ist nur für potenzial-Slots gültig (frequency_per_month, duration_minutes, error_rate_percent, media_breaks). Für tazite-Slots: Slot leer lassen.` }
           }
-          if ((slot === 'frequency_per_month' || slot === 'duration_minutes' || slot === 'error_rate_percent') && typeof value !== 'number') {
-            return { success: false, error: `${slot} erwartet eine Zahl, nicht "${value}". Extrahiere den numerischen Mittelwert.` }
+          // Falls through to step lookup + write below with isNichtBefundMode=true
+        } else {
+          // Normal value mode — value must be present
+          if (value === undefined) {
+            return { success: false, error: 'Entweder value oder nicht_befund_typ muss gesetzt sein.' }
           }
-        } else if (isTaziteArray) {
-          if (!Array.isArray(value)) {
-            return { success: false, error: `${slot} erwartet ein String-Array, z.B. ["SAP FI", "Excel"]. Nicht: "${value}".` }
+          if (isPotenzial) {
+            if (slot === 'media_breaks' && typeof value !== 'number') {
+              return { success: false, error: `media_breaks erwartet eine ganze Zahl (Anzahl Medienbrüche pro Durchlauf, z.B. 0, 1, 2), nicht "${value}".` }
+            }
+            if ((slot === 'frequency_per_month' || slot === 'duration_minutes' || slot === 'error_rate_percent') && typeof value !== 'number') {
+              return { success: false, error: `${slot} erwartet eine Zahl, nicht "${value}". Extrahiere den numerischen Mittelwert.` }
+            }
+          } else if (isTaziteArray) {
+            if (!Array.isArray(value)) {
+              return { success: false, error: `${slot} erwartet ein String-Array, z.B. ["SAP FI", "Excel"]. Nicht: "${value}".` }
+            }
+            // Reject empty arrays — spec requires value: null + nicht_befund_typ instead
+            if ((value as string[]).length === 0) {
+              return { success: false, error: `Leeres Array für "${slot}" ist ungültig. Wenn nichts bekannt: lass den Slot leer und setze nicht_befund_typ via record_governance, oder frag nochmals nach.` }
+            }
+          } else if (slot === 'entscheidungslogik' && typeof value !== 'string') {
+            return { success: false, error: `entscheidungslogik erwartet einen String (Beschreibung der Entscheidungslogik), nicht "${value}".` }
           }
-          // Reject empty arrays — spec requires value: null + nicht_befund_typ instead
-          if ((value as string[]).length === 0) {
-            return { success: false, error: `Leeres Array für "${slot}" ist ungültig. Wenn nichts bekannt: lass den Slot leer und setze nicht_befund_typ via record_governance, oder frag nochmals nach.` }
-          }
-        } else if (slot === 'entscheidungslogik' && typeof value !== 'string') {
-          return { success: false, error: `entscheidungslogik erwartet einen String (Beschreibung der Entscheidungslogik), nicht "${value}".` }
         }
 
         const verbatimQuote = resolvedQuote
@@ -1149,13 +1191,20 @@ export function buildTools(
 
           if (isPotenzial) {
             const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
-            newSlotValue = {
-              value,
-              quote: verbatimQuote,
-              writeSource: writeSource as WriteSource,
-              ...(confidence !== undefined ? { confidence } : {}),
-              ...(qualifier !== undefined ? { qualifier } : {}),
-            }
+            newSlotValue = isNichtBefundMode
+              ? {
+                  value: null,
+                  quote: verbatimQuote,
+                  writeSource: writeSource as WriteSource,
+                  nicht_befund_typ: nicht_befund_typ!,
+                } as SlotValue
+              : {
+                  value: value!,
+                  quote: verbatimQuote,
+                  writeSource: writeSource as WriteSource,
+                  ...(confidence !== undefined ? { confidence } : {}),
+                  ...(qualifier !== undefined ? { qualifier } : {}),
+                }
             subPath = ['potenzial', slot]
             // Atomic per-slot write via jsonb_set (PROJ-27/BL-E1.5 — prevents lost-update race)
             await supabase.rpc('patch_interview_step_field', {
@@ -1226,7 +1275,10 @@ export function buildTools(
           const mergedSlots = !isPotenzial
             ? { ...step.slots, [slot]: newSlotValue }
             : step.slots
-          const allPotenzialFilled = POTENZIAL_SLOT_NAMES.every(s => mergedPotenzial[s] !== null)
+          const allPotenzialFilled = POTENZIAL_SLOT_NAMES.every(s => {
+            const sv = mergedPotenzial[s]
+            return sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
+          })
           const allTaziteFilled = TAZITE_SLOT_NAMES.every(s => {
             const sv = mergedSlots[s]
             return sv != null && (sv.value != null || sv.nicht_befund_typ != null)
@@ -1256,7 +1308,7 @@ export function buildTools(
             source: writeSource,
             stepTitle: step.title,
             slot,
-            value,
+            value: isNichtBefundMode ? `NICHT-BEFUND:${nicht_befund_typ}` : value,
             prevValue: prevSlotValue?.value,
             overwrite: isOverwrite,
             sourceTurn: source_turn ?? null,
@@ -1268,7 +1320,7 @@ export function buildTools(
             step_id: step.id,
             step_title: step.title,
             slot,
-            value,
+            ...(isNichtBefundMode ? { nicht_befund_typ } : { value }),
             source_turn: source_turn ?? null,
             ...(conformance.valid ? {} : { conformanceViolation: true }),
           }

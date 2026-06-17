@@ -19,12 +19,14 @@ export type Phase =
   | 'clarification'
 
 export interface SlotValue {
-  value: string | number | boolean | string[]
+  value: string | number | boolean | string[] | null
   quote: string
   confidence?: 'confirmed' | 'estimate' | 'unknown'
   qualifier?: string | null
   /** Which write path last successfully wrote this slot — used for conflict resolution */
   writeSource?: 'analyst_catchup' | 'analyst_online' | 'quick' | 'backfill' | 'analyst'
+  /** Explicit non-finding marker — deckungsgleich mit TaziteSlot/Schema NichtBefundTyp (PROJ-28/BL-E2.1) */
+  nicht_befund_typ?: NichtBefundTyp
 }
 
 export type NichtBefundTyp = 'nicht_zutreffend' | 'unbekannt' | 'verweigert' | null
@@ -458,8 +460,8 @@ export function toGrenzobjekt(step: StepEntry, fallbackIndex: number): Schritt {
     if (sv == null) return { wert: null, konfidenz: null, nicht_befund_typ: null }
     return {
       wert: typeof sv.value === 'number' ? sv.value : null,
-      konfidenz: conf(sv.confidence, true),
-      nicht_befund_typ: null,
+      konfidenz: conf(sv.confidence, sv.value != null),
+      nicht_befund_typ: sv.nicht_befund_typ ?? null,
     }
   }
 

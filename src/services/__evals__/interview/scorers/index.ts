@@ -8,6 +8,8 @@ import { scoreDialogNaturalness } from './dialogNaturalness'
 import { scoreCompletionCorrectness } from './completionCorrectness'
 import { scoreStepRegistrationCoverage } from './stepRegistrationCoverage'
 import { scoreSchemaConformanceRate } from './schemaConformanceRate'
+import { scoreHallucinationRate } from './hallucinationRate'
+import { scoreConfidenceTrigger } from './confidenceTrigger'
 import type { ScorerInput, ScoreSet } from './types'
 
 export {
@@ -21,6 +23,8 @@ export {
   scoreCompletionCorrectness,
   scoreStepRegistrationCoverage,
   scoreSchemaConformanceRate,
+  scoreHallucinationRate,
+  scoreConfidenceTrigger,
 }
 
 export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
@@ -52,6 +56,8 @@ export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
     completionCorrectness,
     stepRegistrationCoverage: round2(scoreStepRegistrationCoverage(input.finalStepTracker, input.expectedProcessCount)),
     schemaConformanceRate: round2(scoreSchemaConformanceRate(input.finalStepTracker)),
+    hallucinationRate: round2(scoreHallucinationRate(input.turns, input.finalStepTracker)),
+    confidenceTriggerRate: round2(scoreConfidenceTrigger(input.turns)),
   }
 }
 

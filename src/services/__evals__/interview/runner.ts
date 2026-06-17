@@ -416,6 +416,8 @@ function buildReport(opts: {
     `  completion_correctness: ${scores.completionCorrectness}`,
     `  step_registration_coverage: ${scores.stepRegistrationCoverage}`,
     `  schema_conformance_rate: ${scores.schemaConformanceRate}`,
+    `  hallucination_rate: ${scores.hallucinationRate}`,
+    `  confidence_trigger_rate: ${scores.confidenceTriggerRate}`,
     trailMetrics ? 'trail:' : null,
     trailMetrics ? `  total_writes: ${trailMetrics.totalWrites}` : null,
     trailMetrics ? `  blocked_writes: ${trailMetrics.blockedWrites}` : null,
@@ -443,6 +445,8 @@ function buildReport(opts: {
     `| completion_correctness | ${scores.completionCorrectness} | true |`,
     `| step_registration_coverage | ${scores.stepRegistrationCoverage} | 1.0 |`,
     `| schema_conformance_rate | ${scores.schemaConformanceRate} | 1.0 |`,
+    `| hallucination_rate | ${scores.hallucinationRate} | < 0.01 |`,
+    `| confidence_trigger_rate | ${scores.confidenceTriggerRate} | > 0.80 |`,
     trailMetrics ? `| blocked_rate | ${trailMetrics.blockedRate} | < 0.10 |` : null,
     trailMetrics ? `| overwrite_churn | ${trailMetrics.overwriteChurn} | < 0.20 |` : null,
     '',
@@ -569,6 +573,8 @@ async function writeLangfuseScores(
     { name: 'completion_correctness', value: scores.completionCorrectness ? 1 : 0, dataType: 'BOOLEAN' },
     { name: 'step_registration_coverage', value: scores.stepRegistrationCoverage, dataType: 'NUMERIC' },
     { name: 'schema_conformance_rate', value: scores.schemaConformanceRate, dataType: 'NUMERIC' },
+    { name: 'hallucination_rate', value: scores.hallucinationRate, dataType: 'NUMERIC' },
+    { name: 'confidence_trigger_rate', value: scores.confidenceTriggerRate, dataType: 'NUMERIC' },
   ]
 
   for (const entry of scoreEntries) {
