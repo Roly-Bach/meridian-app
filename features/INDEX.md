@@ -40,13 +40,13 @@
 | PROJ-22 | Dual-Loop Interview Engine (ADR-011) | Revision | Interview Engine | PROJ-2 | Approved | [spec](interview-engine/PROJ-22-dual-loop-interview-engine.md) | P1 | L | 0:3:5 |
 | PROJ-23 | Adaptive Clarification Questions | Extension | Interview Engine | PROJ-2 | Approved | [spec](interview-engine/PROJ-23-adaptive-clarification-questions.md) | P1 | M | 0:0:0 |
 | PROJ-24 | Cluster-aware Use Case Generation + Detail View | Extension | Use Case Engine | PROJ-6 | Approved | [spec](use-case-engine/PROJ-24-cluster-aware-use-case-generation.md) | P1 | L | 0:0:0 |
-| PROJ-25 | Prozesswissens-Schema (O1–O5 + Governance) | Revision | Wissensbank | PROJ-20 | Roadmap | [BL-E1.1+E1.6](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-004/022 | P1 | L | — |
-| PROJ-26 | Getypte Abhängigkeitskanten | Extension | Wissensbank | PROJ-20 | Roadmap | [BL-E1.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-006 | P1 | M | — |
-| PROJ-27 | Schema-Bindung + verlustfreie Speicherung | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E1.3–E1.5](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-003/005/015 | P1 | L | — |
-| PROJ-28 | Extraktions-Zuverlässigkeit | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E2.1+E2.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-013/019 | P1 | M | — |
-| PROJ-29 | Gesprächsführungs-Revision | Revision | Interview Engine | PROJ-23 | Roadmap | [BL-E3.1–E3.7](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-001/002/016/017/024–027 | P1 | L | — |
-| PROJ-30 | Tiefe-/O10-Metrik | Revision | Interview Engine | PROJ-21 | Roadmap | [BL-E5.1](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-012 | P1 | L | — |
-| PROJ-31 | Eval-Schärfung (Judge, Perturbation, Robustheit, SME) | Revision | Interview Engine | PROJ-21 | Roadmap | [BL-E5.2–E5.6](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-009–012/014 | P1 | L | — |
+| PROJ-25 | Prozesswissens-Schema (O1–O5 + Governance) | Revision | Wissensbank | PROJ-20 | Planned | [spec](wissensbank/PROJ-25-prozesswissens-schema.md) | P1 | L | — |
+| PROJ-26 | Getypte Abhängigkeitskanten | Extension | Wissensbank | PROJ-20 | Planned | [spec](wissensbank/PROJ-26-getypte-abhaengigkeitskanten.md) | P1 | M | — |
+| PROJ-27 | Schema-Bindung + verlustfreie Speicherung | Revision | Interview Engine | PROJ-22 | Planned | [spec](interview-engine/PROJ-27-schema-bindung-verlustfreie-speicherung.md) | P1 | L | — |
+| PROJ-28 | Extraktions-Zuverlässigkeit | Revision | Interview Engine | PROJ-22 | Planned | [spec](interview-engine/PROJ-28-extraktions-zuverlaessigkeit.md) | P1 | M | — |
+| PROJ-29 | Gesprächsführungs-Revision | Revision | Interview Engine | PROJ-23 | Planned | [spec](interview-engine/PROJ-29-gesprächsführungs-revision.md) | P1 | L | — |
+| PROJ-30 | Tiefe-/O10-Metrik | Revision | Interview Engine | PROJ-21 | Planned | [spec](interview-engine/PROJ-30-tiefe-o10-metrik.md) | P1 | L | — |
+| PROJ-31 | Eval-Schärfung (Judge, Perturbation, Robustheit) | Revision | Interview Engine | PROJ-21 | Planned | [spec](interview-engine/PROJ-31-eval-schaerfung.md) | P1 | L | — |
 | PROJ-32 | Agenten-Architektur (Trennung, Preparator; vertagt) | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E4.1+E4.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021/024 | P2 | M | — |
 
 <!-- Add features above this line -->
@@ -65,7 +65,9 @@
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
 
 ### Etappe 2 (Build-Backlog, ab 2026-06-16)
-Schema zuerst (Fundament, blockt den Rest): PROJ-25 → PROJ-26 → PROJ-27.
+Schema zuerst (Fundament, blockt den Rest): PROJ-25 → PROJ-27 → PROJ-26.
+Reihenfolge 2026-06-16 angepasst: PROJ-27 (stabile Schritt-IDs) vor PROJ-26 (getypte Kanten),
+damit PROJ-26 S001-Format-Referenzen von Anfang an nutzen kann statt titel-basierter Zwischenlösung.
 Darauf aufbauend: PROJ-28 (Extraktion) und PROJ-29 (Gesprächsführung).
 Parallel und laufend mitmessend: PROJ-30 (Tiefe-Metrik) und PROJ-31 (Eval-Schärfung).
 Vertagt (TF3): PROJ-32.
