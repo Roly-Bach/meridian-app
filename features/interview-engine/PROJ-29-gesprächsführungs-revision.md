@@ -1,6 +1,6 @@
 # PROJ-29: Gesprächsführungs-Revision
 
-## Status: Planned
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-23
