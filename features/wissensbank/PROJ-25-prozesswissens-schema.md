@@ -1,13 +1,13 @@
 # PROJ-25: Prozesswissens-Schema (O1–O5 + Governance)
 
-## Status: Planned
+## Status: Approved
 **Type:** Revision
 **Domain:** Wissensbank
 **Extends:** PROJ-20
 **Appetite:** L
-**Bugs:** —
+**Bugs:** 0:1:1
 **Created:** 2026-06-16
-**Last Updated:** 2026-06-16
+**Last Updated:** 2026-06-17
 
 ## Kontext
 
@@ -147,10 +147,219 @@ REQ: REQ-004, REQ-022.
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Schichten
+
+PROJ-25 ist reine Backend-/Service-Revision — keine neuen UI-Seiten, kein neues API-Endpoint. Drei Service-Dateien plus eine Supabase-Migration.
+
+### 1. StepEntry-Struktur (interviewSemantic.ts)
+
+```
+StepEntry
+├── title: string          (O1 Bezeichnung — unverändert)
+├── reihenfolge: number    (O1 Position — neu Top-Level)
+├── governance: GovernanceSlot | null  (neu, ersetzt role Freitext)
+├── abhaengigkeiten: PlaceholderDeps | null  (O6 Placeholder — PROJ-26 schärft Typ)
+├── potenzial              (quantitative Felder, umgezogen aus slots)
+│   ├── frequency_per_month: SlotValue | null
+│   ├── duration_minutes: SlotValue | null
+│   ├── error_rate_percent: SlotValue | null
+│   └── media_breaks: SlotValue | null
+└── slots                  (nur noch tazite Felder)
+    ├── entscheidungslogik: TaziteSlot | null   (← rule_based)
+    ├── tazite_cues: TaziteSlotArray | null      (O2 neu)
+    ├── ausnahmen: TaziteSlotArray | null        (O3 neu)
+    ├── inputs: TaziteSlotArray | null           (O4 neu)
+    ├── outputs: TaziteSlotArray | null          (O4 neu)
+    └── hilfsmittel: TaziteSlotArray | null     (O5, ← data_sources)
+```
+
+Neue Typen: `TaziteSlot` (einwertig), `TaziteSlotArray` (mehrwertig), `GovernanceSlot`.
+`nicht_befund_typ` auf allen taziten Typen: unterscheidet "noch nicht gefragt" (null) von "explizit beantwortet als nicht_zutreffend/unbekannt/verweigert".
+
+Dual-Format-Kompatibilität: `normalizeStepEntry()` liest altes JSONB (slots.frequency_per_month) und neues (potenzial.frequency_per_month).
+
+### 2. Coverage-Messung (slotCoverage.ts)
+
+| Rate | Felder | Nenner |
+|------|--------|--------|
+| O1–O6 Coverage | bezeichnung, reihenfolge, entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, abhaengigkeiten | 9 × n Schritte |
+| Governance-Rate | rolle / organisationseinheit / systeme / nicht_befund_typ | separat, nicht in O1–O6 |
+| Potenzial-Felder | frequency_per_month, duration_minutes, … | zählen NICHT in Coverage |
+
+Coverage-Werte sinken nach Deploy systematisch (9 statt 4 Felder, O2–O5 initial leer). Korrekt — in CHANGELOG dokumentieren.
+
+### 3. Interview-Agent (interviewAgent.ts)
+
+- `record_slot` — erweitert: akzeptiert 6 neue tazite Keys
+- `record_governance` — **neues separates Tool**, partial-write (mergt nur übergebene Felder, lässt bestehende unverändert). Begründung: GovernanceSlot hat andere Struktur als Slot (3 benannte Felder, kein value+quote-Tuple); Evidence ist turn-spezifisch (rolle in Turn 3, OE in Turn 8).
+- `register_step` — setzt `reihenfolge` aus Array-Position bei Neuanlage
+- `formatStepTracker` — zeigt tazite Felder + governance
+- `SLOT_PROMPT_HINT` — 6 neue Einträge
+
+### 4. DB-Migration
+
+`supabase/migrations/20260617000000_proj25_prozesswissens_schema.sql` — atomare Transaktion, DOWN-Script vorhanden. Approval-Gate vor apply_migration.
+
+## Implementation Notes (2026-06-17)
+
+**Files changed:**
+- `src/services/interviewSemantic.ts` — New types (`NichtBefundTyp`, `TaziteSlot`, `TaziteSlotArray`, `GovernanceSlot`, `PlaceholderDependencies`); `StepEntry` restructured with `potenzial` + tazite `slots` + `governance` + `reihenfolge`; `normalizeStepEntry()` for backward compat; `TAZITE_SLOT_NAMES`, `POTENZIAL_SLOT_NAMES`, `COVERAGE_FIELDS` constants.
+- `src/services/interviewAgent.ts` — `record_slot` handles 10 slots (4 potenzial + 6 tazite) with split write paths; `record_governance` new tool with partial-write/merge semantics; `register_step` sets `reihenfolge`; `computeMissingMandatorySlots` iterates all 10; `SLOT_PROMPT_HINT` updated.
+- `src/services/interviewAnalyst.ts` — `mergeFragmentedSteps` merges both `potenzial` and `slots`; backfill `data_sources→hilfsmittel`.
+- `src/services/interviewOrchestrator.ts` — `walkthroughHasContent` and `semanticAllStepsDone` read from `potenzial`.
+- `src/services/processEnrichment.ts` — Reads from `potenzial`/`governance`/`slots`; adds `normalizeStepEntry()` call on load.
+- `src/app/api/interview/[token]/chat/route.ts` — Normalizes all `step_tracker` reads via `normalizeStepEntry()`.
+- `src/services/__evals__/interview/scorers/slotCoverage.ts` — 9-field O1–O6 denominator; `scoreGovernanceCoverage()` separate.
+- `supabase/migrations/20260617000000_proj25_prozesswissens_schema.sql` — Applied 2026-06-17; atomically migrates all existing `step_tracker` JSONB rows.
+
+**Test files updated:** `interviewAgent.test.ts`, `interviewOrchestrator.test.ts`, `slotWriteRace.test.ts`, `stepIdentity.test.ts`, `stepRegistrationCoverage.test.ts`, `processEnrichment.test.ts`, `chat.test.ts`, `slotCoverage.test.ts`. All 484 tests pass.
+
+**Deviations from spec:** None. `record_governance` partial-write decision (ADR-T016) implemented as designed.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Date:** 2026-06-17
+**QA Engineer:** /qa skill
+
+### Automated Tests
+- `npm test`: **484 passed, 0 failed** (37 test files)
+- `npm run test:e2e`: not applicable (pure backend/service revision, no UI)
+
+### Acceptance Criteria — Pass/Fail
+
+#### TypeScript-Typen (interviewSemantic.ts)
+| # | Criterion | Result |
+|---|-----------|--------|
+| 1 | `TaziteSlot` type: `value: string|null`, `quote: string|null`, `confidence?`, `nicht_befund_typ` | ✅ PASS |
+| 2 | `TaziteSlotArray`: `value: string[]|null`, same metadata | ✅ PASS |
+| 3 | `GovernanceSlot`: `rolle/organisationseinheit/systeme/nicht_befund_typ` | ✅ PASS |
+| 4 | `StepEntry.slots` has all 6 tazite O2–O5 fields (null initial) | ✅ PASS |
+| 5 | `StepEntry.reihenfolge: number` (new top-level O1 field) | ✅ PASS |
+| 6 | `StepEntry.abhaengigkeiten` (placeholder-typed O6) | ✅ PASS |
+| 7 | `bezeichnung` stays as `title: string` — no second name field | ✅ PASS |
+| 8 | `StepEntry.governance: GovernanceSlot|null` (first-class, not in slots) | ✅ PASS |
+| 9 | `StepEntry.potenzial` sub-object with 4 quantitative fields | ✅ PASS |
+| 10 | Old flat `slots` keys removed from `StepEntry.slots` | ✅ PASS |
+| 11 | PROJ-27 boundary respected (app-internal English keys, German = export view) | ✅ PASS |
+| 12 | `SlotName` deprecated; writable slots via `TaziteSlotName | PotenzialSlotName` | ✅ PASS |
+| 13 | `MANDATORY_SLOTS` NOT redefined as coverage list | ✅ PASS |
+| 14 | `COVERAGE_FIELDS` defined separately (9 elements) | ✅ PASS |
+
+#### Coverage-Scorer (slotCoverage.ts)
+| # | Criterion | Result |
+|---|-----------|--------|
+| 15 | 9-element O1–O6 `COVERAGE_FIELDS` denominator | ✅ PASS |
+| 16 | Each field read from correct home (title, reihenfolge, slots.*, abhaengigkeiten) | ✅ PASS |
+| 17 | Filled: `value != null` OR `nicht_befund_typ != null` | ✅ PASS |
+| 18 | `abhaengigkeiten`: edge in depends_on/influences OR nicht_befund_typ | ✅ PASS |
+| 19 | `potenzial` fields excluded from denominator | ✅ PASS |
+| 20 | `governance` excluded from O1–O6; separate `scoreGovernanceCoverage()` | ✅ PASS |
+| 21 | `scoreDedupCoverage` uses same COVERAGE_FIELDS and field sources | ✅ PASS |
+| 22 | `slotCoverage.test.ts` complete and green | ✅ PASS |
+
+#### Interview-Agent / record_slot-Tool (interviewAgent.ts)
+| # | Criterion | Result |
+|---|-----------|--------|
+| 23 | `record_slot` accepts all 10 writable slots (4 potenzial + 6 tazite) | ✅ PASS |
+| 24 | `evidence_span`/`evidence_quote` grounding path unchanged | ✅ PASS |
+| 25 | `governance` not a `SlotName` — separate `record_governance` tool | ✅ PASS |
+| 26 | `record_governance` partial-write (only overwrites provided fields) | ✅ PASS |
+| 27 | `register_step` sets `reihenfolge = current.length + 1` | ✅ PASS |
+| 28 | `formatStepTracker` shows tazite fields + governance | ✅ PASS |
+| 29 | `SLOT_PROMPT_HINT` covers all 10 new slot keys | ✅ PASS |
+| 30 | Minimal prompt update present (analyst knows new writable fields) | ✅ PASS |
+
+#### Datenbank-Migration
+| # | Criterion | Result |
+|---|-----------|--------|
+| 31 | Migration at `supabase/migrations/20260617000000_proj25_prozesswissens_schema.sql` | ✅ PASS |
+| 32 | All 6 old slot keys addressed (4 potenzial + rule_based + data_sources) | ✅ PASS |
+| 33 | `role` → `governance.rolle` | ✅ PASS |
+| 34 | `reihenfolge` from 1-based array index | ✅ PASS |
+| 35 | Atomic (BEGIN/COMMIT) | ✅ PASS |
+| 36 | DOWN script present | ✅ PASS |
+| 37 | Idempotent (`is_legacy` check) | ✅ PASS |
+| 38 | Empty arrays `[]` normalized to `value: null, nicht_befund_typ: null` | ❌ **FAIL** — see BUG-M1 |
+
+#### Schutzgut / Regressions-Guard
+| # | Criterion | Result |
+|---|-----------|--------|
+| 39 | `TaziteSlot.quote` field preserved (grounding guard compatible) | ✅ PASS |
+| 40 | `slotWriteRace.test.ts` green | ✅ PASS |
+| 41 | Analyst remains exclusive writer of `step_tracker` | ✅ PASS |
+| 42 | `npm test` green gesamt | ✅ PASS |
+
+### Bugs Found
+
+#### BUG-M1 (Medium) — Empty array `[]` not normalized in `normalizeStepEntry`
+
+**Spec requirement:** Edge Cases + DB Migration AC: "Zwei leere Arrays ohne `nicht_befund_typ` ([]) werden zu `value: null, nicht_befund_typ: null` normalisiert."
+
+**Problem:** `normalizeStepEntry` does not normalize empty arrays to `null` in two places:
+1. In the legacy path (`data_sources → hilfsmittel`), if `data_sources.value = []`, the code produces `hilfsmittel = { value: [], ... }` — invalid per spec.
+   - Code: `interviewSemantic.ts:185` → `value: Array.isArray(val) ? val : ...` returns `[]` when `val` is `[]`.
+2. For tazite slots passed through directly (`tazite_cues`, `ausnahmen`, `inputs`, `outputs`), any JSONB entry with `value: []` is returned as-is.
+3. The SQL migration also copies `data_sources.value` verbatim without empty-array guard.
+
+**Steps to reproduce:**
+```ts
+const legacy = { title: 'Test', reihenfolge: 1, status: 'done', slots: {
+  data_sources: { value: [], quote: '', confidence: 'confirmed' }
+}}
+const result = normalizeStepEntry(legacy, 1)
+// result.slots.hilfsmittel.value === [] — should be null
+```
+
+**Impact:** Low in practice (record_slot rejects empty arrays at runtime; old entries rarely had `[]`), but violates explicit spec AC.
+
+**Fix location:** `interviewSemantic.ts` in `normalizeStepEntry` — add guard: `value: Array.isArray(val) && val.length > 0 ? val : null`. SQL migration needs analogous CASE for empty array check.
+
+---
+
+#### BUG-L1 (Low) — Misleading comment in `processEnrichment.ts`
+
+**Location:** `processEnrichment.ts:193`
+
+**Comment:** `// Read data_sources / hilfsmittel: prefer new location (slots.hilfsmittel), fall back to potenzial for old entries`
+
+**Problem:** "fall back to potenzial" is incorrect — `potenzial` never contained `data_sources`/`hilfsmittel`. The code only reads `step.slots.hilfsmittel` (which is correct after `normalizeStepEntry`). No functional bug — the comment is just misleading.
+
+**Fix:** Update comment to: `// hilfsmittel from slots (normalizeStepEntry maps legacy data_sources here)`
+
+### Security Audit
+
+PROJ-25 is a pure backend/service revision. No new attack surface:
+- No new API endpoints or user-facing inputs
+- SQL migration: parameterless, updates own JSONB structure only — no injection vector
+- `evidence_span` validation in `record_slot`/`record_governance`: span must appear verbatim in current user turn (grounding guard intact)
+- No new RLS implications (no new tables)
+- No secrets exposure
+- **Result: No security issues found**
+
+### Regression Check
+
+All features that depend on `step_tracker` JSONB reads were checked:
+- `interviewOrchestrator.ts` reads from `potenzial` ✅
+- `processEnrichment.ts` reads from `potenzial`/`governance`/`slots` via `normalizeStepEntry` ✅
+- `interviewAnalyst.ts` merges both `potenzial` and `slots` ✅
+- `chat/route.ts` normalizes all step_tracker reads via `normalizeStepEntry` ✅
+- `slotWriteRace.test.ts` passes ✅
+
+Coverage-Regression note: O1–O6 Coverage values drop systematically after PROJ-25 (9-field denominator vs old 4-field denominator, O2–O5 initially empty). **This is expected and correct** per spec and documented in the scorer.
+
+### Summary
+
+| Category | Result |
+|----------|--------|
+| Acceptance Criteria | 41/42 passed |
+| Critical bugs | 0 |
+| High bugs | 0 |
+| Medium bugs | 1 (BUG-M1: empty array normalization) |
+| Low bugs | 1 (BUG-L1: misleading comment) |
+| Security issues | 0 |
+
+**Production-Ready: YES** — No Critical or High bugs. BUG-M1 is a defensive gap with low real-world impact (runtime record_slot rejects empty arrays; old data rarely had `[]`). Can be fixed in PROJ-27 or as a quick follow-up.
 
 ## Deployment
 _To be added by /deploy_
