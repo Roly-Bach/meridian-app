@@ -5,7 +5,7 @@
 **Domain:** Wissensbank
 **Extends:** PROJ-20
 **Appetite:** M
-**Bugs:** 0:1:1
+**Bugs:** 0:0:0
 **Created:** 2026-06-16
 **Last Updated:** 2026-06-17
 
@@ -250,7 +250,7 @@ PROJ-26 definiert diese Formel nicht neu — nur Tests gegen getypte Kanten veri
 
 **QA Date:** 2026-06-17
 **Status:** Approved
-**Bugs:** 0:1:1
+**Bugs:** 0:0:0 (B1+B2 fixed post-QA)
 
 ### Acceptance Criteria
 
