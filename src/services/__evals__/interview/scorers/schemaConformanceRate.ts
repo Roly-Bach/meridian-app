@@ -1,14 +1,5 @@
-import Ajv from 'ajv'
-import schemaJson from '@/schemas/prozessschritt-schema.json'
-import { toGrenzobjekt } from '@/services/interviewSemantic'
+import { checkSchritt } from '@/services/schemaValidator'
 import type { StepEntry } from '@/services/interviewSemantic'
-
-const ajv = new Ajv({ allErrors: true })
-const validateSchritt = ajv.compile({
-  $schema: 'http://json-schema.org/draft-07/schema#',
-  ...schemaJson.definitions.Schritt,
-  definitions: schemaJson.definitions,
-})
 
 /**
  * Fraction of steps in the final tracker that pass prozessschritt-schema validation.
@@ -19,8 +10,7 @@ export function scoreSchemaConformanceRate(steps: StepEntry[]): number {
   if (steps.length === 0) return 1.0
   let valid = 0
   for (let i = 0; i < steps.length; i++) {
-    const schritt = toGrenzobjekt(steps[i], i + 1)
-    if (validateSchritt(schritt)) valid++
+    if (checkSchritt(steps[i], i + 1).valid) valid++
   }
   return valid / steps.length
 }

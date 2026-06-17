@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { RawExtraction } from './extraction'
 import { emitSlotWrite } from './slotWriteTrail'
+import { checkSchritt } from './schemaValidator'
 import { canOverwrite, type WriteSource } from './slotConflictResolver'
 import { generateEmbedding } from './embeddings'
 import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD, SOFT_THRESHOLD } from './stepIdentity'
@@ -930,11 +931,17 @@ export function buildTools(
             }
           }
 
-          const newStepIndex = current.length + 1
+          // Collision guard: skip IDs already present (BL-E1.4 edge case)
+          let stepNum = current.length + 1
+          let candidateId = `S${String(stepNum).padStart(3, '0')}`
+          while (current.some(s => s.id === candidateId)) {
+            stepNum++
+            candidateId = `S${String(stepNum).padStart(3, '0')}`
+          }
           const newEntry: StepEntry = {
-            id: `S${String(newStepIndex).padStart(3, '0')}`,
+            id: candidateId,
             title: title.trim(),
-            reihenfolge: newStepIndex,
+            reihenfolge: stepNum,
             governance: null,
             abhaengigkeiten: null,
             potenzial: {
@@ -1217,6 +1224,15 @@ export function buildTools(
             })
           }
 
+          // Schema conformance check (BL-E1.3): soft warning, never hard-error
+          const mergedStep: StepEntry = { ...step, potenzial: mergedPotenzial, slots: mergedSlots as StepEntry['slots'] }
+          const conformance = checkSchritt(mergedStep, stepIndex + 1)
+          if (!conformance.valid) {
+            console.warn('[record_slot] schema conformance violation', {
+              step_id: step.id, slot, errors: conformance.errors,
+            })
+          }
+
           // Emit slot-write trail event (ADR-015) — non-blocking, never throws
           emitSlotWrite({
             ts: new Date().toISOString(),
@@ -1231,7 +1247,15 @@ export function buildTools(
             evidence: verbatimQuote,
           }).catch(() => {})
 
-          return { success: true, step_id: step.id, step_title: step.title, slot, value, source_turn: source_turn ?? null }
+          return {
+            success: true,
+            step_id: step.id,
+            step_title: step.title,
+            slot,
+            value,
+            source_turn: source_turn ?? null,
+            ...(conformance.valid ? {} : { conformanceViolation: true }),
+          }
         } catch (err) {
           console.error('[record_slot] failed:', err)
           return { success: false, error: (err as Error).message }

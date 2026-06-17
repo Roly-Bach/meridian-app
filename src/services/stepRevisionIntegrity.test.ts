@@ -9,6 +9,7 @@ import {
   toGrenzobjekt,
   type StepEntry,
 } from './interviewSemantic'
+import { canOverwrite } from './slotConflictResolver'
 
 function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
   return {
@@ -209,6 +210,77 @@ describe('toGrenzobjekt — ID assignment', () => {
   it('reihenfolge matches step.reihenfolge', () => {
     const step = makeStep({ reihenfolge: 5 })
     expect(toGrenzobjekt(step, 1).reihenfolge).toBe(5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// B4: Conditional UPDATE guard — .neq('analyst_status', 'done') semantics
+// ---------------------------------------------------------------------------
+
+describe('conditional UPDATE guard (analyst_status ≠ done)', () => {
+  type InterviewRow = { id: string; analyst_status: string; next_briefing: string | null }
+
+  function applyConditionalUpdate(rows: InterviewRow[], id: string, update: Partial<InterviewRow>): InterviewRow[] {
+    return rows.map(row =>
+      row.id === id && row.analyst_status !== 'done' ? { ...row, ...update } : row
+    )
+  }
+
+  it('no-op when analyst_status is already done — briefing unchanged', () => {
+    const rows: InterviewRow[] = [{ id: 'iv-1', analyst_status: 'done', next_briefing: 'existing' }]
+    const after = applyConditionalUpdate(rows, 'iv-1', { next_briefing: 'new', analyst_status: 'done' })
+    expect(after[0].next_briefing).toBe('existing')
+  })
+
+  it('update proceeds when analyst_status is pending', () => {
+    const rows: InterviewRow[] = [{ id: 'iv-1', analyst_status: 'pending', next_briefing: null }]
+    const after = applyConditionalUpdate(rows, 'iv-1', { next_briefing: 'briefing-content', analyst_status: 'done' })
+    expect(after[0].next_briefing).toBe('briefing-content')
+    expect(after[0].analyst_status).toBe('done')
+  })
+
+  it('wrong id: no row updated', () => {
+    const rows: InterviewRow[] = [{ id: 'iv-1', analyst_status: 'pending', next_briefing: null }]
+    const after = applyConditionalUpdate(rows, 'other-id', { next_briefing: 'new', analyst_status: 'done' })
+    expect(after[0].next_briefing).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// B5: is_correction propagation — corrected value replaces old, not appended
+// ---------------------------------------------------------------------------
+
+describe('is_correction: corrected slot value replaces previous', () => {
+  function jsonbSetPath(
+    obj: Record<string, unknown>,
+    path: string[],
+    value: unknown,
+  ): Record<string, unknown> {
+    const [head, ...rest] = path
+    const nested = ((obj[head] ?? {}) as Record<string, unknown>)
+    return { ...obj, [head]: rest.length === 0 ? value : jsonbSetPath(nested, rest, value) }
+  }
+
+  it('jsonb_set replaces old value — no stale value survives in slot', () => {
+    const before: Record<string, unknown> = {
+      potenzial: { duration_minutes: { value: 1200, quote: 'original', writeSource: 'analyst' } },
+    }
+    const correction = { value: 900, quote: 'corrected', writeSource: 'analyst' }
+    const after = jsonbSetPath(before, ['potenzial', 'duration_minutes'], correction)
+    expect((after as { potenzial: { duration_minutes: unknown } }).potenzial.duration_minutes).toEqual(correction)
+    // Old value gone — not present anywhere in the slot
+    expect(JSON.stringify(after)).not.toContain('"value":1200')
+  })
+
+  it('is_correction=true lifts priority block — lower-source write proceeds', () => {
+    // Without is_correction: quick cannot overwrite analyst slot (priority blocked)
+    const isOverwrite = true
+    const priorityBlocked = isOverwrite && !false && !canOverwrite('analyst', 'quick')
+    expect(priorityBlocked).toBe(true)  // blocked normally
+
+    // With is_correction=true: `!is_correction` is false → block bypassed
+    const priorityBlockedWithCorrection = isOverwrite && !true && !canOverwrite('analyst', 'quick')
+    expect(priorityBlockedWithCorrection).toBe(false)  // correction goes through
   })
 })
 

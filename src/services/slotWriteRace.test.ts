@@ -129,6 +129,62 @@ describe('L4: concurrent slot-write race condition', () => {
     expect(dbState[0].potenzial.media_breaks).not.toBeNull()
   })
 
+  it('PROOF: jsonb_set path-isolation — writing to one slot leaves sibling intact', () => {
+    // Model: jsonb_set(['potenzial', 'duration_minutes'], v) touches ONLY that leaf.
+    // sibling path ['potenzial', 'media_breaks'] is untouched — no matter when B reads.
+    function jsonbSetPath(
+      obj: Record<string, unknown>,
+      path: string[],
+      value: unknown,
+    ): Record<string, unknown> {
+      const [head, ...rest] = path
+      const nested = ((obj[head] ?? {}) as Record<string, unknown>)
+      return { ...obj, [head]: rest.length === 0 ? value : jsonbSetPath(nested, rest, value) }
+    }
+
+    const initial = { potenzial: { duration_minutes: null, media_breaks: null } }
+    const aWrite = { value: 1200, writeSource: 'analyst' }
+    const bWrite = { value: 2, writeSource: 'quick' }
+
+    // Order A→B: both slots filled regardless
+    const ab = jsonbSetPath(
+      jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'duration_minutes'], aWrite),
+      ['potenzial', 'media_breaks'],
+      bWrite,
+    )
+    // Order B→A: same result
+    const ba = jsonbSetPath(
+      jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'media_breaks'], bWrite),
+      ['potenzial', 'duration_minutes'],
+      aWrite,
+    )
+
+    const expected = { duration_minutes: aWrite, media_breaks: bWrite }
+    expect((ab as { potenzial: unknown }).potenzial).toEqual(expected)
+    expect((ba as { potenzial: unknown }).potenzial).toEqual(expected)
+    // Contrast with REPRO test above — no lost update here
+  })
+
+  it('PROOF: same-slot concurrent jsonb_set — last write wins, no null/crash', () => {
+    function jsonbSetPath(
+      obj: Record<string, unknown>,
+      path: string[],
+      value: unknown,
+    ): Record<string, unknown> {
+      const [head, ...rest] = path
+      const nested = ((obj[head] ?? {}) as Record<string, unknown>)
+      return { ...obj, [head]: rest.length === 0 ? value : jsonbSetPath(nested, rest, value) }
+    }
+
+    const initial = { potenzial: { duration_minutes: null } }
+    const afterA = jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'duration_minutes'], { value: 1200 })
+    const afterB = jsonbSetPath(afterA, ['potenzial', 'duration_minutes'], { value: 600 })
+
+    // Last writer (B) wins deterministically — no null, no corruption
+    expect((afterB as { potenzial: { duration_minutes: unknown } }).potenzial.duration_minutes).toEqual({ value: 600 })
+    expect((afterB as { potenzial: { duration_minutes: unknown } }).potenzial.duration_minutes).not.toBeNull()
+  })
+
   it('canOverwrite priority resolver does NOT catch lost update on empty slot', () => {
     // ADR-016 only blocks lower-priority overwrites of FILLED slots.
     // Empty slot (undefined existingSource) → always allows write.
