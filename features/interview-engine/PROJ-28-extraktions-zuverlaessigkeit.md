@@ -1,6 +1,6 @@
 # PROJ-28: Extraktions-Zuverlässigkeit
 
-## Status: In Progress
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
@@ -176,7 +176,44 @@ Kein UI, keine API-Route, keine DB-Migration. Abwärtskompatibel — Alt-Einträ
 - **Eval-Gate:** `npm run eval:interview buchhalter` vor Deploy — beide neuen Scorer als Gate. Halluzinationsrate < 1 %, Konfidenz-Trigger > 80 %, Interview-Vollständigkeit ≥ PROJ-22-Baseline.
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-06-17
+**Tester:** QA Agent
+**Status:** Approved (no Critical/High bugs)
+
+### AC Results
+
+| AC | Beschreibung | Result |
+|----|-------------|--------|
+| BL-E2.1 #1 | `SlotValue` trägt `nicht_befund_typ` (kanonischer Enum) | ✅ Pass |
+| BL-E2.1 #2 | Drei Zustände maschinell unterscheidbar | ✅ Pass |
+| BL-E2.1 #3 | Analyst setzt `nicht_befund_typ` wenn Feld adressiert ohne Beleg | ⚠️ Partial (B1) |
+| BL-E2.1 #4 | `nicht_befund_typ`-Slots nicht als offene Lücke | ✅ Pass |
+| BL-E2.1 #5 | Halluzinationsrate < 1% (Eval) | ⏭ Skip (Live-LLM) |
+| BL-E2.1 #6 | `applyGroundingGuard` + `evidence_span`-Check unverändert | ✅ Pass |
+| BL-E2.2 #1 | Prompt-Zeile invertiert | ✅ Pass |
+| BL-E2.2 #2 | `computeWalkthroughSlotTarget` gibt estimate/unknown als Targets | ✅ Pass |
+| BL-E2.2 #3 | Slot-Target-Hinweistexte unterscheiden missing vs low_confidence | ✅ Pass |
+| BL-E2.2 #4 | estimate-Slots triggern Rückfrage (Eval) | ⏭ Skip (Live-LLM) |
+| BL-E2.2 #5 | confirmed-Slots kein Target in Pass 2 | ✅ Pass |
+| BL-E2.2 #6 | Eval-Gate: keine Regression | ⏭ Skip (Live-LLM) |
+
+**Unit Tests:** 545/545 ✅
+
+### Bugs Found
+
+**B1 (Medium)** — Analyst-Prompt-Instruktion für `nicht_befund_typ` fehlt
+- `interviewAnalyst.ts` STUFE-2-Regeln enthalten keine Anweisung wann/wie `nicht_befund_typ` gesetzt wird
+- Tool-Description-Hint vorhanden, aber kein Systemebenen-Verhalten definiert
+- Fix: `nicht_befund_typ`-Regeln zu `record_slot`-Abschnitt in Analyst-Prompt hinzufügen
+
+**B2 (Low)** — Staler Kommentar `interviewAgent.ts:440`
+- Kommentar sagt "nicht_befund_typ not on SlotValue" → nach PROJ-28 unzutreffend
+
+**B3 (Low)** — `computeEmptyMandatorySlots` (`interviewAnalyst.ts:229`) inkonsistentes Pattern
+- Nutzt `=== null` statt expliziter Filled-Check; funktionell korrekt, Invariante hält
+
+### Tally: `0:1:2` (Critical:Medium:Low)
 
 ## Deployment
 _To be added by /deploy_

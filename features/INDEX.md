@@ -43,7 +43,7 @@
 | PROJ-25 | Prozesswissens-Schema (O1–O5 + Governance) | Revision | Wissensbank | PROJ-20 | Approved | [spec](wissensbank/PROJ-25-prozesswissens-schema.md) | P1 | L | 0:1:1 |
 | PROJ-26 | Getypte Abhängigkeitskanten | Extension | Wissensbank | PROJ-20 | Approved | [spec](wissensbank/PROJ-26-getypte-abhaengigkeitskanten.md) | P1 | M | 0:0:0 |
 | PROJ-27 | Schema-Bindung + verlustfreie Speicherung | Revision | Interview Engine | PROJ-22 | Approved | [spec](interview-engine/PROJ-27-schema-bindung-verlustfreie-speicherung.md) | P1 | L | 0:2:4 |
-| PROJ-28 | Extraktions-Zuverlässigkeit | Revision | Interview Engine | PROJ-22 | In Progress | [spec](interview-engine/PROJ-28-extraktions-zuverlaessigkeit.md) | P1 | M | — |
+| PROJ-28 | Extraktions-Zuverlässigkeit | Revision | Interview Engine | PROJ-22 | Approved | [spec](interview-engine/PROJ-28-extraktions-zuverlaessigkeit.md) | P1 | M | 0:1:2 |
 | PROJ-29 | Gesprächsführungs-Revision | Revision | Interview Engine | PROJ-23 | Planned | [spec](interview-engine/PROJ-29-gesprächsführungs-revision.md) | P1 | L | — |
 | PROJ-30 | Tiefe-/O10-Metrik | Revision | Interview Engine | PROJ-21 | Planned | [spec](interview-engine/PROJ-30-tiefe-o10-metrik.md) | P1 | L | — |
 | PROJ-31 | Eval-Schärfung (Judge, Perturbation, Robustheit) | Revision | Interview Engine | PROJ-21 | Planned | [spec](interview-engine/PROJ-31-eval-schaerfung.md) | P1 | L | — |
