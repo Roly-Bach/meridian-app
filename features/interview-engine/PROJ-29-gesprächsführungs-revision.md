@@ -1,6 +1,6 @@
 # PROJ-29: Gesprächsführungs-Revision
 
-## Status: In Progress
+## Status: In Review
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-23
@@ -263,7 +263,113 @@ Alle Felder optional — keine Breaking Changes an bestehenden Aufrufen.
 Einen `/eval:interview`-Lauf mit Persona `buchhalter` durchführen. Metrische Schwellen (REQ-016 ≥80%, REQ-017 ≥85%) werden in PROJ-31 verifiziert — PROJ-29 liefert die Prompt-Basis.
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA-Datum:** 2026-06-17
+**Tester:** QA Engineer (automated)
+**Test-Basis:** Unit-Tests (Vitest) + statische Code-Analyse
+
+### Acceptance Criteria — Ergebnis
+
+| ID | Kriterium | Status | Anmerkung |
+|----|-----------|--------|-----------|
+| E3.1-1 | Engine erkennt konfligierende Aussagen (numerisch ≥ Faktor 3) | ✅ PASS | `detectAmbiguity` + numerischer Vergleich gegen Slot-Werte |
+| E3.1-2 | Ambiguität-Nachfrage benennt beide Aussagen explizit | ✅ PASS | Direktive enthält phraseA + phraseB, "Keine Lücken-Nachfrage in diesem Turn" |
+| E3.1-3 | `computeMissingMandatorySlots` unverändert | ✅ PASS | Nicht angefasst; Test-Suite bestätigt Regression-Freiheit |
+| E3.1-4 | Konflikt-Erkennung deterministisch (Slot-Stand + Fenster) | ✅ PASS | `detectAmbiguity` nutzt Slot-Werte + CONTRA_PATTERNS |
+| E3.2-1 | Exception-Signal → Vertiefungs-Direktive injiziert | ✅ PASS | `detectException` + `exceptionSection` in `buildDynamicContext` |
+| E3.2-2 | Bei Abschweifung re-kontextualisiert Engine | ✅ PASS (Prompt) | Im Methodologie-Text verankert; LLM entscheidet wann |
+| E3.2-3 | Re-Kontextualisierungs-Cap ≤1 per 3 Turns deterministisch | ❌ FAIL | **Bug B1**: `wasRecentlyRecontextualized` implementiert aber nicht in `buildDynamicContext` eingehängt — kein deterministischer Cap aktiv |
+| E3.2-4 | Slot-Coverage-Lücken weiter von `coverage_check` gfüllt | ✅ PASS | Unverändert; Tests bestätigen |
+| E3.3-1 | Jede Nachfrage referenziert Konzept aus letzten 4 Turns | ✅ PASS | Anker-Pflicht in walkthrough_step + slot_completion Methodologie |
+| E3.3-2 | Verneinungen ("kein SAP") kein positiver Anker | ✅ PASS | Explizit in Anker-Pflicht-Direktive erwähnt |
+| E3.3-3 | Negative Formulierung durch positive Anker-Regel ersetzt | ✅ PASS | War nicht im Code; positive Regel ergänzt |
+| E3.4-1 | Blockade-Signal (<10 Wörter ODER Phrasen) → Frametechnik wechseln | ✅ PASS | `detectBlockade` + `⚠️ LADDERING` Direktive |
+| E3.4-2 | Keine strukturell identische Folgefrage bei Blockade | ✅ PASS | Direktive explizit: "KEINE strukturell identische Folgefrage" |
+| E3.4-3 | Nach 2 Blockade-Turns: Thema fallen lassen | ✅ PASS | `computeLadderingStreak >= 2` → `⛔ LADDERING-ABBRUCH` |
+| E3.4-4 | Blockade deterministisch, Zwei-Turn via `next_briefing`-Zähler | ⚠️ PARTIAL | Blockade-Erkennung deterministisch ✓; Streak via History (nicht `next_briefing`) — funktional äquivalent, aber topic-boundary false-positives möglich (Bug B3) |
+| E3.5-1 | Keine inhaltlichen Eigenvorschläge in Nachfragen | ✅ PASS | Maieutik-Direktive in walkthrough_step Methodologie |
+| E3.5-2 | ANKER-SPERRE + `extractNumericTokens` unverändert | ✅ PASS | Nicht angefasst; Tests bestätigen |
+| E3.5-3 | Keine Leading-Questions ("Wäre das wie X?") | ✅ PASS | Maieutik-Direktive explizit |
+| E3.6-1 | Sprachtiefe an `employeeRole`/`department` anpassen | ✅ PASS | Profil-Framing-Linie im Interview-Kontext-Header |
+| E3.6-2 | Fachfremde Rollen → alltagsnahe Sprache | ✅ PASS | Direktive: "Fachfremde Rollen → alltagsnahe Sprache" |
+| E3.6-3 | `employeeRole=null` → kein Fehler, kein Fallback-Branching | ✅ PASS | `profileFraming = ''` wenn null; keine Bedingungsverzweigung |
+| E3.7-1 | Keine Verbesserungsfragen | ✅ PASS | Ist-Fokus-Direktive in walkthrough_step + slot_completion |
+| E3.7-2 | Milde To-be-Einladung entfernt/ersetzt | ✅ PASS | Text war nicht im Code; Ist-Fokus-Direktive im wrap_up ergänzt |
+| E3.7-3 | Spontane To-be-Nennungen → Ist-Engpass vertiefen | ✅ PASS | Direktive: "Ist-Engpass dahinter vertiefen ('Was ist heute der Engpass?')" |
+
+**Ergebnis: 22/24 Pass, 1 Fail, 1 Partial**
+
+### Edge Cases — Ergebnis
+
+| Edge Case | Status | Anmerkung |
+|-----------|--------|-----------|
+| Ambiguität + Lücke im gleichen Turn | ✅ PASS | `ambiguitySection` enthält "Keine Lücken-Nachfrage in diesem Turn" |
+| Ausnahme als eigenständiger Prozessschritt | ✅ PASS | Direktive: "→ register_step nach 1–2 Vertiefungsfragen" |
+| Negations-Aussage als Teil von Ambiguität ("kein SAP" → "prüfe in SAP nach") | ❌ FAIL | **Bug B2**: `detectAmbiguity` prüft nur numerische Konflikte + CONTRA_PATTERN-Marker; implizite tool-basierte Widersprüche werden nicht erkannt |
+| Profil-Kontext fehlt vollständig | ✅ PASS | `profileFraming=''` wenn null, kein Fehler |
+| Laddering nach zwei Versuchen → Thema fallen lassen | ✅ PASS | `computeLadderingStreak>=2` → ABBRUCH-Direktive |
+| Befragter beschreibt To-be spontan | ✅ PASS | Ist-Fokus-Direktive greift |
+| Re-Kontextualisierung zu häufig | ❌ FAIL | **Bug B1** (s.o.) — kein deterministischer Cap |
+| Ambiguität bei echter Unsicherheit ("5 — oder vielleicht 10") | ✅ PASS | ratio 10/5=2 < 3 → kein fire; kein CONTRA_PATTERN-Match → null |
+
+### Gefundene Bugs
+
+#### B1 — Medium: `wasRecentlyRecontextualized` nicht eingehängt
+
+**Beschreibung:** `wasRecentlyRecontextualized()` ist implementiert, exportiert und getestet (4 Tests), wird aber in `buildDynamicContext` nicht aufgerufen. Der Kommentar "E3.2 re-context: inject only when not recently used" auf Zeile 937 zeigt die Intention, der Code endet aber direkt mit der E3.4-Sektion ohne Direktiven-Injection.
+
+**Folge:** Re-Kontextualisierungs-Cap aus AC E3.2-3 ("≤1 per 3 Turns") ist nicht deterministisch durchgesetzt. Das Modell kann in aufeinanderfolgenden Turns re-kontextualisieren ohne Einschränkung.
+
+**Datei:** `src/services/interviewAgent.ts`, ca. Zeile 937
+**Schweregrad:** Medium
+**Fix-Aufwand:** Klein — `wasRecentlyRecontextualized` aufrufen und Re-Kontext-Direktive bei Abschweifungs-Signal + Cap-Bedingung injizieren
+
+#### B2 — Low: Implizite tool-Widersprüche nicht erkannt
+
+**Beschreibung:** Edge Case aus Spec: "Wir nutzen kein SAP" (Turn T1) + "natürlich prüfe ich in SAP nach" (Turn T3). `detectAmbiguity` erkennt weder CONTRA_PATTERN noch numerischen Konflikt — gibt null zurück.
+
+**Folge:** Ambiguitäts-Klärung für system-/tool-basierte Widersprüche bleibt dem Modell überlassen (kein deterministischer Trigger). Kein Crash.
+
+**Datei:** `src/services/interviewAgent.ts`, `detectAmbiguity()`
+**Schweregrad:** Low
+**Fix-Aufwand:** Mittel — erfordert Tool-/Systemnamen-Tracking über mehrere Turns oder Negations-Slot-Tracking
+
+#### B3 — Low: Laddering-Streak history-basiert ohne Topic-Reset
+
+**Beschreibung:** `computeLadderingStreak` wertet die letzten 4 User-Turns aus ohne Wissen über Topic-Grenzen. Seltendes Szenario: Blockade-Turns auf Thema A + Blockade auf neuem Thema B könnten einen `streak >= 2` erzeugen obwohl Thema B nur einen Blockade-Turn hatte.
+
+**Folge:** Seltene false-positive ABBRUCH-Direktive auf Thema B. Kein Crash, leicht suboptimale Gesprächsführung.
+
+**AC-Abweichung:** AC sagt "Zähler im `next_briefing`", Implementierung nutzt History — funktional äquivalent für den Normalfall.
+**Schweregrad:** Low
+**Fix-Aufwand:** Mittel — `next_briefing`-Counter-Bridge (wie `usedFillerPhrases`)
+
+### Test-Suite
+
+```
+✅ 567/567 Unit-Tests passing
+✅ tsc --noEmit: clean
+✅ Neue Tests: 22 Tests für detectAmbiguity, detectException, detectBlockade, computeLadderingStreak, wasRecentlyRecontextualized
+```
+
+### Security Audit
+
+Keine Security-Relevanz — reine Service-Layer/Prompt-Änderung. Kein neuer API-Endpoint, kein DB-Zugriff, kein User-Input-Pfad.
+
+### Regression
+
+- `computeMissingMandatorySlots`: unverändert ✅
+- `detectDrillStops` / drill-stop: unverändert ✅
+- `detectPersonaRefuse`: unverändert ✅
+- ANKER-SPERRE / `extractNumericTokens`: unverändert ✅
+- `coverage_check`-Phase: unverändert ✅
+- 545 bestehende Tests (pre-PROJ-29): alle bestanden ✅
+
+### Produktion-Readiness
+
+**STATUS: NICHT BEREIT** — B1 (Medium) ist AC-Failure: E3.2-3 nicht erfüllt.
+
+Empfehlung: B1 zuerst fixen (klein), dann Re-QA. B2 und B3 können nach Deploy als Known Issues weitergeführt werden.
 
 ## Deployment
 _To be added by /deploy_
