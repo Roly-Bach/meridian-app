@@ -1,4 +1,4 @@
-import { computeMissingMandatorySlots, MANDATORY_SLOTS, groupSemanticSteps } from './interviewAgent'
+import { computeMissingMandatorySlots, MANDATORY_SLOTS, POTENZIAL_SLOT_NAMES, groupSemanticSteps } from './interviewAgent'
 import type { Phase, StepEntry, AnalystBriefing } from './interviewAgent'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -93,10 +93,11 @@ function walkthroughHasContent(tracker: StepEntry[]): boolean {
       (
         // Classic path: 3+ walkthrough data items from update_walkthrough_data
         (s.process_steps?.length ?? 0) + (s.friction_points?.length ?? 0) + (s.pain_point_primary ? 1 : 0) >= 3
-        // Fallback A: at least 1 mandatory slot already filled via record_slot —
+        // Fallback A: at least 1 slot already filled via record_slot —
         // avoids deadlock when Analyst extracts slots directly without calling update_walkthrough_data first.
         // Fix-3 reverted: threshold back to "any slot" (>= 1) to prevent depth-first starvation.
-        || MANDATORY_SLOTS.some(slot => s.slots[slot] !== null)
+        || Object.values(s.potenzial).some(v => v !== null)
+        || Object.values(s.slots).some(v => v !== null)
         // Fallback B: 2+ process_steps (orthogonally correct, kept from Fix-3)
         || (s.process_steps?.length ?? 0) >= 2
       ),
@@ -108,13 +109,13 @@ function allStepsDone(tracker: StepEntry[]): boolean {
   return !tracker.some((s) => s.status === 'exploring' || s.status === 'walkthrough')
 }
 
-// Groups semantically equivalent steps and checks whether the union of mandatory
+// Groups semantically equivalent steps and checks whether the union of potenzial
 // slots per group is complete. Uses groupSemanticSteps (single source of truth).
 function semanticAllStepsDone(tracker: StepEntry[]): boolean {
   if (tracker.length === 0) return false
   return groupSemanticSteps(tracker).every(group =>
-    MANDATORY_SLOTS.every(slot =>
-      group.some(s => s.slots[slot] !== null)
+    POTENZIAL_SLOT_NAMES.every(slot =>
+      group.some(s => s.potenzial[slot] !== null)
     )
   )
 }

@@ -6,6 +6,8 @@ import {
   buildTools,
   MANDATORY_SLOTS,
   OPTIONAL_SLOTS,
+  TAZITE_SLOT_NAMES,
+  POTENZIAL_SLOT_NAMES,
   groupSemanticSteps,
   type InterviewContext,
   type TurnMessage,
@@ -216,10 +218,15 @@ function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
 function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; slot: string }[] {
   const empty: { step: StepEntry; slot: string }[] = []
   for (const step of tracker) {
-    for (const slot of MANDATORY_SLOTS) {
-      if (step.slots[slot] === null) {
+    for (const slot of POTENZIAL_SLOT_NAMES) {
+      if (step.potenzial[slot] === null) {
         empty.push({ step, slot })
       }
+    }
+    for (const slot of TAZITE_SLOT_NAMES) {
+      const sv = step.slots[slot]
+      const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
+      if (!filled) empty.push({ step, slot })
     }
   }
   return empty
@@ -262,22 +269,31 @@ async function mergeFragmentedSteps(
   const groups = groupSemanticSteps(tracker, 0.2)
   if (groups.every(g => g.length === 1)) return { merged: tracker, changed: false }
 
-  const ALL_SLOTS: SlotName[] = [...MANDATORY_SLOTS, ...OPTIONAL_SLOTS]
-
   const merged: StepEntry[] = groups.map(group => {
     if (group.length === 1) return group[0]
 
     const canonical = group.reduce((best, s) => {
-      const sc = MANDATORY_SLOTS.filter(slot => s.slots[slot] !== null).length
-      const bc = MANDATORY_SLOTS.filter(slot => best.slots[slot] !== null).length
+      const sc = POTENZIAL_SLOT_NAMES.filter(slot => s.potenzial[slot] !== null).length
+      const bc = POTENZIAL_SLOT_NAMES.filter(slot => best.potenzial[slot] !== null).length
       return sc > bc ? s : best
     })
 
+    // Merge potenzial slots
+    const potenzial = { ...canonical.potenzial }
+    for (const slot of POTENZIAL_SLOT_NAMES) {
+      if (potenzial[slot] === null) {
+        for (const s of group) {
+          if (s.potenzial[slot] !== null) { potenzial[slot] = s.potenzial[slot]; break }
+        }
+      }
+    }
+
+    // Merge tazite slots
     const slots = { ...canonical.slots }
-    for (const slot of ALL_SLOTS) {
+    for (const slot of TAZITE_SLOT_NAMES) {
       if (slots[slot] === null) {
         for (const s of group) {
-          if (s.slots[slot] !== null) { slots[slot] = s.slots[slot]; break }
+          if (s.slots[slot] !== null) { slots[slot] = s.slots[slot] as never; break }
         }
       }
     }
@@ -293,6 +309,7 @@ async function mergeFragmentedSteps(
 
     return {
       ...canonical,
+      potenzial,
       slots,
       status: bestStatus,
       process_steps: allProcessSteps.length > 0 ? allProcessSteps : canonical.process_steps,
@@ -640,7 +657,9 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
   let mutated = false
   const backfillEmits: Array<{ stepTitle: string; value: string[] }> = []
   const updated = tracker.map((step) => {
-    if (step.slots.data_sources !== null) return step
+    // hilfsmittel replaces data_sources (PROJ-25)
+    const hilfsmittelFilled = step.slots.hilfsmittel?.value != null || step.slots.hilfsmittel?.nicht_befund_typ != null
+    if (hilfsmittelFilled) return step
 
     const fromFriction = Array.isArray(step.friction_tools) ? step.friction_tools : []
     const candidates = fromFriction.length > 0 ? fromFriction : globalToolMentions
@@ -653,11 +672,11 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
       ...step,
       slots: {
         ...step.slots,
-        data_sources: {
+        hilfsmittel: {
           value: deduped,
           quote: '[auto-backfill aus erwähnten Tools/Systemen]',
           confidence: 'unknown' as const,
-          writeSource: 'backfill' as const,
+          nicht_befund_typ: null,
         },
       },
     }

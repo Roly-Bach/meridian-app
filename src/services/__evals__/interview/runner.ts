@@ -467,14 +467,16 @@ function buildSlotTable(stepTracker: StepEntry[]): string {
   const header = [
     '## Slot-Filling-Stand',
     '',
-    '| Schritt | Status | frequency | duration | rule_based | data_sources | error_rate | media_breaks |',
-    '|---------|--------|-----------|----------|------------|--------------|------------|--------------|',
+    '| Schritt | Status | frequency | duration | entscheidungslogik | hilfsmittel | error_rate | media_breaks |',
+    '|---------|--------|-----------|----------|--------------------|-------------|------------|--------------|',
   ]
 
   const rows = stepTracker.map(step => {
-    const f = (s: StepEntry['slots'][keyof StepEntry['slots']]) =>
-      s ? `${String(s.value).slice(0, 30)} ✓` : 'null'
-    return `| ${step.title} | ${step.status} | ${f(step.slots.frequency_per_month)} | ${f(step.slots.duration_minutes)} | ${f(step.slots.rule_based)} | ${f(step.slots.data_sources)} | ${f(step.slots.error_rate_percent)} | ${f(step.slots.media_breaks)} |`
+    const fp = (s: import('@/services/interviewSemantic').SlotValue | null) =>
+      s ? `${String(s.value).slice(0, 20)} ✓` : 'null'
+    const ft = (s: import('@/services/interviewSemantic').TaziteSlot | import('@/services/interviewSemantic').TaziteSlotArray | null) =>
+      s?.value != null ? `${String(s.value).slice(0, 20)} ✓` : s?.nicht_befund_typ ? `[${s.nicht_befund_typ}]` : 'null'
+    return `| ${step.title} | ${step.status} | ${fp(step.potenzial.frequency_per_month)} | ${fp(step.potenzial.duration_minutes)} | ${ft(step.slots.entscheidungslogik)} | ${ft(step.slots.hilfsmittel)} | ${fp(step.potenzial.error_rate_percent)} | ${fp(step.potenzial.media_breaks)} |`
   })
 
   return [...header, ...rows, ''].join('\n')

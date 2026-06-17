@@ -11,15 +11,23 @@ import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD, SOFT
 import {
   MANDATORY_SLOTS,
   OPTIONAL_SLOTS,
+  TAZITE_SLOT_NAMES,
+  POTENZIAL_SLOT_NAMES,
   colonParent,
   normalizeToken,
   tokenJaccard,
   tokenJaccardNorm,
   groupSemanticSteps,
+  normalizeStepEntry,
   type Phase,
   type SlotValue,
   type StepEntry,
   type SlotName,
+  type TaziteSlotName,
+  type PotenzialSlotName,
+  type TaziteSlot,
+  type TaziteSlotArray,
+  type GovernanceSlot,
 } from './interviewSemantic'
 
 // Re-export semantic primitives so existing consumers continue to import from
@@ -29,17 +37,19 @@ import {
 export {
   MANDATORY_SLOTS,
   OPTIONAL_SLOTS,
+  TAZITE_SLOT_NAMES,
+  POTENZIAL_SLOT_NAMES,
   colonParent,
   normalizeToken,
   tokenJaccard,
   tokenJaccardNorm,
   groupSemanticSteps,
 }
-export type { Phase, SlotValue, StepEntry, SlotName }
+export type { Phase, SlotValue, StepEntry, SlotName, TaziteSlotName, PotenzialSlotName, TaziteSlot, TaziteSlotArray, GovernanceSlot }
 
 export interface MissingSlot {
   step_title: string
-  slot: SlotName
+  slot: TaziteSlotName | PotenzialSlotName
 }
 
 export interface InterviewContext {
@@ -95,8 +105,17 @@ export interface AnalystBriefing {
 export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingSlot[] {
   const missing: MissingSlot[] = []
   for (const step of stepTracker) {
-    for (const slot of MANDATORY_SLOTS) {
-      if (step.slots[slot] === null) {
+    // Potenzial (quantitative) slots
+    for (const slot of POTENZIAL_SLOT_NAMES) {
+      if (step.potenzial[slot] === null) {
+        missing.push({ step_title: step.title, slot })
+      }
+    }
+    // Tazite (qualitative) slots
+    for (const slot of TAZITE_SLOT_NAMES) {
+      const sv = step.slots[slot]
+      const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
+      if (!filled) {
         missing.push({ step_title: step.title, slot })
       }
     }
@@ -105,17 +124,25 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
 }
 
 // L1 — Slot-Targeting für walkthrough_step Phase.
-// Wählt deterministisch genau EINEN missing mandatory slot für den aktuell aktiven
-// Step (walkthrough > exploring). Ein einzelner Target verhindert observable-goal-pull
-// auf andere leere Felder, während Talker doch deterministisch geführt wird.
-// Reihenfolge MANDATORY_SLOTS = {frequency_per_month, duration_minutes, rule_based, data_sources}.
+// Wählt deterministisch genau EINEN missing slot für den aktuell aktiven
+// Step (walkthrough > exploring). Potenzial-Slots zuerst (quantitativ), dann tazite.
+// Volle Gesprächsführungs-Revision ist PROJ-29.
 export function computeWalkthroughSlotTarget(stepTracker: StepEntry[]): MissingSlot | null {
   const active =
     stepTracker.find((s) => s.status === 'walkthrough') ??
     stepTracker.find((s) => s.status === 'exploring')
   if (!active) return null
-  for (const slot of MANDATORY_SLOTS) {
-    if (active.slots[slot] === null) {
+  // Potenzial slots first (frequency, duration — most impactful for KI Use Case scoring)
+  for (const slot of POTENZIAL_SLOT_NAMES) {
+    if (active.potenzial[slot] === null) {
+      return { step_title: active.title, slot }
+    }
+  }
+  // Then tazite slots
+  for (const slot of TAZITE_SLOT_NAMES) {
+    const sv = active.slots[slot]
+    const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
+    if (!filled) {
       return { step_title: active.title, slot }
     }
   }
@@ -123,13 +150,19 @@ export function computeWalkthroughSlotTarget(stepTracker: StepEntry[]): MissingS
 }
 
 // Deutsche Slot-Label für Talker-Prompt — kurz, ohne Zahlen-Vorgabe (Anker-Sperre).
-const SLOT_PROMPT_HINT: Record<SlotName, string> = {
+const SLOT_PROMPT_HINT: Record<TaziteSlotName | PotenzialSlotName, string> = {
+  // Potenzial (quantitativ)
   frequency_per_month: 'wie oft pro Monat / Woche dieser Schritt vorkommt',
   duration_minutes: 'wie lange eine einzelne Durchführung dieses Schritts dauert',
-  rule_based: 'ob der Schritt festen Regeln folgt oder eigener Einschätzung Spielraum lässt',
-  data_sources: 'welche Systeme, Tools oder Datenquellen dabei verwendet werden',
   error_rate_percent: 'wie häufig Fehler oder Korrekturen auftreten',
   media_breaks: 'ob es Medienbrüche zwischen Systemen gibt',
+  // Tazite (qualitativ)
+  entscheidungslogik: 'ob der Schritt festen Regeln folgt oder eigener Einschätzung Spielraum lässt — und welche Kriterien entscheiden',
+  tazite_cues: 'was man aus Erfahrung wissen muss um diesen Schritt gut zu machen (implizites Wissen, Fingerspitzengefühl)',
+  ausnahmen: 'welche Ausnahmen oder Sonderfälle auftreten und wie sie behandelt werden',
+  inputs: 'welche Eingaben oder Voraussetzungen für diesen Schritt nötig sind',
+  outputs: 'was dieser Schritt produziert oder weitergibt',
+  hilfsmittel: 'welche Systeme, Tools oder Datenquellen dabei verwendet werden',
 }
 
 // Normalize step title for substring-based dedup — strips whole-string
@@ -195,23 +228,35 @@ function formatStepTracker(steps: StepEntry[]): string {
 
   return steps.map((step) => {
     const title = sanitizeForPrompt(step.title)
-    const role = step.role ? sanitizeForPrompt(step.role) : null
 
-    // Fix 4 (ADR-015): mask raw slot values in the Talker-facing tracker.
-    // Status only — "✓ erfasst" or "fehlt". Prevents anchoring + self-calc.
-    function fmtSlot(sv: SlotValue | null, label: string): string {
-      if (!sv) return `  ${label}: fehlt`
-      return `  ${label}: ✓ erfasst`
+    // Fix 4 (ADR-015): mask raw slot values — show status only to prevent anchoring.
+    function fmtPotenzial(sv: SlotValue | null, label: string): string {
+      return `  ${label}: ${sv != null ? '✓ erfasst' : 'fehlt'}`
+    }
+    function fmtTazite(sv: TaziteSlot | TaziteSlotArray | null, label: string): string {
+      if (sv == null) return `  ${label}: fehlt`
+      const filled = sv.value != null || sv.nicht_befund_typ != null
+      return `  ${label}: ${filled ? '✓ erfasst' : 'fehlt'}`
     }
 
-    const slotLines = [
-      fmtSlot(step.slots.frequency_per_month, 'frequency_per_month'),
-      fmtSlot(step.slots.duration_minutes,    'duration_minutes   '),
-      `  rule_based:          ${step.slots.rule_based != null && step.slots.rule_based.value !== undefined ? '✓ erfasst' : 'fehlt'}`,
-      fmtSlot(step.slots.data_sources,        'data_sources       '),
-      `  error_rate_percent:  ${step.slots.error_rate_percent ? '✓ erfasst' : 'fehlt'}`,
-      `  media_breaks:        ${step.slots.media_breaks ? '✓ erfasst' : 'fehlt'}`,
+    const potenzialLines = [
+      fmtPotenzial(step.potenzial.frequency_per_month, 'frequency_per_month'),
+      fmtPotenzial(step.potenzial.duration_minutes,    'duration_minutes   '),
+      fmtPotenzial(step.potenzial.error_rate_percent,  'error_rate_percent '),
+      fmtPotenzial(step.potenzial.media_breaks,        'media_breaks       '),
     ]
+    const taziteLines = [
+      fmtTazite(step.slots.entscheidungslogik, 'entscheidungslogik '),
+      fmtTazite(step.slots.tazite_cues,        'tazite_cues        '),
+      fmtTazite(step.slots.ausnahmen,          'ausnahmen          '),
+      fmtTazite(step.slots.inputs,             'inputs             '),
+      fmtTazite(step.slots.outputs,            'outputs            '),
+      fmtTazite(step.slots.hilfsmittel,        'hilfsmittel        '),
+    ]
+
+    const govLine = step.governance != null
+      ? `  governance: ${step.governance.rolle ?? step.governance.nicht_befund_typ ?? '✓ teilweise erfasst'}`
+      : `  governance: fehlt`
 
     const walkthrough: string[] = []
     if (step.process_steps?.length) walkthrough.push(`  process_steps: ${step.process_steps.join(' → ')}`)
@@ -219,7 +264,7 @@ function formatStepTracker(steps: StepEntry[]): string {
     if (step.friction_tools?.length) walkthrough.push(`  friction_tools: ${step.friction_tools.join(', ')}`)
     if (step.pain_point_primary) walkthrough.push(`  pain_point_primary: "${step.pain_point_primary}"`)
 
-    return `[${step.status}] "${title}"${role ? ` (${role})` : ''}\n${slotLines.join('\n')}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
+    return `[${step.status}] "${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${govLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
   }).join('\n\n')
 }
 
@@ -263,6 +308,7 @@ Spannen konkretisieren vor dem Erfassen: "Du hast '[Spanne]' gesagt — welcher 
 Tool-Calls laufen still im Hintergrund — erscheinen nie im Text.
 evidence_quote muss ein wörtliches Zitat aus dem Mitarbeiter-Statement sein.
 Slots nur setzen wenn Mitarbeiter den Wert explizit genannt hat.
+record_governance aufrufen sobald Mitarbeiter Rolle, OE oder zuständige Systeme nennt.
 update_topics nach jedem Turn mit aktualisierten Listen aufrufen.
 PFLICHT: Nach Tool-Calls IMMER eine Textantwort generieren — auch nur ein Reaktionssatz + Frage. Eine leere Antwort ist kein gültiger Turn.
 </tools>
@@ -275,13 +321,13 @@ PFLICHT: Nach Tool-Calls IMMER eine Textantwort generieren — auch nur ein Reak
 // assistant turns. When the same null slot has been targeted >= 2 times in the
 // last 4 turns, inject a hard skip-rule to break the retry storm.
 
-type DrillSlotKind = 'duration_minutes' | 'frequency_per_month' | 'error_rate_percent' | 'rule_based'
+type DrillSlotKind = 'duration_minutes' | 'frequency_per_month' | 'error_rate_percent' | 'entscheidungslogik'
 
 const DRILL_PATTERNS: Record<DrillSlotKind, RegExp> = {
   duration_minutes: /(minuten|stunden|wie lange|wie viel(?:e)? zeit|wie viel(?:e)? tag|dauer|aufwand|aufwendest)/i,
   frequency_per_month: /(wie oft|häufigkeit|anzahl|wie viele.*(rechnung|fall|konten|posten|vorgäng|tickets|aufträge)|pro (woche|monat|tag))/i,
   error_rate_percent: /(fehlerquote|fehleranteil|prozent.*(fehler|unstimmig|korrektur)|wie hoch.*anteil.*fehler|anteil.*korrigier)/i,
-  rule_based: /(immer.*gleich(en)?.*schema|festes schema|nach.*regel(werk)?|von fall zu fall|wenn-dann|strengen.*regeln)/i,
+  entscheidungslogik: /(immer.*gleich(en)?.*schema|festes schema|nach.*regel(werk)?|von fall zu fall|wenn-dann|strengen.*regeln|entscheidungslogik)/i,
 }
 
 // F1b: detect persona-refuse patterns. When the persona explicitly declines
@@ -316,7 +362,7 @@ export function detectDrillStops(
     duration_minutes: 0,
     frequency_per_month: 0,
     error_rate_percent: 0,
-    rule_based: 0,
+    entscheidungslogik: 0,
   }
   for (const turn of lastFour) {
     for (const kind of Object.keys(DRILL_PATTERNS) as DrillSlotKind[]) {
@@ -336,7 +382,16 @@ export function detectDrillStops(
 
   const warnings: string[] = []
   for (const kind of Object.keys(counts) as DrillSlotKind[]) {
-    if (counts[kind] >= threshold && activeStep.slots[kind] === null) {
+    // Check correct location: potenzial for quant slots, slots for tazite
+    const slotVal = kind === 'duration_minutes' || kind === 'frequency_per_month' || kind === 'error_rate_percent'
+      ? activeStep.potenzial[kind as PotenzialSlotName]
+      : activeStep.slots[kind as TaziteSlotName]
+    const slotEmpty = slotVal == null || (
+      typeof slotVal === 'object' && 'value' in slotVal && slotVal.value == null &&
+      // nicht_befund_typ exists on TaziteSlot/TaziteSlotArray but not on SlotValue
+      (!('nicht_befund_typ' in slotVal) || (slotVal as TaziteSlot).nicht_befund_typ == null)
+    )
+    if (counts[kind] >= threshold && slotEmpty) {
       const reason = refused
         ? `Mitarbeiter hat im letzten Turn ausgewichen (Refuse-Pattern erkannt)`
         : `${counts[kind]}× in den letzten ${lastFour.length} Turns nachgefragt ohne Wert`
@@ -382,12 +437,12 @@ Kontextregel: Beschreibt die aktuelle Mitarbeiter-Antwort mehrere Prozesse, reco
 
   if (phase === 'slot_completion') {
     return `## Methodik: slot_completion
-Ziel: Verbleibende Pflichtslots nachfragen (frequency_per_month, duration_minutes, rule_based, data_sources).
-Optional: media_breaks fragen wenn Prozess papier- oder systemintensiv erscheint ("Druckst du etwas aus?" / "Gibt es Schritte wo du zwischen Systemen wechselst?").
+Ziel: Verbleibende Pflichtslots nachfragen — Potenzial (frequency_per_month, duration_minutes) und tazite O2–O5 (entscheidungslogik, inputs, outputs, hilfsmittel).
+Optional: error_rate_percent, media_breaks wenn Prozess fehlerträchtig oder systemintensiv wirkt.
 Max. 2–3 fehlende Slots pro Turn — natürlicher Gesprächsfluss, kein Listenformat, keine Ankündigung.
 Spannen: NICHT mehr nachfragen wenn Slot bereits mit confidence=estimate erfasst ist. Nur bei echtem null.
-data_sources-Fallback wenn keine Antwort: leeres Array setzen.
-rule_based: Wenn nach walkthrough noch null → einmal direkt fragen: "Folgt dieser Prozess bei dir immer dem gleichen Schema, oder entscheidest du von Fall zu Fall?" Wenn Mitarbeiter ausweicht oder unklar antwortet: NICHT nochmals fragen — Clarification Card erledigt das am Ende.`
+entscheidungslogik: "Folgt dieser Prozess bei dir immer dem gleichen Schema, oder entscheidest du von Fall zu Fall?" Wenn unklar: NICHT nochmals fragen — Clarification Card erledigt das am Ende.
+governance: record_governance aufrufen wenn Mitarbeiter Rolle oder OE nennt — auch fragmentarisch.`
   }
 
   if (phase === 'coverage_check') {
@@ -452,10 +507,13 @@ function formatFilledSlotsSnapshot(steps: StepEntry[]): string {
   const lines: string[] = []
   for (const step of steps) {
     const filledLabels: string[] = []
-    for (const [slot, sv] of Object.entries(step.slots) as [string, SlotValue | null][]) {
-      if (sv !== null && sv.value !== undefined && sv.value !== null) {
-        filledLabels.push(slot)
-      }
+    // Potenzial
+    for (const [slot, sv] of Object.entries(step.potenzial) as [string, SlotValue | null][]) {
+      if (sv !== null && sv.value !== null && sv.value !== undefined) filledLabels.push(slot)
+    }
+    // Tazite
+    for (const [slot, sv] of Object.entries(step.slots) as [string, TaziteSlot | TaziteSlotArray | null][]) {
+      if (sv != null && (sv.value != null || sv.nicht_befund_typ != null)) filledLabels.push(slot)
     }
     if (filledLabels.length > 0) {
       lines.push(`- "${sanitizeForPrompt(step.title)}": ${filledLabels.map(s => `${s} ✓`).join(', ')}`)
@@ -586,11 +644,16 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   if (ctx.phase === 'walkthrough_step') {
     const filledLines = ctx.stepTracker.flatMap((step) => {
       // Fix 4 (ADR-015): mask raw slot values — only show that the slot is filled.
-      const filledSlots = (Object.entries(step.slots) as [string, SlotValue | null][])
-        .filter(([, sv]) => sv !== null)
+      const filledPotenzial = (Object.entries(step.potenzial) as [string, SlotValue | null][])
+        .filter(([, sv]) => sv !== null && sv.value !== null)
         .map(([name]) => `  ${name}: ✓ erfasst`)
+      const filledTazite = (Object.entries(step.slots) as [string, TaziteSlot | TaziteSlotArray | null][])
+        .filter(([, sv]) => sv != null && (sv.value != null || sv.nicht_befund_typ != null))
+        .map(([name]) => `  ${name}: ✓ erfasst`)
+      const filledSlots = [...filledPotenzial, ...filledTazite]
       if (filledSlots.length === 0 && !step.process_steps?.length && !step.friction_points?.length) return []
-      const header = `[${step.status}] "${sanitizeForPrompt(step.title)}"${step.role ? ` (${sanitizeForPrompt(step.role)})` : ''}`
+      const govNote = step.governance?.rolle ? ` (${sanitizeForPrompt(step.governance.rolle)})` : ''
+      const header = `[${step.status}] "${sanitizeForPrompt(step.title)}"${govNote}`
       const walkLines: string[] = []
       if (step.process_steps?.length) walkLines.push(`  process_steps: ${step.process_steps.join(' → ')}`)
       if (step.friction_points?.length) walkLines.push(`  friction_points: ${step.friction_points.join(', ')}`)
@@ -714,12 +777,11 @@ export function buildTools(
     }),
 
     register_step: tool({
-      description: 'Legt einen neuen Prozessschritt im Slot-Tracker an. Einmalig pro Schritt aufrufen sobald der Schritt klar benannt ist.',
+      description: 'Legt einen neuen Prozessschritt im Slot-Tracker an. Einmalig pro Schritt aufrufen sobald der Schritt klar benannt ist. Setzt reihenfolge automatisch.',
       inputSchema: z.object({
         title: z.string().min(1),
-        role: z.string().optional(),
       }),
-      execute: async ({ title, role }) => {
+      execute: async ({ title }) => {
         try {
           const { data: stateRow } = await supabase
             .from('interview_state')
@@ -727,7 +789,8 @@ export function buildTools(
             .eq('interview_id', interviewId)
             .maybeSingle()
 
-          let current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
+          let current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
+            .map((raw, i) => normalizeStepEntry(raw, i + 1))
 
           // ── Layer 1: exact / substring match (free, always runs) ──────────
           const normalizedTitle = title.trim().toLowerCase()
@@ -860,21 +923,29 @@ export function buildTools(
 
           const newEntry: StepEntry = {
             title: title.trim(),
-            role: role ?? null,
-            status: 'exploring',
-            ...(titleEmbedding ? { embedding: titleEmbedding } : {}),
-            slots: {
+            reihenfolge: current.length + 1,
+            governance: null,
+            abhaengigkeiten: null,
+            potenzial: {
               frequency_per_month: null,
               duration_minutes: null,
-              rule_based: null,
-              data_sources: null,
               error_rate_percent: null,
               media_breaks: null,
+            },
+            status: 'exploring',
+            slots: {
+              entscheidungslogik: null,
+              tazite_cues: null,
+              ausnahmen: null,
+              inputs: null,
+              outputs: null,
+              hilfsmittel: null,
             },
             process_steps: [],
             friction_points: [],
             friction_tools: [],
             pain_point_primary: null,
+            ...(titleEmbedding ? { embedding: titleEmbedding } : {}),
           }
 
           const updated = [...current, newEntry]
@@ -897,11 +968,16 @@ export function buildTools(
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn, z.B. "100", "5 Minuten", "SAP FI und Excel". Das System erweitert ihn deterministisch zum vollständigen Satz und speichert ihn als Beleg. Wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up aus historischem Kontext), nutze evidence_quote stattdessen + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. confidence=confirmed/estimate/unknown wie gehabt. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert (z.B. "eigentlich sind es 15, nicht 10") — hebt Prioritäts-Sperre auf.',
+      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency_per_month, duration_minutes, error_rate_percent, media_breaks) und tazite O2–O5 (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert.',
       inputSchema: z.object({
         step_title: z.string().min(1),
-        slot: z.enum(['frequency_per_month', 'duration_minutes', 'rule_based', 'data_sources', 'error_rate_percent', 'media_breaks']),
-        value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]),
+        slot: z.enum([
+          // Potenzial (quantitativ)
+          'frequency_per_month', 'duration_minutes', 'error_rate_percent', 'media_breaks',
+          // Tazite O2–O5 (qualitativ)
+          'entscheidungslogik', 'tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel',
+        ]),
+        value: z.union([z.string(), z.number(), z.array(z.string())]).describe('String für tazite Einzel-Slots (entscheidungslogik), String-Array für Mehrwert-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel), Zahl für potenzial-Slots.'),
         evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus dem aktuellen Mitarbeiter-Turn. System extrahiert den umgebenden Satz als Beleg.'),
         evidence_quote: z.string().min(3).optional().describe('Fallback wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up). Pflicht: source_turn setzen.'),
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
@@ -917,7 +993,6 @@ export function buildTools(
         if (evidence_span && evidence_span.trim().length >= 2) {
           const span = evidence_span.trim()
           if (userInputText.length > 0 && userInputText.includes(span)) {
-            // Expand span to the enclosing sentence(s) deterministically.
             resolvedQuote = extractSentenceAroundSpan(userInputText, span)
           } else {
             return {
@@ -937,18 +1012,27 @@ export function buildTools(
           resolvedQuote = evidence_quote.trim()
         }
 
-        // Per-slot type guards — return error so LLM corrects the call
-        if (slot === 'rule_based' && typeof value !== 'boolean') {
-          return { success: false, error: `rule_based erwartet true oder false (boolean), nicht "${value}". Nutze true wenn der Schritt feste Regeln/Richtlinien hat, false wenn nicht.` }
-        }
-        if (slot === 'media_breaks' && typeof value !== 'number') {
-          return { success: false, error: `media_breaks erwartet eine ganze Zahl (Anzahl Medienbrüche pro Durchlauf, z.B. 0, 1, 2), nicht "${value}".` }
-        }
-        if ((slot === 'frequency_per_month' || slot === 'duration_minutes' || slot === 'error_rate_percent') && typeof value !== 'number') {
-          return { success: false, error: `${slot} erwartet eine Zahl, nicht "${value}". Extrahiere den numerischen Mittelwert.` }
-        }
-        if (slot === 'data_sources' && !Array.isArray(value)) {
-          return { success: false, error: `data_sources erwartet ein String-Array, z.B. ["SAP", "Excel"]. Nicht: "${value}".` }
+        // Per-slot type guards
+        const isPotenzial = (POTENZIAL_SLOT_NAMES as readonly string[]).includes(slot)
+        const isTaziteArray = ((['tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel'] as const) as readonly string[]).includes(slot)
+
+        if (isPotenzial) {
+          if (slot === 'media_breaks' && typeof value !== 'number') {
+            return { success: false, error: `media_breaks erwartet eine ganze Zahl (Anzahl Medienbrüche pro Durchlauf, z.B. 0, 1, 2), nicht "${value}".` }
+          }
+          if ((slot === 'frequency_per_month' || slot === 'duration_minutes' || slot === 'error_rate_percent') && typeof value !== 'number') {
+            return { success: false, error: `${slot} erwartet eine Zahl, nicht "${value}". Extrahiere den numerischen Mittelwert.` }
+          }
+        } else if (isTaziteArray) {
+          if (!Array.isArray(value)) {
+            return { success: false, error: `${slot} erwartet ein String-Array, z.B. ["SAP FI", "Excel"]. Nicht: "${value}".` }
+          }
+          // Reject empty arrays — spec requires value: null + nicht_befund_typ instead
+          if ((value as string[]).length === 0) {
+            return { success: false, error: `Leeres Array für "${slot}" ist ungültig. Wenn nichts bekannt: lass den Slot leer und setze nicht_befund_typ via record_governance, oder frag nochmals nach.` }
+          }
+        } else if (slot === 'entscheidungslogik' && typeof value !== 'string') {
+          return { success: false, error: `entscheidungslogik erwartet einen String (Beschreibung der Entscheidungslogik), nicht "${value}".` }
         }
 
         const verbatimQuote = resolvedQuote
@@ -960,7 +1044,8 @@ export function buildTools(
             .eq('interview_id', interviewId)
             .maybeSingle()
 
-          const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
+          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
+            .map((raw, i) => normalizeStepEntry(raw, i + 1))
           const stepIndex = findStepFuzzy(current, step_title)
 
           if (stepIndex === -1) {
@@ -968,16 +1053,19 @@ export function buildTools(
             return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel exakt.` }
           }
 
-          const prevSlotValue = current[stepIndex].slots[slot]
+          const step = current[stepIndex]
+
+          // Read current value from correct location
+          const prevSlotValue: SlotValue | TaziteSlot | TaziteSlotArray | null = isPotenzial
+            ? step.potenzial[slot as PotenzialSlotName]
+            : step.slots[slot as TaziteSlotName]
           const isOverwrite = prevSlotValue !== null && prevSlotValue !== undefined
 
-          // Idempotency: skip DB write when value is identical to existing (Pt11).
-          // Prevents analyst churn (same slot written 5× with same value).
-          // is_correction bypasses this check — user explicitly correcting a value.
+          // Idempotency: skip DB write when value is identical (Pt11)
           if (isOverwrite && !is_correction) {
             const prevVal = prevSlotValue?.value
             const same = Array.isArray(value) && Array.isArray(prevVal)
-              ? value.length === prevVal.length && value.every((v, i) => v === (prevVal as string[])[i])
+              ? value.length === (prevVal as string[]).length && (value as string[]).every((v, i) => v === (prevVal as string[])[i])
               : value === prevVal
             if (same) {
               return {
@@ -988,50 +1076,82 @@ export function buildTools(
             }
           }
 
-          // Priority conflict check (ADR-016): block lower-priority writers.
-          // is_correction=true bypasses the check when the user explicitly corrects a prior value.
-          const priorityBlocked = isOverwrite && !is_correction && !canOverwrite(prevSlotValue?.writeSource, writeSource as WriteSource)
-          if (priorityBlocked) {
-            emitSlotWrite({
-              ts: new Date().toISOString(),
-              interviewId,
-              source: writeSource,
-              stepTitle: current[stepIndex].title,
-              slot,
-              value,
-              prevValue: prevSlotValue?.value,
-              overwrite: true,
-              blocked: true,
-              sourceTurn: source_turn ?? null,
-              evidence: verbatimQuote,
-            }).catch(() => {})
-            return {
-              success: false,
-              error: `Slot "${slot}" already owned by higher-priority source "${prevSlotValue?.writeSource ?? 'unknown'}". Current source "${writeSource}" may not overwrite it. Use is_correction=true only if the interviewee explicitly corrected this value.`,
+          // Priority conflict check (ADR-016): potenzial slots only (multiple writers compete there)
+          if (isPotenzial) {
+            const prevAsSlotValue = prevSlotValue as SlotValue | null
+            const priorityBlocked = isOverwrite && !is_correction && !canOverwrite(prevAsSlotValue?.writeSource, writeSource as WriteSource)
+            if (priorityBlocked) {
+              emitSlotWrite({
+                ts: new Date().toISOString(),
+                interviewId,
+                source: writeSource,
+                stepTitle: step.title,
+                slot,
+                value,
+                prevValue: prevAsSlotValue?.value,
+                overwrite: true,
+                blocked: true,
+                sourceTurn: source_turn ?? null,
+                evidence: verbatimQuote,
+              }).catch(() => {})
+              return {
+                success: false,
+                error: `Slot "${slot}" already owned by higher-priority source "${prevAsSlotValue?.writeSource ?? 'unknown'}". Current source "${writeSource}" may not overwrite it. Use is_correction=true only if the interviewee explicitly corrected this value.`,
+              }
             }
           }
 
           const updated = [...current]
-          updated[stepIndex] = {
-            ...updated[stepIndex],
-            status: updated[stepIndex].status === 'exploring' ? 'walkthrough' : updated[stepIndex].status,
-            slots: {
-              ...updated[stepIndex].slots,
-              [slot]: {
-                value,
-                quote: verbatimQuote,
-                writeSource: writeSource as WriteSource,
-                ...(confidence !== undefined ? { confidence } : {}),
-                ...(qualifier !== undefined ? { qualifier } : {}),
+
+          if (isPotenzial) {
+            updated[stepIndex] = {
+              ...step,
+              status: step.status === 'exploring' ? 'walkthrough' : step.status,
+              potenzial: {
+                ...step.potenzial,
+                [slot]: {
+                  value,
+                  quote: verbatimQuote,
+                  writeSource: writeSource as WriteSource,
+                  ...(confidence !== undefined ? { confidence } : {}),
+                  ...(qualifier !== undefined ? { qualifier } : {}),
+                },
               },
-            },
+            }
+          } else if (isTaziteArray) {
+            const taziteVal: TaziteSlotArray = {
+              value: value as string[],
+              quote: verbatimQuote,
+              nicht_befund_typ: null,
+              ...(confidence !== undefined ? { confidence } : {}),
+            }
+            updated[stepIndex] = {
+              ...step,
+              status: step.status === 'exploring' ? 'walkthrough' : step.status,
+              slots: { ...step.slots, [slot]: taziteVal },
+            }
+          } else {
+            // entscheidungslogik (TaziteSlot)
+            const taziteVal: TaziteSlot = {
+              value: value as string,
+              quote: verbatimQuote,
+              nicht_befund_typ: null,
+              ...(confidence !== undefined ? { confidence } : {}),
+            }
+            updated[stepIndex] = {
+              ...step,
+              status: step.status === 'exploring' ? 'walkthrough' : step.status,
+              slots: { ...step.slots, [slot]: taziteVal },
+            }
           }
 
-          // Auto-transition to 'done' when all mandatory slots are filled
-          const allMandatoryFilled = MANDATORY_SLOTS.every(
-            (s) => updated[stepIndex].slots[s] !== null
-          )
-          if (allMandatoryFilled) {
+          // Auto-transition to 'done' when all potenzial + core tazite slots filled
+          const allPotenzialFilled = POTENZIAL_SLOT_NAMES.every(s => updated[stepIndex].potenzial[s] !== null)
+          const allTaziteFilled = TAZITE_SLOT_NAMES.every(s => {
+            const sv = updated[stepIndex].slots[s]
+            return sv != null && (sv.value != null || sv.nicht_befund_typ != null)
+          })
+          if (allPotenzialFilled && allTaziteFilled) {
             updated[stepIndex] = { ...updated[stepIndex], status: 'done' }
           }
 
@@ -1054,9 +1174,79 @@ export function buildTools(
             evidence: verbatimQuote,
           }).catch(() => {})
 
-          return { success: true, step_title, slot, value, step_complete: allMandatoryFilled, source_turn: source_turn ?? null }
+          return { success: true, step_title, slot, value, source_turn: source_turn ?? null }
         } catch (err) {
           console.error('[record_slot] failed:', err)
+          return { success: false, error: (err as Error).message }
+        }
+      },
+    }),
+
+    record_governance: tool({
+      description: 'Erfasst Governance-Information zu einem Prozessschritt (wer führt aus, welche OE, welche Systeme). Partial-Write: nur übergebene Felder werden gesetzt, bestehende bleiben unverändert. Separat von record_slot — GovernanceSlot hat anderes Format. Rufe auf sobald eine Governance-Information im Turn vorkommt.',
+      inputSchema: z.object({
+        step_title: z.string().min(1),
+        rolle: z.string().optional().describe('Person oder Rolle, die den Schritt ausführt'),
+        organisationseinheit: z.string().optional().describe('Organisationseinheit / Abteilung'),
+        systeme: z.array(z.string()).optional().describe('Systeme oder Plattformen, die für diesen Schritt zuständig sind (nicht: Tools die benutzt werden — das ist hilfsmittel)'),
+        nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Setze wenn Governance explizit nicht klärbar ist'),
+        evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus aktuellem Turn als Beleg'),
+        evidence_quote: z.string().min(3).optional(),
+        source_turn: z.number().int().positive().optional(),
+      }),
+      execute: async ({ step_title, rolle, organisationseinheit, systeme, nicht_befund_typ, evidence_span, evidence_quote, source_turn }) => {
+        // Evidence validation (same pattern as record_slot)
+        const userInputText = currentUserInput?.trim() ?? ''
+        let resolvedQuote: string | null = null
+
+        if (evidence_span && evidence_span.trim().length >= 2) {
+          const span = evidence_span.trim()
+          if (userInputText.length > 0 && userInputText.includes(span)) {
+            resolvedQuote = extractSentenceAroundSpan(userInputText, span)
+          } else {
+            return { success: false, error: `evidence_span "${span}" nicht im aktuellen Turn gefunden.` }
+          }
+        }
+        if (resolvedQuote === null && evidence_quote && evidence_quote.trim().length >= 3) {
+          resolvedQuote = evidence_quote.trim()
+        }
+
+        try {
+          const { data: stateRow } = await supabase
+            .from('interview_state')
+            .select('step_tracker')
+            .eq('interview_id', interviewId)
+            .maybeSingle()
+
+          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
+            .map((raw, i) => normalizeStepEntry(raw, i + 1))
+          const stepIndex = findStepFuzzy(current, step_title)
+
+          if (stepIndex === -1) {
+            const available = current.map(s => `"${s.title}"`).join(', ')
+            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbar: ${available || '(keine)'}.` }
+          }
+
+          const existing = current[stepIndex].governance
+          // Partial merge: only overwrite provided fields
+          const merged: GovernanceSlot = {
+            rolle: rolle !== undefined ? rolle : (existing?.rolle ?? null),
+            organisationseinheit: organisationseinheit !== undefined ? organisationseinheit : (existing?.organisationseinheit ?? null),
+            systeme: systeme !== undefined ? systeme : (existing?.systeme ?? null),
+            nicht_befund_typ: nicht_befund_typ !== undefined ? nicht_befund_typ : (existing?.nicht_befund_typ ?? null),
+          }
+
+          const updated = [...current]
+          updated[stepIndex] = { ...updated[stepIndex], governance: merged }
+
+          await supabase
+            .from('interview_state')
+            .update({ step_tracker: updated, updated_at: new Date().toISOString() })
+            .eq('interview_id', interviewId)
+
+          return { success: true, step_title, governance: merged, quote: resolvedQuote, source_turn: source_turn ?? null }
+        } catch (err) {
+          console.error('[record_governance] failed:', err)
           return { success: false, error: (err as Error).message }
         }
       },
@@ -1131,7 +1321,8 @@ export function buildTools(
             .eq('interview_id', interviewId)
             .maybeSingle()
 
-          const current: StepEntry[] = (stateRow?.step_tracker as StepEntry[] | null) ?? []
+          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
+            .map((raw, i) => normalizeStepEntry(raw, i + 1))
           const stepIndex = findStepFuzzy(current, step_title)
 
           if (stepIndex === -1) {

@@ -11,26 +11,40 @@ import type { StepEntry } from './interviewAgent'
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-const emptySlots = {
+const emptyPotenzial: StepEntry['potenzial'] = {
   frequency_per_month: null,
   duration_minutes: null,
-  rule_based: null,
-  data_sources: null,
   error_rate_percent: null,
   media_breaks: null,
 }
 
-const fullSlots = {
+const emptySlots: StepEntry['slots'] = {
+  entscheidungslogik: null,
+  tazite_cues: null,
+  ausnahmen: null,
+  inputs: null,
+  outputs: null,
+  hilfsmittel: null,
+}
+
+const fullPotenzial: StepEntry['potenzial'] = {
   frequency_per_month: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate' as const },
   duration_minutes: { value: 30, quote: '30 Minuten', confidence: 'confirmed' as const },
-  rule_based: { value: true, quote: 'immer gleich', confidence: 'confirmed' as const },
-  data_sources: { value: ['SAP'], quote: 'in SAP', confidence: 'confirmed' as const },
-  error_rate_percent: null,
-  media_breaks: null,
+  error_rate_percent: { value: 0, quote: 'keine Fehler', confidence: 'confirmed' as const },
+  media_breaks: { value: 0, quote: 'keine Brüche', confidence: 'confirmed' as const },
+}
+
+const fullSlots: StepEntry['slots'] = {
+  entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
+  tazite_cues: { value: ['SAP-Wissen'], quote: 'SAP', nicht_befund_typ: null },
+  ausnahmen: { value: ['Storno'], quote: 'Storno', nicht_befund_typ: null },
+  inputs: { value: ['Rechnung'], quote: 'Rechnung', nicht_befund_typ: null },
+  outputs: { value: ['Buchung'], quote: 'Buchung', nicht_befund_typ: null },
+  hilfsmittel: { value: ['SAP'], quote: 'in SAP', nicht_befund_typ: null },
 }
 
 function makeStep(title: string, status: 'exploring' | 'walkthrough' | 'done', slots: StepEntry['slots'] = emptySlots, extra: Partial<StepEntry> = {}): StepEntry {
-  return { title, role: null, status, slots, process_steps: [], friction_points: [], friction_tools: [], pain_point_primary: null, ...extra }
+  return { title, reihenfolge: 1, governance: null, abhaengigkeiten: null, status, potenzial: emptyPotenzial, slots, process_steps: [], friction_points: [], friction_tools: [], pain_point_primary: null, ...extra }
 }
 
 function baseCtx(overrides: Partial<OrchestratorContext> = {}): OrchestratorContext {
@@ -102,7 +116,7 @@ describe('decideNextPhase — walkthrough_step', () => {
   })
 
   it('advances to slot_completion when no active steps remain', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots )]
+    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots, { potenzial: fullPotenzial })]
     expect(decideNextPhase(baseCtx({ phase: 'walkthrough_step', stepTracker: tracker }), null)).toBe('slot_completion')
   })
 
@@ -123,12 +137,12 @@ describe('decideNextPhase — slot_completion', () => {
   })
 
   it('advances to coverage_check when all steps done and no unexplored topics', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots )]
+    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots, { potenzial: fullPotenzial })]
     expect(decideNextPhase(baseCtx({ phase: 'slot_completion', stepTracker: tracker, topicsOpen: [] }), null)).toBe('coverage_check')
   })
 
   it('returns to process_loop when all steps done but unexplored focus topics remain', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots )]
+    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots, { potenzial: fullPotenzial })]
     const ctx = baseCtx({ phase: 'slot_completion', stepTracker: tracker, topicsOpen: ['Mahnwesen'] })
     expect(decideNextPhase(ctx, null)).toBe('process_loop')
   })
@@ -143,7 +157,7 @@ describe('decideNextPhase — coverage_check', () => {
   })
 
   it('advances to wrap_up when all mandatory slots filled', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots )]
+    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots, { potenzial: fullPotenzial })]
     expect(decideNextPhase(baseCtx({ phase: 'coverage_check', stepTracker: tracker }), null)).toBe('wrap_up')
   })
 })
@@ -366,7 +380,7 @@ describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => 
     // B6 scenario: interview was at wrap_up → new step registered → phase pushed back.
     // Analyst has already run (non-null briefing), no cards pending → escape fires.
     const tracker = [
-      makeStep('Rechnungsprüfung', 'done', fullSlots),
+      makeStep('Rechnungsprüfung', 'done', fullSlots, { potenzial: fullPotenzial }),
       makeStep('Mahnprozess', 'walkthrough', emptySlots),
     ]
     const history = [

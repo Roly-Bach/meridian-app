@@ -11,7 +11,8 @@ vi.mock('@/lib/supabase-admin', () => ({
 import {
   computeMissingMandatorySlots,
   computeWalkthroughSlotTarget,
-  MANDATORY_SLOTS,
+  POTENZIAL_SLOT_NAMES,
+  TAZITE_SLOT_NAMES,
   buildTools,
   extractNumericTokens,
   detectNumberAnchoring,
@@ -24,15 +25,23 @@ import {
 function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
   return {
     title: 'Rechnungseingang buchen',
-    role: null,
+    reihenfolge: 1,
+    governance: null,
+    abhaengigkeiten: null,
     status: 'exploring',
-    slots: {
+    potenzial: {
       frequency_per_month: null,
       duration_minutes: null,
-      rule_based: null,
-      data_sources: null,
       error_rate_percent: null,
       media_breaks: null,
+    },
+    slots: {
+      entscheidungslogik: null,
+      tazite_cues: null,
+      ausnahmen: null,
+      inputs: null,
+      outputs: null,
+      hilfsmittel: null,
     },
     process_steps: [],
     friction_points: [],
@@ -42,15 +51,22 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
   }
 }
 
+// All 10 slots filled (4 potenzial + 6 tazite) — used for "all done" assertions.
 function makeFilledStep(overrides: Partial<StepEntry> = {}): StepEntry {
   return makeStep({
-    slots: {
+    potenzial: {
       frequency_per_month: { value: 20, quote: 'etwa 20 mal im Monat' },
       duration_minutes: { value: 15, quote: 'dauert so 15 Minuten' },
-      rule_based: { value: true, quote: 'immer gleich, ja' },
-      data_sources: { value: ['SAP'], quote: 'SAP nutze ich dabei' },
-      error_rate_percent: null,
-      media_breaks: null,
+      error_rate_percent: { value: 5, quote: 'ca. 5% Fehlerrate' },
+      media_breaks: { value: 2, quote: '2 Medienbrüche' },
+    },
+    slots: {
+      entscheidungslogik: { value: 'Regelbasiert nach Betrag', quote: 'immer nach Betrag', nicht_befund_typ: null },
+      tazite_cues: { value: ['SAP-Kenntnisse nötig'], quote: 'SAP Kenntnisse', nicht_befund_typ: null },
+      ausnahmen: { value: ['Storno'], quote: 'Storno ist Ausnahme', nicht_befund_typ: null },
+      inputs: { value: ['Eingangsrechnung'], quote: 'Rechnung kommt an', nicht_befund_typ: null },
+      outputs: { value: ['Gebuchte Rechnung'], quote: 'dann gebucht', nicht_befund_typ: null },
+      hilfsmittel: { value: ['SAP'], quote: 'SAP nutze ich dabei', nicht_befund_typ: null },
     },
     ...overrides,
   })
@@ -118,11 +134,13 @@ describe('detectNumberAnchoring', () => {
 // ─── computeMissingMandatorySlots ─────────────────────────────────────────────
 
 describe('computeMissingMandatorySlots', () => {
-  it('returns all 4 mandatory slots when step has no filled slots', () => {
+  it('returns all 10 mandatory slots (4 potenzial + 6 tazite) when step has no filled slots', () => {
     const steps: StepEntry[] = [makeStep()]
     const missing = computeMissingMandatorySlots(steps)
-    expect(missing).toHaveLength(4)
-    expect(missing.map((m) => m.slot)).toEqual(expect.arrayContaining([...MANDATORY_SLOTS]))
+    expect(missing).toHaveLength(10)
+    expect(missing.map((m) => m.slot)).toEqual(
+      expect.arrayContaining([...POTENZIAL_SLOT_NAMES, ...TAZITE_SLOT_NAMES])
+    )
     expect(missing.every((m) => m.step_title === 'Rechnungseingang buchen')).toBe(true)
   })
 
@@ -132,22 +150,31 @@ describe('computeMissingMandatorySlots', () => {
     expect(missing).toHaveLength(0)
   })
 
-  it('returns only missing mandatory slots (not optional)', () => {
+  it('returns only the missing slots when some potenzial + tazite are already filled', () => {
     const steps: StepEntry[] = [
       makeStep({
-        slots: {
+        potenzial: {
           frequency_per_month: { value: 10, quote: 'zehnmal' },
-          duration_minutes: null,
-          rule_based: { value: false, quote: 'unterschiedlich' },
-          data_sources: null,
+          duration_minutes: { value: 15, quote: '15 min' },
           error_rate_percent: null,
           media_breaks: null,
+        },
+        slots: {
+          entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
+          tazite_cues: { value: ['SAP-Wissen'], quote: 'SAP', nicht_befund_typ: null },
+          ausnahmen: null,
+          inputs: null,
+          outputs: null,
+          hilfsmittel: null,
         },
       }),
     ]
     const missing = computeMissingMandatorySlots(steps)
-    expect(missing).toHaveLength(2)
-    expect(missing.map((m) => m.slot)).toEqual(expect.arrayContaining(['duration_minutes', 'data_sources']))
+    // 2 potenzial missing + 4 tazite missing = 6
+    expect(missing).toHaveLength(6)
+    expect(missing.map((m) => m.slot)).toEqual(
+      expect.arrayContaining(['error_rate_percent', 'media_breaks', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel'])
+    )
   })
 
   it('aggregates missing slots across multiple steps', () => {
@@ -156,7 +183,7 @@ describe('computeMissingMandatorySlots', () => {
       makeFilledStep({ title: 'Schritt B' }),
     ]
     const missing = computeMissingMandatorySlots(steps)
-    expect(missing).toHaveLength(4)
+    expect(missing).toHaveLength(10)
     expect(missing.every((m) => m.step_title === 'Schritt A')).toBe(true)
   })
 
@@ -191,15 +218,13 @@ describe('computeWalkthroughSlotTarget', () => {
     expect(target?.step_title).toBe('Walkthrough-Step')
   })
 
-  it('picks slots in canonical MANDATORY_SLOTS order', () => {
+  it('picks potenzial slots before tazite (canonical order)', () => {
     const steps: StepEntry[] = [
       makeStep({
         status: 'walkthrough',
-        slots: {
+        potenzial: {
           frequency_per_month: { value: 5, quote: 'fünfmal' },
           duration_minutes: null,
-          rule_based: null,
-          data_sources: null,
           error_rate_percent: null,
           media_breaks: null,
         },
@@ -246,13 +271,13 @@ describe('Tool Handlers', () => {
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang', role: undefined })
+      const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang' })
 
       expect(result.success).toBe(true)
       expect(result.step_tracker).toHaveLength(1)
       expect(result.step_tracker[0].title).toBe('Rechnungseingang')
       expect(result.step_tracker[0].status).toBe('exploring')
-      expect(result.step_tracker[0].slots.frequency_per_month).toBeNull()
+      expect(result.step_tracker[0].potenzial.frequency_per_month).toBeNull()
     })
 
     it('initializes walkthrough fields as empty arrays and null', async () => {
@@ -269,7 +294,7 @@ describe('Tool Handlers', () => {
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang', role: undefined })
+      const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang' })
 
       expect(result.success).toBe(true)
       expect(result.step_tracker[0].process_steps).toEqual([])
@@ -288,7 +313,7 @@ describe('Tool Handlers', () => {
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.register_step as any).execute({ title: 'RECHNUNGSEINGANG BUCHEN', role: undefined })
+      const result = await (tools.register_step as any).execute({ title: 'RECHNUNGSEINGANG BUCHEN' })
 
       expect(result.success).toBe(true)
       expect(result.deduplicated).toBe(true)
@@ -307,7 +332,7 @@ describe('Tool Handlers', () => {
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.register_step as any).execute({ title: 'Mahnprozess', role: undefined })
+      const result = await (tools.register_step as any).execute({ title: 'Mahnprozess' })
 
       expect(result.success).toBe(true)
       expect(result.deduplicated).toBe(true)
@@ -330,7 +355,7 @@ describe('Tool Handlers', () => {
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.register_step as any).execute({ title: 'Monatsabschluss', role: undefined })
+      const result = await (tools.register_step as any).execute({ title: 'Monatsabschluss' })
 
       expect(result.success).toBe(true)
       // Non-duplicate path does not set deduplicated — step is added to tracker
@@ -342,7 +367,7 @@ describe('Tool Handlers', () => {
   // ── record_slot ─────────────────────────────────────────────────────────────
 
   describe('record_slot', () => {
-    it('fills slot with value and evidence_quote', async () => {
+    it('fills potenzial slot with value and evidence_quote', async () => {
       const tracker = [makeStep({ title: 'Rechnungseingang' })]
       mockAdminFrom
         .mockReturnValueOnce({
@@ -383,17 +408,24 @@ describe('Tool Handlers', () => {
       expect(result.error).toContain('evidence_quote')
     })
 
-    it('auto-sets status to done when all mandatory slots are filled', async () => {
+    it('auto-sets status to done when all 10 mandatory slots are filled', async () => {
+      // Tracker: all potenzial filled (4/4), 5 tazite filled — missing only ausnahmen
       const tracker = [
         makeStep({
           title: 'Rechnungseingang',
-          slots: {
+          potenzial: {
             frequency_per_month: { value: 20, quote: 'etwa 20 mal' },
             duration_minutes: { value: 15, quote: '15 Minuten' },
-            rule_based: { value: true, quote: 'immer gleich, ja' },
-            data_sources: null,
-            error_rate_percent: null,
-            media_breaks: null,
+            error_rate_percent: { value: 5, quote: 'ca. 5%' },
+            media_breaks: { value: 2, quote: '2 Brüche' },
+          },
+          slots: {
+            entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
+            tazite_cues: { value: ['SAP'], quote: 'SAP', nicht_befund_typ: null },
+            ausnahmen: null,
+            inputs: { value: ['Rechnung'], quote: 'Rechnung', nicht_befund_typ: null },
+            outputs: { value: ['Buchung'], quote: 'Buchung', nicht_befund_typ: null },
+            hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
           },
         }),
       ]
@@ -416,24 +448,22 @@ describe('Tool Handlers', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'data_sources',
-        value: ['SAP'],
-        evidence_quote: 'SAP nutze ich dabei',
+        slot: 'ausnahmen',
+        value: ['Storno'],
+        evidence_quote: 'Storno ist eine Ausnahme',
       })
 
       const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
       expect(updated[0].status).toBe('done')
     })
 
-    it('does not set status to done when data_sources (mandatory) is still missing', async () => {
+    it('does not set status to done when multiple tazite slots are still missing', async () => {
       const tracker = [
         makeStep({
           title: 'Rechnungseingang',
-          slots: {
-            frequency_per_month: { value: 20, quote: 'etwa 20 mal' },
-            duration_minutes: { value: 15, quote: '15 Minuten' },
-            rule_based: null,
-            data_sources: null,
+          potenzial: {
+            frequency_per_month: null,
+            duration_minutes: null,
             error_rate_percent: null,
             media_breaks: null,
           },
@@ -458,29 +488,31 @@ describe('Tool Handlers', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'rule_based',
-        value: true,
-        evidence_quote: 'immer gleich, ja',
+        slot: 'frequency_per_month',
+        value: 20,
+        evidence_quote: 'etwa 20 mal im Monat',
       })
 
       const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
       expect(updated[0].status).not.toBe('done')
     })
 
-    it('rejects string value for rule_based (must be boolean)', async () => {
+    it('rejects non-string value for entscheidungslogik (must be string)', async () => {
       const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'rule_based',
-        value: 'Zweitfreigabe ab 5.000 EUR',
+        slot: 'entscheidungslogik',
+        value: true,
         evidence_quote: 'Zweitfreigabe wenn Betrag über 5.000 EUR',
       })
       expect(result.success).toBe(false)
-      expect(result.error).toContain('boolean')
+      expect(result.error).toContain('String')
     })
 
     it('rejects string value for media_breaks (must be number)', async () => {
       const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
         slot: 'media_breaks',
@@ -493,6 +525,7 @@ describe('Tool Handlers', () => {
 
     it('rejects string value for frequency_per_month (must be number)', async () => {
       const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
         slot: 'frequency_per_month',
@@ -503,11 +536,12 @@ describe('Tool Handlers', () => {
       expect(result.error).toContain('Zahl')
     })
 
-    it('rejects non-array for data_sources', async () => {
+    it('rejects non-array for hilfsmittel', async () => {
       const tools = buildTools('iv-1', 'ws-1')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'data_sources',
+        slot: 'hilfsmittel',
         value: 'SAP und Excel',
         evidence_quote: 'SAP und Excel nutze ich dabei',
       })
@@ -673,14 +707,12 @@ describe('Tool Handlers', () => {
       expect(detectDrillStops(turns, [step])).toEqual([])
     })
 
-    it('returns empty when slot has been filled', () => {
+    it('returns empty when slot has been filled (potenzial.duration_minutes)', () => {
       const step = makeStep({
         status: 'walkthrough',
-        slots: {
+        potenzial: {
           frequency_per_month: null,
           duration_minutes: { value: 30, quote: '30min', confidence: 'estimate', writeSource: 'analyst' },
-          rule_based: null,
-          data_sources: null,
           error_rate_percent: null,
           media_breaks: null,
         },

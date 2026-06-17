@@ -21,11 +21,11 @@
  * 3. Serialize alle Slot-Writes durch In-Memory-Queue pro interviewId
  */
 import { describe, it, expect } from 'vitest'
-import type { StepEntry, SlotName } from './interviewSemantic'
+import type { StepEntry, PotenzialSlotName } from './interviewSemantic'
 import { canOverwrite } from './slotConflictResolver'
 
 type SlotWrite = {
-  slot: SlotName
+  slot: PotenzialSlotName
   value: unknown
   writeSource: 'analyst' | 'quick' | 'backfill'
 }
@@ -33,15 +33,23 @@ type SlotWrite = {
 function makeEmptyStep(title: string): StepEntry {
   return {
     title,
-    role: null,
+    reihenfolge: 1,
+    governance: null,
+    abhaengigkeiten: null,
     status: 'exploring',
-    slots: {
+    potenzial: {
       frequency_per_month: null,
       duration_minutes: null,
-      rule_based: null,
-      data_sources: null,
       error_rate_percent: null,
       media_breaks: null,
+    },
+    slots: {
+      entscheidungslogik: null,
+      tazite_cues: null,
+      ausnahmen: null,
+      inputs: null,
+      outputs: null,
+      hilfsmittel: null,
     },
     process_steps: [],
     friction_points: [],
@@ -52,10 +60,10 @@ function makeEmptyStep(title: string): StepEntry {
 
 /**
  * Aktuelle Implementation: read-modify-write des gesamten Trackers.
- * Spiegelt record_slot Lines 957–1041 in interviewAgent.ts.
+ * Spiegelt record_slot potenzial-write path in interviewAgent.ts.
  */
 function currentImplWrite(snapshot: StepEntry[], stepIdx: number, w: SlotWrite): StepEntry[] {
-  const prevSlot = snapshot[stepIdx].slots[w.slot]
+  const prevSlot = snapshot[stepIdx].potenzial[w.slot]
   const existingSource = prevSlot && typeof prevSlot === 'object' && 'writeSource' in prevSlot
     ? (prevSlot as { writeSource: string }).writeSource
     : undefined
@@ -65,8 +73,8 @@ function currentImplWrite(snapshot: StepEntry[], stepIdx: number, w: SlotWrite):
   const updated = [...snapshot]
   updated[stepIdx] = {
     ...updated[stepIdx],
-    slots: {
-      ...updated[stepIdx].slots,
+    potenzial: {
+      ...updated[stepIdx].potenzial,
       [w.slot]: { value: w.value, quote: 'evidence', writeSource: w.writeSource },
     },
   }
@@ -91,17 +99,17 @@ describe('L4: concurrent slot-write race condition', () => {
     })
     dbState = aResult
 
-    // Writer B modifies its STALE snapshot + writes rule_based
+    // Writer B modifies its STALE snapshot + writes media_breaks
     const bResult = currentImplWrite(snapshotB, 0, {
-      slot: 'rule_based',
-      value: true,
+      slot: 'media_breaks',
+      value: 2,
       writeSource: 'quick',
     })
     dbState = bResult
 
     // Final state: B's write wiped A's write — duration_minutes is null again
-    expect(dbState[0].slots.rule_based).not.toBeNull()
-    expect(dbState[0].slots.duration_minutes).toBeNull() // 👈 LOST UPDATE — A's write gone
+    expect(dbState[0].potenzial.media_breaks).not.toBeNull()
+    expect(dbState[0].potenzial.duration_minutes).toBeNull() // 👈 LOST UPDATE — A's write gone
   })
 
   it('safe baseline: sequential writes (no race) preserve both slots', () => {
@@ -113,12 +121,12 @@ describe('L4: concurrent slot-write race condition', () => {
     })
     // Writer B reads AFTER A's write — fresh snapshot
     dbState = currentImplWrite(dbState, 0, {
-      slot: 'rule_based',
-      value: true,
+      slot: 'media_breaks',
+      value: 2,
       writeSource: 'quick',
     })
-    expect(dbState[0].slots.duration_minutes).not.toBeNull()
-    expect(dbState[0].slots.rule_based).not.toBeNull()
+    expect(dbState[0].potenzial.duration_minutes).not.toBeNull()
+    expect(dbState[0].potenzial.media_breaks).not.toBeNull()
   })
 
   it('canOverwrite priority resolver does NOT catch lost update on empty slot', () => {

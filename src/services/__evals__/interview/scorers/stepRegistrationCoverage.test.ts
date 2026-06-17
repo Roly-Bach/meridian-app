@@ -11,18 +11,21 @@ import type { StepEntry } from '@/services/interviewSemantic'
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const emptySlots: StepEntry['slots'] = {
-  frequency_per_month: null,
-  duration_minutes: null,
-  rule_based: null,
-  data_sources: null,
-  error_rate_percent: null,
-  media_breaks: null,
+  entscheidungslogik: null,
+  tazite_cues: null,
+  ausnahmen: null,
+  inputs: null,
+  outputs: null,
+  hilfsmittel: null,
 }
 
 function makeStep(title: string): StepEntry {
   return {
     title,
-    role: null,
+    reihenfolge: 1,
+    governance: null,
+    abhaengigkeiten: null,
+    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
     status: 'done',
     slots: emptySlots,
     process_steps: [],

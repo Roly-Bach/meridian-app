@@ -85,15 +85,23 @@ const WORKSPACE_ID = 'ws-uuid-1'
 
 const MOCK_STEP_WALKTHROUGH = {
   title: 'Angebotserstellung',
-  role: 'Account Manager',
+  reihenfolge: 1,
+  governance: { rolle: 'Account Manager', organisationseinheit: null, systeme: null, nicht_befund_typ: null },
+  abhaengigkeiten: null,
   status: 'walkthrough' as const,
-  slots: {
+  potenzial: {
     frequency_per_month: { value: 50, quote: '50 passt ganz gut', confidence: 'confirmed' as const },
     duration_minutes: { value: 50, quote: 'so eine Stunde', confidence: 'estimate' as const },
-    rule_based: { value: true, quote: 'feste Vorlage', confidence: 'confirmed' as const },
-    data_sources: { value: ['Salesforce', 'Excel'], quote: 'Salesforce und Excel', confidence: 'confirmed' as const },
     error_rate_percent: null,
     media_breaks: null,
+  },
+  slots: {
+    entscheidungslogik: { value: 'feste Vorlage', quote: 'feste Vorlage', nicht_befund_typ: null },
+    tazite_cues: null,
+    ausnahmen: null,
+    inputs: null,
+    outputs: null,
+    hilfsmittel: { value: ['Salesforce', 'Excel'], quote: 'Salesforce und Excel', nicht_befund_typ: null },
   },
   process_steps: [],
   friction_points: ['Templates müssen angepasst werden'],

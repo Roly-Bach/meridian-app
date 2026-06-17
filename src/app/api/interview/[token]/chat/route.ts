@@ -9,6 +9,7 @@ import {
   type StepEntry,
   type AnalystBriefing,
 } from '@/services/interviewAgent'
+import { normalizeStepEntry } from '@/services/interviewSemantic'
 import {
   decideNextPhaseWithMeta,
   checkLifecycle,
@@ -124,7 +125,8 @@ export async function POST(
   const state = rawState as (Partial<StateRow> & { step_tracker?: unknown }) | null
   const existingTurns = (rawTurns as TurnRow[]) ?? []
   const currentPhase = (state?.phase ?? 'intro') as Phase
-  const stepTracker: StepEntry[] = (state?.step_tracker as StepEntry[] | null) ?? []
+  const stepTracker: StepEntry[] = ((state?.step_tracker as unknown[] | null) ?? [])
+    .map((raw, i) => normalizeStepEntry(raw, i + 1))
   const nextTurnNumber = existingTurns.length + 1
 
   let timerMinutes = 0
@@ -424,7 +426,8 @@ export async function POST(
         .select('step_tracker')
         .eq('interview_id', interview.id)
         .maybeSingle()
-      const freshStepTracker = (freshStateRow?.step_tracker as StepEntry[] | null) ?? stepTracker
+      const freshStepTracker = ((freshStateRow?.step_tracker as unknown[] | null) ?? (stepTracker as unknown[]))
+        .map((raw, i) => normalizeStepEntry(raw, i + 1))
 
       if (needsCatchup && existingTurns.length >= 2) {
         // Catch-up: previous analyst failed, process two turns at once
@@ -488,7 +491,8 @@ export async function POST(
             .select('step_tracker')
             .eq('interview_id', interview.id)
             .maybeSingle()
-          const postOnlineTracker = (postOnlineStateRow?.step_tracker as StepEntry[] | null) ?? freshStepTracker
+          const postOnlineTracker = ((postOnlineStateRow?.step_tracker as unknown[] | null) ?? (freshStepTracker as unknown[]))
+            .map((raw, i) => normalizeStepEntry(raw, i + 1))
 
           await runAnalystCatchup({
             context: { ...sharedContext, stepTracker: postOnlineTracker },

@@ -16,16 +16,32 @@ import type { StepEntry } from '@/services/interviewSemantic'
 
 const slotFilled = (value: string) => ({ value, quote: value, confidence: 'confirmed' as const })
 
+const taziteFilled = (value: string): import('@/services/interviewSemantic').TaziteSlot => ({
+  value,
+  quote: value,
+  confidence: 'confirmed',
+  nicht_befund_typ: null,
+})
+
 const makeStep = (slotOverrides: Partial<StepEntry['slots']> = {}, stepOverrides: Partial<Omit<StepEntry, 'slots'>> = {}): StepEntry => ({
   title: 'Rechnungsprüfung',
-  status: 'done',
-  slots: {
+  reihenfolge: 1,
+  governance: null,
+  abhaengigkeiten: null,
+  potenzial: {
     frequency_per_month: null,
     duration_minutes: null,
-    rule_based: null,
-    data_sources: null,
     error_rate_percent: null,
     media_breaks: null,
+  },
+  status: 'done',
+  slots: {
+    entscheidungslogik: null,
+    tazite_cues: null,
+    ausnahmen: null,
+    inputs: null,
+    outputs: null,
+    hilfsmittel: null,
     ...slotOverrides,
   },
   ...stepOverrides,
@@ -43,43 +59,51 @@ const makeTurn = (
 })
 
 // ─── slotCoverage ─────────────────────────────────────────────────────────────
+// New denominator: 9 O1–O6 fields (bezeichnung, reihenfolge, entscheidungslogik,
+// tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, abhaengigkeiten).
+// potenzial-fields and governance do NOT count toward O1–O6 coverage.
 
 describe('scoreSlotCoverage', () => {
   it('returns 0 for empty tracker', () => {
     expect(scoreSlotCoverage([])).toBe(0)
   })
 
-  it('returns 0 when no mandatory slots filled', () => {
-    expect(scoreSlotCoverage([makeStep()])).toBe(0)
+  it('counts bezeichnung (title) and reihenfolge as filled for any valid step', () => {
+    // A bare step has title + reihenfolge filled → 2/9
+    expect(scoreSlotCoverage([makeStep()])).toBeCloseTo(2 / 9)
   })
 
-  it('returns 1.0 when all mandatory slots filled', () => {
+  it('returns 1.0 when all 9 O1–O6 fields filled', () => {
     const step = makeStep({
-      frequency_per_month: slotFilled('90'),
-      duration_minutes: slotFilled('30'),
-      rule_based: slotFilled('Freigabe ab 5000 EUR'),
-      data_sources: slotFilled('SAP FI'),
+      entscheidungslogik: taziteFilled('Freigabe ab 5000 EUR'),
+      tazite_cues: { value: ['Erfahrung nötig'], quote: 'Erfahrung nötig', nicht_befund_typ: null },
+      ausnahmen: { value: ['Eilbuchung'], quote: 'Eilbuchung', nicht_befund_typ: null },
+      inputs: { value: ['Eingangsrechnung'], quote: 'Eingangsrechnung', nicht_befund_typ: null },
+      outputs: { value: ['Buchungssatz'], quote: 'Buchungssatz', nicht_befund_typ: null },
+      hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
+    }, {
+      abhaengigkeiten: { depends_on: ['Rechnungseingang'], influences: [], nicht_befund_typ: null },
     })
     expect(scoreSlotCoverage([step])).toBe(1.0)
   })
 
-  it('returns 0.5 when half of mandatory slots filled across two steps', () => {
-    const step1 = makeStep({
-      frequency_per_month: slotFilled('90'),
-      duration_minutes: slotFilled('30'),
+  it('counts nicht_befund_typ as filled even without value', () => {
+    const step = makeStep({
+      entscheidungslogik: { value: null, quote: null, nicht_befund_typ: 'nicht_zutreffend' },
     })
-    const step2 = makeStep({}, { title: 'Monatsabschluss' })
-    // 2 filled out of 8 total = 0.25 — wait: 2 steps × 4 mandatory = 8 total, 2 filled
-    expect(scoreSlotCoverage([step1, step2])).toBe(0.25)
+    // bezeichnung + reihenfolge + entscheidungslogik = 3/9
+    expect(scoreSlotCoverage([step])).toBeCloseTo(3 / 9)
   })
 
-  it('returns correct fraction for partial fill', () => {
-    const step = makeStep({
-      frequency_per_month: slotFilled('90'),
-      duration_minutes: slotFilled('30'),
-    })
-    // 2 of 4 mandatory = 0.5
-    expect(scoreSlotCoverage([step])).toBe(0.5)
+  it('returns correct fraction across two steps', () => {
+    const step1 = makeStep({
+      entscheidungslogik: taziteFilled('Freigabe'),
+    }, { reihenfolge: 1 })
+    const step2 = makeStep({}, { title: 'Monatsabschluss', reihenfolge: 2 })
+    // step1: 3/9 filled (bezeichnung, reihenfolge, entscheidungslogik)
+    // step2: 2/9 filled (bezeichnung, reihenfolge)
+    // total: 5 / (2 × 9) = 5/18
+    expect(scoreSlotCoverage([step1, step2])).toBeCloseTo(5 / 18)
   })
 })
 

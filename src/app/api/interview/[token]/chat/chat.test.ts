@@ -244,15 +244,23 @@ describe('POST /api/interview/[token]/chat', () => {
     const stepTracker = [
       {
         title: 'Rechnung prüfen',
-        role: null,
+        reihenfolge: 1,
+        governance: null,
+        abhaengigkeiten: null,
         status: 'walkthrough',
-        slots: {
+        potenzial: {
           frequency_per_month: { value: 20, quote: '20 mal im Monat' },
           duration_minutes: null,
-          rule_based: null,
-          data_sources: null,
           error_rate_percent: null,
           media_breaks: null,
+        },
+        slots: {
+          entscheidungslogik: null,
+          tazite_cues: null,
+          ausnahmen: null,
+          inputs: null,
+          outputs: null,
+          hilfsmittel: null,
         },
       },
     ]
@@ -304,7 +312,9 @@ describe('POST /api/interview/[token]/chat', () => {
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
-          stepTracker,
+          stepTracker: expect.arrayContaining([
+            expect.objectContaining({ title: 'Rechnung prüfen', status: 'walkthrough' }),
+          ]),
           workspaceId: 'ws-1',
           phase: 'process_loop',
         }),
@@ -318,15 +328,23 @@ describe('POST /api/interview/[token]/chat', () => {
     const stepTracker = [
       {
         title: 'Wareneingang buchen',
-        role: null,
+        reihenfolge: 1,
+        governance: null,
+        abhaengigkeiten: null,
         status: 'walkthrough',
-        slots: {
+        potenzial: {
           frequency_per_month: { value: 10, quote: 'zehnmal' },
           duration_minutes: null,
-          rule_based: null,
-          data_sources: null,
           error_rate_percent: null,
           media_breaks: null,
+        },
+        slots: {
+          entscheidungslogik: null,
+          tazite_cues: null,
+          ausnahmen: null,
+          inputs: null,
+          outputs: null,
+          hilfsmittel: null,
         },
       },
     ]
@@ -379,8 +397,8 @@ describe('POST /api/interview/[token]/chat', () => {
           phase: 'coverage_check',
           missingSlotsForCoverageCheck: expect.arrayContaining([
             expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'duration_minutes' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'rule_based' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'data_sources' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'entscheidungslogik' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'hilfsmittel' }),
           ]),
         }),
       })
@@ -393,15 +411,23 @@ describe('POST /api/interview/[token]/chat', () => {
     const stepTracker = [
       {
         title: 'Wareneingang buchen',
-        role: null,
+        reihenfolge: 1,
+        governance: null,
+        abhaengigkeiten: null,
         status: 'walkthrough',
-        slots: {
+        potenzial: {
           frequency_per_month: { value: 10, quote: 'zehnmal' },
           duration_minutes: null,
-          rule_based: null,
-          data_sources: null,
           error_rate_percent: null,
           media_breaks: null,
+        },
+        slots: {
+          entscheidungslogik: null,
+          tazite_cues: null,
+          ausnahmen: null,
+          inputs: null,
+          outputs: null,
+          hilfsmittel: null,
         },
       },
     ]
@@ -454,8 +480,8 @@ describe('POST /api/interview/[token]/chat', () => {
           phase: 'slot_completion',
           missingSlotsForCoverageCheck: expect.arrayContaining([
             expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'duration_minutes' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'rule_based' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'data_sources' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'entscheidungslogik' }),
+            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'hilfsmittel' }),
           ]),
         }),
       })

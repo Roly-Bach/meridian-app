@@ -20,14 +20,23 @@ const mockGenerateEmbedding = vi.mocked(generateEmbedding)
 function makeStep(title: string, embedding?: number[]): StepEntry {
   return {
     title,
+    reihenfolge: 1,
+    governance: null,
+    abhaengigkeiten: null,
     status: 'exploring',
-    slots: {
+    potenzial: {
       frequency_per_month: null,
       duration_minutes: null,
-      rule_based: null,
-      data_sources: null,
       error_rate_percent: null,
       media_breaks: null,
+    },
+    slots: {
+      entscheidungslogik: null,
+      tazite_cues: null,
+      ausnahmen: null,
+      inputs: null,
+      outputs: null,
+      hilfsmittel: null,
     },
     ...(embedding ? { embedding } : {}),
   }
