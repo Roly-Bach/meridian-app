@@ -1,6 +1,6 @@
 # PROJ-31: Eval-Schärfung (Judge, Perturbation, Robustheit)
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-21
@@ -8,7 +8,7 @@
 **Priority:** P1
 **Bugs:** —
 **Created:** 2026-06-17
-**Last Updated:** 2026-06-17
+**Last Updated:** 2026-06-17 (Architected)
 
 ## BL-E-Traceability
 
@@ -125,8 +125,142 @@ Gesamt: ~4–5 Tage solo → Appetite L bestätigt.
 
 ---
 
-## Tech Design (Solution Architect)
-_To be added by /architecture_
+## Tech Design (Solution Architect) — 2026-06-17
+
+### Kontext
+
+PROJ-31 ist ein reines Tooling-Feature. Es ändert keine Produktions-API und kein UI — ausschließlich den Eval-Runner, einen Scorer und neue Hilfsmodule unter `src/services/__evals__/interview/`.
+
+### Modul-Struktur
+
+```
+src/services/__evals__/interview/
+  runner.ts                         [MODIFIED] — --runs / --seed Flags, Perturbation-Hook, Aggregat-Report-Logik
+  perturbation.ts                   [NEW]      — Persona-Perturbation (LLM-Paraphrase + Shuffle)
+  paraphrase-test.ts                [NEW]      — Standalone-Script für Robustheitstest
+
+  scorers/
+    dialogNaturalness.ts            [MODIFIED] — Rubrik 3-stufig, CoT, Parsing, --isolated-criteria
+    index.ts                        [MODIFIED] — Judge-Begründung weitergeben für Report-Sektion
+
+  __fixtures__/
+    buchhalter-paraphrase/          [NEW]
+      original.md                   → Verweis auf vorhandenes Frozen-Transcript
+      variant-a.md                  → Synonym-Paraphrasen der User-Turns
+      variant-b.md                  → Aktiv/Passiv-Invertierung
+      variant-c.md                  → Stichpunkt/Fließtext-Wechsel
+```
+
+### BL-E5.2 — Judge-Disziplin (`dialogNaturalness.ts`)
+
+Der aktuelle Judge gibt eine opake Dezimalzahl ohne Begründung zurück. Der neue Judge:
+
+```
+Eingabe: Agent-Turns (Sample)
+    ↓
+Judge-Prompt: verankerte 3-stufige Rubrik
+    → Stufe 1 (oberflächlich): generische Floskeln, inkonsistente Du-Form, Stilbrüche
+    → Stufe 2 (angemessen): überwiegend natürlich, vereinzelte Mängel
+    → Stufe 3 (exzellent): durchgehend natürlich, höflich, keine Floskeln
+Instruktion: Begründung zuerst, dann "Stufe: X" als letztes Element
+maxOutputTokens: 300 (bisher: 12)
+    ↓
+Parser:
+    "Stufe: 1/2/3" → mapped auf 0.33 / 0.67 / 1.00
+    Fallback bei unbekanntem Format: 0.5 + Warning
+    ↓
+Output: { score: float, rationale: string }
+```
+
+`getJudgeModel` und `temperature: 0` bleiben unverändert (Cross-Vendor, Anti-Zirkularität).
+
+**Optionales `--isolated-criteria` Flag:** 5 separate Judge-Calls je Sub-Kriterium (Natürlichkeit, Du-Form, keine Floskeln, kein Themensprung, Grammatik) → 5 Subscores + gewichtetes Aggregat. Nicht-Default; erhöht API-Kosten signifikant.
+
+**Positions-Swap-Unit-Test:** Gleicher Transcript mit umgekehrter Turn-Reihenfolge → Stufen-Differenz ≤ 1 in ≥ 80 % der Test-Cases. Analog für `slotDepth`-Batch-Judge (Slot-Reihenfolge im Batch vertauscht).
+
+**Report-Sektion `## Judge-Begründung`:** Alles vor "Stufe: X" wird im Markdown-Report festgehalten.
+
+### BL-E5.4 — Mehrfach-Läufe und Seed (`runner.ts`)
+
+```
+CLI: --runs N  (Default: 1, Bereich: 1–10)
+     --seed S   (optional; wenn nicht angegeben: zufällig, im Report dokumentiert)
+
+Pro (model × persona) bei N > 1:
+  run 1..N: Interview + Scorer → ScoreSet pro Lauf
+         ↓
+  Einzelreports: ...-run1.md, ...-run2.md, ...-run3.md
+  Aggregat-Report: ...-aggregate.md
+    Tabelle: Scorer → Median / Min / Max
+         ↓
+  Summary-Tabelle stdout: Modell × Persona mit Median ± Spanne
+```
+
+Rückwärtskompatibilität: `--runs 1 --no-perturbation` = identisch zu PROJ-21.
+
+Frontmatter-Erweiterungen im Einzelreport:
+```yaml
+run_index: 1
+run_seed: 7382
+perturbation_seed: 7382
+```
+
+Aggregat-Report zusätzlich:
+```yaml
+run_count: 3
+scores_median: { slot_coverage: ..., ... }
+scores_min: { ... }
+scores_max: { ... }
+```
+
+### BL-E5.3 — Persona-Perturbation (`perturbation.ts`)
+
+```
+Eingabe: processKnowledge (original), seed: number
+    ↓
+  Schritt 1 — Feldordnungs-Shuffle (deterministisch, kein LLM):
+    processes[] und tools[] per Seed-Random in neue Reihenfolge
+  Schritt 2 — LLM-Paraphrase (Gemini Flash-Lite, temperature 0.7):
+    Zielfelder: process.description, process.pain_points[], additionalContext
+    Unveränderlich: identity, style, faktischer Inhalt
+    Fallback bei LLM-Fehler: Original + console.warn("[perturbation] failed")
+    ↓
+Ausgabe: perturbedProcessKnowledge
+```
+
+Unit-Test: Gleicher Seed → identische Ausgabe.
+
+### BL-E5.5 — Paraphrasen-Robustheitstest (`paraphrase-test.ts`)
+
+```
+Fixtures: buchhalter frozen transcript (original) + 3 Varianten (A/B/C)
+    ↓
+  runDeterministicScorers(jede Variante)
+    Toleranz: |score - original| ≤ 0.05 → Pass
+  runLLMJudges(optional, API-Keys)
+    Toleranz: |score - original| ≤ 0.10 → Warnung (kein Blocker)
+    ↓
+  Output: Markdown-Tabelle stdout
+    Spalten: Scorer | Original | Variante A | Variante B | Variante C | Status
+```
+
+Script läuft eigenständig ohne Eval-Runner; deterministischer Kern braucht keine API-Keys.
+
+Neues npm-Script: `eval:interview:paraphrase-test`
+
+### Neue Dependencies
+
+Keine. Alle benötigten Packages (`ai`, `@ai-sdk/google`, `@ai-sdk/anthropic`, `langfuse`) sind bereits installiert.
+
+### Trade-off-Log
+
+| Entscheidung | Gewählt | Abgelehnt | Begründung |
+|---|---|---|---|
+| Perturbation-LLM | Gemini Flash-Lite | Flash / Claude | Kostenminimal, ausreichend für Paraphrase-Task |
+| Runs: seriell | Seriell | Parallel | Rate-Limit-Konvention aus PROJ-21 |
+| Paraphrase-Fixtures | Handgepflegt (1 Persona) | LLM-generiert | Kontrollierbar; LLM-generiert zu aufwändig zu reviewen |
+| Score-Aggregation | Median | Mean | Robuster gegen Ausreißer (LLM-Judge-Stochastik) |
+| isolated-criteria | Opt-in Flag | Default | 5× API-Kosten; nur für Diagnose nötig |
 
 ## QA Test Results
 _To be added by /qa_
