@@ -61,6 +61,8 @@ export interface PlaceholderDependencies {
 }
 
 export interface StepEntry {
+  /** Stable identifier assigned by register_step: S001, S002, … (PROJ-27/BL-E1.4) */
+  id?: string
   title: string
   /** 1-based position in step_tracker array (O1) — set by register_step */
   reihenfolge: number
@@ -100,6 +102,7 @@ export interface StepEntry {
 
 /** Legacy JSONB shape (pre-PROJ-25) — used by normalizeStepEntry for backward compat */
 interface LegacyStepEntry {
+  id?: string
   title: string
   role?: string | null
   status: 'exploring' | 'walkthrough' | 'done'
@@ -223,6 +226,7 @@ export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): S
   }
 
   return {
+    ...(r.id !== undefined ? { id: r.id } : {}),
     title: r.title,
     reihenfolge: r.reihenfolge ?? fallbackReihenfolge,
     governance,
@@ -350,6 +354,134 @@ export function tokenJaccardNorm(a: string, b: string): number {
   let intersection = 0
   for (const t of ta) if (tb.has(t)) intersection++
   return intersection / (ta.size + tb.size - intersection)
+}
+
+// ---------------------------------------------------------------------------
+// Schema-conformant types (PROJ-25/27) — mirrors prozessschritt-schema.json
+// ---------------------------------------------------------------------------
+
+export type Konfidenz = 0.9 | 0.6 | 0.3 | null
+
+export interface SchemaSlotString {
+  wert: string | null
+  konfidenz: Konfidenz
+  nicht_befund_typ: NichtBefundTyp
+}
+
+export interface SchemaSlotStringArray {
+  wert: string[] | null
+  konfidenz: Konfidenz
+  nicht_befund_typ: NichtBefundTyp
+}
+
+export interface SchemaSlotNumber {
+  wert: number | null
+  konfidenz: Konfidenz
+  nicht_befund_typ: NichtBefundTyp
+}
+
+export interface SchemaPotenzial {
+  haeufigkeit_pro_monat: SchemaSlotNumber
+  dauer_minuten: SchemaSlotNumber
+  fehlerquote_prozent: SchemaSlotNumber
+  medienbrueche: SchemaSlotNumber
+}
+
+export interface SchemaGovernance {
+  rolle: string | null
+  organisationseinheit: string | null
+  systeme: string[] | null
+  nicht_befund_typ: NichtBefundTyp
+}
+
+export interface SchemaAbhaengigkeiten {
+  depends_on: unknown[]
+  influences: unknown[]
+  nicht_befund_typ: NichtBefundTyp
+}
+
+/** Schema-conformant Prozessschritt object (validated against prozessschritt-schema.json#/definitions/Schritt) */
+export interface Schritt {
+  id: string
+  bezeichnung: SchemaSlotString
+  reihenfolge: number
+  entscheidungslogik: SchemaSlotString
+  tazite_cues: SchemaSlotStringArray
+  ausnahmen: SchemaSlotStringArray
+  inputs: SchemaSlotStringArray
+  outputs: SchemaSlotStringArray
+  hilfsmittel: SchemaSlotStringArray
+  abhaengigkeiten: SchemaAbhaengigkeiten
+  potenzial?: SchemaPotenzial
+  governance?: SchemaGovernance
+}
+
+/**
+ * Maps a StepEntry to the schema-conformant Schritt form.
+ * Used by schemaConformanceRate scorer and future PROJ-26 edge extraction.
+ */
+export function toGrenzobjekt(step: StepEntry, fallbackIndex: number): Schritt {
+  const id = step.id ?? `S${String(fallbackIndex).padStart(3, '0')}`
+
+  function conf(c: 'confirmed' | 'estimate' | 'unknown' | undefined, hasValue: boolean): Konfidenz {
+    if (c === 'confirmed') return 0.9
+    if (c === 'estimate') return 0.6
+    if (c === 'unknown') return 0.3
+    return hasValue ? 0.9 : null
+  }
+
+  function mapTaziteSlot(ts: TaziteSlot | null): SchemaSlotString {
+    if (ts == null) return { wert: null, konfidenz: null, nicht_befund_typ: null }
+    return { wert: ts.value, konfidenz: conf(ts.confidence, ts.value != null), nicht_befund_typ: ts.nicht_befund_typ ?? null }
+  }
+
+  function mapTaziteSlotArray(tsa: TaziteSlotArray | null): SchemaSlotStringArray {
+    if (tsa == null) return { wert: null, konfidenz: null, nicht_befund_typ: null }
+    return { wert: tsa.value, konfidenz: conf(tsa.confidence, tsa.value != null), nicht_befund_typ: tsa.nicht_befund_typ ?? null }
+  }
+
+  function mapPotenzialSlot(sv: SlotValue | null): SchemaSlotNumber {
+    if (sv == null) return { wert: null, konfidenz: null, nicht_befund_typ: null }
+    return {
+      wert: typeof sv.value === 'number' ? sv.value : null,
+      konfidenz: conf(sv.confidence, true),
+      nicht_befund_typ: null,
+    }
+  }
+
+  const schritt: Schritt = {
+    id,
+    bezeichnung: { wert: step.title, konfidenz: 0.9, nicht_befund_typ: null },
+    reihenfolge: step.reihenfolge,
+    entscheidungslogik: mapTaziteSlot(step.slots.entscheidungslogik),
+    tazite_cues: mapTaziteSlotArray(step.slots.tazite_cues),
+    ausnahmen: mapTaziteSlotArray(step.slots.ausnahmen),
+    inputs: mapTaziteSlotArray(step.slots.inputs),
+    outputs: mapTaziteSlotArray(step.slots.outputs),
+    hilfsmittel: mapTaziteSlotArray(step.slots.hilfsmittel),
+    abhaengigkeiten: step.abhaengigkeiten ?? { depends_on: [], influences: [], nicht_befund_typ: null },
+  }
+
+  const p = step.potenzial
+  if (p.frequency_per_month != null || p.duration_minutes != null || p.error_rate_percent != null || p.media_breaks != null) {
+    schritt.potenzial = {
+      haeufigkeit_pro_monat: mapPotenzialSlot(p.frequency_per_month),
+      dauer_minuten: mapPotenzialSlot(p.duration_minutes),
+      fehlerquote_prozent: mapPotenzialSlot(p.error_rate_percent),
+      medienbrueche: mapPotenzialSlot(p.media_breaks),
+    }
+  }
+
+  if (step.governance != null) {
+    schritt.governance = {
+      rolle: step.governance.rolle,
+      organisationseinheit: step.governance.organisationseinheit,
+      systeme: step.governance.systeme,
+      nicht_befund_typ: step.governance.nicht_befund_typ,
+    }
+  }
+
+  return schritt
 }
 
 /**

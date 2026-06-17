@@ -79,12 +79,19 @@ const ONLINE_MODE_PREFIX = `ONLINE-MODUS — strikte Regeln:
 function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' | 'default' = 'default'): string {
   const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
   const activeStepLine = activeStep
-    ? `Aktiv im Walkthrough: "${activeStep.title}" (Status: ${activeStep.status})`
+    ? `Aktiv im Walkthrough: "${activeStep.title}" (${activeStep.id ?? 'no-id'}, Status: ${activeStep.status})`
     : 'Aktiv im Walkthrough: keiner — bereit für neue Step-Registration oder Backfill'
+
+  const stepIdList = ctx.stepTracker.length > 0
+    ? ctx.stepTracker.map(s => `  ${s.id ?? '?'}: "${s.title}"`).join('\n')
+    : '  (noch keine Schritte registriert)'
 
   const modePrefix = mode === 'online' ? ONLINE_MODE_PREFIX : ''
 
   return `${modePrefix}Du bist Interview-Analyst für ein laufendes Mitarbeiter-Interview. Deine Aufgabe: strukturierte Wissens-Extraktion nach jedem Mitarbeiter-Turn.
+
+Schritt-IDs (nutze step_id in record_slot statt step_title):
+${stepIdList}
 
 Sprache des Interviews: Deutsch.
 
@@ -443,6 +450,8 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
       }
 
       try {
+        // PROJ-27/BL-E1.5: conditional update — skip if catchup already wrote 'done'
+        // to prevent online analyst briefing from overwriting a more complete catchup result
         await supabase
           .from('interviews')
           .update({
@@ -450,6 +459,7 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
             analyst_status: 'done',
           })
           .eq('id', interviewId)
+          .neq('analyst_status', 'done')
       } catch (err) {
         console.error('[analyst] produce_briefing DB write failed:', err)
       }

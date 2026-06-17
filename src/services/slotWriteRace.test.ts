@@ -15,10 +15,10 @@
  * - canOverwrite(undefined, *) === true
  * - Conflict-Check ist intra-slot, nicht inter-slot
  *
- * Fix-Vektoren (für Folge-PR):
- * 1. Per-slot JSONB-Update an Supabase: jsonb_set statt vollen Tracker zu überschreiben
- * 2. Optimistic locking via updated_at compare-and-swap mit Retry
- * 3. Serialize alle Slot-Writes durch In-Memory-Queue pro interviewId
+ * FIX (PROJ-27/BL-E1.5): record_slot now uses jsonb_set via patch_interview_step_field RPC.
+ * Each writer touches only its specific slot path → no full-tracker overwrite → no lost update.
+ * The REPRO test below documents the OLD behaviour (currentImplWrite) and must stay failing
+ * to verify the race exists in the legacy path. The production path no longer uses that pattern.
  */
 import { describe, it, expect } from 'vitest'
 import type { StepEntry, PotenzialSlotName } from './interviewSemantic'

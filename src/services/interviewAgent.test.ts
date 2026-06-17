@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockAdminFrom } = vi.hoisted(() => ({
+const { mockAdminFrom, mockAdminRpc } = vi.hoisted(() => ({
   mockAdminFrom: vi.fn(),
+  mockAdminRpc: vi.fn().mockResolvedValue({ data: null, error: null }),
 }))
 
 vi.mock('@/lib/supabase-admin', () => ({
-  getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
+  getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom, rpc: mockAdminRpc }),
 }))
 
 import {
@@ -369,16 +370,13 @@ describe('Tool Handlers', () => {
   describe('record_slot', () => {
     it('fills potenzial slot with value and evidence_quote', async () => {
       const tracker = [makeStep({ title: 'Rechnungseingang' })]
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
+      })
+      // record_slot uses rpc() for atomic writes (PROJ-27/BL-E1.5)
+      mockAdminRpc.mockResolvedValue({ data: null, error: null })
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -392,6 +390,10 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(true)
       expect(result.slot).toBe('frequency_per_month')
       expect(result.value).toBe(20)
+      // verify atomic rpc write was called with correct path
+      expect(mockAdminRpc).toHaveBeenCalledWith('patch_interview_step_field', expect.objectContaining({
+        p_sub_path: ['potenzial', 'frequency_per_month'],
+      }))
     })
 
     it('rejects short evidence_quote (Grounding Guard)', async () => {
@@ -430,19 +432,12 @@ describe('Tool Handlers', () => {
         }),
       ]
 
-      let capturedUpdate: unknown
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockImplementation((data: unknown) => {
-            capturedUpdate = data
-            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-          }),
-        })
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
+      })
+      mockAdminRpc.mockResolvedValue({ data: null, error: null })
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -453,8 +448,14 @@ describe('Tool Handlers', () => {
         evidence_quote: 'Storno ist eine Ausnahme',
       })
 
-      const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
-      expect(updated[0].status).toBe('done')
+      // PROJ-27: 'done' status written via separate rpc call (may precede by 'walkthrough' call)
+      const doneStatusCall = mockAdminRpc.mock.calls.find(
+        (call: unknown[]) => {
+          const p = call[1]
+          return Array.isArray(p?.p_sub_path) && p.p_sub_path.join('.') === 'status' && p.p_value === JSON.stringify('done')
+        }
+      )
+      expect(doneStatusCall).toBeDefined()
     })
 
     it('does not set status to done when multiple tazite slots are still missing', async () => {
@@ -470,19 +471,12 @@ describe('Tool Handlers', () => {
         }),
       ]
 
-      let capturedUpdate: unknown
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockImplementation((data: unknown) => {
-            capturedUpdate = data
-            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-          }),
-        })
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
+      })
+      mockAdminRpc.mockResolvedValue({ data: null, error: null })
 
       const tools = buildTools('iv-1', 'ws-1')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -493,8 +487,14 @@ describe('Tool Handlers', () => {
         evidence_quote: 'etwa 20 mal im Monat',
       })
 
-      const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
-      expect(updated[0].status).not.toBe('done')
+      // PROJ-27: no 'done' status rpc call should have been made
+      const doneCall = mockAdminRpc.mock.calls.find(
+        (call: unknown[]) => {
+          const sub = call[1]?.p_sub_path
+          return Array.isArray(sub) && sub.join('.') === 'status' && call[1]?.p_value?.includes('done')
+        }
+      )
+      expect(doneCall).toBeUndefined()
     })
 
     it('rejects non-string value for entscheidungslogik (must be string)', async () => {

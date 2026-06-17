@@ -29,6 +29,8 @@ export interface ScoreSet {
   dialogNaturalness: number
   completionCorrectness: boolean
   stepRegistrationCoverage: number
+  /** PROJ-27/BL-E1.3: fraction of steps passing prozessschritt-schema validation (0–1) */
+  schemaConformanceRate: number
 }
 
 export interface ScorerInput {

@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "prozessschritt-schema",
+  "$comment": "Meridian Prozessschritt-Schema v1.2. SSoT: meridian-ma/schemas/prozessschritt-schema.json. SYNC REQUIRED when SSoT changes — do not edit this copy directly.",
+  "definitions": {
+    "NichtBefundTyp": {
+      "enum": ["nicht_zutreffend", "unbekannt", "verweigert", null]
+    },
+    "Konfidenz": {
+      "enum": [0.9, 0.6, 0.3, null]
+    },
+    "SlotString": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wert", "konfidenz", "nicht_befund_typ"],
+      "properties": {
+        "wert": { "type": ["string", "null"] },
+        "konfidenz": { "$ref": "#/definitions/Konfidenz" },
+        "nicht_befund_typ": { "$ref": "#/definitions/NichtBefundTyp" }
+      }
+    },
+    "SlotStringArray": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wert", "konfidenz", "nicht_befund_typ"],
+      "properties": {
+        "wert": {
+          "oneOf": [
+            { "type": "array", "items": { "type": "string" } },
+            { "type": "null" }
+          ]
+        },
+        "konfidenz": { "$ref": "#/definitions/Konfidenz" },
+        "nicht_befund_typ": { "$ref": "#/definitions/NichtBefundTyp" }
+      }
+    },
+    "SlotNumber": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wert", "konfidenz", "nicht_befund_typ"],
+      "properties": {
+        "wert": { "type": ["number", "null"] },
+        "konfidenz": { "$ref": "#/definitions/Konfidenz" },
+        "nicht_befund_typ": { "$ref": "#/definitions/NichtBefundTyp" }
+      }
+    },
+    "Abhaengigkeiten": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depends_on", "influences", "nicht_befund_typ"],
+      "properties": {
+        "depends_on": { "type": "array" },
+        "influences": { "type": "array" },
+        "nicht_befund_typ": { "$ref": "#/definitions/NichtBefundTyp" }
+      }
+    },
+    "GovernanceSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rolle", "organisationseinheit", "systeme", "nicht_befund_typ"],
+      "properties": {
+        "rolle": { "type": ["string", "null"] },
+        "organisationseinheit": { "type": ["string", "null"] },
+        "systeme": {
+          "oneOf": [
+            { "type": "array", "items": { "type": "string" } },
+            { "type": "null" }
+          ]
+        },
+        "nicht_befund_typ": { "$ref": "#/definitions/NichtBefundTyp" }
+      }
+    },
+    "Potenzial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "haeufigkeit_pro_monat",
+        "dauer_minuten",
+        "fehlerquote_prozent",
+        "medienbrueche"
+      ],
+      "properties": {
+        "haeufigkeit_pro_monat": { "$ref": "#/definitions/SlotNumber" },
+        "dauer_minuten": { "$ref": "#/definitions/SlotNumber" },
+        "fehlerquote_prozent": { "$ref": "#/definitions/SlotNumber" },
+        "medienbrueche": { "$ref": "#/definitions/SlotNumber" }
+      }
+    },
+    "Schritt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "bezeichnung",
+        "reihenfolge",
+        "entscheidungslogik",
+        "tazite_cues",
+        "ausnahmen",
+        "inputs",
+        "outputs",
+        "hilfsmittel",
+        "abhaengigkeiten"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^S[0-9]{3}$"
+        },
+        "bezeichnung": { "$ref": "#/definitions/SlotString" },
+        "reihenfolge": { "type": "integer", "minimum": 1 },
+        "entscheidungslogik": { "$ref": "#/definitions/SlotString" },
+        "tazite_cues": { "$ref": "#/definitions/SlotStringArray" },
+        "ausnahmen": { "$ref": "#/definitions/SlotStringArray" },
+        "inputs": { "$ref": "#/definitions/SlotStringArray" },
+        "outputs": { "$ref": "#/definitions/SlotStringArray" },
+        "hilfsmittel": { "$ref": "#/definitions/SlotStringArray" },
+        "abhaengigkeiten": { "$ref": "#/definitions/Abhaengigkeiten" },
+        "potenzial": { "$ref": "#/definitions/Potenzial" },
+        "governance": { "$ref": "#/definitions/GovernanceSlot" },
+        "revisions_meta": { "type": "object" }
+      }
+    }
+  }
+}

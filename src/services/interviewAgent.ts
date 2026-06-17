@@ -19,6 +19,7 @@ import {
   tokenJaccardNorm,
   groupSemanticSteps,
   normalizeStepEntry,
+  toGrenzobjekt,
   type Phase,
   type SlotValue,
   type StepEntry,
@@ -28,6 +29,7 @@ import {
   type TaziteSlot,
   type TaziteSlotArray,
   type GovernanceSlot,
+  type Schritt,
 } from './interviewSemantic'
 
 // Re-export semantic primitives so existing consumers continue to import from
@@ -44,8 +46,9 @@ export {
   tokenJaccard,
   tokenJaccardNorm,
   groupSemanticSteps,
+  toGrenzobjekt,
 }
-export type { Phase, SlotValue, StepEntry, SlotName, TaziteSlotName, PotenzialSlotName, TaziteSlot, TaziteSlotArray, GovernanceSlot }
+export type { Phase, SlotValue, StepEntry, SlotName, TaziteSlotName, PotenzialSlotName, TaziteSlot, TaziteSlotArray, GovernanceSlot, Schritt }
 
 export interface MissingSlot {
   step_title: string
@@ -191,6 +194,11 @@ function findStepFuzzy(tracker: StepEntry[], stepTitle: string): number {
   return bestScore >= 0.4 ? bestIdx : -1
 }
 
+// Stable-ID lookup (PROJ-27/BL-E1.4). Used when record_slot supplies step_id.
+function findStepById(tracker: StepEntry[], stepId: string): number {
+  return tracker.findIndex((s) => s.id === stepId)
+}
+
 /**
  * Deterministically expand a verbatim span (e.g. "100", "5 Minuten") to the
  * enclosing sentence(s) in the source text. Used by record_slot to derive a
@@ -264,7 +272,8 @@ function formatStepTracker(steps: StepEntry[]): string {
     if (step.friction_tools?.length) walkthrough.push(`  friction_tools: ${step.friction_tools.join(', ')}`)
     if (step.pain_point_primary) walkthrough.push(`  pain_point_primary: "${step.pain_point_primary}"`)
 
-    return `[${step.status}] "${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${govLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
+    const idPrefix = step.id ? `${step.id} ` : ''
+    return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${govLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
   }).join('\n\n')
 }
 
@@ -921,9 +930,11 @@ export function buildTools(
             }
           }
 
+          const newStepIndex = current.length + 1
           const newEntry: StepEntry = {
+            id: `S${String(newStepIndex).padStart(3, '0')}`,
             title: title.trim(),
-            reihenfolge: current.length + 1,
+            reihenfolge: newStepIndex,
             governance: null,
             abhaengigkeiten: null,
             potenzial: {
@@ -970,6 +981,7 @@ export function buildTools(
     record_slot: tool({
       description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency_per_month, duration_minutes, error_rate_percent, media_breaks) und tazite O2–O5 (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert.',
       inputSchema: z.object({
+        step_id: z.string().regex(/^S[0-9]{3}$/).optional().describe('Stabiler Schritt-ID (z.B. S001). Bevorzugt gegenüber step_title. Aus register_step-Antwort.'),
         step_title: z.string().min(1),
         slot: z.enum([
           // Potenzial (quantitativ)
@@ -985,7 +997,7 @@ export function buildTools(
         source_turn: z.number().int().positive().optional(),
         is_correction: z.boolean().optional().describe('Setze auf true wenn der Mitarbeiter einen früher genannten Wert explizit widerspricht oder korrigiert. Hebt Prioritäts-Konflikt-Sperre auf.'),
       }),
-      execute: async ({ step_title, slot, value, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
+      execute: async ({ step_id, step_title, slot, value, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
         // Fix 3 (ADR-015): prefer deterministic span-based extraction.
         const userInputText = currentUserInput?.trim() ?? ''
         let resolvedQuote: string | null = null
@@ -1046,11 +1058,18 @@ export function buildTools(
 
           const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
             .map((raw, i) => normalizeStepEntry(raw, i + 1))
-          const stepIndex = findStepFuzzy(current, step_title)
+
+          // ID-first lookup (PROJ-27/BL-E1.4): stable reference, falls back to fuzzy title match
+          const stepIndex = step_id !== undefined
+            ? (() => {
+                const byId = findStepById(current, step_id)
+                return byId !== -1 ? byId : findStepFuzzy(current, step_title)
+              })()
+            : findStepFuzzy(current, step_title)
 
           if (stepIndex === -1) {
-            const available = current.map(s => `"${s.title}"`).join(', ')
-            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel exakt.` }
+            const available = current.map(s => `"${s.title}" (${s.id ?? 'no-id'})`).join(', ')
+            return { success: false, error: `Schritt "${step_id ?? step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel oder IDs exakt.` }
           }
 
           const step = current[stepIndex]
@@ -1071,7 +1090,7 @@ export function buildTools(
               return {
                 success: true,
                 skipped: true,
-                message: `Slot "${slot}" für "${step_title}" enthält bereits diesen Wert. STOPP — kein weiterer record_slot-Aufruf für diesen Slot nötig. Fahre mit dem nächsten fehlenden Slot fort.`,
+                message: `Slot "${slot}" für "${step.title}" enthält bereits diesen Wert. STOPP — kein weiterer record_slot-Aufruf für diesen Slot nötig. Fahre mit dem nächsten fehlenden Slot fort.`,
               }
             }
           }
@@ -1101,71 +1120,109 @@ export function buildTools(
             }
           }
 
-          const updated = [...current]
+          // Build new slot value object
+          let newSlotValue: SlotValue | TaziteSlot | TaziteSlotArray
+          let subPath: string[]
 
           if (isPotenzial) {
-            updated[stepIndex] = {
-              ...step,
-              status: step.status === 'exploring' ? 'walkthrough' : step.status,
-              potenzial: {
-                ...step.potenzial,
-                [slot]: {
-                  value,
-                  quote: verbatimQuote,
-                  writeSource: writeSource as WriteSource,
-                  ...(confidence !== undefined ? { confidence } : {}),
-                  ...(qualifier !== undefined ? { qualifier } : {}),
-                },
-              },
+            const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
+            newSlotValue = {
+              value,
+              quote: verbatimQuote,
+              writeSource: writeSource as WriteSource,
+              ...(confidence !== undefined ? { confidence } : {}),
+              ...(qualifier !== undefined ? { qualifier } : {}),
+            }
+            subPath = ['potenzial', slot]
+            // Atomic per-slot write via jsonb_set (PROJ-27/BL-E1.5 — prevents lost-update race)
+            await supabase.rpc('patch_interview_step_field', {
+              p_interview_id: interviewId,
+              p_step_index: stepIndex,
+              p_sub_path: subPath,
+              p_value: JSON.stringify(newSlotValue),
+            })
+            if (newStatus !== step.status) {
+              await supabase.rpc('patch_interview_step_field', {
+                p_interview_id: interviewId,
+                p_step_index: stepIndex,
+                p_sub_path: ['status'],
+                p_value: JSON.stringify(newStatus),
+              })
             }
           } else if (isTaziteArray) {
-            const taziteVal: TaziteSlotArray = {
+            newSlotValue = {
               value: value as string[],
               quote: verbatimQuote,
               nicht_befund_typ: null,
               ...(confidence !== undefined ? { confidence } : {}),
-            }
-            updated[stepIndex] = {
-              ...step,
-              status: step.status === 'exploring' ? 'walkthrough' : step.status,
-              slots: { ...step.slots, [slot]: taziteVal },
+            } as TaziteSlotArray
+            subPath = ['slots', slot]
+            await supabase.rpc('patch_interview_step_field', {
+              p_interview_id: interviewId,
+              p_step_index: stepIndex,
+              p_sub_path: subPath,
+              p_value: JSON.stringify(newSlotValue),
+            })
+            if (step.status === 'exploring') {
+              await supabase.rpc('patch_interview_step_field', {
+                p_interview_id: interviewId,
+                p_step_index: stepIndex,
+                p_sub_path: ['status'],
+                p_value: JSON.stringify('walkthrough'),
+              })
             }
           } else {
             // entscheidungslogik (TaziteSlot)
-            const taziteVal: TaziteSlot = {
+            newSlotValue = {
               value: value as string,
               quote: verbatimQuote,
               nicht_befund_typ: null,
               ...(confidence !== undefined ? { confidence } : {}),
-            }
-            updated[stepIndex] = {
-              ...step,
-              status: step.status === 'exploring' ? 'walkthrough' : step.status,
-              slots: { ...step.slots, [slot]: taziteVal },
+            } as TaziteSlot
+            subPath = ['slots', slot]
+            await supabase.rpc('patch_interview_step_field', {
+              p_interview_id: interviewId,
+              p_step_index: stepIndex,
+              p_sub_path: subPath,
+              p_value: JSON.stringify(newSlotValue),
+            })
+            if (step.status === 'exploring') {
+              await supabase.rpc('patch_interview_step_field', {
+                p_interview_id: interviewId,
+                p_step_index: stepIndex,
+                p_sub_path: ['status'],
+                p_value: JSON.stringify('walkthrough'),
+              })
             }
           }
 
-          // Auto-transition to 'done' when all potenzial + core tazite slots filled
-          const allPotenzialFilled = POTENZIAL_SLOT_NAMES.every(s => updated[stepIndex].potenzial[s] !== null)
+          // Check auto-transition to 'done' using in-memory snapshot + new value
+          const mergedPotenzial = isPotenzial
+            ? { ...step.potenzial, [slot]: newSlotValue }
+            : step.potenzial
+          const mergedSlots = !isPotenzial
+            ? { ...step.slots, [slot]: newSlotValue }
+            : step.slots
+          const allPotenzialFilled = POTENZIAL_SLOT_NAMES.every(s => mergedPotenzial[s] !== null)
           const allTaziteFilled = TAZITE_SLOT_NAMES.every(s => {
-            const sv = updated[stepIndex].slots[s]
+            const sv = mergedSlots[s]
             return sv != null && (sv.value != null || sv.nicht_befund_typ != null)
           })
-          if (allPotenzialFilled && allTaziteFilled) {
-            updated[stepIndex] = { ...updated[stepIndex], status: 'done' }
+          if (allPotenzialFilled && allTaziteFilled && step.status !== 'done') {
+            await supabase.rpc('patch_interview_step_field', {
+              p_interview_id: interviewId,
+              p_step_index: stepIndex,
+              p_sub_path: ['status'],
+              p_value: JSON.stringify('done'),
+            })
           }
-
-          await supabase
-            .from('interview_state')
-            .update({ step_tracker: updated, updated_at: new Date().toISOString() })
-            .eq('interview_id', interviewId)
 
           // Emit slot-write trail event (ADR-015) — non-blocking, never throws
           emitSlotWrite({
             ts: new Date().toISOString(),
             interviewId,
             source: writeSource,
-            stepTitle: updated[stepIndex].title,
+            stepTitle: step.title,
             slot,
             value,
             prevValue: prevSlotValue?.value,
@@ -1174,7 +1231,7 @@ export function buildTools(
             evidence: verbatimQuote,
           }).catch(() => {})
 
-          return { success: true, step_title, slot, value, source_turn: source_turn ?? null }
+          return { success: true, step_id: step.id, step_title: step.title, slot, value, source_turn: source_turn ?? null }
         } catch (err) {
           console.error('[record_slot] failed:', err)
           return { success: false, error: (err as Error).message }
@@ -1236,13 +1293,13 @@ export function buildTools(
             nicht_befund_typ: nicht_befund_typ !== undefined ? nicht_befund_typ : (existing?.nicht_befund_typ ?? null),
           }
 
-          const updated = [...current]
-          updated[stepIndex] = { ...updated[stepIndex], governance: merged }
-
-          await supabase
-            .from('interview_state')
-            .update({ step_tracker: updated, updated_at: new Date().toISOString() })
-            .eq('interview_id', interviewId)
+          // Atomic per-field write (PROJ-27/BL-E1.5)
+          await supabase.rpc('patch_interview_step_field', {
+            p_interview_id: interviewId,
+            p_step_index: stepIndex,
+            p_sub_path: ['governance'],
+            p_value: JSON.stringify(merged),
+          })
 
           return { success: true, step_title, governance: merged, quote: resolvedQuote, source_turn: source_turn ?? null }
         } catch (err) {
