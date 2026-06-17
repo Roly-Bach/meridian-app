@@ -201,10 +201,14 @@ describe('toGrenzobjekt — ID assignment', () => {
 
   it('abhaengigkeiten preserved when set', () => {
     const step = makeStep({
-      abhaengigkeiten: { depends_on: ['S002'], influences: ['S003'], nicht_befund_typ: null },
+      abhaengigkeiten: {
+        depends_on: [{ schritt_id: 'S002', typ: 'voraussetzung' as const, beschreibung: null }],
+        influences: [{ schritt_id: 'S003', typ: 'beeinflusst' as const, beschreibung: null }],
+        nicht_befund_typ: null,
+      },
     })
     const schritt = toGrenzobjekt(step, 1)
-    expect(schritt.abhaengigkeiten.depends_on).toEqual(['S002'])
+    expect(schritt.abhaengigkeiten.depends_on[0].schritt_id).toBe('S002')
   })
 
   it('reihenfolge matches step.reihenfolge', () => {

@@ -41,7 +41,7 @@
 | PROJ-23 | Adaptive Clarification Questions | Extension | Interview Engine | PROJ-2 | Approved | [spec](interview-engine/PROJ-23-adaptive-clarification-questions.md) | P1 | M | 0:0:0 |
 | PROJ-24 | Cluster-aware Use Case Generation + Detail View | Extension | Use Case Engine | PROJ-6 | Approved | [spec](use-case-engine/PROJ-24-cluster-aware-use-case-generation.md) | P1 | L | 0:0:0 |
 | PROJ-25 | Prozesswissens-Schema (O1–O5 + Governance) | Revision | Wissensbank | PROJ-20 | Approved | [spec](wissensbank/PROJ-25-prozesswissens-schema.md) | P1 | L | 0:1:1 |
-| PROJ-26 | Getypte Abhängigkeitskanten | Extension | Wissensbank | PROJ-20 | Planned | [spec](wissensbank/PROJ-26-getypte-abhaengigkeitskanten.md) | P1 | M | — |
+| PROJ-26 | Getypte Abhängigkeitskanten | Extension | Wissensbank | PROJ-20 | In Progress | [spec](wissensbank/PROJ-26-getypte-abhaengigkeitskanten.md) | P1 | M | — |
 | PROJ-27 | Schema-Bindung + verlustfreie Speicherung | Revision | Interview Engine | PROJ-22 | Approved | [spec](interview-engine/PROJ-27-schema-bindung-verlustfreie-speicherung.md) | P1 | L | 0:2:4 |
 | PROJ-28 | Extraktions-Zuverlässigkeit | Revision | Interview Engine | PROJ-22 | Planned | [spec](interview-engine/PROJ-28-extraktions-zuverlaessigkeit.md) | P1 | M | — |
 | PROJ-29 | Gesprächsführungs-Revision | Revision | Interview Engine | PROJ-23 | Planned | [spec](interview-engine/PROJ-29-gesprächsführungs-revision.md) | P1 | L | — |

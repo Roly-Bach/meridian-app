@@ -53,10 +53,24 @@ export interface GovernanceSlot {
   nicht_befund_typ: NichtBefundTyp
 }
 
-/** Placeholder-Typ für Abhängigkeitskanten — PROJ-26 schärft diesen Typ */
-export interface PlaceholderDependencies {
-  depends_on: unknown[]
-  influences: unknown[]
+/** Getypte Abhängigkeitskante (depends_on-Array) — PROJ-26/BL-E1.2 */
+export interface AbhaengigkeitsKante {
+  schritt_id: string
+  typ: 'voraussetzung' | 'ressource' | 'ausloeser'
+  beschreibung: string | null
+}
+
+/** Getypte Einfluss-Kante (influences-Array) — PROJ-26/BL-E1.2 */
+export interface EinflussKante {
+  schritt_id: string
+  typ: 'beeinflusst' | 'terminierung'
+  beschreibung: string | null
+}
+
+/** Strukturierte Abhängigkeiten eines Prozessschritts (O6) — PROJ-26 */
+export interface Abhaengigkeiten {
+  depends_on: AbhaengigkeitsKante[]
+  influences: EinflussKante[]
   nicht_befund_typ: NichtBefundTyp
 }
 
@@ -68,8 +82,8 @@ export interface StepEntry {
   reihenfolge: number
   /** Replaces free-text role field */
   governance: GovernanceSlot | null
-  /** O6 dependency placeholder — PROJ-26 implements typed edges */
-  abhaengigkeiten: PlaceholderDependencies | null
+  /** O6 typed dependency edges — PROJ-26 */
+  abhaengigkeiten: Abhaengigkeiten | null
   /** Quantitative KI-Potenzial fields (moved from slots) */
   potenzial: {
     frequency_per_month: SlotValue | null
@@ -129,7 +143,7 @@ interface LegacyStepEntry {
   } | null
   reihenfolge?: number
   governance?: GovernanceSlot | null
-  abhaengigkeiten?: PlaceholderDependencies | null
+  abhaengigkeiten?: Abhaengigkeiten | null
   process_steps?: string[]
   friction_points?: string[]
   friction_tools?: string[]
@@ -395,8 +409,8 @@ export interface SchemaGovernance {
 }
 
 export interface SchemaAbhaengigkeiten {
-  depends_on: unknown[]
-  influences: unknown[]
+  depends_on: AbhaengigkeitsKante[]
+  influences: EinflussKante[]
   nicht_befund_typ: NichtBefundTyp
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { scoreSlotCoverage, scoreDedupCoverage, scoreGovernanceCoverage } from './slotCoverage'
-import type { StepEntry, TaziteSlot, TaziteSlotArray, GovernanceSlot } from '@/services/interviewSemantic'
+import type { StepEntry, TaziteSlot, TaziteSlotArray, GovernanceSlot, AbhaengigkeitsKante, EinflussKante, Abhaengigkeiten } from '@/services/interviewSemantic'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -51,12 +51,31 @@ const makeStep = (
   ...overrides,
 })
 
+const abhaengigkeitsKante = (schritt_id: string): AbhaengigkeitsKante => ({
+  schritt_id,
+  typ: 'voraussetzung',
+  beschreibung: null,
+})
+
+const einflussKante = (schritt_id: string): EinflussKante => ({
+  schritt_id,
+  typ: 'beeinflusst',
+  beschreibung: null,
+})
+
+const abhaengigkeiten = (overrides: Partial<Abhaengigkeiten> = {}): Abhaengigkeiten => ({
+  depends_on: [],
+  influences: [],
+  nicht_befund_typ: null,
+  ...overrides,
+})
+
 const fullyFilledStep = (reihenfolge = 1): StepEntry =>
   makeStep(
     {
       title: 'Vollständiger Schritt',
       reihenfolge,
-      abhaengigkeiten: { depends_on: ['Vorstufe'], influences: [], nicht_befund_typ: null },
+      abhaengigkeiten: abhaengigkeiten({ depends_on: [abhaengigkeitsKante('S002')] }),
     },
     {
       entscheidungslogik: tazite('Freigabe ab 5000 EUR'),
@@ -102,19 +121,32 @@ describe('scoreSlotCoverage', () => {
     expect(scoreSlotCoverage([step])).toBeCloseTo(2 / 9)
   })
 
-  it('abhaengigkeiten with at least one edge = filled', () => {
-    const step = makeStep({ abhaengigkeiten: { depends_on: ['Step A'], influences: [], nicht_befund_typ: null } })
+  it('AbhaengigkeitsKante in depends_on = filled', () => {
+    const step = makeStep({ abhaengigkeiten: abhaengigkeiten({ depends_on: [abhaengigkeitsKante('S002')] }) })
     // bezeichnung + reihenfolge + abhaengigkeiten = 3/9
     expect(scoreSlotCoverage([step])).toBeCloseTo(3 / 9)
   })
 
+  it('EinflussKante in influences = filled', () => {
+    const step = makeStep({ abhaengigkeiten: abhaengigkeiten({ influences: [einflussKante('S003')] }) })
+    expect(scoreSlotCoverage([step])).toBeCloseTo(3 / 9)
+  })
+
   it('abhaengigkeiten empty arrays + keine nicht_befund_typ = not filled', () => {
-    const step = makeStep({ abhaengigkeiten: { depends_on: [], influences: [], nicht_befund_typ: null } })
+    const step = makeStep({ abhaengigkeiten: abhaengigkeiten() })
     expect(scoreSlotCoverage([step])).toBeCloseTo(2 / 9)
   })
 
   it('abhaengigkeiten with nicht_befund_typ = filled', () => {
-    const step = makeStep({ abhaengigkeiten: { depends_on: [], influences: [], nicht_befund_typ: 'nicht_zutreffend' } })
+    const step = makeStep({ abhaengigkeiten: abhaengigkeiten({ nicht_befund_typ: 'nicht_zutreffend' }) })
+    expect(scoreSlotCoverage([step])).toBeCloseTo(3 / 9)
+  })
+
+  it('backward-compat: PROJ-25 unknown[] elements tolerated (no crash)', () => {
+    // Old sessions may have string[] in depends_on — runtime still counts length >= 1
+    const oldFormat = { depends_on: ['Vorstufe'] as unknown as AbhaengigkeitsKante[], influences: [], nicht_befund_typ: null } satisfies Abhaengigkeiten
+    const step = makeStep({ abhaengigkeiten: oldFormat })
+    expect(() => scoreSlotCoverage([step])).not.toThrow()
     expect(scoreSlotCoverage([step])).toBeCloseTo(3 / 9)
   })
 

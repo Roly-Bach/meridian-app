@@ -30,6 +30,9 @@ import {
   type TaziteSlot,
   type TaziteSlotArray,
   type GovernanceSlot,
+  type Abhaengigkeiten,
+  type AbhaengigkeitsKante,
+  type EinflussKante,
   type Schritt,
 } from './interviewSemantic'
 
@@ -267,6 +270,18 @@ function formatStepTracker(steps: StepEntry[]): string {
       ? `  governance: ${step.governance.rolle ?? step.governance.nicht_befund_typ ?? '✓ teilweise erfasst'}`
       : `  governance: fehlt`
 
+    const depLine = (() => {
+      const dep = step.abhaengigkeiten
+      if (dep == null || (dep.depends_on.length === 0 && dep.influences.length === 0 && dep.nicht_befund_typ == null)) {
+        return '  abhaengigkeiten: fehlt'
+      }
+      if (dep.depends_on.length === 0 && dep.influences.length === 0) {
+        return `  abhaengigkeiten: nicht_befund: ${dep.nicht_befund_typ}`
+      }
+      const total = dep.depends_on.length + dep.influences.length
+      return `  abhaengigkeiten: ✓ ${total} Kante(n) (depends_on: ${dep.depends_on.length}, influences: ${dep.influences.length})`
+    })()
+
     const walkthrough: string[] = []
     if (step.process_steps?.length) walkthrough.push(`  process_steps: ${step.process_steps.join(' → ')}`)
     if (step.friction_points?.length) walkthrough.push(`  friction_points: ${step.friction_points.join(', ')}`)
@@ -274,7 +289,7 @@ function formatStepTracker(steps: StepEntry[]): string {
     if (step.pain_point_primary) walkthrough.push(`  pain_point_primary: "${step.pain_point_primary}"`)
 
     const idPrefix = step.id ? `${step.id} ` : ''
-    return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${govLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
+    return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${govLine}\n${depLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
   }).join('\n\n')
 }
 
@@ -452,7 +467,8 @@ Optional: error_rate_percent, media_breaks wenn Prozess fehlerträchtig oder sys
 Max. 2–3 fehlende Slots pro Turn — natürlicher Gesprächsfluss, kein Listenformat, keine Ankündigung.
 Spannen: NICHT mehr nachfragen wenn Slot bereits mit confidence=estimate erfasst ist. Nur bei echtem null.
 entscheidungslogik: "Folgt dieser Prozess bei dir immer dem gleichen Schema, oder entscheidest du von Fall zu Fall?" Wenn unklar: NICHT nochmals fragen — Clarification Card erledigt das am Ende.
-governance: record_governance aufrufen wenn Mitarbeiter Rolle oder OE nennt — auch fragmentarisch.`
+governance: record_governance aufrufen wenn Mitarbeiter Rolle oder OE nennt — auch fragmentarisch.
+abhaengigkeiten: record_dependency aufrufen wenn Mitarbeiter nennt, welcher Schritt einen anderen voraussetzt oder beeinflusst.`
   }
 
   if (phase === 'coverage_check') {
@@ -1328,6 +1344,115 @@ export function buildTools(
           return { success: true, step_title, governance: merged, quote: resolvedQuote, source_turn: source_turn ?? null }
         } catch (err) {
           console.error('[record_governance] failed:', err)
+          return { success: false, error: (err as Error).message }
+        }
+      },
+    }),
+
+    record_dependency: tool({
+      description: 'Erfasst eine getypte Abhängigkeitskante zwischen zwei Prozessschritten (O6/REQ-006). Kanten-Modus: source_step_id → target_step_id mit richtung + typ. Nicht-Befund-Modus: nur source_step_id + nicht_befund_typ wenn keine Abhängigkeiten bekannt. Typen depends_on: voraussetzung/ressource/ausloeser. Typen influences: beeinflusst/terminierung.',
+      inputSchema: z.object({
+        source_step_id: z.string().regex(/^S[0-9]{3}$/).describe('Schritt, auf dem die Kante eingetragen wird (z.B. S001)'),
+        target_step_id: z.string().regex(/^S[0-9]{3}$/).optional().describe('Referenzierter Schritt — Kanten-Modus'),
+        richtung: z.enum(['depends_on', 'influences']).optional().describe('depends_on: source setzt target voraus. influences: source beeinflusst target.'),
+        typ: z.string().optional().describe('Kantentyp: depends_on → voraussetzung/ressource/ausloeser; influences → beeinflusst/terminierung'),
+        beschreibung: z.string().nullable().optional(),
+        nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Nicht-Befund-Modus: setze wenn Mitarbeiter explizit keine Abhängigkeiten kennt'),
+      }),
+      execute: async ({ source_step_id, target_step_id, richtung, typ, beschreibung, nicht_befund_typ }) => {
+        const isEdgeMode = target_step_id !== undefined && richtung !== undefined && typ !== undefined
+        const isNichtBefundMode = nicht_befund_typ !== undefined
+
+        if (!isEdgeMode && !isNichtBefundMode) {
+          return { success: false, error: 'Kanten-Modus (target_step_id + richtung + typ) oder Nicht-Befund-Modus (nicht_befund_typ) erforderlich.' }
+        }
+        if (isEdgeMode && isNichtBefundMode) {
+          return { success: false, error: 'Kanten-Modus und Nicht-Befund-Modus schließen sich aus — nur eines übergeben.' }
+        }
+
+        if (isEdgeMode) {
+          if (source_step_id === target_step_id) {
+            return { success: false, error: 'Selbstreferenz nicht erlaubt: source_step_id und target_step_id dürfen nicht identisch sein.' }
+          }
+          const validDependsOnTypes = ['voraussetzung', 'ressource', 'ausloeser']
+          const validInfluencesTypes = ['beeinflusst', 'terminierung']
+          if (richtung === 'depends_on' && !validDependsOnTypes.includes(typ!)) {
+            return { success: false, error: `Ungültiger Typ für depends_on: "${typ}". Erlaubt: ${validDependsOnTypes.join(', ')}.` }
+          }
+          if (richtung === 'influences' && !validInfluencesTypes.includes(typ!)) {
+            return { success: false, error: `Ungültiger Typ für influences: "${typ}". Erlaubt: ${validInfluencesTypes.join(', ')}.` }
+          }
+        }
+
+        try {
+          const { data: stateRow } = await supabase
+            .from('interview_state')
+            .select('step_tracker')
+            .eq('interview_id', interviewId)
+            .maybeSingle()
+
+          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
+            .map((raw, i) => normalizeStepEntry(raw, i + 1))
+
+          const sourceIndex = current.findIndex(s => s.id === source_step_id)
+          if (sourceIndex === -1) {
+            const available = current.map(s => s.id ?? s.title).join(', ')
+            return { success: false, error: `Quell-Schritt "${source_step_id}" nicht im step_tracker. Verfügbar: ${available || '(keine)'}.` }
+          }
+
+          if (isEdgeMode) {
+            const targetExists = current.some(s => s.id === target_step_id)
+            if (!targetExists) {
+              const available = current.map(s => s.id ?? s.title).join(', ')
+              return { success: false, error: `Ziel-Schritt "${target_step_id}" nicht im step_tracker. Zuerst via register_step anlegen. Verfügbar: ${available || '(keine)'}.` }
+            }
+          }
+
+          const existing: Abhaengigkeiten = current[sourceIndex].abhaengigkeiten ?? {
+            depends_on: [],
+            influences: [],
+            nicht_befund_typ: null,
+          }
+
+          let updated: Abhaengigkeiten
+
+          if (isNichtBefundMode) {
+            updated = { ...existing, nicht_befund_typ: nicht_befund_typ! }
+          } else if (richtung === 'depends_on') {
+            const isDuplicate = existing.depends_on.some(k => k.schritt_id === target_step_id && k.typ === typ)
+            if (isDuplicate) {
+              return { success: true, message: 'Kante bereits vorhanden (idempotent)', skipped: true }
+            }
+            const newKante: AbhaengigkeitsKante = {
+              schritt_id: target_step_id!,
+              typ: typ as AbhaengigkeitsKante['typ'],
+              beschreibung: beschreibung ?? null,
+            }
+            updated = { ...existing, depends_on: [...existing.depends_on, newKante] }
+          } else {
+            const isDuplicate = existing.influences.some(k => k.schritt_id === target_step_id && k.typ === typ)
+            if (isDuplicate) {
+              return { success: true, message: 'Kante bereits vorhanden (idempotent)', skipped: true }
+            }
+            const newKante: EinflussKante = {
+              schritt_id: target_step_id!,
+              typ: typ as EinflussKante['typ'],
+              beschreibung: beschreibung ?? null,
+            }
+            updated = { ...existing, influences: [...existing.influences, newKante] }
+          }
+
+          // TOCTOU-safe write (PROJ-27/BL-E1.5) — only touches abhaengigkeiten sub-path
+          await supabase.rpc('patch_interview_step_field', {
+            p_interview_id: interviewId,
+            p_step_index: sourceIndex,
+            p_sub_path: ['abhaengigkeiten'],
+            p_value: JSON.stringify(updated),
+          })
+
+          return { success: true, source_step_id, abhaengigkeiten: updated }
+        } catch (err) {
+          console.error('[record_dependency] failed:', err)
           return { success: false, error: (err as Error).message }
         }
       },

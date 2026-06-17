@@ -1,6 +1,6 @@
 # PROJ-26: Getypte Abhängigkeitskanten
 
-## Status: Planned
+## Status: In Progress
 **Type:** Extension
 **Domain:** Wissensbank
 **Extends:** PROJ-20
@@ -157,7 +157,94 @@ BL-Item: BL-E1.2. REQ: REQ-006. Schema: `prozessschritt-schema.json` v1.2.
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Entscheidung: Nicht-Befund-Modus
+
+Modus A — **Einzelnes Tool `record_dependency` mit diskriminierter Eingabe**.
+
+Zwei Modi in einem Tool (analog `record_governance`):
+- **Kanten-Modus**: `target_step_id + richtung + typ + beschreibung` → schreibt getypte Kante
+- **Nicht-Befund-Modus**: nur `nicht_befund_typ` → setzt `abhaengigkeiten.nicht_befund_typ`, keine Kante
+
+Hält Agent-Tool-Count niedrig. Kein separates `mark_dependency_not_found`-Tool.
+
+---
+
+### Betroffene Dateien (3, keine neuen, keine Migration)
+
+#### `src/services/interviewSemantic.ts`
+
+`PlaceholderDependencies` ersetzen durch drei exportierte Interfaces:
+
+| Interface | Felder |
+|-----------|--------|
+| `AbhaengigkeitsKante` | `schritt_id: string; typ: 'voraussetzung' \| 'ressource' \| 'ausloeser'; beschreibung: string \| null` |
+| `EinflussKante` | `schritt_id: string; typ: 'beeinflusst' \| 'terminierung'; beschreibung: string \| null` |
+| `Abhaengigkeiten` | `depends_on: AbhaengigkeitsKante[]; influences: EinflussKante[]; nicht_befund_typ: NichtBefundTyp` |
+
+- `StepEntry.abhaengigkeiten` → `Abhaengigkeiten | null`
+- `SchemaAbhaengigkeiten` (Schema-Export-Sektion) auf dieselben konkreten Typen heben
+- `normalizeStepEntry`: `r.abhaengigkeiten ?? null` bleibt unverändert — TypeScript-Typen sind Compile-Time; bestehende JSONB-Rows mit `unknown[]`-Elementen crashen nicht (keine Runtime-Migration nötig)
+
+#### `src/services/interviewAgent.ts`
+
+**A) `formatStepTracker`** — `abhaengigkeiten`-Zeile hinzufügen (aktuell fehlend):
+- Kanten vorhanden → `✓ N Kante(n) (depends_on: X, influences: Y)`
+- `nicht_befund_typ` gesetzt, keine Kanten → `nicht_befund: <typ>`
+- Beides null/leer → `abhaengigkeiten: fehlt`
+
+**B) Neues Tool `record_dependency`** — nach `record_slot` einfügen.
+
+Zod-Input:
+```
+source_step_id: string  (regex /^S[0-9]{3}$/)
+// Kanten-Modus:
+target_step_id?: string
+richtung?: 'depends_on' | 'influences'
+typ?: string
+beschreibung?: string | null
+// Nicht-Befund-Modus:
+nicht_befund_typ?: 'nicht_zutreffend' | 'unbekannt' | 'verweigert'
+```
+
+Validierungslogik:
+- `source` muss im `step_tracker` existieren
+- `target` muss existieren (nur Kanten-Modus)
+- `source !== target` (Selbstreferenz verboten)
+- `typ` muss zu `richtung` passen (`depends_on` → voraussetzung/ressource/ausloeser; `influences` → beeinflusst/terminierung)
+- Idempotenz: gleiche source+target+typ → success, kein Duplikat
+
+Schreibpfad (gleiche RPC wie PROJ-27):
+1. `step_tracker` aus `interview_state` lesen
+2. Alle Einträge via `normalizeStepEntry`
+3. Source-Schritt per S-ID finden
+4. Validieren, dedup, aktualisiertes `Abhaengigkeiten`-Objekt bauen
+5. `supabase.rpc('patch_interview_step_field', { p_sub_path: ['abhaengigkeiten'], p_value: JSON.stringify(updated) })`
+
+Konkurrenz-Analyse:
+- `record_dependency` + `record_slot` gleichzeitig → sicher (verschiedene `sub_path`)
+- Zwei `record_dependency` gleichzeitig → last-write-wins auf `abhaengigkeiten` (akzeptabel: Single-Agent, keine parallelen Tool-Calls erwartet)
+
+**C) System-Prompt** — eine Zeile `record_dependency`-Erwähnung in Tool-Liste (~Zeile 440). Vollständige Gesprächsführungs-Überarbeitung ist PROJ-29.
+
+#### `src/services/__evals__/interview/scorers/slotCoverage.test.ts`
+
+Neue Testfälle für `abhaengigkeiten` mit getypten Kanten:
+- `AbhaengigkeitsKante` vorhanden → befüllt
+- `EinflussKante` vorhanden → befüllt
+- Leere Arrays + `nicht_befund_typ: null` → unbefüllt
+- `nicht_befund_typ` gesetzt (keine Kanten) → befüllt
+- PROJ-25-Placeholder mit `unknown[]`-Elementen → kein Crash (toleriert)
+
+---
+
+### Coverage-Logik (keine Änderung)
+
+`slotCoverage.ts` Z. 16–22 korrekt für `abhaengigkeiten`:
+```
+befüllt wenn depends_on.length ≥ 1 OR influences.length ≥ 1 OR nicht_befund_typ != null
+```
+PROJ-26 definiert diese Formel nicht neu — nur Tests gegen getypte Kanten verifizieren sie.
 
 ## QA Test Results
 _To be added by /qa_

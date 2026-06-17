@@ -82,7 +82,7 @@ describe('scoreSlotCoverage', () => {
       outputs: { value: ['Buchungssatz'], quote: 'Buchungssatz', nicht_befund_typ: null },
       hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
     }, {
-      abhaengigkeiten: { depends_on: ['Rechnungseingang'], influences: [], nicht_befund_typ: null },
+      abhaengigkeiten: { depends_on: [{ schritt_id: 'S001', typ: 'voraussetzung' as const, beschreibung: null }], influences: [], nicht_befund_typ: null },
     })
     expect(scoreSlotCoverage([step])).toBe(1.0)
   })
