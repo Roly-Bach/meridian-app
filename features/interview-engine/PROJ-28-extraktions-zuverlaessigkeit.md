@@ -105,7 +105,74 @@ Die Slot-Target-Hinweistexte im Prompt werden für `estimate`-Slots angepasst: s
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Überblick
+
+Reine Service-Layer-Revision — kein neues UI, keine neue DB-Tabelle, keine Migration laufender Interviews. Zwei unabhängige Defekte im `interviewAgent.ts`/`interviewSemantic.ts`-Pfad werden in einer Bau-Einheit behoben.
+
+---
+
+### BL-E2.1 — Nicht-Befund-Marker auf `SlotValue`
+
+**Problem:** `SlotValue` (quantitative Potenzial-Slots) hat kein `nicht_befund_typ`-Feld. `TaziteSlot` hat es bereits. Dadurch sind drei Zustände nicht unterscheidbar: befüllt / noch nicht adressiert / Nicht-Befund.
+
+**Zustandsmaschine nach Fix:**
+
+| Zustand | value | nicht_befund_typ |
+|---------|-------|-----------------|
+| Lücke (nicht adressiert) | `null` | `null` |
+| Nicht-Befund (adressiert, kein Beleg) | `null` | `'unbekannt'` / `'verweigert'` / `'nicht_zutreffend'` |
+| Befüllt | ≠ `null` | `null` |
+
+**Drei betroffene Ebenen:**
+
+1. `SlotValue` Interface (`interviewSemantic.ts`): `nicht_befund_typ: NichtBefundTyp` hinzufügen — deckungsgleich mit `TaziteSlot`
+2. `record_slot`-Tool (`interviewAgent.ts`): Analyst kann `nicht_befund_typ` für Potenzial-Slots setzen, wenn `applyGroundingGuard` einen Wert ablehnt und das Feld aktiv adressiert wurde
+3. `mapPotenzialSlot()` (`interviewSemantic.ts`): propagiert `slot.nicht_befund_typ` statt hardcoded `null`
+
+**Slot-Tracker-Fix:** `computeWalkthroughSlotTarget` und `computeMissingMandatorySlots` prüfen Tazite-Slots bereits korrekt via `sv.value != null || sv.nicht_befund_typ != null`. Potenzial-Slots werden aktuell nur via `=== null` geprüft — nach Interface-Fix auf dieselbe Filled-Logik umstellen.
+
+**Langfuse:** Analyst-Span loggt `nicht_befund_typ`-Setzung (Slot-Name + Marker-Wert) als Attribut.
+
+---
+
+### BL-E2.2 — Konfidenz-Inversion beheben
+
+**Problem:** Zwei voneinander unabhängige Stellen invertieren die Konfidenz-Logik.
+
+**Stelle A — Prompt (`interviewAgent.ts:468`, `slot_completion`-Phase):**
+- ALT: `NICHT mehr nachfragen wenn Slot bereits mit confidence=estimate erfasst ist. Nur bei echtem null.`
+- NEU: `null` → fehlend, nachfragen; `estimate`/`unknown` → unsicher, kurze Bestätigung einholen; `confirmed` → abgeschlossen
+
+**Stelle B — `computeWalkthroughSlotTarget` (`interviewAgent.ts:137`):**
+- ALT: `if (active.potenzial[slot] === null)` — nur Null-Slots als Target
+- NEU: Prioritätsreihenfolge in zwei Passes:
+  1. Potenzial-Slots `value === null && nicht_befund_typ === null` (echte Lücke)
+  2. Tazite-Slots nicht adressiert
+  3. Potenzial-Slots `confidence === 'estimate' || 'unknown'` (unsicher belegt, Loop-Schutz: max. 2 Versuche)
+  4. Tazite-Slots `confidence === 'estimate' || 'unknown'`
+
+**Loop-Schutz:** Nach ≥ 2 Rückfrage-Versuchen auf einem `estimate`-Slot bleibt der Wert stehen — kein weiteres Target. `estimate` ist kein Nicht-Befund; `nicht_befund_typ` wird nicht gesetzt.
+
+---
+
+### Betroffene Dateien
+
+| Datei | Art der Änderung |
+|-------|-----------------|
+| `src/services/interviewSemantic.ts` | `SlotValue` + `nicht_befund_typ: NichtBefundTyp`; `mapPotenzialSlot()` propagiert statt `null` |
+| `src/services/interviewAgent.ts` | `computeWalkthroughSlotTarget` Prioritätslogik; `computeMissingMandatorySlots` Filled-Check für Potenzial; `slot_completion`-Prompt-Zeile; `record_slot`-Tool akzeptiert `nicht_befund_typ` für Potenzial-Slots |
+| `src/services/__evals__/interview/scorers/hallucinationRate.ts` | NEU: Feldwerte ohne Transkript-Beleg zählen; Ziel < 1 % |
+| `src/services/__evals__/interview/scorers/confidenceTrigger.ts` | NEU: `estimate`-Slot in Turn N → Rückfrage in Turn N+1..N+3 vorhanden; Ziel > 80 % |
+
+Kein UI, keine API-Route, keine DB-Migration. Abwärtskompatibel — Alt-Einträge ohne `nicht_befund_typ` werden als `null` (= Lücke) gelesen.
+
+---
+
+### Architektur-Entscheide
+
+- **Phase-Übergang bei laufendem `estimate`-Target:** Kein Catch-up-Marker nötig. Analyst stoppt nach 2 Versuchen, Phase-Übergang läuft normal.
+- **Eval-Gate:** `npm run eval:interview buchhalter` vor Deploy — beide neuen Scorer als Gate. Halluzinationsrate < 1 %, Konfidenz-Trigger > 80 %, Interview-Vollständigkeit ≥ PROJ-22-Baseline.
 
 ## QA Test Results
 _To be added by /qa_
