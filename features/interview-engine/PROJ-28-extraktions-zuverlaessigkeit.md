@@ -32,15 +32,19 @@ Beide Defekte werden unabhängig voneinander behoben, laufen aber in derselben B
 
 ### BL-E2.1 — Expliziter Nicht-Befund-Marker
 
-Ein Feld ohne Transkriptbeleg erhält einen dedizierten Marker, der maschinell von einem befüllten Feld (`SlotValue` mit `value`) unterscheidbar ist. Mögliche Realisierung: `{ absent: true, reason: 'no_evidence' | 'refused' }` als Sentinel-Typ neben `SlotValue | null`. Die genaue Typ-Wahl ist Architekturentscheidung (`/architecture`).
+Der kanonische Nicht-Befund-Mechanismus ist `nicht_befund_typ: 'nicht_zutreffend' | 'unbekannt' | 'verweigert' | null` (Schema `prozessschritt-schema.json`, in jedem Slot-Typ; PROJ-25 für die taziten Slots). PROJ-28 erfindet **keinen** parallelen Marker, sondern realisiert REQ-013 für die quantitativen Slots über dasselbe Feld:
 
-Der Marker wird gesetzt, wenn:
-- Der Analyst explizit bestätigt, dass die Frage adressiert wurde, aber kein belegbares Wertangebot vorlag
-- Der Befragte die Auskunft verweigert hat
+- Die App-interne `SlotValue` (`interviewSemantic.ts`) wird um `nicht_befund_typ: 'nicht_zutreffend' | 'unbekannt' | 'verweigert' | null` erweitert. PROJ-25 belässt die quantitativen `potenzial`-Slots als `SlotValue` ohne dieses Feld; PROJ-28 zieht es nach, deckungsgleich mit der Schema-`SlotNumber`.
+- Drei maschinell unterscheidbare Zustände, exakt die Schema-Semantik: `value != null` (befüllt); `value == null && nicht_befund_typ == null` (noch nicht adressiert, O8-Lücke); `value == null && nicht_befund_typ != null` (Nicht-Befund).
 
-Das starke Evidence-Grounding (`applyGroundingGuard`, `evidence_span`-Verbatim-Check, ADR-015) bleibt unangetastet. Der Marker ergänzt das Grounding — er greift, wenn das Grounding einen Wert ablehnt.
+Der Analyst setzt `nicht_befund_typ`, wenn:
+- die Frage adressiert wurde, aber kein belegbares Wertangebot vorlag → `unbekannt`
+- der Befragte die Auskunft verweigert hat → `verweigert`
+- das Feld explizit nicht anwendbar ist → `nicht_zutreffend`
 
-Out of Scope: Nicht-Befund-Marker für O1–O5-Felder (PROJ-25) — nur für bestehende quantitative Slots.
+Das starke Evidence-Grounding (`applyGroundingGuard`, `evidence_span`-Verbatim-Check, ADR-015) bleibt unangetastet. Der Marker ergänzt das Grounding: er greift, wenn das Grounding einen Wert ablehnt.
+
+**Scope-Abgrenzung zu PROJ-25.** Die `nicht_befund_typ`-Felddefinition auf den taziten O2–O5-Slots (`TaziteSlot`) sowie auf Governance/`abhaengigkeiten` gehört zu PROJ-25/26. PROJ-28 ergänzt das Feld auf der quantitativen `SlotValue` und liefert die aktive Setz-Logik im Analyst. Diese Setz-Logik ist slot-typ-agnostisch: lehnt `applyGroundingGuard` einen Wert für einen gerade erfassten Slot ab, setzt der Analyst dessen `nicht_befund_typ` (das Feld existiert dann auf allen Slot-Typen). Die quantitativen Slots zählen nicht in den O1–O6-Coverage-Nenner; ihr Marker speist die separate Potenzial-/Halluzinations-Messung, nicht die Coverage.
 
 ### BL-E2.2 — Konfidenz-Inversion beheben
 
@@ -50,7 +54,9 @@ Die Prompt-Regel in `slot_completion` wird umgekehrt:
 
 `computeWalkthroughSlotTarget` (`interviewAgent.ts:112`) wird erweitert: statt nur `=== null` werden auch `estimate`- und `unknown`-Slots als offen behandelt, mit niedrigerer Priorität als echte `null`-Slots.
 
-Die Slot-Target-Hinweistexte im Prompt werden für `estimate`-Slots angepasst: statt „noch fehlend" heißt es „unsicher belegt — kurze Bestätigung einholen".
+Die Slot-Target-Hinweistexte im Prompt werden für `estimate`-Slots angepasst: statt „noch fehlend" heißt es „unsicher belegt, kurze Bestätigung einholen".
+
+**Build-Reihenfolge-Kopplung.** PROJ-28 baut nach PROJ-25/27. Die Zeilennummern (`interviewAgent.ts:388`, `:112`) und die Slot-Menge sind IST vor PROJ-25; nach PROJ-25 liegen die quantitativen Slots in `potenzial`, die Pflicht-Coverage-Felder sind die taziten O2–O5, und `computeWalkthroughSlotTarget`/der `slot_completion`-Prompt operieren auf der umstrukturierten Slot-Menge. Der Inversions-Fix (Konfidenz statt `=== null`) und die Konfidenz-Steuerung gelten unabhängig vom Slot-Ort und über alle Slot-Typen mit `confidence`-Feld (quantitativ wie tazit).
 
 ## User Stories
 
@@ -63,9 +69,10 @@ Die Slot-Target-Hinweistexte im Prompt werden für `estimate`-Slots angepasst: s
 
 ### BL-E2.1 — Nicht-Befund-Marker
 
-- [ ] Es existiert ein dedizierter Typ/Sentinel, der `{ absent: true }` signalisiert — maschinell von `SlotValue` (befüllt) und `null` (noch nicht adressiert) unterscheidbar
-- [ ] Der Analyst setzt diesen Marker, wenn `applyGroundingGuard` einen Wert ablehnt und das Feld im aktuellen Turn aktiv adressiert wurde
-- [ ] Felder mit Marker erscheinen im Slot-Tracker als „nicht belegbar" — nicht als offene Lücke für erneute Nachfrage
+- [ ] `SlotValue` (`interviewSemantic.ts`) trägt `nicht_befund_typ: 'nicht_zutreffend' | 'unbekannt' | 'verweigert' | null` (kanonischer Enum, deckungsgleich mit Schema `SlotNumber`/`SlotString` und PROJ-25 `TaziteSlot`); kein neuer `absent`-Sentinel
+- [ ] Drei Zustände maschinell unterscheidbar: befüllt (`value != null`), Lücke (`value == null && nicht_befund_typ == null`), Nicht-Befund (`value == null && nicht_befund_typ != null`)
+- [ ] Der Analyst setzt `nicht_befund_typ`, wenn `applyGroundingGuard` einen Wert ablehnt und das Feld im aktuellen Turn aktiv adressiert wurde (kein Beleg → `unbekannt`, Verweigerung → `verweigert`, nicht anwendbar → `nicht_zutreffend`)
+- [ ] Felder mit gesetztem `nicht_befund_typ` erscheinen im Slot-Tracker als „nicht belegbar", nicht als offene Lücke für erneute Nachfrage
 - [ ] Halluzinationsrate (Feldwerte ohne Verbatim-Beleg im Transkript) < 1 % gemessen im Eval (`npm run eval:interview buchhalter`)
 - [ ] `applyGroundingGuard` und `evidence_span`-Check bleiben unverändert
 
@@ -80,9 +87,9 @@ Die Slot-Target-Hinweistexte im Prompt werden für `estimate`-Slots angepasst: s
 
 ## Edge Cases
 
-- **Slot ist `estimate` nach 2 Nachfrage-Versuchen:** Agent setzt Marker `{ absent: true, reason: 'low_confidence_persistent' }` statt unbegrenzt weiterzufragen — verhindert Nachfrage-Loop
-- **Befragter verweigert Auskunft explizit:** Agent setzt `{ absent: true, reason: 'refused' }`, fragt nicht erneut, akzeptiert keine Zahl aus dem Kontext
-- **`applyGroundingGuard` lehnt Wert ab, Feld noch `null`:** Analyst schreibt keinen Wert — kein Marker, da unklar ob das Feld überhaupt adressiert wurde; Talker kann im nächsten Turn erneut fragen
+- **Slot ist `estimate` nach 2 Nachfrage-Versuchen:** Der Wert existiert (unsicher belegt), das ist **kein** Nicht-Befund. `nicht_befund_typ` wird nicht gesetzt; stattdessen stoppt die konfidenzgesteuerte Nachfrage nach dem Limit (BL-E2.2, Nachfrage-Loop-Schutz), der `estimate`-Wert bleibt mit seiner Konfidenz stehen
+- **Befragter verweigert Auskunft explizit:** Agent setzt `nicht_befund_typ='verweigert'`, fragt nicht erneut, akzeptiert keine Zahl aus dem Kontext
+- **`applyGroundingGuard` lehnt Wert ab, Feld noch nicht adressiert:** Analyst schreibt keinen Wert und setzt **keinen** `nicht_befund_typ` (Zustand bleibt Lücke, `value == null && nicht_befund_typ == null`), da unklar ist, ob das Feld überhaupt adressiert wurde; Talker kann im nächsten Turn erneut fragen
 - **Migration laufender Interviews:** Bestehende `null`-Felder bleiben `null` — kein Marker rückwirkend gesetzt; kein Breaking Change
 - **`estimate`-Slot wird in `slot_completion` als Target gesetzt, aber Phase wechselt:** Phase-Übergang abbrechen oder Catch-up-Marker setzen — Architektur-Entscheidung
 - **Eval findet Regression:** Nicht deployen; Root Cause analysieren; `computeWalkthroughSlotTarget`-Änderung separat testen
@@ -90,8 +97,8 @@ Die Slot-Target-Hinweistexte im Prompt werden für `estimate`-Slots angepasst: s
 ## Technical Requirements
 
 - **Eval-Gate:** `npm run eval:interview buchhalter` vor Deployment — Halluzinationsrate-Check und Konfidenz-Trigger-Check als neue Scorer
-- **Keine Schema-Migration für laufende Interviews:** `SlotValue | null` bleibt kompatibel; neuer Sentinel-Typ ist additiv
-- **Langfuse:** Analyst-Spans loggen `absent_marker_set: true` wenn Marker gesetzt wird — prüfbar in Trace-Analyse
+- **Keine Schema-Migration für laufende Interviews:** das additive optionale Feld `nicht_befund_typ` auf `SlotValue` ist abwärtskompatibel (Alt-Einträge ohne das Feld werden als `null` = Lücke gelesen); `SlotValue | null` bleibt kompatibel
+- **Langfuse:** Analyst-Spans loggen das gesetzte `nicht_befund_typ` (Wert plus betroffener Slot), wenn ein Nicht-Befund markiert wird, prüfbar in der Trace-Analyse
 - **Unit-Tests:** `computeWalkthroughSlotTarget` mit `estimate`/`unknown`-Slots abdecken (offline, ohne LLM)
 
 ---
