@@ -1,6 +1,6 @@
 # PROJ-30: Tiefe-/O10-Metrik
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-21
@@ -301,7 +301,15 @@ Langfuse: 4 neue Score-Objekte (`depth_score`, `depth_p1`, `depth_p2`, `depth_p3
 - M2 betrifft zukünftigen PROJ-25-Effekt, kein Bruch heute
 
 ## Deployment
-_To be added by /deploy_
+
+| Aspekt | Wert |
+|--------|------|
+| Production URL | https://meridian-app.vercel.app |
+| Deployed | 2026-06-17 |
+| G1 (Build/Lint/TS) | pass |
+| G2 (Tests: 553/553) | pass |
+| G3 (Sandbox) | n/a — Vercel auto-deploy via push to main |
+| G4 (Security) | n/a — keine Auth/RLS/API/LLM-Endpoint-Änderungen |
 
 ## Implementation Notes (2026-06-17)
 
@@ -320,13 +328,12 @@ _To be added by /deploy_
 **Build-Loops:** Coder: 1 Iteration, Reviewer: 1 Iteration, Verifier: 1 Iteration. Alle Checks grün.
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: < 1d (Spec war vollständig) |
-| Größte Überraschung | `backfill-fixtures-from-md.ts` + `runReplay.ts` mussten mitgepatcht werden |
-| Vorgeschlagene Regeländerung | — |
+| Spec-Genauigkeit | High — alle ACs umsetzbar wie spezifiziert; L1 (Signatur-Abweichung) war bewusste Designentscheidung, kein Spec-Fehler |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: < 1d (Spec war vollständig, kein Architektur-Rätselraten nötig) |
+| Größte Überraschung | Deploy-Konflikt: Remote hatte inzwischen 3 neue Scorer (PROJ-27/28) — rebase nötig mit manuellem Merge aller 5 konfliktierenden Dateien |
+| Vorgeschlagene Regeländerung | Vor Deploy immer `git fetch && git status` prüfen; bei schnell laufenden parallelen Features täglich pullen |
 | Build-Loop-Iterationen | tatsächlich: 1 (geplant: ≤5) |
 | Häufigste Fehlerkategorie im Loop | — |
