@@ -126,7 +126,141 @@ Die Arbeit ist überwiegend Prompt-Revision, aber nicht ausschließlich. Die Dim
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Übersicht
+
+PROJ-29 ist eine reine In-File-Revision von `src/services/interviewAgent.ts`. Keine neue Datenbank-Tabelle, kein neuer API-Endpoint, kein neues npm-Paket. Die sieben Gesprächsführungs-Dimensionen verteilen sich auf zwei Implementierungsschichten.
+
+---
+
+### Schicht A — Reine Prompt-Revisionen (`buildPhaseMethodology`)
+
+Vier Dimensionen haben keine stateful Garantie — sie werden als Direktiven im phasenspezifischen Methodologie-Block formuliert. Kein neuer Helfer, kein Zähler.
+
+| Dimension | Phase(n) | Änderung |
+|-----------|----------|----------|
+| **E3.3 Konzept-verankerung** | walkthrough_step, slot_completion, coverage_check | Bestehende Negativformulierung ("keine noch nicht genannten Daten") wird durch eine positive Anker-Pflicht ersetzt: jede Nachfrage muss ein Konzept, eine Aussage oder einen Schritt aus den letzten vier Befragten-Turns explizit referenzieren. Negations-Aussagen ("nutzen wir kein SAP") werden als explizite Anti-Anker gelistet. |
+| **E3.5 Maieutische Schärfung** | alle aktiven Phasen | Neue Regel im Methodologie-Text: keine inhaltlichen Eigenvorschläge in Fragen ("Was wäre, wenn du Tool X hättest?"), keine Leading-Questions ("Wäre das wie...?"). ANKER-SPERRE und `extractNumericTokens`-Prüfung bleiben unverändert. |
+| **E3.6 Profil-adaptives Framing** | alle aktiven Phasen | `buildPhaseMethodology` wird um `employeeRole` und `department` als Parameter erweitert. Fachfremde Rollen (Verwaltung, Sachbearbeitung) erhalten die Direktive für alltagsnahe Sprache; Fach-/IT-Rollen bekommen Domänen-Terminologie gespiegelt. Fehlende Profil-Felder → kein Fallback-Branching, neutrales Framing wie bisher. |
+| **E3.7 Lösungssperre / Ist-Fokus** | wrap_up + alle aktiven Phasen | To-be-Einladung ("Wenn du einen Punkt ändern könntest") aus `wrap_up`-Prompt entfernen. Neue Ist-Fokus-Direktive in `walkthrough_step` und `slot_completion`: keine Fragen die Verbesserungsideen einladen; spontane To-be-Nennungen → Ist-Problem dahinter vertiefen. |
+
+---
+
+### Schicht B — Detektor → Direktive (`buildDynamicContext` + drei neue private Helfer)
+
+Drei Dimensionen brauchen deterministische Detektion oder Cross-Turn-Zähler, weil reine Prompt-Anweisung die Garantien aus den REQs nicht trägt. Das Muster folgt exakt dem etablierten drill-stop / ANKER-SPERRE Hybrid: ein Helfer analysiert den Turn-Zustand, `buildDynamicContext` injiziert eine zwingend markierte Direktive (`⚠️` / `⛔`) wenn der Helfer feuert.
+
+#### E3.1 — Ambiguität-Detektor
+
+```
+detectAmbiguity(lastUserTurn, stepTracker, recentAssistantTurns)
+  → { conflict: true, phraseA: string, phraseB: string } | null
+```
+
+**Was es tut:** Vergleicht den aktuellen `lastUserTurn` gegen bereits erfasste Slot-Werte im `stepTracker` und gegen das `recentAssistantTurns`-Fenster (4 Turns). Konflikt = zwei faktisch unterschiedliche Aussagen zum gleichen Sachverhalt.
+
+**Detektion (deterministisch):**
+- Numerische Konflikte: `extractNumericTokens` auf `lastUserTurn` + zugehörige Slot-Werte → Größenordnungsvergleich (≥ Faktor 3 = Konflikt-Kandidat)
+- Terminologische Widersprüche: Pattern-Match auf "aber eigentlich", "oder doch", "obwohl vorhin" im `lastUserTurn`
+- Unsicherheit ("ich glaube", "vielleicht", "ungefähr") = kein Konflikt, nur Lücken-Kandidat
+
+**Inject:** `## ⚠️ AMBIGUITÄT-KLÄRUNG` Block mit phraseA und phraseB — Talker benennt beide Aussagen explizit. Lücken-Nachfrage (`computeMissingMandatorySlots`) bleibt erhalten — additiv, nicht ersetzend. Priorität: Ambiguität geht vor Lücke in diesem Turn.
+
+---
+
+#### E3.2 — Ausnahme-Detektor + Re-Kontextualisierungs-Cap
+
+**Ausnahme-Detektion (stateless, per-Turn):**
+
+```
+detectException(lastUserTurn) → boolean
+```
+
+Regex auf Ausnahme-Signale: `manchmal`, `außer wenn`, `im Sonderfall`, `wenn .* dann`, `aber nicht immer`. Bei Treffer injiziert `buildDynamicContext` eine "Ausnahme vertiefen"-Direktive.
+
+**Re-Kontextualisierungs-Cap (stateful):**
+
+Der Mindestabstand von drei Turns zwischen Re-Kontextualisierungen wird über einen neuen Cross-Turn-Zähler `recontextStreak` im `AnalystBriefing` / `InterviewContext` getragen — identisches Bridge-Muster wie `usedFillerPhrases`:
+
+```
+AnalystBriefing  →  (next_briefing JSON)  →  InterviewContext
+  recontextStreak?: number                    recontextStreak?: number
+```
+
+- `recontextStreak` = 0 → soeben re-kontextualisiert, Cap aktiv
+- `recontextStreak` ≥ 3 → Re-Kontextualisierung erlaubt
+- `buildDynamicContext` injiziert Re-Kontext-Direktive nur wenn `recontextStreak` ≥ 3 (oder undefined)
+- Der Analyst inkrementiert/resetzt den Zähler als Teil des normalen `AnalystBriefing`-Writes (kein neues Tool)
+
+---
+
+#### E3.4 — Blockade-Detektor + Laddering-Zähler
+
+```
+detectBlockade(lastUserTurn) → boolean
+```
+
+Feuert wenn:
+- Wortanzahl `lastUserTurn` < 10 (Schwelle analog `detectPersonaRefuse`)
+- ODER Phrase-Match: "weiß ich nicht", "keine Ahnung", "ist halt so", "immer schon so", "weiß nicht genau"
+
+**Laddering-Direktive:** Bei Blockade injiziert `buildDynamicContext` `## ⚠️ LADDERING` Direktive: Frametechnik wechseln — Perspektivwechsel, Beispiel-Einladung oder vereinfachende Reformulierung. Keine strukturell identische Folgefrage.
+
+**Zwei-Turn-Abbruch:** Cross-Turn-Zähler `ladderiungStreak` (Bridge analog E3.2):
+
+```
+AnalystBriefing  →  InterviewContext
+  ladderiungStreak?: number
+```
+
+- Nach 2 Laddering-Turns: `buildDynamicContext` injiziert `⛔ LADDERING-ABBRUCH`: Thema fallen lassen, nächsten Aspekt/Schritt adressieren
+
+---
+
+### Neue Interface-Felder
+
+Zwei neue optionale Felder folgen dem `usedFillerPhrases`-Muster — Bridge von `AnalystBriefing` → `InterviewContext` → `buildDynamicContext`:
+
+```
+AnalystBriefing:
+  + recontextStreak?: number    // 0 = soeben rekontext., ≥3 = erlaubt, undefined = noch nie
+  + ladderiungStreak?: number   // 0 = kein Blockade-Turn, 1 = erster, 2+ → Abbruch
+
+InterviewContext:
+  + recontextStreak?: number
+  + ladderiungStreak?: number
+```
+
+Alle Felder optional — keine Breaking Changes an bestehenden Aufrufen.
+
+---
+
+### Was unverändert bleibt
+
+| Invariante | Warum |
+|------------|-------|
+| `computeMissingMandatorySlots` | E3.1 ist additiv — Lücken-Nachfrage bleibt eigenständig |
+| ANKER-SPERRE + `extractNumericTokens` | E3.5 erweitert nur Prompt-Direktiven |
+| `anchoringViolations`-Scorer | liegt in Analyst-Scope |
+| `detectDrillStops` / drill-stop | E3.4 Blockade-Detektor ist komplementär |
+| `detectPersonaRefuse` / refuse-detect | E3.4 erweitert Phrasen-Liste nicht destruktiv |
+| `coverage_check`-Phase-Logik | kein PROJ-29-Scope |
+| DB-Schema, API-Routes, npm-Pakete | keine Änderungen |
+
+---
+
+### Betroffene Dateien
+
+| Datei | Änderungstyp |
+|-------|-------------|
+| `src/services/interviewAgent.ts` | alle Änderungen (Schicht A + B) |
+| Keine anderen Dateien | — |
+
+---
+
+### Verifikation nach Implementierung
+
+Einen `/eval:interview`-Lauf mit Persona `buchhalter` durchführen. Metrische Schwellen (REQ-016 ≥80%, REQ-017 ≥85%) werden in PROJ-31 verifiziert — PROJ-29 liefert die Prompt-Basis.
 
 ## QA Test Results
 _To be added by /qa_
