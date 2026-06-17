@@ -14,12 +14,12 @@
 
 | BL-Item | Titel | REQ |
 |---------|-------|-----|
-| BL-E5.2 | Judge-Disziplin | REQ-009, REQ-010, REQ-011 |
+| BL-E5.2 | Judge-Disziplin | REQ-009, REQ-010, REQ-011, REQ-012 |
 | BL-E5.3 | Persona-Perturbation | REQ-014 |
 | BL-E5.4 | Mehrfach-Läufe und Seed | EVAL-D-11/12 |
 | BL-E5.5 | Paraphrasen-Robustheitstest | REQ-014 |
 
-BL-E5.6 (SME-in-the-loop) ist aus diesem Scope herausgenommen — zu eng an TF4/Thesis-Methodik; wird in meridian-ma separat behandelt.
+BL-E5.6 (SME-in-the-loop) ist aus diesem Scope herausgenommen: die Inter-Rater-Kalibrierung (Cohen's κ ≥ 0,70, ADR-T011 Limitation 1 / EVAL-J-06) braucht einen menschlichen Zweitcodierer und ist TF4-Methodik. Sie wird in meridian-ma geführt; die Bau-seitige Kalibrierungsbasis (`depth-rubric.md`) liefert PROJ-30. Hinweis Traceability: der Build-Backlog ordnet PROJ-31 die Items BL-E5.2–E5.6 zu; mit dieser Herausnahme baut PROJ-31 nur E5.2–E5.5, E5.6 ist nach meridian-ma/TF4 verschoben.
 
 ## Dependencies
 
@@ -57,8 +57,10 @@ PROJ-21 hat die Eval-Foundation gebaut: Modell-Matrix, sechs Scorer, A/B-Verglei
 - [ ] Score-Parsing robust: erkennt `Stufe: 1/2/3`, Rohzahl `1`/`2`/`3` und mapped auf 0.33/0.67/1.00. Fallback bei unbekanntem Format: 0.5 + Warning.
 - [ ] Judge-Begründung (alles vor dem Score) wird im Markdown-Report unter `## Judge-Begründung` festgehalten.
 - [ ] Positions-Swap-Unit-Test: Judge-Aufruf mit identischen Turns in umgekehrter Reihenfolge darf keine systematische Abweichung > 0.15 erzeugen (Stufen-Differenz ≤ 1 in ≥ 80 % der Test-Cases).
-- [ ] `--isolated-criteria` Flag: bei Aufruf wird je Kriterium ein separater Judge-Call durchgeführt (5 Calls); Output: 5 Subscores + gewichtetes Aggregat.
-- [ ] Cross-Vendor-Routing (`getJudgeModel`) und `temperature: 0` bleiben unverändert (Schutzgut aus PROJ-21).
+- [ ] Die Judge-Disziplin gilt auch für den `slotDepth`-Batch-Judge aus PROJ-30 (REQ-012): ein Positions-Swap über die Slot-Reihenfolge im Batch erzeugt keine systematische Abweichung > 0.15 (Stufen-Differenz ≤ 1 in ≥ 80 % der Test-Cases). Damit wird die in PROJ-30 nach hier vertagte Order-Unabhängigkeit (EVAL-J-02) eingelöst.
+- [ ] Der Standard-Aufruf bewertet genau ein Kriterium (Natürlichkeit) mit der verankerten Rubrik; damit ist REQ-010/EVAL-J-03 im Default erfüllt (eine Kriteriumsdefinition je Aufruf, Begründung vor Score). Das `--isolated-criteria` Flag ist die optionale Sub-Dimensions-Diagnose: je Sub-Kriterium ein separater Judge-Call (5 Calls); Output: 5 Subscores + gewichtetes Aggregat.
+- [ ] Cross-Vendor-Routing (`getJudgeModel`) und `temperature: 0` bleiben unverändert (Schutzgut aus PROJ-21, deckt EVAL-J-05 Anti-Zirkularität).
+- [ ] EVAL-J-Abdeckung dokumentiert: J-02 (Positions-Swap), J-03 (Kriterienisolation + CoT), J-04 (verankerte Skala), J-05 (Cross-Vendor) sind oben adressiert. J-01 (komparativ statt absolut) wird im A/B-Pfad (`compare.ts`) eingelöst, wo zwei Läufe verglichen werden; der Einzel-Transkript-Score bleibt verankert-absolut (EVAL-J-04), weil Paarvergleich ein zweites Vergleichsobjekt voraussetzt (EVAL-J-01: „wo die Bewertungsaufgabe es zulässt").
 
 ### BL-E5.4 — Mehrfach-Läufe und Seed
 
@@ -88,7 +90,7 @@ PROJ-21 hat die Eval-Foundation gebaut: Modell-Matrix, sechs Scorer, A/B-Verglei
   - Variante C: Stichpunkt-/Fließtext-Wechsel
 - [ ] `npm run eval:interview:paraphrase-test` führt alle deterministischen Scorer auf Original + 3 Varianten aus. Läuft lokal ohne API-Keys.
 - [ ] Toleranzschwelle deterministischer Scorer: Differenz ≤ ±0.05 vs. Original → Pass; sonst Fail.
-- [ ] `dialogNaturalness` (LLM-basiert): höhere Toleranz ±0.10; bei Fail ist das kein harter Blocker, sondern eine Warnung.
+- [ ] LLM-basierte Judges (`dialogNaturalness` und der `slotDepth`-O10-Judge aus PROJ-30): höhere Toleranz ±0.10; bei Fail kein harter Blocker, sondern Warnung. REQ-014 nennt die Stabilität der internen Urteile O8/O10 explizit, daher gehört der Tiefe-Judge in den Paraphrasen-Test; der API-key-freie deterministische Kern bleibt davon getrennt lauffähig.
 - [ ] Ausgabe auf stdout: Markdown-Tabelle mit Pass/Fail je Scorer × Variante.
 - [ ] Test ist eigenständig lauffähig ohne den Eval-Runner zu starten.
 

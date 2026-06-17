@@ -90,7 +90,7 @@ Der Scorer ist schemaagnostisch: er urteilt über den Inhalt jedes befüllten Sl
 
 ## Out of Scope
 
-- **SME-Kalibrierung / zweiter Codierer**: Rubrik-Kalibrierung (Cohen's κ ≥ 0,70) ist Bestandteil von PROJ-31 (BL-E5.6), nicht PROJ-30. PROJ-30 liefert die technische Implementierung und die Rubrik-Dokumentation als Kalibrierungsbasis.
+- **SME-Kalibrierung / zweiter Codierer**: Rubrik-Kalibrierung (Cohen's κ ≥ 0,70) ist TF4-Methodik und liegt in meridian-ma (BL-E5.6, Inter-Rater-Auflage ADR-T011 Limitation 1 / EVAL-J-06), nicht im Bau-Repo und nicht in PROJ-30. PROJ-30 liefert die technische Implementierung und die Rubrik-Dokumentation (`depth-rubric.md`) als Kalibrierungsbasis.
 - **Tiefe-Messung auf echten Produktiv-Interviews**: Scorer läuft nur auf Eval-Runs (wie alle PROJ-21-Scorer).
 - **Judge-Disziplin-Schärfung** (Positionsverzerrung, Verbosity-Bias): PROJ-31.
 - **Persona-Perturbation**: PROJ-31.
