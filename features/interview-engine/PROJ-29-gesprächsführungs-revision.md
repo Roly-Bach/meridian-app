@@ -23,7 +23,9 @@ Die Interview-Engine führt Gespräche nach dem Walkthrough-Protokoll (ADR-008/A
 | E3.6 | Profil-adaptives Framing | anpassen |
 | E3.7 | Lösungssperre / Ist-Fokus | anpassen |
 
-Alle Änderungen sind Prompt-Revisionen in `src/services/interviewAgent.ts`. Kein neues Tool, kein neuer API-Endpoint, keine DB-Änderung. Der Lücken-Auslöser (`computeMissingMandatorySlots`), die ANKER-SPERRE und `anchoringViolations`-Scorer bleiben vollständig erhalten.
+Alle Änderungen leben in `src/services/interviewAgent.ts`. Kein neues Tool, kein neuer API-Endpoint, keine DB-Änderung. Der Lücken-Auslöser (`computeMissingMandatorySlots`), die ANKER-SPERRE und `anchoringViolations`-Scorer bleiben vollständig erhalten.
+
+Die Arbeit ist überwiegend Prompt-Revision, aber nicht ausschließlich. Die Dimensionen mit zählbaren oder stateful Garantien (E3.1 Konflikt-Erkennung, E3.2 Re-Kontextualisierungs-Cap, E3.4 Blockade-Signal und Zwei-Turn-Abbruch) folgen dem im Code bereits etablierten Hybrid-Muster: ein deterministischer Detektor oder Zähler im Code spannt eine Direktive in den Prompt, der Prompt ist der Aktuator. Das setzt die vorhandenen In-File-Helfer fort (drill-stop über `recentAssistantTurns`, refuse-detect über `lastUserTurn`, Cross-Turn-Zähler über `next_briefing`/`usedFillerPhrases`, Detektor-Pattern wie `extractNumericTokens`) und ist kein neues Tool, kein Endpoint, keine DB-Änderung. Reine Prompt-Anweisung trägt diese drei Garantien nicht verlässlich.
 
 **Traceability:** BL-E3.1–E3.7 → REQ-001, REQ-002, REQ-016, REQ-017, REQ-024, REQ-025, REQ-026, REQ-027
 
@@ -51,12 +53,13 @@ Alle Änderungen sind Prompt-Revisionen in `src/services/interviewAgent.ts`. Kei
 - [ ] Engine erkennt konfligierende Aussagen innerhalb der aktuellen Session (z.B. "Das dauert 5 Minuten" vs. spätere Beschreibung eines mehrstündigen Vorgangs zum gleichen Schritt) und stellt eine Nachfrage, die den Widerspruch explizit benennt — nicht einen fehlenden Wert anfordert
 - [ ] Ambiguitäts-Nachfrage unterscheidet sich strukturell von Lücken-Nachfrage: benennt beide konfligierenden Aussagen ("Du hast vorhin X erwähnt — jetzt beschreibst du Y. Was ist der Unterschied?")
 - [ ] `computeMissingMandatorySlots` bleibt unverändert — Ambiguitäts-Auslöser ist additiv, nicht ersetzend
+- [ ] Die Konflikt-Erkennung stützt sich auf eine deterministische Vergleichsfläche (neue Aussage gegen den erfassten Slot-Stand und das `recentAssistantTurns`-Fenster), nicht allein auf spontanes Bemerken durch das Modell; sonst ist die ≥80%-Klassifikation (REQ-016) prompt-seitig nicht verlässlich erreichbar
 
 ### BL-E3.2 — Ausnahme-Auslöser + Ziel-/Kontextsteuerung
 
 - [ ] Erwähnt der Befragte eine Abweichung vom Normalfall ("manchmal", "außer wenn", "im Sonderfall", "wenn X dann Y"), vertieft die Engine explizit: eine Nachfrage zu diesem Sonderfall statt sofort weiterzugehen
 - [ ] Bei Abschweifung (keine Register-Kandidaten, keine Slot-Signale, kein Walkthrough-Content in der Antwort) re-kontextualisiert die Engine in einem Satz auf das Interviewziel und einen offenen Punkt, bevor sie weiterfragt
-- [ ] Re-Kontextualisierung tritt nicht öfter als einmal in drei aufeinanderfolgenden Turns auf
+- [ ] Re-Kontextualisierung tritt nicht öfter als einmal in drei aufeinanderfolgenden Turns auf; der Abstand wird über einen deterministischen Cross-Turn-Zähler im `next_briefing` geführt (analog `usedFillerPhrases`), nicht über Prompt-internes Turn-Zählen
 - [ ] Slot-Coverage-Lücken werden weiterhin von der bestehenden `coverage_check`-Phase nachgefüllt — BL-E3.2 fügt keinen neuen Mechanismus dafür ein
 
 ### BL-E3.3 — Konzept-verankerte Nachfrage
@@ -70,6 +73,7 @@ Alle Änderungen sind Prompt-Revisionen in `src/services/interviewAgent.ts`. Kei
 - [ ] Bei Blockade-Signal — Antwort mit weniger als ca. 10 Wörtern ODER Formulierungen wie "weiß ich nicht", "keine Ahnung", "ist halt so", "immer schon so" — wechselt die Engine die Frametechnik: Perspektivwechsel, Beispiel-Einladung ("Kannst du ein konkretes Beispiel nennen?") oder vereinfachende Reformulierung
 - [ ] Engine stellt bei Blockade keine strukturell identische Folgefrage (kein Wiederholungs-Retry des gleichen Turns)
 - [ ] Hält die Blockade nach zwei Laddering-Turns an, lässt die Engine das Thema fallen und geht zum nächsten Aspekt über
+- [ ] Das Blockade-Signal (Wortzahl-Schwelle plus Phrasen-Treffer auf `lastUserTurn`) wird deterministisch erkannt, analog dem bestehenden refuse-detect (F1b); der Zwei-Turn-Abbruch läuft über einen deterministischen Laddering-Zähler im `next_briefing`, nicht über Prompt-Zählen
 
 ### BL-E3.5 — Maieutische Schärfung
 
@@ -113,7 +117,8 @@ Alle Änderungen sind Prompt-Revisionen in `src/services/interviewAgent.ts`. Kei
 
 - Alle Änderungen in `src/services/interviewAgent.ts`
 - Primär betroffene Funktionen: `buildPhaseMethodology()`, `buildDynamicContext()`
-- Bestehende Invarianten bleiben erhalten: ANKER-SPERRE, `computeMissingMandatorySlots`, `coverage_check`-Phase, `anchoringViolations`-Scorer, `extractNumericTokens`
+- Deterministische Stütz-Schicht (kein neues Tool, kein Endpoint, keine DB): die zählbaren und stateful Haken (E3.1 Konflikt-Vergleich, E3.2 Re-Kontext-Cap, E3.4 Blockade-Erkennung und Zwei-Turn-Abbruch) werden über kleine In-File-Helfer plus vorhandene Kontextfelder getragen, die dem etablierten Muster folgen: `recentAssistantTurns` (4-Turn-Fenster, deckt zugleich REQ-017), `lastUserTurn` (refuse-detect F1b), Cross-Turn-Zähler im `next_briefing`/`usedFillerPhrases`, Detektor-Pattern wie `extractNumericTokens`. Der Prompt bleibt der Aktuator
+- Bestehende Invarianten bleiben erhalten: ANKER-SPERRE, `computeMissingMandatorySlots`, `coverage_check`-Phase, `anchoringViolations`-Scorer, `extractNumericTokens`, drill-stop (`recentAssistantTurns`), refuse-detect (`lastUserTurn`)
 - Nach Implementierung: einen `/eval:interview`-Lauf mit einer repräsentativen Persona (Empfehlung: `buchhalter`) durchführen, um Regression zu überprüfen
 - Metrische Schwellen (REQ-016 ≥80 %, REQ-017 ≥85 %, REQ-025 Cue-Ausbeute, REQ-026/027 Rater-Werte) werden in PROJ-31 mit verfeinerten Judges verifiziert; PROJ-29 liefert die Prompt-Basis
 
