@@ -179,7 +179,7 @@ Kein UI, keine API-Route, keine DB-Migration. Abwärtskompatibel — Alt-Einträ
 
 **QA Date:** 2026-06-17
 **Tester:** QA Agent
-**Status:** Approved (no Critical/High bugs)
+**Status:** Approved — Bugs B1–B3 geschlossen (0:0:0)
 
 ### AC Results
 
