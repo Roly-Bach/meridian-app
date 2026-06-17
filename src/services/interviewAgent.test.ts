@@ -1198,6 +1198,30 @@ describe('Tool Handlers', () => {
       expect(detectAmbiguity(undefined, [])).toBeNull()
       expect(detectAmbiguity('Test Aussage 100 Minuten.', [])).toBeNull()
     })
+
+    describe('B2 fix: negation-contradiction via priorUserTurns', () => {
+      it('detects "kein SAP" in prior turn + positive SAP mention in current turn', () => {
+        const prior = ['Wir nutzen kein SAP, alles läuft über Excel.']
+        const result = detectAmbiguity('Natürlich prüfe ich kurz in SAP nach.', [], prior)
+        expect(result).not.toBeNull()
+        expect(result?.phraseA).toMatch(/kein SAP/i)
+        expect(result?.phraseB).toMatch(/SAP/i)
+      })
+      it('detects "keine Excel" contradiction', () => {
+        const prior = ['Wir haben keine Excel-Listen dafür.']
+        const result = detectAmbiguity('Ich öffne dann meine Excel-Tabelle und trage es ein.', [], prior)
+        expect(result).not.toBeNull()
+      })
+      it('returns null when current turn does NOT positively mention negated concept', () => {
+        const prior = ['Wir nutzen kein SAP.']
+        const result = detectAmbiguity('Das Prozessschritt dauert etwa 10 Minuten.', [], prior)
+        expect(result).toBeNull()
+      })
+      it('returns null when priorUserTurns is empty', () => {
+        const result = detectAmbiguity('Ich nutze SAP täglich.', [], [])
+        expect(result).toBeNull()
+      })
+    })
   })
 
   describe('wasRecentlyRecontextualized (E3.2 cap)', () => {

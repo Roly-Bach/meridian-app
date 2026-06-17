@@ -468,9 +468,27 @@ const CONTRA_PATTERNS: RegExp[] = [
   /halt nein/i,
 ]
 
+// B2 fix: extract capitalized concepts explicitly negated in prior turns.
+// Pattern: "kein SAP", "keine Excel", "nutzen kein CRM", "gibt es keine Aufzeichnung"
+const NEGATED_CONCEPT_RE = /\bkein[e]?\s+([A-ZÄÖÜ][a-zäöüß]+(?:[A-Z][a-z]+)*)/gi
+
+function extractNegatedConcepts(turns: string[]): Map<string, string> {
+  const result: Map<string, string> = new Map()
+  for (const turn of turns) {
+    const re = new RegExp(NEGATED_CONCEPT_RE.source, 'gi')
+    let m: RegExpExecArray | null
+    while ((m = re.exec(turn)) !== null) {
+      const concept = m[1].toLowerCase()
+      if (concept.length >= 3) result.set(concept, m[0])
+    }
+  }
+  return result
+}
+
 export function detectAmbiguity(
   lastUserTurn: string | undefined,
   stepTracker: StepEntry[],
+  priorUserTurns?: string[],
 ): AmbiguityResult {
   if (!lastUserTurn) return null
 
@@ -488,34 +506,51 @@ export function detectAmbiguity(
   const activeStep =
     stepTracker.find(s => s.status === 'walkthrough') ??
     stepTracker.find(s => s.status === 'exploring')
-  if (!activeStep) return null
+  if (activeStep) {
+    const currentNums = extractNumericTokens(lastUserTurn)
+      .map(Number)
+      .filter(n => !isNaN(n) && n > 0)
 
-  const currentNums = extractNumericTokens(lastUserTurn)
-    .map(Number)
-    .filter(n => !isNaN(n) && n > 0)
-  if (currentNums.length === 0) return null
+    if (currentNums.length > 0) {
+      const durationSlot = activeStep.potenzial.duration_minutes
+      if (durationSlot?.value != null && typeof durationSlot.value === 'number' && durationSlot.value > 0) {
+        for (const n of currentNums) {
+          const ratio = Math.max(n, durationSlot.value) / Math.min(n, durationSlot.value)
+          if (ratio >= 3 && n !== durationSlot.value) {
+            return {
+              phraseA: `${durationSlot.value} Minuten (erfasst)`,
+              phraseB: `${n} (aktuelle Aussage)`,
+            }
+          }
+        }
+      }
 
-  const durationSlot = activeStep.potenzial.duration_minutes
-  if (durationSlot?.value != null && typeof durationSlot.value === 'number' && durationSlot.value > 0) {
-    for (const n of currentNums) {
-      const ratio = Math.max(n, durationSlot.value) / Math.min(n, durationSlot.value)
-      if (ratio >= 3 && n !== durationSlot.value) {
-        return {
-          phraseA: `${durationSlot.value} Minuten (erfasst)`,
-          phraseB: `${n} (aktuelle Aussage)`,
+      const freqSlot = activeStep.potenzial.frequency_per_month
+      if (freqSlot?.value != null && typeof freqSlot.value === 'number' && freqSlot.value > 0) {
+        for (const n of currentNums) {
+          const ratio = Math.max(n, freqSlot.value) / Math.min(n, freqSlot.value)
+          if (ratio >= 3 && n !== freqSlot.value) {
+            return {
+              phraseA: `${freqSlot.value}× pro Monat (erfasst)`,
+              phraseB: `${n} (aktuelle Aussage)`,
+            }
+          }
         }
       }
     }
   }
 
-  const freqSlot = activeStep.potenzial.frequency_per_month
-  if (freqSlot?.value != null && typeof freqSlot.value === 'number' && freqSlot.value > 0) {
-    for (const n of currentNums) {
-      const ratio = Math.max(n, freqSlot.value) / Math.min(n, freqSlot.value)
-      if (ratio >= 3 && n !== freqSlot.value) {
+  // B2 fix: negation contradiction — concept denied in prior turns, mentioned positively now
+  if (priorUserTurns && priorUserTurns.length > 0) {
+    const negated = extractNegatedConcepts(priorUserTurns)
+    for (const [concept, negPhrase] of negated) {
+      // Positive mention: concept appears without an immediately preceding negation
+      const posRe = new RegExp(`(?<!kein[e]?\\s)\\b${concept}[a-zäöüß]*\\b`, 'i')
+      if (posRe.test(lastUserTurn)) {
+        const posMatch = lastUserTurn.match(new RegExp(`\\b${concept}[a-zäöüß]*\\b`, 'i'))
         return {
-          phraseA: `${freqSlot.value}× pro Monat (erfasst)`,
-          phraseB: `${n} (aktuelle Aussage)`,
+          phraseA: negPhrase,
+          phraseB: posMatch?.[0] ?? concept,
         }
       }
     }
@@ -923,7 +958,9 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     : ''
 
   // E3.1 — Ambiguity: conflicting factual statements (additive to drill-stop/missing-slot)
-  const ambiguityResult = detectAmbiguity(ctx.lastUserTurn, ctx.stepTracker)
+  // Pass prior user turns (exclude current) for negation-contradiction detection (B2 fix)
+  const priorUserTurns = ctx.recentUserTurns?.slice(0, -1)
+  const ambiguityResult = detectAmbiguity(ctx.lastUserTurn, ctx.stepTracker, priorUserTurns)
   const ambiguitySection = ambiguityResult
     ? `\n\n## ⚠️ AMBIGUITÄT-KLÄRUNG (PFLICHT — dieser Turn)\nWidersprüchliche Aussagen erkannt:\n- Früher: "${ambiguityResult.phraseA}"\n- Jetzt: "${ambiguityResult.phraseB}"\nSpreche beide Aussagen explizit an: "Du hast vorhin [A] erwähnt — jetzt sagst du [B]. Was ist der Unterschied?" Keine Lücken-Nachfrage in diesem Turn — Ambiguität hat Vorrang.`
     : ''
@@ -934,7 +971,12 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     ? `\n\n## ⚠️ AUSNAHME ERKANNT\nDer Mitarbeiter hat einen Sonderfall oder eine Ausnahme erwähnt. Vertiefe diesen mit einer gezielten Nachfrage bevor du weitergehst. Ausnahmen die eigenständige Schritte sind → register_step nach 1–2 Vertiefungsfragen.`
     : ''
 
-  // E3.2 re-context: inject only when not recently used (stateless cap via assistant turns)
+  // E3.2 re-context cap: suppress re-contextualization when already used in last 3 turns
+  const recentlyRecontextualized = wasRecentlyRecontextualized(ctx.recentAssistantTurns)
+  const recontextCapSection = recentlyRecontextualized
+    ? `\n\n## Re-Kontext-Sperre (E3.2)\nRe-Kontextualisierung wurde in den letzten Turns bereits eingesetzt — diesen Turn NICHT erneut re-kontextualisieren. Stelle stattdessen eine direkte thematische Nachfrage.`
+    : ''
+
   // E3.4 — Laddering: blockade detection + two-turn drop rule
   const ladderiungStreak = computeLadderingStreak(ctx.recentUserTurns)
   const currentBlockade = detectBlockade(ctx.lastUserTurn)
@@ -952,7 +994,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}${profileFraming}
 
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${drillStopSection}${ambiguitySection}${exceptionSection}${ladderiungSection}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
