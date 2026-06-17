@@ -13,6 +13,11 @@ export interface TurnRecord {
   toolCalls: ToolCallRecord[]
 }
 
+export interface SlotDepthResult {
+  depth_score: number | null
+  depth_distribution: { p1: number; p2: number; p3: number } | null
+}
+
 export interface ScoreSet {
   slotCoverage: number
   dedupSlotCoverage: number
@@ -35,6 +40,8 @@ export interface ScoreSet {
   hallucinationRate: number
   /** PROJ-28/BL-E2.2: fraction of estimate/unknown slots that received a follow-up re-ask within 3 turns. Target > 0.80 */
   confidenceTriggerRate: number
+  depth_score: number | null
+  depth_distribution: { p1: number; p2: number; p3: number } | null
 }
 
 export interface ScorerInput {

@@ -37,6 +37,7 @@ interface ReportFrontmatter {
     tool_call_plausibility: number
     dialog_naturalness: number
     completion_correctness: boolean
+    depth_score?: number | null
   }
 }
 
@@ -200,11 +201,17 @@ function buildComparison(baseline: RunGroup, candidate: RunGroup): string {
       ['anchoring_violations', 'anchoring_violations'],
       ['tool_call_plausibility', 'tool_call_plausibility'],
       ['dialog_naturalness', 'dialog_naturalness'],
+      ['depth_score', 'depth_score'] as [string, keyof typeof bs],
     ]
 
     for (const [label, key] of numericScores) {
-      const bv = bs[key] as number
-      const cv = cs[key] as number
+      const bv = bs[key] as number | null | undefined
+      const cv = cs[key] as number | null | undefined
+      if (bv == null && cv == null) continue
+      if (bv == null || cv == null) {
+        lines.push(`| ${label} | ${bv ?? 'n/a'} | ${cv ?? 'n/a'} | (incomplete) |`)
+        continue
+      }
       const delta = Math.round((cv - bv) * 100) / 100
       const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '='
       const sign = delta > 0 ? '+' : ''

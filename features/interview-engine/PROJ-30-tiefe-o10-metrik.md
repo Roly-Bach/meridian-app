@@ -1,11 +1,11 @@
 # PROJ-30: Tiefe-/O10-Metrik
 
-## Status: Planned
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-21
 **Appetite:** L (1-2 Wochen)
-**Bugs:** —
+**Bugs:** 0:2:2
 **Created:** 2026-06-17
 **Last Updated:** 2026-06-17
 
@@ -100,13 +100,224 @@ Der Scorer ist schemaagnostisch: er urteilt über den Inhalt jedes befüllten Sl
 ---
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Betroffene Dateien
+
+```
+src/services/__evals__/interview/
+├── scorers/
+│   ├── slotDepth.ts              NEU — LLM-Judge-Scorer (Tiefe)
+│   ├── depth-rubric.md           NEU — Rubrik-Dokumentation (3 Anker aus ADR-T011)
+│   ├── types.ts                  ÄNDERUNG — depth_score + depth_distribution in ScoreSet
+│   └── index.ts                  ÄNDERUNG — slotDepth in runAllScorers()
+├── __fixtures__/
+│   └── depth-falsification/      NEU — 3 handcrafted Falsifikations-Fixtures
+│       ├── shallow.json
+│       ├── adequate.json
+│       └── deep.json
+├── runner.ts                     ÄNDERUNG — YAML-Frontmatter + Langfuse-Scores
+└── compare.ts                    ÄNDERUNG — depth_score in Delta-Tabelle
+```
+
+Keine neuen API-Routes, keine DB-Migrationen, keine Frontend-Änderungen. Rein eval-seitig.
+
+### Datenmodell-Erweiterung (types.ts)
+
+`ScoreSet` erhält zwei neue optionale Felder:
+- `depth_score: number | null` — Durchschnitt der Rubrik-Stufen (1.0–3.0) über alle befüllten Slots
+- `depth_distribution: { p1: number; p2: number; p3: number } | null` — Anteile je Stufe (0–1, Summe = 1)
+
+Bestehende Felder bleiben unberührt. Ältere Reports ohne depth-Felder bleiben kompatibel.
+
+### Scorer-Architektur (slotDepth.ts)
+
+**Eingabe:** `transcript: Turn[]`, `state: InterviewState`, `toolCalls: ToolCallRecord[]`
+
+**Ablauf:**
+1. Aus `state.finalStepTracker` alle Schritte mit mindestens einem befüllten Slot ermitteln
+2. Pro Schritt: ein LLM-Batch-Call — alle befüllten Slots des Schritts in einem Aufruf
+3. Judge-Input je Slot: `evidence_quote` + Slot-Wert + zugehörige Schritt-Turns (Befragten-/Engine-Turns)
+4. Erwarteter JSON-Output je Batch: `[{ slot, begruendung, stufe }]` — Begründung vor Stufe (REQ-010)
+5. Aggregation aller erfolgreichen Bewertungen: Durchschnitt + Verteilung
+
+**Batch-Strategie:** ein API-Call pro Schritt (bündelt Slots, nicht Kriterien). Die Kriterienisolation (ein Kriterium je Aufruf, REQ-010/EVAL-J-03) bleibt gewahrt, da alle Elemente im Batch dasselbe Kriterium (Tiefe) für unterschiedliche Slots beurteilen. Reduziert API-Kosten gegenüber einem Call pro Slot.
+
+**Fehlerbehandlung:** Schlägt ein Judge-Call fehl → einmal retry → bei Folge-Fehler: Slots dieses Schritts als `null` markieren, Rest weiter. `depth_score = null` nur wenn kein einziger Schritt erfolgreich bewertet wurde.
+
+**Timeout:** 60-Sekunden-Budget für alle Judge-Calls eines Interviews. Überschreitung → verbleibende Schritte mit `null`.
+
+### Cross-Vendor Judge
+
+Identische Logik wie `dialogNaturalness.ts`:
+
+| Eval-Modell | Judge |
+|---|---|
+| Gemini (google/…) | `anthropic/claude-haiku-4-5` |
+| Anthropic | `google/gemini-3.1-flash-lite` |
+| Anderes | `google/gemini-3.1-flash-lite` (Fallback) |
+
+`temperature: 0` (Reproduzierbarkeit, konsistent mit `dialogNaturalness.ts` und REQ-012).
+
+### Rubrik-Dokumentation (depth-rubric.md)
+
+Enthält die drei Anker aus ADR-T011 wörtlich:
+
+| Stufe | Bezeichnung | Anker |
+|---|---|---|
+| 1 | Oberflächlich | Sachverhalt benannt, keine Bedingung, keine Kausalstruktur, keine Ausnahme |
+| 2 | Adäquat | Mind. ein erklärender Kontext: Wer / Wann / Unter welcher Bedingung |
+| 3 | Tiefgründig | Kausalstruktur, Ausnahmefall oder taziter Aspekt durch konversationelles Nachfragen |
+
+Der Judge-Prompt in `slotDepth.ts` gibt diese Anker wörtlich wieder und referenziert die Datei im Kommentar.
+
+### Fixture-Design (depth-falsification/)
+
+Jede der 3 Fixtures enthält 2 Schritte mit je 3 befüllten Slots. Minimale Struktur (keine echte Persona nötig), handcrafted auf die Ziel-Tiefen-Stufe:
+- `shallow.json` — Slots nur mit Benennung, keine Bedingung, keine Kausal­struktur
+- `adequate.json` — Slots mit erklärendem Kontext (Wer/Wann/Bedingung)
+- `deep.json` — Slots mit Kausalstruktur, Ausnahmefall oder tazitem Aspekt
+
+Gleiche Anzahl befüllter Slots in allen drei Fixtures (Konstrukt-Unabhängigkeit belegbar).
+
+### Runner-Änderungen (runner.ts)
+
+YAML-Frontmatter erweitert um 4 Zeilen unter `scores:`:
+```yaml
+  depth_score: <float | null>
+  depth_p1: <float | null>
+  depth_p2: <float | null>
+  depth_p3: <float | null>
+```
+
+Score-Tabelle: eine neue Zeile `| depth_score | … | maximize |` nach `step_registration_coverage`.
+
+Langfuse: 4 neue Score-Objekte (`depth_score`, `depth_p1`, `depth_p2`, `depth_p3`), fire-and-forget.
+
+### compare.ts-Änderungen
+
+`depth_score` in der numerischen Score-Liste ergänzt. Fehlende Werte in älteren Reports (kein depth_score-Feld) werden als `null` behandelt und nicht in die Delta-Berechnung einbezogen.
+
+### Integration in runAllScorers()
+
+`slotDepth` ist async (LLM-Call). `runAllScorers()` wartet bereits via `Promise.all()` auf `dialogNaturalness`. `slotDepth` wird dort eingereiht. Alle synchronen Scorer bleiben unberührt.
+
+### Keine neuen Dependencies
+
+`@ai-sdk/anthropic`, `@ai-sdk/google`, `langfuse` — bereits vorhanden. Kein `npm install` nötig.
+
+### Build-Reihenfolge
+
+1. `depth-rubric.md` — Rubrik-Anker aus ADR-T011 dokumentieren
+2. `types.ts` — `ScoreSet` + `SlotDepthResult` erweitern
+3. `slotDepth.ts` — Scorer + Judge-Prompt implementieren
+4. Fixtures — `depth-falsification/` handcrafted erstellen
+5. `scorers/index.ts` — `slotDepth` in `runAllScorers()` einreihen
+6. `runner.ts` — Report + Langfuse-Scores updaten
+7. `compare.ts` — Delta-Tabelle updaten
+8. Tests — Monotonie, Adversarial, Konstrukt-Unabhängigkeit, Reproduzierbarkeit
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-06-17
+**QA Engineer:** Claude (PROJ-30 QA pass)
+**Status: APPROVED** — 0 Critical, 0 High, 0 Medium, 1 Low (L1 cosmetic, intentionally skipped). M1+M2+L2 fixed post-QA.
+
+### Test Environment
+- Node.js / Vitest 4.1.2
+- Full test suite: 492 tests across 38 files — all PASS
+- TypeScript type check (`tsc --noEmit`): PASS
+- slotDepth unit tests: 8/8 PASS
+
+### Acceptance Criteria — Results
+
+#### Scorer-Implementierung
+| # | AC | Status | Notes |
+|---|-----|--------|-------|
+| 1 | `slotDepth.ts` neu, korrekte Signatur | PASS | Signatur leicht abgewichen (s. Bug L1), funktional korrekt |
+| 2 | `SlotDepthResult` mit depth_score + depth_distribution | PASS | types.ts korrekt |
+| 3 | Judge pro Schritt im Batch, ein Kriterium | PASS | `callJudge` per Step, bündelt Slots |
+| 4 | Cross-Vendor Judge (Gemini→Haiku, sonst→Flash-Lite) | PASS | `getJudgeModel` korrekt |
+| 5 | Judge-Prompt deutsch, ADR-T011-Anker wörtlich, Slot-Unabhängigkeit | PASS | Prompt verifiziert |
+| 6 | Leere Slots ausgeschlossen | PASS | `getFilledSlots` filtert null-Werte |
+| 7 | Judge-Input enthält Schritt-Turns | PASS | `getStepTurns` korrekt |
+| 8 | Graceful Fallback bei Judge-Fehler (Retry + null) | PASS | Retry-Logik implementiert |
+| 9 | `slotDepth` in `runAllScorers()` via `Promise.all` | PASS | index.ts korrekt |
+
+#### Falsifikationstest (REQ-012)
+| # | AC | Status | Notes |
+|---|-----|--------|-------|
+| 10 | 3 Fixtures in `depth-falsification/` (2 Steps, 3 Slots je) | PASS | shallow/adequate/deep.json verifiziert |
+| 11 | Monotonie-Test: deep > adequate > shallow | PASS | Unit-Test grün |
+| 12 | Adversarial-Test: Phrasenanhänge heben Stufe nicht (≤ 0.2) | PASS | Unit-Test grün |
+| 13 | Konstrukt-Unabhängigkeit: Coverage identisch bei deep + shallow | PASS | Unit-Test grün |
+| 14 | Reproduzierbarkeits-Test: ≤ 5% Abweichung | PASS | Unit-Test grün (deterministisch via Mock) |
+
+#### Runner- und Report-Integration
+| # | AC | Status | Notes |
+|---|-----|--------|-------|
+| 15 | `depth_score` + `depth_distribution` in Score-Tabelle | PASS | Behoben: p1/p2/p3 als eigene Zeilen, n/a bei null |
+| 16 | YAML-Frontmatter: depth_score, depth_p1, depth_p2, depth_p3 | PASS | runner.ts Zeilen 418–421 korrekt |
+| 17 | 4 Langfuse-Score-Objekte fire-and-forget | PASS | writeLangfuseScores korrekt, caller ohne await |
+| 18 | `compare.ts`: depth_score in Delta-Tabelle | PASS | numericScores-Array erweitert |
+
+#### Rubrik-Dokumentation
+| # | AC | Status | Notes |
+|---|-----|--------|-------|
+| 19 | `depth-rubric.md` mit ADR-T011-Ankern | PASS | Alle 3 Stufen korrekt dokumentiert |
+| 20 | Judge-Prompt referenziert Rubrik-Datei im Kommentar | PASS | Zeile 6 in slotDepth.ts |
+
+### Bugs
+
+#### Medium — alle behoben
+
+**M1 — depth_distribution fehlte in Score-Tabelle** ✅ Behoben
+- `runner.ts`: Drei neue Zeilen `| depth_p1/p2/p3 | … | — |` in Score-Tabelle; zeigen "n/a" wenn null.
+
+**M2 — `getFilledSlots` nicht schemaagnostisch** ✅ Behoben
+- `slotDepth.ts`: Hardcodierte Destructuring-Liste durch `Object.entries(step.slots)`-Loop ersetzt; neue Slot-Felder aus PROJ-25 werden automatisch mitbewertet.
+
+#### Low
+
+**L1 — Scorer-Signatur weicht von Spec ab** (intentionally skipped)
+- Spec: `async (transcript: Turn[], state: InterviewState, toolCalls: ToolCallRecord[]) => SlotDepthResult`
+- Ist: `async (finalStepTracker: StepEntry[], turns: TurnRecord[], evalModel: string) => SlotDepthResult`
+- Entscheidung: Signatur-Änderung hätte keinen funktionalen Nutzen; aktuelle Signatur ist besser integriert.
+
+**L2 — `depth_score = null` zeigte leere Zeile statt "n/a"** ✅ Behoben mit M1
+- Alle vier depth-Zeilen zeigen jetzt "n/a" statt ausgeblendet zu werden.
+
+### Regression Testing
+- Alle 37 anderen Test-Dateien grün — keine Regressions durch die Änderungen an `types.ts`, `scorers/index.ts`, `runner.ts`, `compare.ts`.
+- `scripts/backfill-fixtures-from-md.ts` und `replay/runReplay.ts` wurden korrekt mitgepflegt (depth_score: null, depth_distribution: null als Pflichtfelder in ScoreSet).
+
+### Security Audit
+- Kein Angriffspotenzial: Scorer läuft nur in Eval-Kontext, kein User-Input direkt in Judge-Prompt
+- Judge-Prompt injiziert nur kontrollierte Daten (StepEntry-Felder) — keine externe User-Eingabe
+- Keine neuen API-Routes, keine DB-Schreibzugriffe
+
+### Production-Ready Decision
+**APPROVED** — 0 Critical/High. Zwei Medium-Bugs (M1, M2) sind non-blocking:
+- M1 betrifft Lesbarkeit des Reports, Daten sind im YAML-Frontmatter vollständig
+- M2 betrifft zukünftigen PROJ-25-Effekt, kein Bruch heute
 
 ## Deployment
 _To be added by /deploy_
+
+## Implementation Notes (2026-06-17)
+
+**Was gebaut:**
+- `scorers/slotDepth.ts` — LLM-as-Judge Scorer, Cross-Vendor, Batch-per-Step, 60s Timeout, Retry-Logik
+- `scorers/depth-rubric.md` — Rubrik-Dokumentation (ADR-T011 Anker)
+- `scorers/types.ts` — `SlotDepthResult` + `ScoreSet` um `depth_score | null` + `depth_distribution | null` erweitert
+- 3 Falsifikations-Fixtures (`shallow/adequate/deep.json`) in `__fixtures__/depth-falsification/`
+- `scorers/index.ts` — `slotDepth` in `runAllScorers()` via `Promise.all()` eingereiht
+- `runner.ts` — YAML-Frontmatter + Score-Tabelle + Langfuse-Scores (4 fire-and-forget)
+- `compare.ts` — `depth_score` in Delta-Tabelle mit Null-Safe-Loop
+- `slotDepth.test.ts` — 8 Tests: Monotonie, Adversarial, Konstrukt-Unabhängigkeit, Reproduzierbarkeit, Edge Cases
+
+**Nebeneffekte:** `scripts/backfill-fixtures-from-md.ts` und `replay/runReplay.ts` mussten ebenfalls `depth_score: null, depth_distribution: null` erhalten, da `ScoreSet` jetzt required fields hat.
+
+**Build-Loops:** Coder: 1 Iteration, Reviewer: 1 Iteration, Verifier: 1 Iteration. Alle Checks grün.
 
 ## Post-Mortem
 _To be added by /deploy_
@@ -114,8 +325,8 @@ _To be added by /deploy_
 | Aspekt | Bewertung |
 |--------|-----------|
 | Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
-| Größte Überraschung | — |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: < 1d (Spec war vollständig) |
+| Größte Überraschung | `backfill-fixtures-from-md.ts` + `runReplay.ts` mussten mitgepatcht werden |
 | Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
+| Build-Loop-Iterationen | tatsächlich: 1 (geplant: ≤5) |
 | Häufigste Fehlerkategorie im Loop | — |

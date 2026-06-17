@@ -1,0 +1,33 @@
+{
+  "finalStepTracker": [
+    {
+      "title": "Rechnungsprüfung",
+      "reihenfolge": 1,
+      "governance": null,
+      "abhaengigkeiten": null,
+      "status": "done",
+      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "slots": {
+        "entscheidungslogik": { "value": "SAP FI", "quote": "SAP FI", "nicht_befund_typ": null },
+        "tazite_cues": { "value": ["Vier-Augen-Prinzip"], "quote": "Vier-Augen-Prinzip", "nicht_befund_typ": null },
+        "ausnahmen": { "value": ["Eilbuchung"], "quote": "Eilbuchung", "nicht_befund_typ": null },
+        "inputs": null, "outputs": null, "hilfsmittel": null
+      }
+    },
+    {
+      "title": "Zahlungsfreigabe",
+      "reihenfolge": 2,
+      "governance": null,
+      "abhaengigkeiten": null,
+      "status": "done",
+      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "slots": {
+        "entscheidungslogik": { "value": "Freigabe", "quote": "Freigabe", "nicht_befund_typ": null },
+        "tazite_cues": { "value": ["Unterschrift"], "quote": "Unterschrift", "nicht_befund_typ": null },
+        "ausnahmen": { "value": ["Urlaub"], "quote": "Urlaub", "nicht_befund_typ": null },
+        "inputs": null, "outputs": null, "hilfsmittel": null
+      }
+    }
+  ],
+  "turns": []
+}

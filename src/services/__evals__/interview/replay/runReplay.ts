@@ -177,6 +177,8 @@ async function main() {
           schemaConformanceRate: scores.schemaConformanceRate ?? 0,
           hallucinationRate: scores.hallucinationRate ?? 0,
           confidenceTriggerRate: scores.confidenceTriggerRate ?? 1,
+          depth_score: null,
+          depth_distribution: null,
         },
         updatedAt: new Date().toISOString(),
       }

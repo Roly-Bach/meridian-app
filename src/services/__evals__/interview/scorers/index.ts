@@ -10,6 +10,7 @@ import { scoreStepRegistrationCoverage } from './stepRegistrationCoverage'
 import { scoreSchemaConformanceRate } from './schemaConformanceRate'
 import { scoreHallucinationRate } from './hallucinationRate'
 import { scoreConfidenceTrigger } from './confidenceTrigger'
+import { scoreSlotDepth } from './slotDepth'
 import type { ScorerInput, ScoreSet } from './types'
 
 export {
@@ -25,19 +26,19 @@ export {
   scoreSchemaConformanceRate,
   scoreHallucinationRate,
   scoreConfidenceTrigger,
+  scoreSlotDepth,
 }
 
 export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
-  const [dialogNaturalness] = await Promise.all([
+  const [dialogNaturalness, slotDepthResult] = await Promise.all([
     scoreDialogNaturalness(input.turns, input.evalModel),
+    scoreSlotDepth(input.finalStepTracker, input.turns, input.evalModel),
   ])
 
   const completionCorrectness = scoreCompletionCorrectness(input.interviewStatus)
   const slotCoverage = round2(scoreSlotCoverage(input.finalStepTracker))
   const dedupSlotCoverage = round2(scoreDedupCoverage(input.finalStepTracker))
 
-  // L9: pre-clarification snapshot. Falls back to final tracker when clarification
-  // did not run (delta then 0 — neither penalty nor credit to recovery path).
   const preTracker = input.preClarificationStepTracker ?? input.finalStepTracker
   const slotCoveragePreClarification = round2(scoreSlotCoverage(preTracker))
   const dedupSlotCoveragePreClarification = round2(scoreDedupCoverage(preTracker))
@@ -58,6 +59,8 @@ export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
     schemaConformanceRate: round2(scoreSchemaConformanceRate(input.finalStepTracker)),
     hallucinationRate: round2(scoreHallucinationRate(input.turns, input.finalStepTracker)),
     confidenceTriggerRate: round2(scoreConfidenceTrigger(input.turns)),
+    depth_score: slotDepthResult.depth_score,
+    depth_distribution: slotDepthResult.depth_distribution,
   }
 }
 

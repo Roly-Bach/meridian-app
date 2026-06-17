@@ -62,6 +62,8 @@ function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['score
     schemaConformanceRate: 0, // live LLM required — set to 0 in offline baselines
     hallucinationRate: 0,
     confidenceTriggerRate: 1,
+    depth_score: null,
+    depth_distribution: null,
   }
 }
 

@@ -418,6 +418,10 @@ function buildReport(opts: {
     `  schema_conformance_rate: ${scores.schemaConformanceRate}`,
     `  hallucination_rate: ${scores.hallucinationRate}`,
     `  confidence_trigger_rate: ${scores.confidenceTriggerRate}`,
+    `  depth_score: ${scores.depth_score ?? 'null'}`,
+    `  depth_p1: ${scores.depth_distribution?.p1 ?? 'null'}`,
+    `  depth_p2: ${scores.depth_distribution?.p2 ?? 'null'}`,
+    `  depth_p3: ${scores.depth_distribution?.p3 ?? 'null'}`,
     trailMetrics ? 'trail:' : null,
     trailMetrics ? `  total_writes: ${trailMetrics.totalWrites}` : null,
     trailMetrics ? `  blocked_writes: ${trailMetrics.blockedWrites}` : null,
@@ -447,6 +451,10 @@ function buildReport(opts: {
     `| schema_conformance_rate | ${scores.schemaConformanceRate} | 1.0 |`,
     `| hallucination_rate | ${scores.hallucinationRate} | < 0.01 |`,
     `| confidence_trigger_rate | ${scores.confidenceTriggerRate} | > 0.80 |`,
+    `| depth_score | ${scores.depth_score ?? 'n/a'} | maximize |`,
+    `| depth_p1 | ${scores.depth_distribution?.p1 ?? 'n/a'} | — |`,
+    `| depth_p2 | ${scores.depth_distribution?.p2 ?? 'n/a'} | — |`,
+    `| depth_p3 | ${scores.depth_distribution?.p3 ?? 'n/a'} | — |`,
     trailMetrics ? `| blocked_rate | ${trailMetrics.blockedRate} | < 0.10 |` : null,
     trailMetrics ? `| overwrite_churn | ${trailMetrics.overwriteChurn} | < 0.20 |` : null,
     '',
@@ -579,6 +587,15 @@ async function writeLangfuseScores(
 
   for (const entry of scoreEntries) {
     lf.score({ traceId: trace.id, name: entry.name, value: entry.value, dataType: entry.dataType })
+  }
+
+  if (scores.depth_score != null) {
+    lf.score({ traceId: trace.id, name: 'depth_score', value: scores.depth_score, dataType: 'NUMERIC' })
+  }
+  if (scores.depth_distribution != null) {
+    lf.score({ traceId: trace.id, name: 'depth_p1', value: scores.depth_distribution.p1, dataType: 'NUMERIC' })
+    lf.score({ traceId: trace.id, name: 'depth_p2', value: scores.depth_distribution.p2, dataType: 'NUMERIC' })
+    lf.score({ traceId: trace.id, name: 'depth_p3', value: scores.depth_distribution.p3, dataType: 'NUMERIC' })
   }
 
   await lf.shutdownAsync()

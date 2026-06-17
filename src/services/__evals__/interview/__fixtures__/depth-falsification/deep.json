@@ -1,0 +1,33 @@
+{
+  "finalStepTracker": [
+    {
+      "title": "Rechnungsprüfung",
+      "reihenfolge": 1,
+      "governance": null,
+      "abhaengigkeiten": null,
+      "status": "done",
+      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "slots": {
+        "entscheidungslogik": { "value": "SAP FI blockiert automatisch ab 5.000 EUR, weil interne Revisionsrichtlinien Vieraugenprinzip vorschreiben", "quote": "SAP FI blockiert automatisch ab 5.000 EUR, weil interne Revisionsrichtlinien Vieraugenprinzip vorschreiben", "nicht_befund_typ": null },
+        "tazite_cues": { "value": ["Ich erkenne fehlerhafte Rechnungen am Schriftbild, weil bestimmte Lieferanten immer denselben Fehler machen – das Wissen kommt aus 8 Jahren Erfahrung, nirgends dokumentiert"], "quote": "Ich erkenne fehlerhafte Rechnungen am Schriftbild", "nicht_befund_typ": null },
+        "ausnahmen": { "value": ["Bei Eilbuchungen unter Zeitdruck übergehe ich die zweite Unterschrift – passiert ca. 3-4 Mal im Jahr und birgt Revisionsrisiko"], "quote": "Bei Eilbuchungen unter Zeitdruck übergehe ich die zweite Unterschrift", "nicht_befund_typ": null },
+        "inputs": null, "outputs": null, "hilfsmittel": null
+      }
+    },
+    {
+      "title": "Zahlungsfreigabe",
+      "reihenfolge": 2,
+      "governance": null,
+      "abhaengigkeiten": null,
+      "status": "done",
+      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "slots": {
+        "entscheidungslogik": { "value": "Der Abteilungsleiter unterschreibt oft blind, weil er mir vertraut – das echte Gate ist meine eigene Prüfung, nicht seine Unterschrift", "quote": "Der Abteilungsleiter unterschreibt oft blind, weil er mir vertraut", "nicht_befund_typ": null },
+        "tazite_cues": { "value": ["Ich prüfe zuerst immer Kontonummer und Bankleitzahl, weil wir einmal eine Zahlung an ein falsches Konto hatten – seitdem ist das mein erster Schritt"], "quote": "Ich prüfe zuerst immer Kontonummer und Bankleitzahl", "nicht_befund_typ": null },
+        "ausnahmen": { "value": ["Bei bestimmten Lieferanten ignoriere ich die 5.000 EUR Grenze weil unser Rahmenvertrag das explizit erlaubt – steht nirgendswo im System"], "quote": "Bei bestimmten Lieferanten ignoriere ich die 5.000 EUR Grenze", "nicht_befund_typ": null },
+        "inputs": null, "outputs": null, "hilfsmittel": null
+      }
+    }
+  ],
+  "turns": []
+}
