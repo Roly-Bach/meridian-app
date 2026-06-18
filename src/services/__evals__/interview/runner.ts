@@ -422,11 +422,13 @@ function buildReport(opts: {
   trailMetrics?: TrailMetrics | null
   runIndex?: number
   runSeed?: number
+  isolatedCriteria?: boolean
+  totalRuns?: number
 }): string {
   const {
     model, personaName, interviewId, evalRunId, baselineLabel,
     turns, finalStepTracker, interviewStatus, scores, trailMetrics,
-    runIndex, runSeed,
+    runIndex, runSeed, isolatedCriteria, totalRuns,
   } = opts
 
   const testerModel = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
@@ -464,6 +466,10 @@ function buildReport(opts: {
     runIndex != null ? `run_index: ${runIndex}` : null,
     runSeed != null ? `run_seed: ${runSeed}` : null,
     runSeed != null ? `perturbation_seed: ${runSeed}` : null,
+    isolatedCriteria ? `isolated_criteria: true` : null,
+    isolatedCriteria && totalRuns && totalRuns > 1
+      ? `judge_calls_note: "isolated_criteria=true runs=${totalRuns} => ${5 * totalRuns} judge calls per persona"`
+      : null,
     `turns_total: ${turns.length}`,
     `status: ${status}`,
     `baseline_label: ${baselineLabel ?? 'null'}`,
@@ -584,6 +590,7 @@ function writeReport(opts: {
   runIndex?: number
   runSeed?: number
   totalRuns?: number
+  isolatedCriteria?: boolean
 }): string {
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10)
@@ -1295,6 +1302,7 @@ async function main() {
             runIndex: runs > 1 ? runIndex : undefined,
             runSeed: runs > 1 ? seed + runIndex - 1 : undefined,
             totalRuns: runs,
+            isolatedCriteria,
           })
 
           console.log(`\n[eval] Report written: ${reportPath}`)

@@ -134,7 +134,102 @@
       "toolCalls": []
     }
   ],
-  "finalStepTracker": [],
+  "finalStepTracker": [
+    {
+      "id": "S001",
+      "title": "Monatsabschluss",
+      "reihenfolge": 1,
+      "governance": null,
+      "abhaengigkeiten": null,
+      "potenzial": {
+        "frequency_per_month": {
+          "value": 1,
+          "quote": "zwölf Durchgänge im Kalenderjahr",
+          "confidence": "confirmed"
+        },
+        "duration_minutes": {
+          "value": 1440,
+          "quote": "24 Arbeitsstunden für einen Abschluss",
+          "confidence": "confirmed"
+        },
+        "error_rate_percent": null,
+        "media_breaks": null
+      },
+      "status": "done",
+      "slots": {
+        "entscheidungslogik": {
+          "value": "Abstimmungsarbeiten in SAP FI folgen einem starren Schema (ca. 80 %); manuelle Nachpflege von Ausnahmen in Excel-Listen erfordert fachliches Ermessen (ca. 20 %).",
+          "quote": "Anteil der festen, strikten Regeln auf etwa 80 Prozent",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": null,
+        "ausnahmen": {
+          "value": ["Manuelle Nachpflege von Sonderfällen außerhalb des regulären Systems in Excel-Hilfslisten"],
+          "quote": "auftretende Ausnahmen manuell außerhalb der regulären Systemumgebung nachgepflegt werden müssen",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "inputs": null,
+        "outputs": null,
+        "hilfsmittel": {
+          "value": ["SAP FI", "Excel-Hilfslisten"],
+          "quote": "Buchungen in SAP FI klaren Vorgaben, Aufbereitung der Fehlerfälle in Excel-Listen",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      }
+    },
+    {
+      "id": "S002",
+      "title": "Rechnungsprüfung",
+      "reihenfolge": 2,
+      "governance": null,
+      "abhaengigkeiten": null,
+      "potenzial": {
+        "frequency_per_month": {
+          "value": 100,
+          "quote": "100 Rechnungen pro Monat",
+          "confidence": "confirmed"
+        },
+        "duration_minutes": {
+          "value": 5,
+          "quote": "innerhalb von etwa fünf Minuten vollständig erfassen und archivieren",
+          "confidence": "confirmed"
+        },
+        "error_rate_percent": {
+          "value": 5,
+          "quote": "bei etwa fünf Prozent der Rechnungen Diskrepanzen",
+          "confidence": "confirmed"
+        },
+        "media_breaks": null
+      },
+      "status": "done",
+      "slots": {
+        "entscheidungslogik": {
+          "value": "Strikte Compliance-Regeln; Zweit-Freigabe ab 5.000 EUR zwingend erforderlich.",
+          "quote": "strikten buchhalterischen Richtlinien, insbesondere bei der Rechnungsprüfung und der notwendigen Zweit-Freigabe ab einem Betrag von 5.000 EUR",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": null,
+        "ausnahmen": {
+          "value": ["Fehlende Bestellreferenz erfordert manuelle Recherche in mehreren Systemen", "Fehlerhafte Steuersätze oder Kostenstellen erfordern manuelle Klärung"],
+          "quote": "fehlende Bestellreferenzen den Prozess durch manuelle Suchvorgänge in unterschiedlichen Systemen erheblich verlangsamen",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "inputs": null,
+        "outputs": null,
+        "hilfsmittel": {
+          "value": ["SAP FI", "DocuWare"],
+          "quote": "in SAP FI gebucht und in DocuWare abgelegt",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      }
+    }
+  ],
   "scores": {
     "slotCoverage": 0.63,
     "dedupSlotCoverage": 0.63,

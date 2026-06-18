@@ -30,6 +30,7 @@ import {
   scoreCompletionCorrectness,
   scoreStepRegistrationCoverage,
   scoreDialogNaturalness,
+  scoreSlotDepth,
 } from './scorers'
 import type { TurnRecord, ScoreSet } from './scorers/types'
 import type { StepEntry } from '@/services/interviewSemantic'
@@ -91,10 +92,14 @@ function hasLlmKey(): boolean {
 
 async function runLlmScorers(
   turns: TurnRecord[],
+  finalStepTracker: StepEntry[],
   evalModel: string,
-): Promise<{ dialogNaturalness: number }> {
-  const result = await scoreDialogNaturalness(turns, evalModel, false)
-  return { dialogNaturalness: result.score }
+): Promise<{ dialogNaturalness: number; depth_score: number | null }> {
+  const [dialogResult, depthResult] = await Promise.all([
+    scoreDialogNaturalness(turns, evalModel, false),
+    scoreSlotDepth(finalStepTracker, turns, evalModel),
+  ])
+  return { dialogNaturalness: dialogResult.score, depth_score: depthResult.depth_score }
 }
 
 // ─── Comparison ───────────────────────────────────────────────────────────────
@@ -204,10 +209,10 @@ async function main() {
     console.log('\n## LLM-Judge Scorer (optional)\n')
     const evalModel = original.model
     const [origLlm, varALlm, varBLlm, varCLlm] = await Promise.all([
-      runLlmScorers(original.turns, evalModel),
-      runLlmScorers(variantA.turns, evalModel),
-      runLlmScorers(variantB.turns, evalModel),
-      runLlmScorers(variantC.turns, evalModel),
+      runLlmScorers(original.turns, original.finalStepTracker, evalModel),
+      runLlmScorers(variantA.turns, variantA.finalStepTracker, evalModel),
+      runLlmScorers(variantB.turns, variantB.finalStepTracker, evalModel),
+      runLlmScorers(variantC.turns, variantC.finalStepTracker, evalModel),
     ])
 
     const llmVariants = [
