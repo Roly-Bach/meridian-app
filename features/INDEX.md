@@ -48,10 +48,14 @@
 | PROJ-30 | Tiefe-/O10-Metrik | Revision | Interview Engine | PROJ-21 | Deployed | [spec](interview-engine/PROJ-30-tiefe-o10-metrik.md) | P1 | L | 0:0:1 |
 | PROJ-31 | Eval-Schärfung (Judge, Perturbation, Robustheit) | Revision | Interview Engine | PROJ-21 | Deployed | [spec](interview-engine/PROJ-31-eval-schaerfung.md) | P1 | L | 0:0:0 |
 | PROJ-32 | Agenten-Architektur (Trennung, Preparator; vertagt) | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E4.1+E4.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021/024 | P2 | M | — |
+| PROJ-33 | Turn-Loop-Konsolidierung (runInterviewTurn) | Revision | Interview Engine | PROJ-22 | Planned | [spec](interview-engine/PROJ-33-turn-loop-konsolidierung.md) | P1 | M | — |
+| PROJ-34 | Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals) | Revision | Interview Engine | PROJ-33 | Roadmap | — | P2 | — | — |
+| PROJ-35 | interviewAgent.ts entkernen (Conversation-Signals + Re-Export-Hub) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
+| PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Roadmap | — | P2 | — | — |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-33
+## Next Available ID: PROJ-37
 
 ## Known Issues
 
@@ -80,6 +84,15 @@ Dokument (nicht zwei verknüpfte Ebenen); das bestehende Slot-Substrat wird beha
 realisiert dagegen, entscheidet die Architektur nicht neu. Die acht Einheiten bündeln 23 Einzel-Befunde
 aus dem [Build-Backlog](../../meridian-ma/requirements/build-backlog-etappe2.md); jede Spec listet ihre
 BL-E-Items und REQs (Traceability).
+
+### Etappe 3 (Deepening, ab 2026-06-18)
+Architektur-Review 2026-06-18 (`/improve-codebase-architecture`) fand vier Deepening-Kandidaten.
+Gewählt und entschieden: PROJ-33 (Turn-Loop-Konsolidierung, [ADR-016](../docs/adr/ADR-016-interview-turn-seam-runinterviewturn.md)) —
+`runInterviewTurn` als tiefes Modul, Prod-Route und Eval-Runner werden Adapter. Vertagt als ein
+kohärenter Folge-Kandidat: PROJ-34 (Werkzeug-Schreibabsichten + TurnStore-Port für DB-freie Evals).
+Weitere Kandidaten aus dem Review als Roadmap festgehalten: PROJ-35 (`interviewAgent.ts` entkernen —
+Conversation-Signals-Modul + Re-Export-Hub, #2+#3) und PROJ-36 (ProcessStepsTable Cluster-Aggregation, #4).
+Specs folgen erst bei Bau-Start (je `/write-spec` mit Grilling); Begründungen in ADR-016.
 
 ## Architecture Notes
 
