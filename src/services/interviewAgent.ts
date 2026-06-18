@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { RawExtraction } from './extraction'
 import { emitSlotWrite } from './slotWriteTrail'
-import { checkSchritt } from './schemaValidator'
 import { canOverwrite, type WriteSource } from './slotConflictResolver'
 import { generateEmbedding } from './embeddings'
 import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD, SOFT_THRESHOLD } from './stepIdentity'
@@ -1504,15 +1503,6 @@ export function buildTools(
             })
           }
 
-          // Schema conformance check (BL-E1.3): soft warning, never hard-error
-          const mergedStep: StepEntry = { ...step, potenzial: mergedPotenzial, slots: mergedSlots as StepEntry['slots'] }
-          const conformance = checkSchritt(mergedStep, stepIndex + 1)
-          if (!conformance.valid) {
-            console.warn('[record_slot] schema conformance violation', {
-              step_id: step.id, slot, errors: conformance.errors,
-            })
-          }
-
           // Emit slot-write trail event (ADR-015) — non-blocking, never throws
           emitSlotWrite({
             ts: new Date().toISOString(),
@@ -1534,7 +1524,6 @@ export function buildTools(
             slot,
             ...(isNichtBefundMode ? { nicht_befund_typ } : { value }),
             source_turn: source_turn ?? null,
-            ...(conformance.valid ? {} : { conformanceViolation: true }),
           }
         } catch (err) {
           console.error('[record_slot] failed:', err)

@@ -62,17 +62,20 @@ KRITISCHE REGELN:
 - step_type = "decision" NUR wenn eine explizite Entscheidungsverzweigung beschrieben wird ("wenn X dann Y sonst Z")
 - condition_text: Bedingung als Prosatext, nur wenn step_type = "decision"
 - Wenn kein passendes Zitat gefunden: source_quote = null
+- Gib EXAKT so viele Einträge zurück wie Schritte in der Eingabe angegeben — einen pro step_title, in der gleichen Reihenfolge
 
 Ausgabeformat — nur valides JSON, kein Text davor oder danach:
-[
-  {
-    "step_title": "...",
-    "description": "...",
-    "source_quote": "wörtliches Zitat oder null",
-    "step_type": "action",
-    "condition_text": null
-  }
-]`
+{
+  "steps": [
+    {
+      "step_title": "...",
+      "description": "...",
+      "source_quote": "wörtliches Zitat oder null",
+      "step_type": "action",
+      "condition_text": null
+    }
+  ]
+}`
 
 interface TrackerDescriptionOutput {
   step_title: string
@@ -133,8 +136,6 @@ export async function createProcessStepsFromTracker({
     steps.map((s) => ({
       step_title: s.title,
       role: s.governance?.rolle ?? null,
-      process_steps: s.process_steps ?? [],
-      friction_points: s.friction_points ?? [],
       pain_point_primary: s.pain_point_primary ?? null,
     }))
   )
@@ -156,7 +157,7 @@ export async function createProcessStepsFromTracker({
       model: resolveModel(process.env.ENRICHMENT_MODEL),
       schema: TrackerDescriptionSchema,
       system: TRACKER_DESCRIPTION_PROMPT,
-      prompt: `Vollständiges Transkript:\n${transcript}\n\nProzessschritte:\n${stepsInput}`,
+      prompt: `Vollständiges Transkript:\n${transcript}\n\nProzessschritte (EXAKT ${steps.length} Einträge erwartet):\n${stepsInput}`,
       experimental_telemetry: buildTraceMetadata('processEnrichment.createProcessStepsFromTracker', {
         interviewId,
         model: process.env.ENRICHMENT_MODEL ?? 'google/gemini-3.1-flash-lite',

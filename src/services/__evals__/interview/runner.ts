@@ -48,6 +48,7 @@ import {
   decideNextPhase,
   checkLifecycle,
   shouldInjectWrapUpQuestion,
+  wrapUpQuestionAlreadyAsked,
   WRAP_UP_QUESTION_TEXT,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
@@ -895,7 +896,8 @@ async function runInterview(
 
     // Fix 1 (ADR-015): Deterministic wrap_up question injection.
     // Mirrors chat/route.ts behaviour for eval runs.
-    if (shouldInjectWrapUpQuestion(orchestratedPhase, agentHistory)) {
+    if (shouldInjectWrapUpQuestion(orchestratedPhase, agentHistory) &&
+        !wrapUpQuestionAlreadyAsked(conversationHistory)) {
       const turnNumber = dbHistory.length / 2 + 1
       const agentText = WRAP_UP_QUESTION_TEXT
       console.log(`\n[Agent (injected wrap-up question)]: ${agentText}`)
