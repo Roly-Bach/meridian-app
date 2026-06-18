@@ -26,7 +26,7 @@ export function scoreConfidenceTrigger(turns: TurnRecord[]): number {
     for (const call of turn.toolCalls) {
       if (call.toolName !== 'record_slot') continue
       const conf = call.args.confidence as string | undefined
-      if (conf === 'estimate' || conf === 'unknown') {
+      if (conf === 'unknown') {
         estimateRecords.push({
           turnNumber: turn.turnNumber,
           step_title: call.args.step_title as string,

@@ -107,10 +107,15 @@ export function scoreToolCallPlausibility(turns: TurnRecord[]): number {
   let totalScore = 0
 
   // Span-based candidates: deterministic — tool already validated verbatim presence.
-  // Sanity-check still: confirm span is in the recording-turn input.
+  // If not in recording turn, check prior turns (analyst catchup from earlier user input).
   for (const { evidenceSpan, turnIdx } of spanCandidates) {
     const input = turns[turnIdx]?.userInput ?? ''
-    totalScore += input.includes(evidenceSpan) ? 1.0 : 0.5
+    if (input.includes(evidenceSpan)) {
+      totalScore += 1.0
+    } else {
+      const foundInPrior = turns.some((t, i) => i < turnIdx && t.userInput.includes(evidenceSpan))
+      totalScore += foundInPrior ? 0.9 : 0.5
+    }
   }
 
   // Quote-based candidates: fall back to token-overlap heuristic.
