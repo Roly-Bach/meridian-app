@@ -1,6 +1,6 @@
 # PROJ-31: Eval-Schärfung (Judge, Perturbation, Robustheit)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-21
@@ -8,7 +8,7 @@
 **Priority:** P1
 **Bugs:** 0:0:0
 **Created:** 2026-06-17
-**Last Updated:** 2026-06-18 (Approved — 4 QA-Bugs behoben: B1 scoreSlotDepth in paraphrase-test, B2 Fixture-StepTracker, B3 isolated_criteria Frontmatter, B4 Integration-Test-Stub)
+**Last Updated:** 2026-06-18 (Deployed — v1.31.0-PROJ-31, main → Vercel auto-deploy)
 
 ## BL-E-Traceability
 
@@ -341,15 +341,25 @@ Nicht relevant — reine Tooling-Änderung. Kein Produktions-API, keine Nutzerda
 Die Bugs B1 und B2 sollten in einem Follow-up (< 1d) vor dem nächsten Eval-Run behoben werden.
 
 ## Deployment
-_To be added by /deploy_
+
+| Feld | Wert |
+|------|------|
+| Deployed | 2026-06-18 |
+| Branch | feat/proj-31 → main |
+| Tag | v1.31.0-PROJ-31 |
+| G1 (Static) | pass — build ✅ tsc ✅ |
+| G2 (Tests) | pass — 574 Tests, 42 Suites, 0 Fehler |
+| G3 (Sandbox) | n/a — reine Tooling-Änderung, kein UI/API-Diff |
+| G4 (Permissions) | n/a — kein Auth/RLS/API-Diff |
+| Trigger | push main → Vercel auto-deploy |
 
 ## Post-Mortem
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
-| Größte Überraschung | — |
+| Spec-Genauigkeit | Medium |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: L |
+| Größte Überraschung | Fixture B2: leerer `finalStepTracker` in Paraphrase-Fixtures — `slotCoverage`/`dedupSlotCoverage` testeten keine echte Robustheit; Fixture musste nachgepflegt werden. |
 | Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Build-Loop-Iterationen | tatsächlich: 2 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Spec-Lücke |
