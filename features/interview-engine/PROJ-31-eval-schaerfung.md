@@ -1,6 +1,6 @@
 # PROJ-31: Eval-Schärfung (Judge, Perturbation, Robustheit)
 
-## Status: Architected
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-21
@@ -8,7 +8,7 @@
 **Priority:** P1
 **Bugs:** —
 **Created:** 2026-06-17
-**Last Updated:** 2026-06-17 (Architected)
+**Last Updated:** 2026-06-18 (In Progress — Build abgeschlossen, Branch feat/proj-31, Commit 95ac59f)
 
 ## BL-E-Traceability
 
