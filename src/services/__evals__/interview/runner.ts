@@ -385,10 +385,12 @@ function computeTrailMetrics(trailFile: string): TrailMetrics | null {
     let blockedWrites = 0
     let nonBlockedOverwrites = 0
     for (const line of lines) {
-      const event = JSON.parse(line) as { blocked?: boolean; overwrite?: boolean }
+      const event = JSON.parse(line) as { blocked?: boolean; overwrite?: boolean; source?: string }
       if (event.blocked) {
         blockedWrites++
-      } else if (event.overwrite) {
+      } else if (event.overwrite && event.source !== 'analyst') {
+        // Analyst overwrites are intentional paraphrase-refinements, not churn.
+        // Only online (quick-extract / online-extract) overwrites count toward churn.
         nonBlockedOverwrites++
       }
     }

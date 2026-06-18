@@ -22,7 +22,7 @@ Rubrik:
 - Stufe 2 (angemessen): überwiegend natürliche Sprache, vereinzelte Mängel, Du-Form meist eingehalten
 - Stufe 3 (exzellent): durchgehend natürlich, höflich, keine generischen Floskeln, konsequente Du-Form, keine abrupten Themensprünge
 
-Schreibe zuerst deine Begründung (Beobachtungen zu Natürlichkeit, Du-Form, Floskeln, Themenübergängen, Grammatik). Dann am Ende exakt: \`Stufe: X\` (X = 1, 2 oder 3)`
+Antworte NUR mit JSON im Format: {"stufe": <Zahl 1-5>, "begruendung": "<kurze Begründung>"}`
 
 const MAX_SAMPLE_TURNS = 8
 
@@ -37,7 +37,26 @@ export interface DialogNaturalnessResult {
  * Falls back to 0.5 with a warning on unexpected format.
  */
 export function parseJudgeResponse(text: string): { score: number; rationale: string } {
-  // Find the last occurrence of "Stufe: X" (tolerant for bold markdown, extra spaces, colon variants)
+  // 1. Try JSON format: {"stufe": X, "begruendung": "..."}
+  try {
+    // Extract JSON object from text (judge may wrap it in markdown code fences)
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
+      const stufeRaw = parsed['stufe']
+      if (typeof stufeRaw === 'number' && stufeRaw >= 1 && stufeRaw <= 5) {
+        const stufe = Math.round(stufeRaw) as 1 | 2 | 3
+        const scoreMap: Record<number, number> = { 1: 0.33, 2: 0.67, 3: 1.0, 4: 1.0, 5: 1.0 }
+        const score = scoreMap[stufe] ?? 0.5
+        const rationale = typeof parsed['begruendung'] === 'string' ? parsed['begruendung'].trim() : ''
+        return { score, rationale }
+      }
+    }
+  } catch {
+    // JSON parse failed — fall through to regex
+  }
+
+  // 2. Fallback: regex for "Stufe: X" (tolerant for bold markdown, extra spaces, colon variants)
   const regex = /\*{0,2}Stufe\s*[:\s]\s*([123])\*{0,2}/gi
   let lastMatch: RegExpExecArray | null = null
   let match: RegExpExecArray | null
