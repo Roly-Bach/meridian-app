@@ -1,11 +1,11 @@
 # PROJ-28: Extraktions-Zuverlässigkeit
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** M (3–5d)
-**Bugs:** —
+**Bugs:** 0:0:0
 **Created:** 2026-06-17
 **Last Updated:** 2026-06-17
 **Implementation:** 2026-06-17
@@ -221,16 +221,21 @@ Kein UI, keine API-Route, keine DB-Migration. Abwärtskompatibel — Alt-Einträ
 - B3 fixed: `computeEmptyMandatorySlots` nutzt jetzt explizite Filled-Check-Pattern
 
 ## Deployment
-_To be added by /deploy_
+
+- **Production URL:** https://meridian-app-roly-bach.vercel.app
+- **Deployed:** 2026-06-18 (Code war bereits auf main — auto-deployed mit PROJ-31 Push)
+- **G1 Static:** pass — build clean, lint/tsc clean
+- **G2 Tests:** pass — 603/603 Vitest
+- **G3 Sandbox:** pass — Code bereits live (main → auto-deploy)
+- **G4 Permissions:** pass — keine neuen API-Routen, kein DB-Zugriff, kein Env-Var-Leak
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: — |
+| Spec-Genauigkeit | Medium |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: << 1 Tag |
 | Größte Überraschung | — |
 | Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Build-Loop-Iterationen | tatsächlich: 3 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Spec-Lücke (Analyst-Prompt-Instruktion für nicht_befund_typ nicht explizit spezifiziert — B1) |

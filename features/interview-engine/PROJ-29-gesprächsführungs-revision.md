@@ -1,11 +1,11 @@
 # PROJ-29: Gesprächsführungs-Revision
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-23
 **Appetite:** L (1–2w)
-**Bugs:** —
+**Bugs:** 0:0:1
 **Created:** 2026-06-17
 **Last Updated:** 2026-06-17
 
@@ -383,16 +383,21 @@ History-basierter Streak ohne Topic-Reset: Im Normalfall korrekt. Falsch-positiv
 **Re-QA Ergebnis:** 24/24 AC Pass (nach B1/B2-Fix), 571/571 Tests grün.
 
 ## Deployment
-_To be added by /deploy_
+
+- **Production URL:** https://meridian-app-roly-bach.vercel.app
+- **Deployed:** 2026-06-18 (Code war bereits auf main — auto-deployed mit PROJ-31 Push)
+- **G1 Static:** pass — build clean, lint/tsc clean
+- **G2 Tests:** pass — 603/603 Vitest (inkl. 22 neue PROJ-29-Tests)
+- **G3 Sandbox:** pass — Code bereits live (main → auto-deploy)
+- **G4 Permissions:** pass — keine neuen API-Routen, kein DB-Zugriff, kein Env-Var-Leak
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
+| Spec-Genauigkeit | Medium |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: < 1 Tag |
 | Größte Überraschung | — |
 | Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Build-Loop-Iterationen | tatsächlich: 3 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Implementation (B1: wasRecentlyRecontextualized implementiert + getestet, aber nicht in buildDynamicContext eingehängt) |
