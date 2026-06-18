@@ -1,13 +1,13 @@
 # PROJ-26: Getypte Abhängigkeitskanten
 
-## Status: Approved
+## Status: Deployed
 **Type:** Extension
 **Domain:** Wissensbank
 **Extends:** PROJ-20
 **Appetite:** M
 **Bugs:** 0:0:0
 **Created:** 2026-06-16
-**Last Updated:** 2026-06-17
+**Last Updated:** 2026-06-18
 
 ## Kontext
 
@@ -326,16 +326,21 @@ All 530 unit tests pass. E2E suite (164 pass, 9 skipped, 13 did not run — all 
 No Critical or High bugs. B1 (Medium) is a testing gap, not a functionality defect. B2 (Low) pre-dates this feature.
 
 ## Deployment
-_To be added by /deploy_
+
+- **Production URL:** https://meridian-app-roly-bach.vercel.app
+- **Deployed:** 2026-06-18
+- **G1:** pass (build ✓, tsc 0 errors ✓, no secrets ✓)
+- **G2:** pass (603/604 unit tests; 1 pre-existing skip; no UI changes → E2E not required)
+- **G3:** n/a (GitHub auto-deploy to production on push to main)
+- **G4:** pass (server-side only; no new DB migrations; `record_dependency` Zod-validated + S001-regex; no new auth/RLS surface)
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | Medium |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: <<1 Tag (Agentic Pipeline) |
+| Größte Überraschung | Agentic Pipeline war drastisch schneller als manuelle M-Schätzung erwartet hatte |
+| Vorgeschlagene Regeländerung | Appetite-Definitionen (S/M/L/XL) kalibrieren — s. PROJ-27 Post-Mortem |
+| Build-Loop-Iterationen | tatsächlich: 2 (feat → QA → bug-fix; geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Test (B1 fehlende Unit-Tests für record_dependency) |

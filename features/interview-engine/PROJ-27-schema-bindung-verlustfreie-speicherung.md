@@ -1,13 +1,13 @@
 # PROJ-27: Schema-Bindung + verlustfreie Speicherung
 
-## Status: In Progress
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** L
 **Bugs:** 0:0:0
 **Created:** 2026-06-16
-**Last Updated:** 2026-06-17
+**Last Updated:** 2026-06-18
 
 ## Kontext
 
@@ -358,16 +358,22 @@ Regressionsschutz: `slotWriteRace.test.ts` + `npm run eval:replay` + Eval-Gate `
 **READY** — 0 open bugs. All B1–B6 resolved in PROJ-28/follow-up commits (2026-06-17/18).
 
 ## Deployment
-_To be added by /deploy_
+
+- **Production URL:** https://meridian-app-roly-bach.vercel.app
+- **Deployed:** 2026-06-18
+- **G1:** pass (build ✓, tsc 0 errors ✓, no secrets ✓)
+- **G2:** pass (603/604 unit tests; 1 pre-existing skip; no UI changes → E2E not required)
+- **G3:** n/a (GitHub auto-deploy to production on push to main)
+- **G4:** pass (B6 REVOKE migration applied; no new RLS/auth surface from PROJ-26)
+- **Supabase migrations:** `20260617000001_proj27_patch_step_field` + `20260617000002_proj27_revoke_auth_grant` — both applied ✓
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | Medium |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: <<1 Tag (Agentic Pipeline) |
+| Größte Überraschung | Agentic Pipeline war drastisch schneller als manuelle L-Schätzung erwartet hatte |
+| Vorgeschlagene Regeländerung | Appetite-Definitionen (S/M/L/XL) an Agentic-Pipeline-Realität kalibrieren |
+| Build-Loop-Iterationen | tatsächlich: 3 (feat → QA → bug-fix; geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Test (B1-B5 fehlende Unit-Tests für neue Pfade) + Security (B6 GRANT-Fehler) |
