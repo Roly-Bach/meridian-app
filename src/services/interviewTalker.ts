@@ -83,13 +83,18 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
 
   // F1: feed last assistant turns into context for drill-stop detection.
   // F1b: also feed last user turn for refuse-detect.
+  // E3.4: feed last user turns for laddering streak detection.
   const recentAssistantTurns = opts.history
     .filter((t) => t.role === 'assistant')
     .slice(-4)
     .map((t) => t.content)
   const lastUserTurn = [...opts.history].reverse().find((t) => t.role === 'user')?.content
+  const recentUserTurns = opts.history
+    .filter((t) => t.role === 'user')
+    .slice(-4)
+    .map((t) => t.content)
   const dynamicPart = buildDynamicContext(
-    { ...opts.context, recentAssistantTurns, lastUserTurn },
+    { ...opts.context, recentAssistantTurns, lastUserTurn, recentUserTurns },
     opts.briefing,
   )
 

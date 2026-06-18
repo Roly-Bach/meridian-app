@@ -82,6 +82,8 @@ export interface InterviewContext {
   recentAssistantTurns?: string[]
   /** Last user message — used for refuse-detect (F1b). */
   lastUserTurn?: string
+  /** Last 4 user messages — used for laddering streak detection (E3.4). */
+  recentUserTurns?: string[]
 }
 
 export interface TurnMessage {
@@ -452,6 +454,176 @@ export function detectDrillStops(
   return warnings
 }
 
+// ─── PROJ-29: Conversation Quality Detectors ─────────────────────────────────
+
+// E3.1 — Detect conflicting factual statements within the current session.
+// Returns the two conflicting phrases when a numeric or explicit contradiction is found.
+export type AmbiguityResult = { phraseA: string; phraseB: string } | null
+
+const CONTRA_PATTERNS: RegExp[] = [
+  /eigentlich (doch|schon|nicht|kein)/i,
+  /obwohl (ich|wir) (vorhin|gerade|eben)/i,
+  /nein[,\s]+warte/i,
+  /oder doch[\s,?]/i,
+  /halt nein/i,
+]
+
+// B2 fix: extract capitalized concepts explicitly negated in prior turns.
+// Pattern: "kein SAP", "keine Excel", "nutzen kein CRM", "gibt es keine Aufzeichnung"
+const NEGATED_CONCEPT_RE = /\bkein[e]?\s+([A-ZÄÖÜ][a-zäöüß]+(?:[A-Z][a-z]+)*)/gi
+
+function extractNegatedConcepts(turns: string[]): Map<string, string> {
+  const result: Map<string, string> = new Map()
+  for (const turn of turns) {
+    const re = new RegExp(NEGATED_CONCEPT_RE.source, 'gi')
+    let m: RegExpExecArray | null
+    while ((m = re.exec(turn)) !== null) {
+      const concept = m[1].toLowerCase()
+      if (concept.length >= 3) result.set(concept, m[0])
+    }
+  }
+  return result
+}
+
+export function detectAmbiguity(
+  lastUserTurn: string | undefined,
+  stepTracker: StepEntry[],
+  priorUserTurns?: string[],
+): AmbiguityResult {
+  if (!lastUserTurn) return null
+
+  // Explicit contradiction markers — extract surrounding phrase fragments
+  for (const p of CONTRA_PATTERNS) {
+    const m = lastUserTurn.match(p)
+    if (m && m.index !== undefined) {
+      const before = lastUserTurn.slice(Math.max(0, m.index - 60), m.index).trim()
+      const after = lastUserTurn.slice(m.index, Math.min(lastUserTurn.length, m.index + 80)).trim()
+      if (before.length > 3 && after.length > 3) return { phraseA: before, phraseB: after }
+    }
+  }
+
+  // Numeric conflict: compare current turn numbers against captured slot values
+  const activeStep =
+    stepTracker.find(s => s.status === 'walkthrough') ??
+    stepTracker.find(s => s.status === 'exploring')
+  if (activeStep) {
+    const currentNums = extractNumericTokens(lastUserTurn)
+      .map(Number)
+      .filter(n => !isNaN(n) && n > 0)
+
+    if (currentNums.length > 0) {
+      const durationSlot = activeStep.potenzial.duration_minutes
+      if (durationSlot?.value != null && typeof durationSlot.value === 'number' && durationSlot.value > 0) {
+        for (const n of currentNums) {
+          const ratio = Math.max(n, durationSlot.value) / Math.min(n, durationSlot.value)
+          if (ratio >= 3 && n !== durationSlot.value) {
+            return {
+              phraseA: `${durationSlot.value} Minuten (erfasst)`,
+              phraseB: `${n} (aktuelle Aussage)`,
+            }
+          }
+        }
+      }
+
+      const freqSlot = activeStep.potenzial.frequency_per_month
+      if (freqSlot?.value != null && typeof freqSlot.value === 'number' && freqSlot.value > 0) {
+        for (const n of currentNums) {
+          const ratio = Math.max(n, freqSlot.value) / Math.min(n, freqSlot.value)
+          if (ratio >= 3 && n !== freqSlot.value) {
+            return {
+              phraseA: `${freqSlot.value}× pro Monat (erfasst)`,
+              phraseB: `${n} (aktuelle Aussage)`,
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // B2 fix: negation contradiction — concept denied in prior turns, mentioned positively now
+  if (priorUserTurns && priorUserTurns.length > 0) {
+    const negated = extractNegatedConcepts(priorUserTurns)
+    for (const [concept, negPhrase] of negated) {
+      // Positive mention: concept appears without an immediately preceding negation
+      const posRe = new RegExp(`(?<!kein[e]?\\s)\\b${concept}[a-zäöüß]*\\b`, 'i')
+      if (posRe.test(lastUserTurn)) {
+        const posMatch = lastUserTurn.match(new RegExp(`\\b${concept}[a-zäöüß]*\\b`, 'i'))
+        return {
+          phraseA: negPhrase,
+          phraseB: posMatch?.[0] ?? concept,
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+// E3.2 — Detect exception/special-case signals in the user turn.
+const EXCEPTION_PATTERNS: RegExp[] = [
+  /\b(manchmal|gelegentlich|ab und zu|hin und wieder)\b/i,
+  /\baußer wenn\b/i,
+  /\bim sonderfall\b/i,
+  /\bwenn .{1,40} (dann|nicht)\b/i,
+  /\bnicht immer\b/i,
+  /\bin (manchen|bestimmten|einigen) fällen\b/i,
+  /\b(ausnahme|ausnahmsweise|ausnahmen)\b/i,
+  /\babhängig (davon|ob|von)\b/i,
+]
+
+export function detectException(lastUserTurn: string | undefined): boolean {
+  if (!lastUserTurn) return false
+  return EXCEPTION_PATTERNS.some(p => p.test(lastUserTurn))
+}
+
+// E3.2 — Check if re-contextualization was used recently in assistant turns (stateless cap).
+const RECONTEXT_ASSISTANT_PATTERNS: RegExp[] = [
+  /lass uns (zurück|noch einmal|wieder).*(kommen|schauen|gehen)/i,
+  /kommen wir (zurück|noch einmal) zu/i,
+  /zurück zu (deiner|unserem|dem|dieser)/i,
+  /wir hatten noch nicht gesprochen über/i,
+  /lass mich.*(erinnern|zurückkommen)/i,
+  /aber eigentlich wollte ich noch/i,
+]
+
+export function wasRecentlyRecontextualized(recentAssistantTurns: string[] | undefined): boolean {
+  if (!recentAssistantTurns || recentAssistantTurns.length === 0) return false
+  // Check last 3 assistant turns for re-contextualization language
+  return recentAssistantTurns.slice(-3).some(t =>
+    RECONTEXT_ASSISTANT_PATTERNS.some(p => p.test(t)),
+  )
+}
+
+// E3.4 — Detect blockade signal: short answer or explicit refusal to engage.
+const BLOCKADE_PATTERNS: RegExp[] = [
+  /\b(weiß ich nicht|weiß nicht genau|weiß (das|es) nicht)\b/i,
+  /\bkeine ahnung\b/i,
+  /\bist halt so\b/i,
+  /\bimmer schon so\b/i,
+  /\bschwer zu sagen\b/i,
+  /\b(kann ich|kann man) (so nicht|nicht) sagen\b/i,
+  /\bda fragst du (mich|uns) zu viel\b/i,
+  /\bkann ich nicht sagen\b/i,
+]
+
+export function detectBlockade(lastUserTurn: string | undefined): boolean {
+  if (!lastUserTurn) return false
+  const words = lastUserTurn.trim().split(/\s+/).filter(w => w.length > 0)
+  if (words.length < 10) return true
+  return BLOCKADE_PATTERNS.some(p => p.test(lastUserTurn))
+}
+
+// E3.4 — Count consecutive blockade turns from most recent user turns backwards.
+export function computeLadderingStreak(recentUserTurns: string[] | undefined): number {
+  if (!recentUserTurns || recentUserTurns.length === 0) return 0
+  let streak = 0
+  for (const turn of [...recentUserTurns].reverse()) {
+    if (detectBlockade(turn)) streak++
+    else break
+  }
+  return streak
+}
+
 // ─── Phase Methodology Sections ───────────────────────────────────────────────
 // Iteration 1 (ADR-011 D7): Max. 5 Zeilen pro Phase, taktisches Briefing.
 // Injected per-turn in buildDynamicContext so static prompt stays cacheable.
@@ -481,7 +653,10 @@ Spontan genannte Werte (Häufigkeit, Dauer, Systeme): record_slot bzw. update_wa
 Reibungspunkte und zugehörige Tools via update_walkthrough_data; Pain Points mit Ortsbezug via link_bottleneck.
 Abschluss: wenn Ablauf natürlich endet oder alle Leitfragen gestellt wurden, zu slot_completion übergehen.
 Turn-Budget: Nach 3 Walkthrough-Turns auf demselben Schritt zu slot_completion übergehen — Tiefe ist nicht das Ziel, Breite schon. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — diese sind nicht slot-relevant.
-Kontextregel: Beschreibt die aktuelle Mitarbeiter-Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt aufrufen. Andere Prozesse nicht mit Slots befüllen — register_step + Erkundung im nächsten Turn.`
+Kontextregel: Beschreibt die aktuelle Mitarbeiter-Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt aufrufen. Andere Prozesse nicht mit Slots befüllen — register_step + Erkundung im nächsten Turn.
+Anker-Pflicht (E3.3): Jede Nachfrage referenziert ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns des Mitarbeiters. Verneinungen ("nutzen wir kein SAP", "passiert nie") sind kein Anker — nicht erneut als Nachfrage-Grundlage nutzen.
+Maieutik (E3.5): Keine inhaltlichen Vorschläge in Fragen ("Was wäre, wenn du Tool X hättest?", "Könnte man das automatisieren?"). Keine Leading-Questions ("Wäre das wie X?"). Frage offen — lass den Mitarbeiter die Antwort selbst entwickeln.
+Ist-Fokus (E3.7): Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen ("Was würdest du ändern?", "Wenn du X optimieren könntest..."). Beschreibt der Mitarbeiter spontan eine Verbesserungsidee: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?") — nicht weiter To-be vertiefen.`
   }
 
   if (phase === 'slot_completion') {
@@ -492,7 +667,9 @@ Max. 2–3 fehlende Slots pro Turn — natürlicher Gesprächsfluss, kein Listen
 Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → unsicher belegt, kurze Bestätigung einholen (max. 1–2 Versuche pro Slot). confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen.
 entscheidungslogik: "Folgt dieser Prozess bei dir immer dem gleichen Schema, oder entscheidest du von Fall zu Fall?" Wenn unklar: NICHT nochmals fragen — Clarification Card erledigt das am Ende.
 governance: record_governance aufrufen wenn Mitarbeiter Rolle oder OE nennt — auch fragmentarisch.
-abhaengigkeiten: record_dependency aufrufen wenn Mitarbeiter nennt, welcher Schritt einen anderen voraussetzt oder beeinflusst.`
+abhaengigkeiten: record_dependency aufrufen wenn Mitarbeiter nennt, welcher Schritt einen anderen voraussetzt oder beeinflusst.
+Anker-Pflicht (E3.3): Slot-Fragen knüpfen an das an, was der Mitarbeiter bereits genannt hat. Verneinungen ("nutzen wir kein X") nicht als Anker einer Folgefrage nutzen.
+Ist-Fokus (E3.7): Keine Verbesserungsfragen. Bei spontanen To-be-Nennungen: Ist-Engpass dahinter erfassen ("Was ist heute der Engpass, der das nötig macht?").`
   }
 
   if (phase === 'coverage_check') {
@@ -523,7 +700,8 @@ PFLICHT: Stelle als allererste Antwort in dieser Phase exakt diese Frage — kei
 Verabschiede dich NICHT ohne diese Frage gestellt zu haben.
 Nach der Antwort:
 - Neuer Prozess → register_step aufrufen, explorieren — kein Abschluss.
-- Keine neuen Inhalte → kurz verabschieden.`
+- Keine neuen Inhalte → kurz verabschieden.
+Ist-Fokus (E3.7): Die abschließende Frage zielt auf noch nicht genannte Ist-Prozesse. Keine Verbesserungsideen oder Zukunftswünsche anfragen. Bei spontaner To-be-Nennung: Ist-Problem dahinter erfassen.`
 }
 
 // ─── Canonical Example (Iteration 1: 6 examples → 1) ─────────────────────────
@@ -738,6 +916,11 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   const hasExploringSteps = ctx.stepTracker.some(s => s.status === 'exploring')
   const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, hasExploringSteps)}\n</methodology>`
 
+  // E3.6 — Profile-adaptive framing: inject only when role is known
+  const profileFraming = ctx.employeeRole
+    ? `\n- Profil-Framing: Sprachtiefe und Fachbegriffe an "${ctx.employeeRole}" (${ctx.department}) anpassen. Fachfremde Rollen → alltagsnahe Sprache; Fach-/IT-Rollen → Domänen-Terminologie spiegeln.`
+    : ''
+
   // Kompakter Lookup für bereits erfasste Slots — in allen Phasen außer walkthrough_step
   // (dort gibt es bereits den READ_ONLY_STATE Block).
   let alreadyKnownSection = ''
@@ -774,15 +957,44 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     ? `\n\n## ⛔ DRILL-STOP (PFLICHT)\n${drillWarnings.map(w => `- ${w}`).join('\n')}`
     : ''
 
+  // E3.1 — Ambiguity: conflicting factual statements (additive to drill-stop/missing-slot)
+  // Pass prior user turns (exclude current) for negation-contradiction detection (B2 fix)
+  const priorUserTurns = ctx.recentUserTurns?.slice(0, -1)
+  const ambiguityResult = detectAmbiguity(ctx.lastUserTurn, ctx.stepTracker, priorUserTurns)
+  const ambiguitySection = ambiguityResult
+    ? `\n\n## ⚠️ AMBIGUITÄT-KLÄRUNG (PFLICHT — dieser Turn)\nWidersprüchliche Aussagen erkannt:\n- Früher: "${ambiguityResult.phraseA}"\n- Jetzt: "${ambiguityResult.phraseB}"\nSpreche beide Aussagen explizit an: "Du hast vorhin [A] erwähnt — jetzt sagst du [B]. Was ist der Unterschied?" Keine Lücken-Nachfrage in diesem Turn — Ambiguität hat Vorrang.`
+    : ''
+
+  // E3.2 — Exception: special-case mention → deepen before moving on
+  const exceptionDetected = detectException(ctx.lastUserTurn)
+  const exceptionSection = exceptionDetected
+    ? `\n\n## ⚠️ AUSNAHME ERKANNT\nDer Mitarbeiter hat einen Sonderfall oder eine Ausnahme erwähnt. Vertiefe diesen mit einer gezielten Nachfrage bevor du weitergehst. Ausnahmen die eigenständige Schritte sind → register_step nach 1–2 Vertiefungsfragen.`
+    : ''
+
+  // E3.2 re-context cap: suppress re-contextualization when already used in last 3 turns
+  const recentlyRecontextualized = wasRecentlyRecontextualized(ctx.recentAssistantTurns)
+  const recontextCapSection = recentlyRecontextualized
+    ? `\n\n## Re-Kontext-Sperre (E3.2)\nRe-Kontextualisierung wurde in den letzten Turns bereits eingesetzt — diesen Turn NICHT erneut re-kontextualisieren. Stelle stattdessen eine direkte thematische Nachfrage.`
+    : ''
+
+  // E3.4 — Laddering: blockade detection + two-turn drop rule
+  const ladderiungStreak = computeLadderingStreak(ctx.recentUserTurns)
+  const currentBlockade = detectBlockade(ctx.lastUserTurn)
+  const ladderiungSection = ladderiungStreak >= 2
+    ? `\n\n## ⛔ LADDERING-ABBRUCH (PFLICHT)\nNach ${ladderiungStreak} aufeinanderfolgenden Blockade-Turns: Thema jetzt fallen lassen. Gehe direkt zum nächsten Aspekt oder Schritt über — keine weitere Nachfrage zu diesem Thema.`
+    : currentBlockade
+    ? `\n\n## ⚠️ LADDERING — Frametechnik wechseln\nBlockade-Signal erkannt. Stelle KEINE strukturell identische Folgefrage. Wechsle Frametechnik:\n- Perspektivwechsel: "Wie würde ein Kollege das beschreiben?"\n- Beispiel-Einladung: "Kannst du ein konkretes Beispiel aus der letzten Woche nennen?"\n- Vereinfachende Reformulierung der Frage`
+    : ''
+
   return `## Interview-Kontext
 - Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
 - Abteilung: ${ctx.department}
 - ${focusLine}
 - Phase: ${ctx.phase}
-- Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}
+- Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}${profileFraming}
 
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${drillStopSection}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
@@ -1648,13 +1860,18 @@ export function createInterviewStream(opts: AgentStreamOptions) {
   const staticPart = buildStaticPrompt()
   // F1: feed last assistant turns into context for drill-stop detection.
   // F1b: also feed last user turn for refuse-detect.
+  // E3.4: feed last user turns for laddering streak detection.
   const recentAssistantTurns = opts.history
     .filter((t) => t.role === 'assistant')
     .slice(-4)
     .map((t) => t.content)
   const lastUserTurn = [...opts.history].reverse().find((t) => t.role === 'user')?.content
+  const recentUserTurns = opts.history
+    .filter((t) => t.role === 'user')
+    .slice(-4)
+    .map((t) => t.content)
   const dynamicPart = buildDynamicContext(
-    { ...opts.context, recentAssistantTurns, lastUserTurn },
+    { ...opts.context, recentAssistantTurns, lastUserTurn, recentUserTurns },
     opts.briefing,
   )
 

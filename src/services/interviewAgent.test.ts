@@ -20,6 +20,11 @@ import {
   detectDrillStops,
   detectPersonaRefuse,
   detectFillerPhrases,
+  detectAmbiguity,
+  detectException,
+  detectBlockade,
+  computeLadderingStreak,
+  wasRecentlyRecontextualized,
   type StepEntry,
 } from './interviewAgent'
 
@@ -1065,6 +1070,184 @@ describe('Tool Handlers', () => {
       const fillers = detectFillerPhrases('Notiere ich als variabel. Nächster Punkt: Wie sieht der Abschluss aus?')
       expect(fillers).toContain('Notiere ich als variabel')
       expect(fillers).toContain('Nächster Punkt')
+    })
+  })
+
+  // ─── PROJ-29: Conversation Quality Detectors ─────────────────────────────────
+
+  describe('detectBlockade (E3.4)', () => {
+    it('triggers on short answer (< 10 words)', () => {
+      expect(detectBlockade('Weiß ich nicht.')).toBe(true)
+      expect(detectBlockade('Keine Ahnung.')).toBe(true)
+      expect(detectBlockade('Geht so.')).toBe(true)
+    })
+    it('triggers on explicit blockade phrases', () => {
+      expect(detectBlockade('Das weiß ich nicht genau, da führe ich keine Aufzeichnung.')).toBe(true)
+      expect(detectBlockade('Das ist halt so, immer schon so bei uns.')).toBe(true)
+      expect(detectBlockade('Das kann ich so nicht sagen, es variiert zu stark.')).toBe(true)
+    })
+    it('does NOT trigger on substantive short-but-precise answer', () => {
+      // 10+ words, no blockade phrases
+      expect(detectBlockade('Ich bearbeite das täglich morgens und es dauert meistens ungefähr eine Stunde.')).toBe(false)
+    })
+    it('returns false for undefined', () => {
+      expect(detectBlockade(undefined)).toBe(false)
+    })
+  })
+
+  describe('computeLadderingStreak (E3.4)', () => {
+    it('returns 0 for empty or undefined', () => {
+      expect(computeLadderingStreak(undefined)).toBe(0)
+      expect(computeLadderingStreak([])).toBe(0)
+    })
+    it('returns 1 for one blockade turn at end', () => {
+      const turns = [
+        'Ich bearbeite täglich die Eingangsrechnungen und buche sie direkt ins SAP-System.',
+        'Weiß ich nicht.',
+      ]
+      expect(computeLadderingStreak(turns)).toBe(1)
+    })
+    it('returns 2 for two consecutive blockade turns at end', () => {
+      const turns = [
+        'Der Prozess läuft täglich morgens und dauert meistens ungefähr eine Stunde für mich.',
+        'Keine Ahnung.',
+        'Ist halt so.',
+      ]
+      expect(computeLadderingStreak(turns)).toBe(2)
+    })
+    it('resets streak when non-blockade turn interrupts', () => {
+      const turns = [
+        'Keine Ahnung.',
+        'Ich mache das täglich morgens und es dauert ungefähr eine Stunde für mich.',
+        'Ist halt so.',
+      ]
+      expect(computeLadderingStreak(turns)).toBe(1)
+    })
+  })
+
+  describe('detectException (E3.2)', () => {
+    it('detects "manchmal"', () => {
+      expect(detectException('Das mache ich manchmal per E-Mail, manchmal direkt im System.')).toBe(true)
+    })
+    it('detects "außer wenn"', () => {
+      expect(detectException('Normalerweise in SAP, außer wenn das System down ist.')).toBe(true)
+    })
+    it('detects "in bestimmten Fällen"', () => {
+      expect(detectException('In bestimmten Fällen eskaliere ich an meinen Vorgesetzten.')).toBe(true)
+    })
+    it('detects "Ausnahme"', () => {
+      expect(detectException('Als Ausnahme nehme ich das mal manuell raus.')).toBe(true)
+    })
+    it('does NOT trigger on normal statements', () => {
+      expect(detectException('Ich bearbeite täglich die Eingangsrechnungen im SAP-System.')).toBe(false)
+      expect(detectException(undefined)).toBe(false)
+    })
+  })
+
+  describe('detectAmbiguity (E3.1)', () => {
+    it('detects numeric conflict: captured duration vs much larger value in current turn', () => {
+      const step = makeStep({
+        status: 'walkthrough',
+        potenzial: {
+          frequency_per_month: null,
+          duration_minutes: { value: 5, quote: 'dauert 5 Minuten', confidence: 'confirmed' },
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      })
+      const result = detectAmbiguity('Das dauert eigentlich eher 300 Minuten — fast einen halben Tag.', [step])
+      expect(result).not.toBeNull()
+      expect(result?.phraseA).toContain('5 Minuten')
+      expect(result?.phraseB).toContain('300')
+    })
+    it('detects numeric conflict: captured frequency vs much lower value', () => {
+      const step = makeStep({
+        status: 'exploring',
+        potenzial: {
+          frequency_per_month: { value: 120, quote: '120 mal im Monat', confidence: 'confirmed' },
+          duration_minutes: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      })
+      const result = detectAmbiguity('Das passiert vielleicht 10 Mal im Monat, nicht mehr.', [step])
+      expect(result).not.toBeNull()
+    })
+    it('does NOT flag minor numeric variation (ratio < 3)', () => {
+      const step = makeStep({
+        status: 'walkthrough',
+        potenzial: {
+          frequency_per_month: null,
+          duration_minutes: { value: 10, quote: '10 Minuten', confidence: 'confirmed' },
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      })
+      // 15 minutes vs 10 → ratio 1.5 < 3
+      const result = detectAmbiguity('Das dauert eher 15 Minuten.', [step])
+      expect(result).toBeNull()
+    })
+    it('detects explicit contradiction marker "eigentlich doch"', () => {
+      const result = detectAmbiguity(
+        'Das läuft über SAP — eigentlich doch manchmal über Excel.',
+        [],
+      )
+      expect(result).not.toBeNull()
+    })
+    it('returns null for undefined or no active step', () => {
+      expect(detectAmbiguity(undefined, [])).toBeNull()
+      expect(detectAmbiguity('Test Aussage 100 Minuten.', [])).toBeNull()
+    })
+
+    describe('B2 fix: negation-contradiction via priorUserTurns', () => {
+      it('detects "kein SAP" in prior turn + positive SAP mention in current turn', () => {
+        const prior = ['Wir nutzen kein SAP, alles läuft über Excel.']
+        const result = detectAmbiguity('Natürlich prüfe ich kurz in SAP nach.', [], prior)
+        expect(result).not.toBeNull()
+        expect(result?.phraseA).toMatch(/kein SAP/i)
+        expect(result?.phraseB).toMatch(/SAP/i)
+      })
+      it('detects "keine Excel" contradiction', () => {
+        const prior = ['Wir haben keine Excel-Listen dafür.']
+        const result = detectAmbiguity('Ich öffne dann meine Excel-Tabelle und trage es ein.', [], prior)
+        expect(result).not.toBeNull()
+      })
+      it('returns null when current turn does NOT positively mention negated concept', () => {
+        const prior = ['Wir nutzen kein SAP.']
+        const result = detectAmbiguity('Das Prozessschritt dauert etwa 10 Minuten.', [], prior)
+        expect(result).toBeNull()
+      })
+      it('returns null when priorUserTurns is empty', () => {
+        const result = detectAmbiguity('Ich nutze SAP täglich.', [], [])
+        expect(result).toBeNull()
+      })
+    })
+  })
+
+  describe('wasRecentlyRecontextualized (E3.2 cap)', () => {
+    it('detects re-contextualization in recent assistant turns', () => {
+      const turns = [
+        'Wie lange dauert dieser Schritt?',
+        'Lass uns zurück zu deiner Frage kommen.',
+        'Wie oft passiert das pro Woche?',
+      ]
+      expect(wasRecentlyRecontextualized(turns)).toBe(true)
+    })
+    it('detects "kommen wir zurück zu"', () => {
+      const turns = ['Kommen wir zurück zu dem was du vorhin beschrieben hast.']
+      expect(wasRecentlyRecontextualized(turns)).toBe(true)
+    })
+    it('returns false when no re-contextualization in recent turns', () => {
+      const turns = [
+        'Wie lange dauert dieser Schritt für dich typischerweise?',
+        'Und wie oft passiert das pro Monat?',
+        'Welche Systeme nutzt du dabei?',
+      ]
+      expect(wasRecentlyRecontextualized(turns)).toBe(false)
+    })
+    it('returns false for undefined or empty', () => {
+      expect(wasRecentlyRecontextualized(undefined)).toBe(false)
+      expect(wasRecentlyRecontextualized([])).toBe(false)
     })
   })
 })
