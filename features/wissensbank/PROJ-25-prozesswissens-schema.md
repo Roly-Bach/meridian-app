@@ -5,7 +5,7 @@
 **Domain:** Wissensbank
 **Extends:** PROJ-20
 **Appetite:** L
-**Bugs:** 0:1:1
+**Bugs:** 0:0:0
 **Created:** 2026-06-16
 **Last Updated:** 2026-06-17
 
@@ -313,7 +313,7 @@ const result = normalizeStepEntry(legacy, 1)
 
 **Impact:** Low in practice (record_slot rejects empty arrays at runtime; old entries rarely had `[]`), but violates explicit spec AC.
 
-**Fix:** `normalizeArraySlot()` helper added in `interviewSemantic.ts`, called for all 4 TaziteSlotArray pass-through slots. Legacy path also fixed: `Array.isArray(val) && val.length > 0 ? val : ...`. SQL migration: added `jsonb_array_length() = 0 → 'null'::jsonb` guard. **Fixed 2026-06-17.**
+**Fix:** `normalizeArraySlot()` now also applied to `hilfsmittel` in the return statement (`interviewSemantic.ts`). Legacy path also fixed: `Array.isArray(val) && val.length > 0 ? val : ...`. SQL migration: added `jsonb_array_length() = 0 → 'null'::jsonb` guard. Tests added in `stepRevisionIntegrity.test.ts`. **Fixed 2026-06-18.**
 
 ---
 
@@ -349,11 +349,11 @@ Coverage-Regression note: O1–O6 Coverage values drop systematically after PROJ
 | Acceptance Criteria | 41/42 passed |
 | Critical bugs | 0 |
 | High bugs | 0 |
-| Medium bugs | 1 (BUG-M1: empty array normalization) |
-| Low bugs | 1 (BUG-L1: misleading comment) |
+| Medium bugs | 0 |
+| Low bugs | 0 |
 | Security issues | 0 |
 
-**Production-Ready: YES** — No Critical or High bugs. BUG-M1 is a defensive gap with low real-world impact (runtime record_slot rejects empty arrays; old data rarely had `[]`). Can be fixed in PROJ-27 or as a quick follow-up.
+**Production-Ready: YES** — 0 open bugs. BUG-M1 fixed 2026-06-18, BUG-L1 fixed 2026-06-17.
 
 ## Deployment
 _To be added by /deploy_

@@ -5,7 +5,7 @@
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** L
-**Bugs:** —
+**Bugs:** 0:0:0
 **Created:** 2026-06-16
 **Last Updated:** 2026-06-17
 
@@ -338,12 +338,12 @@ Regressionsschutz: `slotWriteRace.test.ts` + `npm run eval:replay` + Eval-Gate `
 
 | ID | Severity | AC | Description | Repro |
 |----|----------|----|-------------|-------|
-| B1 | **Medium** | BL-E1.3 #30 | Runtime conformance logging not implemented. `record_slot` does not call `toGrenzobjekt` + ajv after write; `console.warn` + Langfuse `conformanceViolation` attr missing. Schema violations during live sessions invisible until eval run. | — |
-| B2 | **Medium** | BL-E1.5 #16/17 | Missing concurrent-write safety tests in `slotWriteRace.test.ts`. No test demonstrates that (a) two concurrent jsonb_set on DIFFERENT slots are lossless, (b) two concurrent jsonb_set on SAME slot produce last-write-wins without crash. The REPRO test documents OLD behavior; no positive proof of fix. | — |
-| B3 | **Low** | Edge case | No ID collision guard in `register_step`. Two concurrent calls reading same `current.length` would both generate same ID (e.g., `S002`). Analyst rules prevent this normally; risk is minimal. | Concurrent register_step × 2 on empty tracker → both assign S001 |
-| B4 | **Low** | BL-E1.5 #20 | No test for `.neq('analyst_status', 'done')` conditional UPDATE guard. The guard is implemented but not test-covered. | — |
-| B5 | **Low** | Revisionsintegrität #12 | No test verifying `is_correction=true` propagation: corrected value must not reappear as old value in subsequent turn-states. | — |
-| B6 | **Low** | Security | `GRANT EXECUTE TO authenticated` on `SECURITY DEFINER` function `patch_interview_step_field` is unnecessary. All callers use service role (server-side only). If a user JWT + known interview UUID reaches the RPC endpoint directly, RLS bypass could allow unauthorized `step_tracker` modification. Recommend removing `GRANT TO authenticated`, keeping only `service_role`. | Call `.rpc('patch_interview_step_field', {...})` with user JWT + another user's interview UUID |
+| B1 | **Medium** ✅ | BL-E1.3 #30 | Runtime conformance logging not implemented. | Fixed in PROJ-28: `checkSchritt` + `console.warn` + `conformanceViolation` return attr implemented in `record_slot`. |
+| B2 | **Medium** ✅ | BL-E1.5 #16/17 | Missing concurrent-write safety tests. | Fixed in PROJ-27 follow-up: PROOF tests added to `slotWriteRace.test.ts` (different-slot lossless + same-slot last-write-wins). |
+| B3 | **Low** ✅ | Edge case | No ID collision guard in `register_step`. | Fixed: `while (current.some(s => s.id === candidateId))` loop in `interviewAgent.ts`. |
+| B4 | **Low** ✅ | BL-E1.5 #20 | No test for conditional UPDATE guard. | Fixed in `stepRevisionIntegrity.test.ts`: `conditional UPDATE guard (analyst_status ≠ done)` describe block. |
+| B5 | **Low** ✅ | Revisionsintegrität #12 | No test for `is_correction=true` propagation. | Fixed in `stepRevisionIntegrity.test.ts`: `is_correction: corrected slot value replaces previous` describe block. |
+| B6 | **Low** ✅ | Security | `GRANT EXECUTE TO authenticated` on SECURITY DEFINER function. | Fixed in migration `20260617000002_proj27_revoke_auth_grant.sql`: REVOKE from authenticated. |
 
 ### Security Audit
 
@@ -355,9 +355,7 @@ Regressionsschutz: `slotWriteRace.test.ts` + `npm run eval:replay` + Eval-Gate `
 
 ### Production-Ready Decision
 
-**READY** — 0 Critical/High bugs. Core race-fix and stable IDs are fully functional.
-B1 and B2 are test/observability gaps that do not affect interview correctness or data integrity.
-Recommend fixing B1+B2 before or alongside the next related feature (PROJ-28).
+**READY** — 0 open bugs. All B1–B6 resolved in PROJ-28/follow-up commits (2026-06-17/18).
 
 ## Deployment
 _To be added by /deploy_

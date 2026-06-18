@@ -255,7 +255,7 @@ export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): S
       ausnahmen: normalizeArraySlot(r.slots?.ausnahmen),
       inputs: normalizeArraySlot(r.slots?.inputs),
       outputs: normalizeArraySlot(r.slots?.outputs),
-      hilfsmittel,
+      hilfsmittel: normalizeArraySlot(hilfsmittel),
     },
     process_steps: r.process_steps,
     friction_points: r.friction_points,

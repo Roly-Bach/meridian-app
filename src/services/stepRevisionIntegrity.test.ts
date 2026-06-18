@@ -86,6 +86,40 @@ describe('normalizeStepEntry — id preservation', () => {
 })
 
 // ---------------------------------------------------------------------------
+// normalizeStepEntry — empty array normalization (BUG-M1)
+// ---------------------------------------------------------------------------
+
+describe('normalizeStepEntry — empty TaziteSlotArray normalization (BUG-M1)', () => {
+  const baseNonLegacy = {
+    title: 'X',
+    reihenfolge: 1,
+    status: 'exploring' as const,
+    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+  }
+
+  it('hilfsmittel value:[] → null in non-legacy path', () => {
+    const raw = { ...baseNonLegacy, slots: { hilfsmittel: { value: [], quote: null, nicht_befund_typ: null } } }
+    const normalized = normalizeStepEntry(raw, 1)
+    expect(normalized.slots.hilfsmittel?.value).toBeNull()
+  })
+
+  it('hilfsmittel value:[] → null in legacy fallback (no data_sources)', () => {
+    const raw = {
+      title: 'X', status: 'exploring' as const,
+      slots: { frequency_per_month: { value: 1, quote: 'q' }, hilfsmittel: { value: [], quote: null, nicht_befund_typ: null } },
+    }
+    const normalized = normalizeStepEntry(raw, 1)
+    expect(normalized.slots.hilfsmittel?.value).toBeNull()
+  })
+
+  it('hilfsmittel with non-empty array passes through unchanged', () => {
+    const raw = { ...baseNonLegacy, slots: { hilfsmittel: { value: ['SAP'], quote: 'nutzt SAP', nicht_befund_typ: null } } }
+    const normalized = normalizeStepEntry(raw, 1)
+    expect(normalized.slots.hilfsmittel?.value).toEqual(['SAP'])
+  })
+})
+
+// ---------------------------------------------------------------------------
 // toGrenzobjekt — ID assignment
 // ---------------------------------------------------------------------------
 
