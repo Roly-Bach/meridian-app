@@ -156,3 +156,66 @@ describe('scoreSlotDepth — Edge Cases', () => {
     }
   })
 })
+
+// ─── Order-Swap-Test (BL-E5.2) ────────────────────────────────────────────────
+//
+// Verifiziert, dass die Parser-Logik invariant gegenüber Slot-Reihenfolge im
+// Batch-Input ist. Da LLM gemockt: der Test sichert, dass gleiche Slots in
+// anderer Reihenfolge dasselbe Ergebnis liefern.
+//
+// Integration-Test für echten Order-Swap mit LLM benötigt API-Keys (key-gated).
+
+describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
+  it('Slots in umgekehrter Reihenfolge im StepEntry → gleicher Score (mit gemocktem LLM)', async () => {
+    // Build two StepEntry objects with same slots but different property insertion order.
+    // getFilledSlots() sorts by name, so both should produce the same sorted batch.
+    const baseStep: StepEntry = {
+      title: 'Rechnungsprüfung',
+      reihenfolge: 1,
+      governance: null,
+      abhaengigkeiten: null,
+      status: 'done',
+      potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+      slots: {
+        entscheidungslogik: { value: 'Freigabe ab 5000 EUR', quote: 'Freigabe ab 5000 EUR', confidence: 'confirmed', nicht_befund_typ: null },
+        tazite_cues: null,
+        ausnahmen: null,
+        inputs: { value: ['Eingangsrechnung'], quote: 'Eingangsrechnung', nicht_befund_typ: null },
+        outputs: null,
+        hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
+      },
+    }
+
+    // Reverse-order step: same data, but object properties created in different order.
+    // Since JS object property order can affect Object.entries() on older engines,
+    // we explicitly create the slots object in reverse alphabetical order.
+    const reverseOrderStep: StepEntry = {
+      ...baseStep,
+      slots: {
+        tazite_cues: null,
+        outputs: null,
+        inputs: { value: ['Eingangsrechnung'], quote: 'Eingangsrechnung', nicht_befund_typ: null },
+        hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
+        entscheidungslogik: { value: 'Freigabe ab 5000 EUR', quote: 'Freigabe ab 5000 EUR', confidence: 'confirmed', nicht_befund_typ: null },
+        ausnahmen: null,
+      },
+    }
+
+    const stufe2Response = JSON.stringify([
+      { slot: 'entscheidungslogik', begruendung: 'Erklärender Kontext vorhanden', stufe: 2 },
+      { slot: 'inputs', begruendung: 'Oberflächlich benannt', stufe: 2 },
+      { slot: 'hilfsmittel', begruendung: 'Nur Tool-Name', stufe: 2 },
+    ])
+    mockGenerateText.mockResolvedValue({ text: stufe2Response } as Awaited<ReturnType<typeof generateText>>)
+
+    const result1 = await scoreSlotDepth([baseStep], [], EVAL_MODEL)
+
+    mockGenerateText.mockResolvedValue({ text: stufe2Response } as Awaited<ReturnType<typeof generateText>>)
+    const result2 = await scoreSlotDepth([reverseOrderStep], [], EVAL_MODEL)
+
+    expect(result1.depth_score).not.toBeNull()
+    expect(result2.depth_score).not.toBeNull()
+    // Parser-Invarianz: gleicher Mock-Output → gleicher Score
+    expect(result1.depth_score).toBe(result2.depth_score)
+  })
+})

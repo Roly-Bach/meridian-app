@@ -15,23 +15,59 @@ function getJudgeModel(evalModel: string): string {
 }
 
 const JUDGE_SYSTEM = `Du bist ein Qualitätsprüfer für KI-Interview-Dialoge auf Deutsch.
-Bewerte die folgenden Agent-Texte nach diesen fünf Kriterien:
+Bewerte die folgenden Agent-Texte nach ihrer Gesprächsnatürlichkeit.
 
-1. Natürliche, gesprächliche deutsche Sprache (kein Behördendeutsch, kein Denglisch)
-2. Höfliche Du-Form konsequent verwendet
-3. Keine generischen Einleitungen ("Sicher!", "Natürlich!", "Gerne!", "Das ist eine gute Frage!")
-4. Keine abrupten Themensprünge ohne verbindende Formulierung
-5. Grammatikalisch korrekte, leicht lesbare Sätze
+Rubrik:
+- Stufe 1 (oberflächlich): generische Einleitungen/Floskeln ("Sicher!", "Natürlich!", "Gerne!", "Das ist eine gute Frage!"), häufige Stilbrüche, inkonsistente Du-Form
+- Stufe 2 (angemessen): überwiegend natürliche Sprache, vereinzelte Mängel, Du-Form meist eingehalten
+- Stufe 3 (exzellent): durchgehend natürlich, höflich, keine generischen Floskeln, konsequente Du-Form, keine abrupten Themensprünge
 
-Antworte NUR mit einer Dezimalzahl zwischen 0.00 und 1.00.
-0.00 = durchgehend schlechte Qualität, 1.00 = durchgehend exzellente Qualität.
-Keine weitere Erklärung, keine Begründung — nur die Zahl.`
+Schreibe zuerst deine Begründung (Beobachtungen zu Natürlichkeit, Du-Form, Floskeln, Themenübergängen, Grammatik). Dann am Ende exakt: \`Stufe: X\` (X = 1, 2 oder 3)`
 
 const MAX_SAMPLE_TURNS = 8
 
-export async function scoreDialogNaturalness(turns: TurnRecord[], evalModel: string): Promise<number> {
+export interface DialogNaturalnessResult {
+  score: number
+  rationale: string
+}
+
+/**
+ * Parse the LLM judge response.
+ * Returns { score, rationale } where score is 0.33 / 0.67 / 1.00.
+ * Falls back to 0.5 with a warning on unexpected format.
+ */
+export function parseJudgeResponse(text: string): { score: number; rationale: string } {
+  // Find the last occurrence of "Stufe: X" (tolerant for bold markdown, extra spaces, colon variants)
+  const regex = /\*{0,2}Stufe\s*[:\s]\s*([123])\*{0,2}/gi
+  let lastMatch: RegExpExecArray | null = null
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text)) !== null) {
+    lastMatch = match
+  }
+
+  if (!lastMatch) {
+    console.warn('[dialogNaturalness] unexpected format, fallback 0.5')
+    return { score: 0.5, rationale: text.trim() }
+  }
+
+  const stufe = parseInt(lastMatch[1], 10) as 1 | 2 | 3
+  const scoreMap: Record<1 | 2 | 3, number> = { 1: 0.33, 2: 0.67, 3: 1.0 }
+  const score = scoreMap[stufe] ?? 0.5
+
+  // Rationale = everything before the last "Stufe: X" marker
+  const lastMatchIndex = text.lastIndexOf(lastMatch[0])
+  const rationale = text.slice(0, lastMatchIndex).trim()
+
+  return { score, rationale }
+}
+
+export async function scoreDialogNaturalness(
+  turns: TurnRecord[],
+  evalModel: string,
+  isolatedCriteria = false,
+): Promise<DialogNaturalnessResult> {
   const agentTexts = turns.map(t => t.agentText).filter(t => t.trim().length > 0)
-  if (agentTexts.length === 0) return 0.5
+  if (agentTexts.length === 0) return { score: 0.5, rationale: '' }
 
   // Sample spread across conversation to keep judge prompt short
   const sample =
@@ -46,21 +82,95 @@ export async function scoreDialogNaturalness(turns: TurnRecord[], evalModel: str
 
   const judgeModelString = getJudgeModel(evalModel)
 
+  if (isolatedCriteria) {
+    return scoreWithIsolatedCriteria(sample, judgeModelString)
+  }
+
   try {
     const model = resolveModel(judgeModelString)
     const { text } = await generateText({
       model,
       system: JUDGE_SYSTEM,
       prompt: `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`,
-      maxOutputTokens: 12,
+      maxOutputTokens: 300,
       temperature: 0,
     })
 
-    const score = parseFloat(text.trim().replace(',', '.'))
-    if (isNaN(score) || score < 0 || score > 1) return 0.5
-    return Math.round(score * 100) / 100
+    return parseJudgeResponse(text)
   } catch (err) {
     console.warn('[scorer:dialog_naturalness] judge call failed, returning 0.5:', err)
-    return 0.5
+    return { score: 0.5, rationale: '' }
   }
+}
+
+// ─── Isolated criteria mode ───────────────────────────────────────────────────
+
+interface CriterionResult {
+  criterion: string
+  weight: number
+  score: number
+  rationale: string
+}
+
+const ISOLATED_CRITERIA: Array<{ criterion: string; weight: number; prompt: string }> = [
+  {
+    criterion: 'Natürlichkeit',
+    weight: 0.3,
+    prompt: 'Bewerte ausschließlich die Natürlichkeit der Sprache (kein Behördendeutsch, kein Denglisch). Stufe 1 = sehr unnatürlich, Stufe 2 = teils natürlich, Stufe 3 = durchgehend natürlich. Schreibe deine Begründung, dann: `Stufe: X`',
+  },
+  {
+    criterion: 'Du-Form',
+    weight: 0.2,
+    prompt: 'Bewerte ausschließlich die Konsistenz der Du-Form. Stufe 1 = oft falsch/gemischt, Stufe 2 = meistens korrekt, Stufe 3 = immer korrekt. Schreibe deine Begründung, dann: `Stufe: X`',
+  },
+  {
+    criterion: 'Keine Floskeln',
+    weight: 0.2,
+    prompt: 'Bewerte ausschließlich ob generische Einleitungsfloskeln ("Sicher!", "Natürlich!", "Gerne!", "Das ist eine gute Frage!") verwendet werden. Stufe 1 = häufig, Stufe 2 = selten, Stufe 3 = nie. Schreibe deine Begründung, dann: `Stufe: X`',
+  },
+  {
+    criterion: 'Kein Themensprung',
+    weight: 0.2,
+    prompt: 'Bewerte ausschließlich ob abrupte Themensprünge ohne verbindende Formulierung vorkommen. Stufe 1 = häufig, Stufe 2 = selten, Stufe 3 = nie. Schreibe deine Begründung, dann: `Stufe: X`',
+  },
+  {
+    criterion: 'Grammatik',
+    weight: 0.1,
+    prompt: 'Bewerte ausschließlich die Grammatik und Lesbarkeit. Stufe 1 = viele Fehler, Stufe 2 = wenige Fehler, Stufe 3 = fehlerfrei. Schreibe deine Begründung, dann: `Stufe: X`',
+  },
+]
+
+async function scoreWithIsolatedCriteria(
+  sample: string[],
+  judgeModelString: string,
+): Promise<DialogNaturalnessResult> {
+  const promptBase = `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`
+  const results: CriterionResult[] = []
+
+  for (const crit of ISOLATED_CRITERIA) {
+    try {
+      const model = resolveModel(judgeModelString)
+      const { text } = await generateText({
+        model,
+        system: crit.prompt,
+        prompt: promptBase,
+        maxOutputTokens: 300,
+        temperature: 0,
+      })
+      const parsed = parseJudgeResponse(text)
+      results.push({ criterion: crit.criterion, weight: crit.weight, score: parsed.score, rationale: parsed.rationale })
+    } catch {
+      results.push({ criterion: crit.criterion, weight: crit.weight, score: 0.5, rationale: '' })
+    }
+  }
+
+  const totalWeight = results.reduce((s, r) => s + r.weight, 0)
+  const weightedScore = results.reduce((s, r) => s + r.score * r.weight, 0) / totalWeight
+  const score = Math.round(weightedScore * 100) / 100
+
+  const rationale = results
+    .map(r => `[${r.criterion}] Score: ${r.score} — ${r.rationale}`)
+    .join('\n\n')
+
+  return { score, rationale }
 }

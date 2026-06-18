@@ -17,7 +17,8 @@
     "eval:interview": "tsx --conditions react-server src/services/__evals__/interview/runner.ts",
     "eval:interview:compare": "tsx --conditions react-server src/services/__evals__/interview/compare.ts",
     "eval:replay": "tsx src/services/__evals__/interview/replay/runReplay.ts",
-    "eval:replay:update": "tsx src/services/__evals__/interview/replay/runReplay.ts --update-baseline"
+    "eval:replay:update": "tsx src/services/__evals__/interview/replay/runReplay.ts --update-baseline",
+    "eval:interview:paraphrase-test": "tsx src/services/__evals__/interview/paraphrase-test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",

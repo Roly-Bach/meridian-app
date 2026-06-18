@@ -1,0 +1,150 @@
+{
+  "evalRunId": "206c431a-fe5e-4b46-9e25-bdbea1e07869",
+  "interviewId": "cf46973c-9e4e-4741-a0b8-d4a24a89420a",
+  "model": "google/gemini-3.5-flash",
+  "persona": "buchhalter",
+  "status": "completed",
+  "variant": "c",
+  "variantDescription": "Stichpunkt/Fließtext-Wechsel der User-Turns",
+  "turns": [
+    {
+      "turnNumber": 1,
+      "userInput": "Meine Hauptaufgaben im Überblick: Rechnungsbearbeitung täglich, Monatsabschluss zyklisch. Dabei sorge ich dafür, dass Buchungen korrekt erfasst und Belege archiviert werden. Außerdem stimme ich offene Posten ab und bereite Daten für andere Abteilungen auf.",
+      "agentText": "Hallo Andreas. Schön, dass wir heute sprechen. In diesem Gespräch möchten wir dein wertvolles Prozesswissen strukturiert dokumentieren, um die Abläufe in deiner Abteilung besser zu verstehen. Das Gespräch wird vertraulich behandelt.",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 2,
+      "userInput": "Der Monatsabschluss ist der aufwändigste Prozess. Ablauf: systematischer Abgleich offener Posten, dann Buchung der Rückstellungen, dann Übergabe ans Controlling. Problem dabei: Ausnahmen müssen manuell außerhalb der regulären Systeme nachgepflegt werden. Das kostet viel Zeit, besonders unter dem Zeitdruck am Monatsende.",
+      "agentText": "Verstanden, der Monatsabschluss fordert also die meiste Aufmerksamkeit. Wie viele dieser Abschlüsse führst du pro Jahr durch und wie viele Arbeitstage oder Stunden benötigst du typischerweise für einen einzelnen Monatsabschluss?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 3,
+      "userInput": "Frequenz: zwölfmal pro Jahr, also jeden Monat. Dauer: in der Regel zwei bis drei Tage. In dieser Zeit werden Abstimmungsarbeiten und Rückstellungsbuchungen abgeschlossen. Zeitdruck ist dabei ein konstanter Faktor, denn das Controlling wartet auf die Daten.",
+      "agentText": "Du hast „zwei bis drei Tage” gesagt — welcher Wert trifft es für einen typischen Monatsabschluss besser?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 4,
+      "userInput": "Die Dauer hängt von der Komplexität der Korrekturen ab. Ich orientiere mich meistens am oberen Ende des Zeitrahmens. Der Hauptgrund: die manuelle Nachpflege von Ausnahmen zieht den Prozess in den dritten Tag hinein. Fazit: drei Arbeitstage sind der Normalfall, nicht die Ausnahme.",
+      "agentText": "Drei Tage sind also der Regelfall. Wie sieht der erste Schritt beim Monatsabschluss konkret aus, sobald du mit dem Abgleich der offenen Posten beginnst?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 5,
+      "userInput": "Der Ablauf am Anfang ist folgender: Zuerst werden sämtliche offenen Posten systemseitig abgestimmt. Inkonsistenzen werden dabei identifiziert und die Datenbasis auf Korrektheit geprüft. Das schafft die Grundlage für die nachgelagerten Buchungsschritte. Erst danach lassen sich die Rückstellungen ableiten und ins System übertragen.",
+      "agentText": "Welche Schritte folgen direkt, nachdem du die Rückstellungen in die Buchungssysteme übertragen hast?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 6,
+      "userInput": "Nach den Rückstellungen geht es weiter mit: Übergabe der aufbereiteten Daten ans Controlling, Überführung in Auswertungstabellen und schließlich Dokumentation aller manuellen Korrekturen aus den Hilfslisten. Diese letzte Dokumentation ist wichtig für die Konsistenz des Gesamtabschlusses.",
+      "agentText": "ミーティングNachdem du die manuellen Korrekturen in den Hilfslisten dokumentiert hast, ist der Monatsabschluss damit vollständig abgeschlossen, oder folgt daraufhin noch ein weiterer Schritt?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 7,
+      "userInput": "Noch nicht ganz abgeschlossen: Es folgt die finale Übergabe und Abstimmung mit den Fachabteilungen. Dabei werden Fragen geklärt, damit die erfassten Daten korrekt in die Planungsrechnungen integriert werden. Erst wenn alle Rückfragen beantwortet und der Abgleich endgültig bestätigt ist, ist der Monatsabschluss wirklich fertig.",
+      "agentText": "",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 8,
+      "userInput": "Die Rechnungsprüfung läuft so ab: Eingang der Belege per E-Mail, dann Prüfung von Lieferant, Betragshöhe und Leistungszeitraum, dann Buchung in SAP FI und Ablage in DocuWare. Wichtige Regel: bei Beträgen über einer bestimmten finanziellen Grenze ist eine Zweit-Freigabe Pflicht.",
+      "agentText": "Das ist ein sehr strukturierter Ablauf. Wie viele eingehende Rechnungen bearbeitest du durchschnittlich pro Monat und wie viel Zeit benötigst du ungefähr für die Prüfung und Buchung einer einzelnen Rechnung?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 9,
+      "userInput": "Monatliches Volumen: etwa 80 bis 100 Eingangsrechnungen. Die Bearbeitungszeit je Rechnung variiert stark. Hauptproblem: fehlende Bestellreferenzen erfordern manuelle Suchen in mehreren Systemen. Ein fester Zeitwert pro Beleg lässt sich daher kaum angeben, denn jede Abweichung bei Kostenstellen oder Steuersätzen bedeutet zusätzliche Klärungsarbeit.",
+      "agentText": "Du hast „80 bis 100” Rechnungen genannt — welcher Wert trifft es für einen typischen Monat besser, und wie viele Minuten benötigst du im Durchschnitt für die Prüfung und Buchung einer einzelnen Rechnung?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 10,
+      "userInput": "In der Praxis liegt die Auslastung eher am oberen Ende — das Volumen schwankt je nach Saison. Was die Zeit betrifft: unkomplizierte Rechnungen sind schnell in SAP FI gebucht und in DocuWare abgelegt. Aber sobald eine Bestellreferenz fehlt oder Kostenstellen nicht stimmen, vervielfacht sich der Aufwand. Pauschal lässt sich die Zeit daher nicht angeben.",
+      "agentText": "Wenn wir die Schwankungen einbeziehen und uns am oberen Ende orientieren, halten wir 100 Rechnungen pro Monat fest. Welcher Zeitwert in Minuten beschreibt die Bearbeitung einer einzelnen Rechnung am besten – einmal für einen fehlerfreien Standardfall und einmal, wenn du manuell recherchieren musst?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 11,
+      "userInput": "Für einen fehlerfreien Standardfall: Erfassung in SAP FI und Ablage in DocuWare dauern nur wenige Minuten. Bei Problemen — z.B. fehlende Bestellreferenz oder Unstimmigkeiten — wird manuelle Recherche notwendig. Diese Nachforschungen kosten mich wöchentlich etwa eine Stunde, was den Zeitaufwand pro betroffener Rechnung deutlich nach oben treibt.",
+      "agentText": "Du hast „wenige Minuten” für einen fehlerfreien Standardfall genannt — wie viele Minuten sind das für eine solche Rechnung typischerweise? Und folgt dieser gesamte Prüfungsprozess einer festen, strikten Regel oder gibt es dabei oft Ermessensspielräume?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 12,
+      "userInput": "Für einen fehlerfreien Standardvorgang: etwa fünf Minuten für vollständige Erfassung und Archivierung. Zum Thema Regelgebundenheit: Der Prozess unterliegt strikten buchhalterischen Richtlinien. Besonders die Rechnungsprüfung und die Zweit-Freigabe ab 5.000 EUR sind klar definiert. Ermessensspielraum gibt es kaum, denn Compliance-Regeln und Prüfschritte sind klar vorgegeben.",
+      "agentText": "Für einen fehlerfreien Standardfall halten wir also 5 Minuten fest.",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 13,
+      "userInput": "Rechenweg für den monatlichen Durchschnitt: Eine Stunde Recherchezeit pro Woche ergibt vier Stunden pro Monat. Diese vier Stunden verteilen sich auf 100 Rechnungen, was eine zusätzliche Belastung von rund zweieinhalb Minuten je Rechnung ergibt. In Summe also etwa siebeneinhalb Minuten pro Rechnung im Durchschnitt. Bei Häufung von Sonderfällen kann dieser Wert noch variieren.",
+      "agentText": "Das macht die Kalkulation sehr präzise, danke.",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 14,
+      "userInput": "Für den Monatsabschluss gilt: acht Stunden täglich über drei Tage ergibt 24 Arbeitsstunden gesamt. Der Prozess folgt strengen buchhalterischen Anforderungen. Ausnahme: bei der manuellen Pflege der Ausnahmen in den Excel-Listen habe ich einen gewissen Spielraum, weil ich selbst entscheide, wie die Korrekturen am sinnvollsten eingetragen werden. Die Buchungen in SAP FI sind dagegen klar vorgegeben.",
+      "agentText": "Damit haben wir für den Monatsabschluss 24 Stunden (1.440 Minuten) erfasst.",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 15,
+      "userInput": "Die Rechnungsprüfung ist ein Dauerprozess: jeden Monat, ohne Unterbrechung. Der Grund ist einfach: Eingangsrechnungen gehen kontinuierlich ein und müssen bearbeitet werden. Monatsvolumen bearbeite ich daher regelmäßig — für eine lückenlose Buchführung in SAP FI und korrekte Ablage in DocuWare.",
+      "agentText": "Wie hoch ist der prozentuale Anteil der Rechnungen, bei denen tatsächlich Fehler oder fehlende Angaben (wie die Bestellreferenz) auftreten und eine manuelle Klärung erfordern, und druckst du in diesem Prozess an irgendeiner Stelle Dokumente auf Papier aus?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 16,
+      "userInput": "Fehlerquote: etwa fünf Prozent der Rechnungen haben Diskrepanzen — fehlende Kostenstellen, falsche Steuersätze. Dazu kommen noch die fehlenden Bestellreferenzen als eigene Problemkategorie. Zusammen binden diese Fälle einen relevanten Teil meiner Kapazität. Zur Papiernutzung: komplett digital, keine Ausdrucke. Belege kommen per E-Mail und werden in DocuWare archiviert.",
+      "agentText": "Das ist ein sehr effizienter, digitaler Prozess.",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 17,
+      "userInput": "Zur Rechnungsprüfung: Größtenteils regelbasiert durch Compliance-Vorgaben. Aber bei Diskrepanzen brauche ich fachliches Urteilsvermögen — zum Beispiel bei unklaren Leistungszeiträumen. Das macht den Prozess nicht zu 100% automatisiert.\n\nZum Monatsabschluss: Etwa 80 Prozent laufen nach strikten Regeln ab, weil die SAP-Abstimmungen einem festen Schema folgen. Die restlichen 20 Prozent sind manuell — da entscheide ich, wie Ausnahmen in den Excel-Listen aufbereitet werden. Diese persönliche Einschätzung ist wichtig für die Bilanzwahrheit.",
+      "agentText": "Vielen Dank, Andreas. Damit habe ich alle Details zu den Prozessen der Rechnungsprüfung und des Monatsabschlusses vollständig und präzise erfasst.",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 18,
+      "userInput": "Danke ebenfalls. Das war ein konstruktiver Austausch. Falls weitere Fragen zu den Abläufen in der Finanzbuchhaltung auftauchen, stehe ich jederzeit zur Verfügung. Schönen weiteren Tag.",
+      "agentText": "Vielen Dank für das angenehme und aufschlussreiche Gespräch, Andreas. Deine detaillierten Schilderungen helfen uns sehr weiter. Ich wünsche dir ebenfalls einen erfolgreichen Arbeitstag und alles Gute!",
+      "phase": "intro",
+      "toolCalls": []
+    }
+  ],
+  "finalStepTracker": [],
+  "scores": {
+    "slotCoverage": 0.63,
+    "dedupSlotCoverage": 0.63,
+    "phaseAdherence": 1,
+    "phaseProgression": 0.6,
+    "anchoringViolations": 1,
+    "toolCallPlausibility": 0.27,
+    "dialogNaturalness": 0.62,
+    "completionCorrectness": true,
+    "stepRegistrationCoverage": 1
+  },
+  "generatedAt": "2026-06-17T00:00:00.000Z"
+}

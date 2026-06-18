@@ -10,6 +10,11 @@
  *   npm run eval:interview -- --models gemini-3.1-flash-lite,gemini-3.5-flash --personas buchhalter,vertriebler
  *   npm run eval:interview -- --models gemini-3.1-flash-lite --personas buchhalter --baseline-label PROJ-22-pre-refactor
  *
+ * Usage (multi-run with seed):
+ *   npm run eval:interview -- --personas buchhalter --runs 3
+ *   npm run eval:interview -- --personas buchhalter --runs 5 --seed 42 --no-perturbation
+ *   npm run eval:interview -- --personas buchhalter --runs 3 --isolated-criteria
+ *
  * LANGFUSE_ENABLED is set to true automatically for eval runs.
  *
  * Requires in .env.local:
@@ -54,6 +59,7 @@ import { clusterProcessSteps } from '@/services/processClustering'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
 import type { Database } from '@/lib/database.types'
+import { perturbPersona } from './perturbation'
 
 type ProcessStepUpdate = Database['public']['Tables']['process_steps']['Update']
 import { runAllScorers, type TurnRecord, type ScoreSet } from './scorers'
@@ -72,6 +78,26 @@ interface RunArgs {
   models: string[]
   personas: string[]
   baselineLabel: string | null
+  runs: number
+  seed: number
+  noPerturbation: boolean
+  isolatedCriteria: boolean
+}
+
+function printUsage(): void {
+  console.error('Usage: npm run eval:interview <persona>')
+  console.error('       npm run eval:interview -- --models m1,m2 --personas p1,p2')
+  console.error('       npm run eval:interview -- --personas buchhalter --runs 3')
+  console.error('       npm run eval:interview -- --personas buchhalter --runs 5 --seed 42 --no-perturbation')
+  console.error('')
+  console.error('Options:')
+  console.error('  --models      Comma-separated model IDs (default: INTERVIEW_MODEL env or gemini-3.1-flash-lite)')
+  console.error('  --personas    Comma-separated persona names')
+  console.error('  --runs N      Number of runs per model×persona (1–10, default: 1)')
+  console.error('  --seed S      Seeded PRNG seed (default: random)')
+  console.error('  --no-perturbation  Skip persona perturbation (default: false)')
+  console.error('  --isolated-criteria  Use isolated criteria mode for dialogNaturalness (default: false)')
+  console.error('  --baseline-label  Label for this run (stored in report frontmatter)')
 }
 
 function parseArgs(): RunArgs {
@@ -79,6 +105,10 @@ function parseArgs(): RunArgs {
   let models: string[] | null = null
   let personas: string[] | null = null
   let baselineLabel: string | null = null
+  let runs = 1
+  let seed: number | null = null
+  let noPerturbation = false
+  let isolatedCriteria = false
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--models' && args[i + 1]) {
@@ -87,10 +117,35 @@ function parseArgs(): RunArgs {
       personas = args[++i].split(',').map(s => s.trim()).filter(Boolean)
     } else if (args[i] === '--baseline-label' && args[i + 1]) {
       baselineLabel = args[++i]
+    } else if (args[i] === '--runs' && args[i + 1]) {
+      const parsed = parseInt(args[++i], 10)
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+        console.error(`[runner] --runs must be an integer between 1 and 10, got: ${args[i]}`)
+        printUsage()
+        process.exit(1)
+      }
+      runs = parsed
+    } else if (args[i] === '--seed' && args[i + 1]) {
+      const parsed = parseInt(args[++i], 10)
+      if (!Number.isInteger(parsed)) {
+        console.error(`[runner] --seed must be an integer, got: ${args[i]}`)
+        printUsage()
+        process.exit(1)
+      }
+      seed = parsed
+    } else if (args[i] === '--no-perturbation') {
+      noPerturbation = true
+    } else if (args[i] === '--isolated-criteria') {
+      isolatedCriteria = true
     } else if (!args[i].startsWith('--') && !personas) {
       // Backward-compatible: positional persona arg
       personas = [args[i]]
     }
+  }
+
+  // If seed not provided, generate one and log it
+  if (seed === null) {
+    seed = Math.floor(Math.random() * 100000)
   }
 
   // Normalize bare model IDs (no provider prefix) → google/ default
@@ -100,6 +155,10 @@ function parseArgs(): RunArgs {
     models: (models ?? [process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite']).map(normalizeModel),
     personas: personas ?? [],
     baselineLabel,
+    runs,
+    seed,
+    noPerturbation,
+    isolatedCriteria,
   }
 }
 
@@ -361,10 +420,13 @@ function buildReport(opts: {
   interviewStatus: string
   scores: ScoreSet
   trailMetrics?: TrailMetrics | null
+  runIndex?: number
+  runSeed?: number
 }): string {
   const {
     model, personaName, interviewId, evalRunId, baselineLabel,
     turns, finalStepTracker, interviewStatus, scores, trailMetrics,
+    runIndex, runSeed,
   } = opts
 
   const testerModel = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
@@ -399,6 +461,9 @@ function buildReport(opts: {
     `interview_id: ${interviewId}`,
     `eval_run_id: ${evalRunId}`,
     langfuseSession ? `langfuse_session: ${langfuseSession}` : null,
+    runIndex != null ? `run_index: ${runIndex}` : null,
+    runSeed != null ? `run_seed: ${runSeed}` : null,
+    runSeed != null ? `perturbation_seed: ${runSeed}` : null,
     `turns_total: ${turns.length}`,
     `status: ${status}`,
     `baseline_label: ${baselineLabel ?? 'null'}`,
@@ -460,6 +525,16 @@ function buildReport(opts: {
     '',
   ].filter(l => l !== null).join('\n')
 
+  const judgeRationale = scores.dialogNaturalnessRationale
+    ? [
+        '',
+        '## Judge-Begründung',
+        '',
+        scores.dialogNaturalnessRationale,
+        '',
+      ].join('\n')
+    : ''
+
   const conversationLog = [
     '## Gesprächsverlauf',
     '',
@@ -472,7 +547,7 @@ function buildReport(opts: {
 
   const slotTable = buildSlotTable(finalStepTracker)
 
-  return [frontmatter, scoreTable, conversationLog, slotTable].join('\n')
+  return [frontmatter, scoreTable, judgeRationale, conversationLog, slotTable].join('\n')
 }
 
 function buildSlotTable(stepTracker: StepEntry[]): string {
@@ -506,6 +581,9 @@ function writeReport(opts: {
   finalStepTracker: StepEntry[]
   interviewStatus: string
   scores: ScoreSet
+  runIndex?: number
+  runSeed?: number
+  totalRuns?: number
 }): string {
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10)
@@ -514,7 +592,13 @@ function writeReport(opts: {
   const dir = path.resolve(process.cwd(), 'docs', 'evals', 'interview', dateStr)
   fs.mkdirSync(dir, { recursive: true })
 
-  const filename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}.md`
+  // Backward-compatible: runs=1 uses the same naming as before
+  const runSuffix =
+    opts.totalRuns && opts.totalRuns > 1 && opts.runIndex != null
+      ? `-run${opts.runIndex}`
+      : ''
+
+  const filename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}${runSuffix}.md`
   const filepath = path.join(dir, filename)
 
   const trailMetrics = process.env.SLOT_TRAIL_FILE
@@ -536,7 +620,7 @@ function writeReport(opts: {
     scores: opts.scores,
     generatedAt: now.toISOString(),
   }
-  const transcriptFilename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}.transcript.json`
+  const transcriptFilename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}${runSuffix}.transcript.json`
   fs.writeFileSync(path.join(dir, transcriptFilename), JSON.stringify(transcriptData, null, 2), 'utf8')
 
   return filepath
@@ -621,6 +705,8 @@ async function runInterview(
   persona: Persona,
   personaName: string,
   baselineLabel: string | null,
+  runIndex?: number,
+  totalRuns?: number,
 ): Promise<InterviewResult> {
   // Override INTERVIEW_MODEL for this run
   process.env.INTERVIEW_MODEL = model
@@ -637,7 +723,12 @@ async function runInterview(
   const evalTimeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-')
   const runDir = path.resolve(process.cwd(), 'docs', 'evals', 'interview', evalDateStr)
   fs.mkdirSync(runDir, { recursive: true })
-  process.env.SLOT_TRAIL_FILE = path.join(runDir, `${evalDateStr}-${evalTimeStr}-${modelSlug(model)}-${personaName}.slot-trail.jsonl`)
+  // Run-specific trail file when running multiple runs to avoid overwrite
+  const trailSuffix =
+    totalRuns && totalRuns > 1 && runIndex != null
+      ? `-run${runIndex}`
+      : ''
+  process.env.SLOT_TRAIL_FILE = path.join(runDir, `${evalDateStr}-${evalTimeStr}-${modelSlug(model)}-${personaName}${trailSuffix}.slot-trail.jsonl`)
 
   console.log(`\n${'─'.repeat(60)}`)
   console.log(`[eval] model=${model} persona=${personaName} evalRunId=${evalRunId}`)
@@ -998,14 +1089,150 @@ function printSummary(results: RunSummary[]): void {
   console.log('═'.repeat(80))
 }
 
+function printMultiRunSummary(
+  model: string,
+  personaName: string,
+  allScores: ScoreSet[],
+): void {
+  if (allScores.length === 0) return
+
+  const numericKeys = ['slotCoverage', 'dedupSlotCoverage', 'dialogNaturalness', 'phaseAdherence', 'stepRegistrationCoverage'] as const
+
+  console.log(`\n${'─'.repeat(60)}`)
+  console.log(`Multi-run summary: model=${model} persona=${personaName} runs=${allScores.length}`)
+  console.log(`${'Scorer'.padEnd(35)} ${'Median'.padStart(8)} ${'Min'.padStart(8)} ${'Max'.padStart(8)}`)
+  console.log('─'.repeat(60))
+
+  for (const key of numericKeys) {
+    const vals = allScores.map(s => s[key] as number)
+    const sorted = [...vals].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    const median = sorted.length % 2 !== 0
+      ? sorted[mid]
+      : Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 100) / 100
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
+    console.log(`${key.padEnd(35)} ${String(median).padStart(8)} ${String(min).padStart(8)} ${String(max).padStart(8)}`)
+  }
+  console.log('─'.repeat(60))
+}
+
+// ─── Aggregate report writer ──────────────────────────────────────────────────
+
+type NumericScoreKey = NonNullable<{
+  [K in keyof ScoreSet]-?: ScoreSet[K] extends number ? K : never
+}[keyof ScoreSet]>
+
+function computeMedian(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 100) / 100
+}
+
+function computeMedianBoolean(values: boolean[]): number {
+  // Majority vote: 1 if more true than false, 0 if more false, 0.5 if equal
+  const trueCount = values.filter(Boolean).length
+  const falseCount = values.length - trueCount
+  if (trueCount > falseCount) return 1
+  if (falseCount > trueCount) return 0
+  return 0.5
+}
+
+function writeAggregateReport(opts: {
+  model: string
+  personaName: string
+  baselineLabel: string | null
+  seed: number
+  allScores: ScoreSet[]
+  dir: string
+  dateStr: string
+  timeStr: string
+}): string {
+  const { model, personaName, baselineLabel, seed, allScores, dir, dateStr, timeStr } = opts
+
+  const NUMERIC_KEYS: NumericScoreKey[] = [
+    'slotCoverage', 'dedupSlotCoverage', 'slotCoveragePreClarification',
+    'dedupSlotCoveragePreClarification', 'clarificationCoverageDelta',
+    'phaseAdherence', 'phaseProgression', 'anchoringViolations',
+    'toolCallPlausibility', 'dialogNaturalness', 'stepRegistrationCoverage',
+    'schemaConformanceRate', 'hallucinationRate', 'confidenceTriggerRate',
+  ]
+
+  const medians: Partial<Record<NumericScoreKey, number>> = {}
+  const mins: Partial<Record<NumericScoreKey, number>> = {}
+  const maxes: Partial<Record<NumericScoreKey, number>> = {}
+
+  for (const key of NUMERIC_KEYS) {
+    const vals = allScores.map(s => s[key] as number).filter(v => typeof v === 'number')
+    if (vals.length === 0) continue
+    medians[key] = computeMedian(vals)
+    mins[key] = Math.min(...vals)
+    maxes[key] = Math.max(...vals)
+  }
+
+  const completionMedian = computeMedianBoolean(allScores.map(s => s.completionCorrectness))
+
+  const depthScores = allScores.map(s => s.depth_score).filter((v): v is number => v != null)
+  const depthMedian = depthScores.length > 0 ? computeMedian(depthScores) : null
+  const depthMin = depthScores.length > 0 ? Math.min(...depthScores) : null
+  const depthMax = depthScores.length > 0 ? Math.max(...depthScores) : null
+
+  const frontmatter = [
+    '---',
+    `interview_model: ${model}`,
+    `persona: ${personaName}`,
+    `baseline_label: ${baselineLabel ?? 'null'}`,
+    `run_count: ${allScores.length}`,
+    `perturbation_seed: ${seed}`,
+    `eval_date: ${dateStr}`,
+    'scores_median:',
+    ...NUMERIC_KEYS.filter(k => medians[k] != null).map(k => `  ${k}: ${medians[k]}`),
+    `  completion_correctness: ${completionMedian}`,
+    depthMedian != null ? `  depth_score: ${depthMedian}` : null,
+    'scores_min:',
+    ...NUMERIC_KEYS.filter(k => mins[k] != null).map(k => `  ${k}: ${mins[k]}`),
+    depthMin != null ? `  depth_score: ${depthMin}` : null,
+    'scores_max:',
+    ...NUMERIC_KEYS.filter(k => maxes[k] != null).map(k => `  ${k}: ${maxes[k]}`),
+    depthMax != null ? `  depth_score: ${depthMax}` : null,
+    '---',
+  ].filter(l => l !== null).join('\n')
+
+  const tableRows = NUMERIC_KEYS
+    .filter(k => medians[k] != null)
+    .map(k => `| ${k} | ${medians[k]} | ${mins[k]} | ${maxes[k]} |`)
+
+  tableRows.push(`| completion_correctness | ${completionMedian} | — | — |`)
+  if (depthMedian != null) {
+    tableRows.push(`| depth_score | ${depthMedian} | ${depthMin} | ${depthMax} |`)
+  }
+
+  const body = [
+    '',
+    `## Aggregat (${allScores.length} Läufe, seed=${seed})`,
+    '',
+    '| Metrik | Median | Min | Max |',
+    '|--------|--------|-----|-----|',
+    ...tableRows,
+    '',
+  ].join('\n')
+
+  const filename = `${dateStr}-${timeStr}-${modelSlug(model)}-${personaName}-aggregate.md`
+  const filepath = path.join(dir, filename)
+  fs.writeFileSync(filepath, frontmatter + body, 'utf8')
+  return filepath
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { models, personas, baselineLabel } = parseArgs()
+  const { models, personas, baselineLabel, runs, seed, noPerturbation, isolatedCriteria } = parseArgs()
 
   if (personas.length === 0) {
-    console.error('Usage: npm run eval:interview <persona>')
-    console.error('       npm run eval:interview -- --models m1,m2 --personas p1,p2')
+    printUsage()
     console.error(`Available personas: ${Object.keys(PERSONA_MAP).join(', ')}`)
     process.exit(1)
   }
@@ -1017,6 +1244,8 @@ async function main() {
     process.exit(1)
   }
 
+  console.log(`[runner] seed=${seed} runs=${runs} noPerturbation=${noPerturbation} isolatedCriteria=${isolatedCriteria}`)
+
   // Enable Langfuse tracing for all eval runs
   process.env.LANGFUSE_ENABLED = 'true'
   initLangfuse()
@@ -1025,62 +1254,101 @@ async function main() {
 
   for (const model of [...models].sort()) {
     for (const personaName of personas) {
-      const persona = await PERSONA_MAP[personaName]()
-      try {
-        const result = await runInterview(model, persona, personaName, baselineLabel)
+      const basePersona = await PERSONA_MAP[personaName]()
+      const multiRunScores: ScoreSet[] = []
 
-        // Flush OTel spans before scoring (ensures traces are in Langfuse)
-        await flushLangfuse().catch(() => {})
-
-        const scores = await runAllScorers({
-          turns: result.turnRecords,
-          finalStepTracker: result.finalStepTracker,
-          preClarificationStepTracker: result.preClarificationStepTracker ?? undefined,
-          interviewStatus: result.finalInterviewStatus,
-          evalModel: model,
-          expectedProcessCount: persona.expectedProcessCount,
-        })
-
-        const reportPath = writeReport({
-          model,
-          personaName,
-          interviewId: result.interviewId,
-          evalRunId: result.evalRunId,
-          baselineLabel,
-          turns: result.turnRecords,
-          finalStepTracker: result.finalStepTracker,
-          interviewStatus: result.finalInterviewStatus,
-          scores,
-        })
-
-        console.log(`\n[eval] Report written: ${reportPath}`)
-
-        // Write scores to Langfuse (non-blocking, fire-and-forget)
-        writeLangfuseScores(
-          result.interviewId,
-          result.evalRunId,
-          personaName,
-          model,
-          baselineLabel,
-          scores,
-        ).catch(err => console.error('[runner] langfuse score write failed:', err))
-
-        results.push({ model, persona: personaName, scores, reportPath })
-
-        console.log(`\n[eval] Done: interview_id=${result.interviewId} eval_run_id=${result.evalRunId}`)
-        const projectUrl = process.env.LANGFUSE_PROJECT_URL
-        if (projectUrl) {
-          console.log(`  Langfuse session: ${projectUrl}/sessions/${result.interviewId}`)
+      for (let runIndex = 1; runIndex <= runs; runIndex++) {
+        // Persona perturbation (unless disabled)
+        let persona: Persona = basePersona
+        if (!noPerturbation) {
+          // Use a different seed per run to get different perturbations across runs
+          const runSeed = seed + runIndex - 1
+          const perturbedKnowledge = await perturbPersona(basePersona.processKnowledge, runSeed)
+          persona = { ...basePersona, processKnowledge: perturbedKnowledge }
         }
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err)
-        console.error(`[runner] Run failed for model=${model} persona=${personaName}:`, err)
-        results.push({ model, persona: personaName, scores: null, reportPath: null, error: errMsg })
+
+        try {
+          const result = await runInterview(model, persona, personaName, baselineLabel, runIndex, runs)
+
+          // Flush OTel spans before scoring (ensures traces are in Langfuse)
+          await flushLangfuse().catch(() => {})
+
+          const scores = await runAllScorers({
+            turns: result.turnRecords,
+            finalStepTracker: result.finalStepTracker,
+            preClarificationStepTracker: result.preClarificationStepTracker ?? undefined,
+            interviewStatus: result.finalInterviewStatus,
+            evalModel: model,
+            expectedProcessCount: persona.expectedProcessCount,
+          }, isolatedCriteria)
+
+          const reportPath = writeReport({
+            model,
+            personaName,
+            interviewId: result.interviewId,
+            evalRunId: result.evalRunId,
+            baselineLabel,
+            turns: result.turnRecords,
+            finalStepTracker: result.finalStepTracker,
+            interviewStatus: result.finalInterviewStatus,
+            scores,
+            runIndex: runs > 1 ? runIndex : undefined,
+            runSeed: runs > 1 ? seed + runIndex - 1 : undefined,
+            totalRuns: runs,
+          })
+
+          console.log(`\n[eval] Report written: ${reportPath}`)
+
+          // Write scores to Langfuse (non-blocking, fire-and-forget)
+          writeLangfuseScores(
+            result.interviewId,
+            result.evalRunId,
+            personaName,
+            model,
+            baselineLabel,
+            scores,
+          ).catch(err => console.error('[runner] langfuse score write failed:', err))
+
+          multiRunScores.push(scores)
+          results.push({ model, persona: personaName, scores, reportPath })
+
+          console.log(`\n[eval] Done: interview_id=${result.interviewId} eval_run_id=${result.evalRunId}`)
+          const projectUrl = process.env.LANGFUSE_PROJECT_URL
+          if (projectUrl) {
+            console.log(`  Langfuse session: ${projectUrl}/sessions/${result.interviewId}`)
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err)
+          console.error(`[runner] Run failed for model=${model} persona=${personaName} run=${runIndex}:`, err)
+          results.push({ model, persona: personaName, scores: null, reportPath: null, error: errMsg })
+        }
+      }
+
+      // Write aggregate report when multiple runs completed
+      if (runs > 1 && multiRunScores.length > 0) {
+        const now = new Date()
+        const dateStr = now.toISOString().slice(0, 10)
+        const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-')
+        const dir = path.resolve(process.cwd(), 'docs', 'evals', 'interview', dateStr)
+        fs.mkdirSync(dir, { recursive: true })
+        const aggregatePath = writeAggregateReport({
+          model,
+          personaName,
+          baselineLabel,
+          seed,
+          allScores: multiRunScores,
+          dir,
+          dateStr,
+          timeStr,
+        })
+        console.log(`\n[eval] Aggregate report written: ${aggregatePath}`)
+        printMultiRunSummary(model, personaName, multiRunScores)
       }
     }
   }
 
-  if (models.length * personas.length > 1) {
+  if (models.length * personas.length > 1 && runs === 1) {
+    // Multi-run mode uses printMultiRunSummary (printed per model×persona above)
     printSummary(results)
   }
 

@@ -1,4 +1,5 @@
 export type { ScoreSet, TurnRecord, ToolCallRecord, ScorerInput } from './types'
+export type { SlotDepthResult } from './slotDepth'
 
 import { scoreSlotCoverage, scoreDedupCoverage } from './slotCoverage'
 import { scorePhaseAdherence, scorePhaseProgression } from './phaseAdherence'
@@ -29,9 +30,9 @@ export {
   scoreSlotDepth,
 }
 
-export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
-  const [dialogNaturalness, slotDepthResult] = await Promise.all([
-    scoreDialogNaturalness(input.turns, input.evalModel),
+export async function runAllScorers(input: ScorerInput, isolatedCriteria = false): Promise<ScoreSet> {
+  const [dialogNaturalnessResult, slotDepthResult] = await Promise.all([
+    scoreDialogNaturalness(input.turns, input.evalModel, isolatedCriteria),
     scoreSlotDepth(input.finalStepTracker, input.turns, input.evalModel),
   ])
 
@@ -53,7 +54,8 @@ export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
     phaseProgression: round2(scorePhaseProgression(input.turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(input.turns),
     toolCallPlausibility: round2(scoreToolCallPlausibility(input.turns)),
-    dialogNaturalness,
+    dialogNaturalness: dialogNaturalnessResult.score,
+    dialogNaturalnessRationale: dialogNaturalnessResult.rationale || undefined,
     completionCorrectness,
     stepRegistrationCoverage: round2(scoreStepRegistrationCoverage(input.finalStepTracker, input.expectedProcessCount)),
     schemaConformanceRate: round2(scoreSchemaConformanceRate(input.finalStepTracker)),
@@ -61,6 +63,7 @@ export async function runAllScorers(input: ScorerInput): Promise<ScoreSet> {
     confidenceTriggerRate: round2(scoreConfidenceTrigger(input.turns)),
     depth_score: slotDepthResult.depth_score,
     depth_distribution: slotDepthResult.depth_distribution,
+    slotDepthRationale: slotDepthResult.rationale || undefined,
   }
 }
 

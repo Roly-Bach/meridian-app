@@ -13,10 +13,6 @@ export interface TurnRecord {
   toolCalls: ToolCallRecord[]
 }
 
-export interface SlotDepthResult {
-  depth_score: number | null
-  depth_distribution: { p1: number; p2: number; p3: number } | null
-}
 
 export interface ScoreSet {
   slotCoverage: number
@@ -42,6 +38,10 @@ export interface ScoreSet {
   confidenceTriggerRate: number
   depth_score: number | null
   depth_distribution: { p1: number; p2: number; p3: number } | null
+  /** BL-E5.2: CoT rationale from the dialogNaturalness judge (optional) */
+  dialogNaturalnessRationale?: string
+  /** BL-E5.2: CoT rationale from the slotDepth judge (optional) */
+  slotDepthRationale?: string
 }
 
 export interface ScorerInput {

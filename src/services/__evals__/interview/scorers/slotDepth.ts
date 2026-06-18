@@ -1,7 +1,13 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
 import type { StepEntry } from '@/services/interviewSemantic'
-import type { TurnRecord, SlotDepthResult } from './types'
+import type { TurnRecord } from './types'
+
+export interface SlotDepthResult {
+  depth_score: number | null
+  depth_distribution: { p1: number; p2: number; p3: number } | null
+  rationale?: string
+}
 
 // See depth-rubric.md for anchor documentation (ADR-T011)
 const RUBRIC = `Rubrik (ADR-T011):
@@ -25,7 +31,10 @@ function getFilledSlots(step: StepEntry): FilledSlot[] {
   const result: FilledSlot[] = []
 
   // Dynamic iteration over all named slots — picks up PROJ-25 O1-O5 extensions without code changes
-  for (const [name, slot] of Object.entries(step.slots) as Array<[string, { value: string | string[] | null; quote: string | null } | null]>) {
+  // Sorted by name for deterministic batch order (Order-Swap invariance, BL-E5.2)
+  const slotEntries = (Object.entries(step.slots) as Array<[string, { value: string | string[] | null; quote: string | null } | null]>)
+    .sort(([a], [b]) => a.localeCompare(b))
+  for (const [name, slot] of slotEntries) {
     if (slot == null || slot.value == null) continue
     if (Array.isArray(slot.value)) {
       if (slot.value.length === 0) continue
@@ -134,6 +143,7 @@ export async function scoreSlotDepth(
   const judgeModelString = getJudgeModel(evalModel)
   const startTime = Date.now()
   const allStufen: number[] = []
+  const rationaleLines: string[] = []
 
   for (const step of finalStepTracker) {
     if (Date.now() - startTime > TIMEOUT_MS) break
@@ -150,7 +160,10 @@ export async function scoreSlotDepth(
     if (judgments === null) continue
 
     for (const j of judgments) {
-      if ([1, 2, 3].includes(j.stufe)) allStufen.push(j.stufe)
+      if ([1, 2, 3].includes(j.stufe)) {
+        allStufen.push(j.stufe)
+        rationaleLines.push(`[${step.title}/${j.slot}] Stufe ${j.stufe}: ${j.begruendung}`)
+      }
     }
   }
 
@@ -162,6 +175,7 @@ export async function scoreSlotDepth(
   const p2 = round2(allStufen.filter(s => s === 2).length / total)
   const p3 = round2(allStufen.filter(s => s === 3).length / total)
   const depth_score = round2(allStufen.reduce((a, b) => a + b, 0) / total)
+  const rationale = rationaleLines.join('\n')
 
-  return { depth_score, depth_distribution: { p1, p2, p3 } }
+  return { depth_score, depth_distribution: { p1, p2, p3 }, rationale }
 }
