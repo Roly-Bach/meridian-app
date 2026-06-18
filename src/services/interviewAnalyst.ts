@@ -170,8 +170,9 @@ den zurückgegebenen matched_title als step_title verwenden.
 
 **update_topics**: Mit aktualisierten covered/open Listen aufrufen.
 
-**produce_briefing**: Als letzten Tool-Call aufrufen. Enthält next_focus, suggested_question und optional wrap_up_question_asked.
+**produce_briefing**: Als LETZTEN Tool-Call aufrufen — exakt EINMAL pro Turn, NIEMALS mehrfach.
 produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER Phasenwechsel zu coverage_check/wrap_up. Wenn der Turn keine neue extrahierbare Information enthielt (reine Rückfrage, Smalltalk, Wiederholung, Persona weicht aus) → produce_briefing NICHT aufrufen; das vorherige next_briefing bleibt gültig.
+Wenn du produce_briefing bereits einmal aufgerufen hast: Tool-Sequenz sofort beenden — kein weiterer produce_briefing-Call unter keinen Umständen.
 
 ## Clarification Cards (ab Phase=coverage_check oder wrap_up)
 PFLICHT: Sobald Phase coverage_check oder wrap_up erreicht ist, durchsuche ALLE registrierten

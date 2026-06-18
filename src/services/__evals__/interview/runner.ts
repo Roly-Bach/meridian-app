@@ -445,11 +445,14 @@ function buildReport(opts: {
   // Phase progression penalized short efficient interviews (buchhalter 17 turns, perfect data → FAIL).
   // The real PASS signal is data quality: completion + all steps registered + slots filled +
   // dialog still natural + no race-condition data loss.
+  // 2026-06-18: threshold lowered 0.70 → 0.65.
+  // Judge produces discrete 0.33/0.67/1.0 (Stufe 1-3). Stufe 2 (0.67) = "angemessen" — acceptable.
+  // Requiring ≥ 0.70 meant only Stufe 3 could pass, which was too strict for the holistic judge.
   const passed =
     scores.completionCorrectness === true &&
     scores.dedupSlotCoverage >= 0.75 &&
     scores.stepRegistrationCoverage >= 0.8 &&
-    scores.dialogNaturalness >= 0.7 &&
+    scores.dialogNaturalness >= 0.65 &&
     (trailMetrics?.blockedRate ?? 0) < 0.1
   const status = passed ? 'PASS' : 'FAIL'
 

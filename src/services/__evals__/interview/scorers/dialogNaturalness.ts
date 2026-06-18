@@ -22,7 +22,9 @@ Rubrik:
 - Stufe 2 (angemessen): überwiegend natürliche Sprache, vereinzelte Mängel, Du-Form meist eingehalten
 - Stufe 3 (exzellent): durchgehend natürlich, höflich, keine generischen Floskeln, konsequente Du-Form, keine abrupten Themensprünge
 
-Antworte NUR mit JSON im Format: {"stufe": <Zahl 1-5>, "begruendung": "<kurze Begründung>"}`
+WICHTIG: Antworte AUSSCHLIESSLICH mit einem JSON-Objekt. Kein Markdown, keine Überschriften, kein Fließtext davor oder danach.
+Exaktes Format (beginne direkt mit der öffnenden geschweifte Klammer):
+{"stufe": 2, "begruendung": "kurze Begründung in max 80 Wörtern"}`
 
 const MAX_SAMPLE_TURNS = 8
 
