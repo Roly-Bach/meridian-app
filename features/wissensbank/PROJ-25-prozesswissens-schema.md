@@ -356,16 +356,22 @@ Coverage-Regression note: O1–O6 Coverage values drop systematically after PROJ
 **Production-Ready: YES** — 0 open bugs. BUG-M1 fixed 2026-06-18, BUG-L1 fixed 2026-06-17.
 
 ## Deployment
-_To be added by /deploy_
+
+- **Production URL:** https://meridian-app-roly-bach.vercel.app
+- **Deployed:** 2026-06-18
+- **G1 (Static):** pass — build, lint, tsc green
+- **G2 (Tests):** pass — 603/603
+- **G3 (Sandbox):** n/a — auto-deployed via main push (GitHub → Vercel)
+- **G4 (Permissions):** n/a — no auth/RLS/API changes
+- **Vercel Deployment:** dpl_EwLYLgGzb4xAPUVC2uY69cQWs19B
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
+| Spec-Genauigkeit | Medium |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: < 1 Tag |
 | Größte Überraschung | — |
 | Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Build-Loop-Iterationen | tatsächlich: 2 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Test (BUG-M1: leere-Array-Normalisierung in einem Code-Pfad nicht abgedeckt) |
