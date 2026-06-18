@@ -48,7 +48,7 @@
 | PROJ-30 | Tiefe-/O10-Metrik | Revision | Interview Engine | PROJ-21 | Deployed | [spec](interview-engine/PROJ-30-tiefe-o10-metrik.md) | P1 | L | 0:0:1 |
 | PROJ-31 | Eval-Schärfung (Judge, Perturbation, Robustheit) | Revision | Interview Engine | PROJ-21 | Deployed | [spec](interview-engine/PROJ-31-eval-schaerfung.md) | P1 | L | 0:0:0 |
 | PROJ-32 | Agenten-Architektur (Trennung, Preparator; vertagt) | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E4.1+E4.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021/024 | P2 | M | — |
-| PROJ-33 | Turn-Loop-Konsolidierung (runInterviewTurn) | Revision | Interview Engine | PROJ-22 | Planned | [spec](interview-engine/PROJ-33-turn-loop-konsolidierung.md) | P1 | M | — |
+| PROJ-33 | Turn-Loop-Konsolidierung (runInterviewTurn) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-33-turn-loop-konsolidierung.md) | P1 | M | — |
 | PROJ-34 | Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals) | Revision | Interview Engine | PROJ-33 | Roadmap | — | P2 | — | — |
 | PROJ-35 | interviewAgent.ts entkernen (Conversation-Signals + Re-Export-Hub) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
 | PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Roadmap | — | P2 | — | — |

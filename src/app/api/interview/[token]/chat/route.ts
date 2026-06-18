@@ -2,33 +2,12 @@ import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import {
-  computeMissingMandatorySlots,
-  type Phase,
-  type TurnMessage,
-  type StepEntry,
-  type AnalystBriefing,
-} from '@/services/interviewAgent'
-import { normalizeStepEntry } from '@/services/interviewSemantic'
-import {
-  decideNextPhaseWithMeta,
-  checkLifecycle,
-  shouldInjectWrapUpQuestion,
-  WRAP_UP_QUESTION_TEXT,
-  type OrchestratorContext,
-} from '@/services/interviewOrchestrator'
-import { createTalkerStream } from '@/services/interviewTalker'
-import { runAnalystOnline, runAnalystCatchup, runAnalystFailureRetry } from '@/services/interviewAnalyst'
-import { runQuickExtract } from '@/services/interviewQuickExtract'
-import { extractAndEmbed, deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
-import { createProcessStepsFromTracker } from '@/services/processEnrichment'
-import { clusterProcessSteps } from '@/services/processClustering'
+import type { AnalystBriefing } from '@/services/interviewAgent'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
-import { buildTraceMetadata } from '@/services/_telemetry'
+import { runInterviewTurn } from '@/services/runInterviewTurn'
 import type { Database } from '@/lib/database.types'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
-type StateRow = Database['public']['Tables']['interview_state']['Row']
 type TurnRow = Database['public']['Tables']['turns']['Row']
 
 const ChatInputSchema = z.object({
@@ -38,8 +17,17 @@ const ChatInputSchema = z.object({
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // ─── POST /api/interview/[token]/chat ─────────────────────────────────────────
-// Iteration 2: Orchestrator decides phase (deterministic TypeScript).
-// Iteration 3: Talker streams text-only; Analyst runs in background via after().
+// Prod adapter around runInterviewTurn (PROJ-33 / ADR-016).
+// Responsibilities of this route:
+//   - Validate HTTP input + UUID format
+//   - Load interview by access_token (HTTP concern — not interviewId)
+//   - 404 / 410 / 409 guards
+//   - Rate limiting
+//   - created → active activation
+//   - timerMinutes calculation from first turn timestamp
+//   - Delegate full turn logic to runInterviewTurn
+//   - Schedule background analyst via after()
+//   - Return stream response
 
 export async function POST(
   req: Request,
@@ -65,7 +53,7 @@ export async function POST(
   }
   const { user_input } = parsed.data
 
-  // ── Load interview ──────────────────────────────────────────────────────────
+  // ── Load interview by access_token (HTTP concern — access_token is URL-based) ─
   const { data: rawInterview, error: fetchError } = await supabase
     .from('interviews')
     .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes, created_at, analyst_status, next_briefing')
@@ -108,404 +96,30 @@ export async function POST(
     }
   }
 
-  // ── Load state + turns ──────────────────────────────────────────────────────
-  const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
-    supabase
-      .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker')
-      .eq('interview_id', interview.id)
-      .maybeSingle(),
-    supabase
-      .from('turns')
-      .select('turn_number, user_input, agent_response, created_at')
-      .eq('interview_id', interview.id)
-      .order('turn_number', { ascending: true }),
-  ])
+  // ── timerMinutes: HTTP concern — computed from first turn timestamp ──────────
+  // runInterviewTurn receives timerMinutes as an input so it stays testable
+  // without time-mocking. The route owns this computation.
+  const { data: turnsForTimer } = await supabase
+    .from('turns')
+    .select('created_at')
+    .eq('interview_id', interview.id)
+    .order('turn_number', { ascending: true })
+    .limit(1)
 
-  const state = rawState as (Partial<StateRow> & { step_tracker?: unknown }) | null
-  const existingTurns = (rawTurns as TurnRow[]) ?? []
-  const currentPhase = (state?.phase ?? 'intro') as Phase
-  const stepTracker: StepEntry[] = ((state?.step_tracker as unknown[] | null) ?? [])
-    .map((raw, i) => normalizeStepEntry(raw, i + 1))
-  const nextTurnNumber = existingTurns.length + 1
+  const firstTurns = (turnsForTimer as Pick<TurnRow, 'created_at'>[] | null) ?? []
+  const timerMinutes = firstTurns.length > 0
+    ? Math.floor((Date.now() - new Date(firstTurns[0].created_at).getTime()) / 60000)
+    : 0
 
-  let timerMinutes = 0
-  if (existingTurns.length > 0) {
-    const firstTurnTime = new Date(existingTurns[0].created_at).getTime()
-    timerMinutes = Math.floor((Date.now() - firstTurnTime) / 60000)
-  }
-
-  // ── Build full history (including current user turn) ────────────────────────
-  const history: TurnMessage[] = existingTurns.flatMap((t) => [
-    { role: 'user' as const, content: t.user_input },
-    { role: 'assistant' as const, content: t.agent_response },
-  ])
-  history.push({ role: 'user', content: user_input })
-
-  // ── Read Analyst briefing from previous turn ────────────────────────────────
-  const analystStatus = interview.analyst_status ?? 'idle'
-  const analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
-  // F3: Seed filler phrase list with common German fillers from Turn 1 onward.
-  // Prevents "Das ist..." / "Vielen Dank" from appearing even on first turns.
-  const SEED_FILLERS = [
-    'Das ist ein', 'Das ist eine', 'Das klingt', 'Das macht',
-    'Vielen Dank', 'Danke', 'Ich danke', 'Sehr gut',
-    'Interessant', 'Gut,', 'Alles klar',
-  ]
-  const persistedFillers = analystBriefing?.usedFillerPhrases ?? []
-  const usedFillerPhrases: string[] = persistedFillers.length === 0
-    ? SEED_FILLERS
-    : persistedFillers
-
-  // ── Iteration 2: Orchestrator decides phase ─────────────────────────────────
-  const orchestratorCtx: OrchestratorContext = {
-    phase: currentPhase,
-    stepTracker,
-    topicsOpen: (state?.topics_open as string[] | null) ?? [],
-    topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-    timerMinutes,
-    maxDurationMinutes: interview.max_duration_minutes ?? 30,
-    historyLength: history.length,
-    history,
-  }
-
-  // Log Orchestrator span
-  const orchTelemetry = buildTraceMetadata('interview.orchestrator', {
+  // ── Delegate to deep module ─────────────────────────────────────────────────
+  const turn = await runInterviewTurn({
     interviewId: interview.id,
-    environment: 'prod',
-    component: 'orchestrator',
-  })
-  if (orchTelemetry.isEnabled) {
-    console.log('[orchestrator] phase decision', { from: currentPhase, analystStatus })
-  }
-
-  // Check lifecycle (complete interview if Hard-Stop or Soft-Confirm)
-  const lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
-  if (lifecycle.shouldComplete) {
-    await supabase
-      .from('interviews')
-      .update({ status: 'completed', extractions_pending: true })
-      .eq('id', interview.id)
-
-    console.log('[orchestrator] lifecycle complete:', lifecycle.reason)
-
-    // Trigger post-completion tasks fire-and-forget
-    after(async () => {
-      await createProcessStepsFromTracker({ interviewId: interview.id, workspaceId: interview.workspace_id })
-      clusterProcessSteps(interview.workspace_id).catch((err) =>
-        console.error('[chat] post-complete clusterProcessSteps failed:', err),
-      )
-      deduplicateKnowledgeObjects(interview.workspace_id).catch((err) =>
-        console.error('[chat] post-complete deduplicateKnowledgeObjects failed:', err),
-      )
-    })
-
-    // Save farewell turn before returning — Talker stream for farewell message
-    const farewellContext = {
-      interviewId: interview.id,
-      workspaceId: interview.workspace_id,
-      employeeName: interview.employee_name,
-      employeeRole: interview.employee_role,
-      department: interview.department,
-      focusTopics: interview.focus_topics,
-      phase: 'wrap_up' as Phase,
-      timerMinutes,
-      topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-      topicsOpen: (state?.topics_open as string[] | null) ?? [],
-      extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
-      maxDurationMinutes: interview.max_duration_minutes ?? 30,
-      stepTracker,
-      usedFillerPhrases,
-    }
-
-    const farewellBriefing: AnalystBriefing = {
-      next_focus: 'Verabschiedung',
-      suggested_question: 'Verabschiede dich kurz und herzlich.',
-    }
-
-    const farewellStream = createTalkerStream({
-      context: farewellContext,
-      history,
-      briefing: farewellBriefing,
-      onFinish: async (agentText) => {
-        if (!agentText) return
-        await supabase.from('turns').insert({
-          interview_id: interview.id,
-          turn_number: nextTurnNumber,
-          user_input,
-          agent_response: agentText,
-        })
-      },
-    })
-    return farewellStream.toTextStreamResponse()
-  }
-
-  // Decide phase for this turn
-  const { phase: nextPhaseDecision, phaseJustEntered } = decideNextPhaseWithMeta(orchestratorCtx, analystBriefing)
-  // 'completed' means lifecycle.shouldComplete should have caught it above; treat as wrap_up for safety
-  const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
-
-  // Update phase in DB if changed
-  if (orchestratedPhase !== currentPhase) {
-    await supabase
-      .from('interview_state')
-      .update({ phase: orchestratedPhase, updated_at: new Date().toISOString() })
-      .eq('interview_id', interview.id)
-  }
-
-  // ── Fix 1 (ADR-015): Deterministic wrap_up question injection ───────────────
-  // When transitioning into wrap_up for the first time, skip the Talker and
-  // write the verbatim closing question as agent_response. This guarantees the
-  // question is asked exactly once and exactly as designed — no LLM paraphrase,
-  // no regex heuristic, no Analyst-flag race.
-  if (shouldInjectWrapUpQuestion(orchestratedPhase, history)) {
-    const agentText = WRAP_UP_QUESTION_TEXT
-    await supabase.from('turns').insert({
-      interview_id: interview.id,
-      turn_number: nextTurnNumber,
-      user_input,
-      agent_response: agentText,
-    })
-    // Stream the constant text back to the client without invoking the LLM.
-    const encoder = new TextEncoder()
-    const injectedStream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode(agentText))
-        controller.close()
-      },
-    })
-    return new Response(injectedStream, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    })
-  }
-
-  // ── Fix 2 (ADR-015): Synchronous Pre-Talker Quick-Extract ─────────────────
-  // Closes the 1-turn race between Analyst (post-Talker, async) and the next
-  // Talker turn. Runs only when steps are already registered so it can never
-  // fragment the tracker. Failures are non-fatal — the full Analyst still runs.
-  // runQuickExtract returns fresh tracker when it made tool calls, null otherwise.
-  // Eliminates an extra DB round-trip on every turn.
-  let freshStepTracker = stepTracker
-  if (stepTracker.length > 0) {
-    const activeStep = stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
-    const qeTracker = await runQuickExtract({
-      interviewId: interview.id,
-      workspaceId: interview.workspace_id,
-      userInput: user_input,
-      stepTracker,
-      currentTurnNumber: nextTurnNumber,
-      activeStepTitle: activeStep?.title ?? null,
-    })
-    if (qeTracker !== null) freshStepTracker = qeTracker
-  }
-
-  // ── Compute missing slots for slot_completion / coverage_check ──────────────
-  const missingSlotsForCoverageCheck =
-    orchestratedPhase === 'coverage_check' || orchestratedPhase === 'slot_completion'
-      ? computeMissingMandatorySlots(freshStepTracker)
-      : undefined
-
-  // ── Catch-up run detection (analyst_status='failed') ───────────────────────
-  const needsCatchup = analystStatus === 'failed'
-
-  // ── Iteration 3: Talker stream (text-only, no tools) ───────────────────────
-
-  // Set analyst_status='processing' (non-blocking write, Orchestrator span)
-  // Non-blocking: set analyst_status='processing' before Talker stream starts
-  void supabase.from('interviews').update({ analyst_status: 'processing' }).eq('id', interview.id).then(() => {}, () => {})
-
-  const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
-
-  const stream = createTalkerStream({
-    context: {
-      interviewId: interview.id,
-      workspaceId: interview.workspace_id,
-      employeeName: interview.employee_name,
-      employeeRole: interview.employee_role,
-      department: interview.department,
-      focusTopics: interview.focus_topics,
-      phase: orchestratedPhase,
-      timerMinutes,
-      topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-      topicsOpen: (state?.topics_open as string[] | null) ?? [],
-      extractionsLog: currentLog,
-      maxDurationMinutes: interview.max_duration_minutes ?? 30,
-      stepTracker: freshStepTracker,
-      missingSlotsForCoverageCheck,
-      usedFillerPhrases,
-    },
-    history,
-    briefing: analystBriefing,
     userInput: user_input,
-    onFinish: async (agentText) => {
-      if (!agentText) return
-
-      const { data: newTurn, error: turnError } = await supabase
-        .from('turns')
-        .insert({
-          interview_id: interview.id,
-          turn_number: nextTurnNumber,
-          user_input,
-          agent_response: agentText,
-        })
-        .select('id')
-        .single()
-      if (turnError) console.error('[onFinish] turns insert failed:', turnError.message)
-
-      const { error: stateError } = await supabase
-        .from('interview_state')
-        .update({
-          timer_minutes: timerMinutes,
-          updated_at: new Date().toISOString(),
-          extractions_log: currentLog as unknown as import('@/lib/database.types').Json,
-        })
-        .eq('interview_id', interview.id)
-      if (stateError) console.error('[onFinish] state update failed:', stateError.message)
-
-      // Post-completion tasks: fire-and-forget extraction pipeline
-      const runPostCompletionTasks = async () => {
-        const { data: ci } = await supabase
-          .from('interviews')
-          .select('status')
-          .eq('id', interview.id)
-          .single()
-        if (ci?.status !== 'completed') return
-        await createProcessStepsFromTracker({ interviewId: interview.id, workspaceId: interview.workspace_id })
-        clusterProcessSteps(interview.workspace_id).catch((err) =>
-          console.error('[chat] clusterProcessSteps failed:', err),
-        )
-        deduplicateKnowledgeObjects(interview.workspace_id).catch((err) =>
-          console.error('[chat] deduplicateKnowledgeObjects failed:', err),
-        )
-      }
-
-      // extractAndEmbed: post-turn semantic extraction (knowledge_objects)
-      // Continues to run alongside the Analyst's live tracker-pflege (PROJ-20 out of scope)
-      if (newTurn?.id) {
-        const transcript = [
-          ...existingTurns.map((t) => ({ user_input: t.user_input, agent_response: t.agent_response })),
-          { user_input, agent_response: agentText },
-        ]
-        extractAndEmbed({
-          interviewId: interview.id,
-          workspaceId: interview.workspace_id,
-          turnId: newTurn.id,
-          transcript,
-        })
-          .then(async (newExtractions) => {
-            if (newExtractions.length > 0) {
-              const updatedLog = [...currentLog, ...newExtractions]
-              const { error } = await supabase
-                .from('interview_state')
-                .update({
-                  extractions_log: updatedLog as unknown as import('@/lib/database.types').Json,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('interview_id', interview.id)
-              if (error) console.error('[onFinish] extractions_log update failed:', error.message)
-            }
-            await runPostCompletionTasks()
-          })
-          .catch((err) => console.error('[onFinish] extractAndEmbed failed:', err))
-      } else {
-        await runPostCompletionTasks()
-      }
-    },
+    timerMinutes,
+    traceCtx: { interviewId: interview.id, environment: 'prod' },
   })
 
-  // ── Iteration 3: Analyst runs in background ─────────────────────────────────
-  after(async () => {
-    try {
-      const analystHistory = history // includes current user_input as last message
+  after(() => turn.background())
 
-      // Reload step_tracker so Analyst sees slots filled by Talker tools during streaming.
-      // Pre-streaming stepTracker is stale — tools update DB after state was loaded.
-      const adminDb = getSupabaseAdmin()
-      const { data: freshStateRow } = await adminDb
-        .from('interview_state')
-        .select('step_tracker')
-        .eq('interview_id', interview.id)
-        .maybeSingle()
-      const freshStepTracker = ((freshStateRow?.step_tracker as unknown[] | null) ?? (stepTracker as unknown[]))
-        .map((raw, i) => normalizeStepEntry(raw, i + 1))
-
-      if (needsCatchup && existingTurns.length >= 2) {
-        // Catch-up: previous analyst failed, process two turns at once
-        const prevUserInput = existingTurns[existingTurns.length - 1]?.user_input ?? ''
-        await runAnalystFailureRetry({
-          context: {
-            interviewId: interview.id,
-            workspaceId: interview.workspace_id,
-            employeeName: interview.employee_name,
-            employeeRole: interview.employee_role,
-            department: interview.department,
-            focusTopics: interview.focus_topics,
-            phase: orchestratedPhase,
-            timerMinutes,
-            topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-            topicsOpen: (state?.topics_open as string[] | null) ?? [],
-            extractionsLog: currentLog,
-            maxDurationMinutes: interview.max_duration_minutes ?? 30,
-            stepTracker: freshStepTracker,
-          },
-          history: analystHistory,
-          previousUserInput: prevUserInput,
-          currentUserInput: user_input,
-          traceCtx: { interviewId: interview.id, environment: 'prod' },
-        })
-      } else {
-        const sharedContext = {
-          interviewId: interview.id,
-          workspaceId: interview.workspace_id,
-          employeeName: interview.employee_name,
-          employeeRole: interview.employee_role,
-          department: interview.department,
-          focusTopics: interview.focus_topics,
-          phase: orchestratedPhase,
-          timerMinutes,
-          topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-          topicsOpen: (state?.topics_open as string[] | null) ?? [],
-          extractionsLog: currentLog,
-          maxDurationMinutes: interview.max_duration_minutes ?? 30,
-          stepTracker: freshStepTracker,
-        }
-
-        // Online analyst: extracts from current turn only
-        await runAnalystOnline({
-          context: sharedContext,
-          history: analystHistory,
-          currentUserInput: user_input,
-          traceCtx: { interviewId: interview.id, environment: 'prod' },
-        })
-
-        // History catchup: runs once when entering coverage_check or wrap_up.
-        // Fills slots mentioned in earlier turns but not yet recorded.
-        // Idempotency: phaseJustEntered is non-null only on the turn where the
-        // phase changes — so this fires at most once per phase transition.
-        const shouldRunCatchup =
-          phaseJustEntered === 'coverage_check' || phaseJustEntered === 'wrap_up'
-        if (shouldRunCatchup) {
-          // Reload step_tracker after online analyst to get freshest slots
-          const { data: postOnlineStateRow } = await adminDb
-            .from('interview_state')
-            .select('step_tracker')
-            .eq('interview_id', interview.id)
-            .maybeSingle()
-          const postOnlineTracker = ((postOnlineStateRow?.step_tracker as unknown[] | null) ?? (freshStepTracker as unknown[]))
-            .map((raw, i) => normalizeStepEntry(raw, i + 1))
-
-          await runAnalystCatchup({
-            context: { ...sharedContext, stepTracker: postOnlineTracker },
-            history: analystHistory,
-            currentUserInput: user_input,
-            traceCtx: { interviewId: interview.id, environment: 'prod' },
-          })
-        }
-      }
-    } catch (err) {
-      console.error('[analyst] background run error:', err)
-    }
-  })
-
-  return stream.toTextStreamResponse()
+  return turn.stream.toTextStreamResponse()
 }

@@ -35,28 +35,22 @@ import { resolveModel } from '@/lib/llm-provider'
 import { initLangfuse, flushLangfuse } from '@/lib/langfuse'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import {
-  computeMissingMandatorySlots,
   type Phase,
   type TurnMessage,
   type StepEntry,
-  type MissingSlot,
   type ClarificationCard,
   type AnalystBriefing,
 } from '@/services/interviewAgent'
 import { createTalkerStream, TALKER_THINKING_BUDGET } from '@/services/interviewTalker'
 import {
   decideNextPhase,
-  checkLifecycle,
-  shouldInjectWrapUpQuestion,
-  wrapUpQuestionAlreadyAsked,
-  WRAP_UP_QUESTION_TEXT,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
-import { extractAndEmbed, deduplicateKnowledgeObjects, type TurnTranscript, type RawExtraction } from '@/services/extraction'
-import { runAnalyst, ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/interviewAnalyst'
-import { runQuickExtract } from '@/services/interviewQuickExtract'
+import { deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
+import { ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/interviewAnalyst'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
 import { clusterProcessSteps } from '@/services/processClustering'
+import { runInterviewTurn } from '@/services/runInterviewTurn'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
 import type { Database } from '@/lib/database.types'
@@ -847,32 +841,12 @@ async function runInterview(
       history: agentHistory,
     }
 
-    const lifecycle = checkLifecycle(orchCtx, analystBriefing)
-    if (lifecycle.shouldComplete) {
-      await supabase
-        .from('interviews')
-        .update({ status: 'completed', extractions_pending: true })
-        .eq('id', interviewId)
-      console.log('\n[eval] Orchestrator: lifecycle complete:', lifecycle.reason)
-
-      // Mirror post-completion pipeline from chat route
-      await createProcessStepsFromTracker({ interviewId, workspaceId })
-      clusterProcessSteps(workspaceId).catch((err) =>
-        console.error('[runner] post-complete clusterProcessSteps failed:', err),
-      )
-      deduplicateKnowledgeObjects(workspaceId).catch((err) =>
-        console.error('[runner] post-complete deduplicateKnowledgeObjects failed:', err),
-      )
-
-      break
-    }
-
+    // PROJ-23: Clarification phase — eval-specific handling stays in runner.
     const nextPhaseDecision = decideNextPhase(orchCtx, analystBriefing)
-    const orchestratedPhase: Phase =
+    const phaseForClarificationCheck: Phase =
       nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
 
-    // PROJ-23: Clarification phase — submit synthetic answers and complete
-    if (orchestratedPhase === 'clarification') {
+    if (phaseForClarificationCheck === 'clarification') {
       const cards = analystBriefing?.clarification_cards ?? []
       console.log(`\n[eval] Clarification phase: ${cards.length} cards — submitting synthetic answers`)
       // L9: snapshot tracker BEFORE synthetic answers land — used by scorer to
@@ -887,75 +861,26 @@ async function runInterview(
       break
     }
 
-    if (orchestratedPhase !== dbState.phase) {
-      await supabase
-        .from('interview_state')
-        .update({ phase: orchestratedPhase, updated_at: new Date().toISOString() })
-        .eq('interview_id', interviewId)
-    }
-
-    // Fix 1 (ADR-015): Deterministic wrap_up question injection.
-    // Mirrors chat/route.ts behaviour for eval runs.
-    if (shouldInjectWrapUpQuestion(orchestratedPhase, agentHistory) &&
-        !wrapUpQuestionAlreadyAsked(conversationHistory)) {
-      const turnNumber = dbHistory.length / 2 + 1
-      const agentText = WRAP_UP_QUESTION_TEXT
-      console.log(`\n[Agent (injected wrap-up question)]: ${agentText}`)
-      await supabase.from('turns').insert({
-        interview_id: interviewId,
-        turn_number: turnNumber,
-        user_input: personaResponse,
-        agent_response: agentText,
-      })
-      conversationHistory.push({ role: 'assistant', content: agentText })
-      lastAgentText = agentText
-      continue
-    }
-
-    // Pre-Talker Quick-Extract — returns fresh tracker when tool calls were made.
-    let preTalkerStepTracker = dbState.stepTracker
-    if (dbState.stepTracker.length > 0) {
-      const currentTurnNumber = dbHistory.length / 2 + 1
-      const qeTracker = await runQuickExtract({
-        interviewId,
-        workspaceId,
-        userInput: personaResponse,
-        stepTracker: dbState.stepTracker,
-        currentTurnNumber,
-        traceCtx,
-      })
-      if (qeTracker !== null) preTalkerStepTracker = qeTracker
-    }
-
-    const missingSlotsForCoverageCheck: MissingSlot[] | undefined =
-      orchestratedPhase === 'coverage_check' || orchestratedPhase === 'slot_completion'
-        ? computeMissingMandatorySlots(preTalkerStepTracker)
-        : undefined
-
-    const agentStream = createTalkerStream({
-      context: {
-        interviewId,
-        workspaceId,
-        employeeName: persona.identity.name,
-        employeeRole: persona.identity.role,
-        department: persona.identity.department,
-        focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
-        phase: orchestratedPhase,
-        timerMinutes: simulatedTimerMinutes,
-        topicsCovered: dbState.topicsCovered,
-        topicsOpen: dbState.topicsOpen,
-        extractionsLog: dbState.extractionsLog,
-        maxDurationMinutes: 30,
-        stepTracker: preTalkerStepTracker,
-        missingSlotsForCoverageCheck,
-      },
-      history: agentHistory,
-      briefing: analystBriefing,
+    // Delegate full turn logic to runInterviewTurn (PROJ-33 / ADR-016).
+    const turnResult = await runInterviewTurn({
+      interviewId,
       userInput: personaResponse,
-      traceCtx,
+      timerMinutes: simulatedTimerMinutes,
+      traceCtx: traceCtx as Record<string, unknown>,
     })
 
-    const agentText = await agentStream.text
+    const agentText = await turnResult.stream.text
+
+    // Await background analyst to capture tool calls for scoring.
+    const analystResult = await turnResult.background().catch(err => {
+      console.error('[runner] background analyst failed:', err)
+      return null
+    })
+    const analystToolCalls: AnalystToolCallRecord[] = analystResult?.toolCalls ?? []
+
+    if (analystToolCalls.length > 0) {
+      console.log(`  [analyst tools] ${analystToolCalls.map(tc => tc.toolName).join(', ')}`)
+    }
 
     const turnNumber = dbHistory.length / 2 + 1
 
@@ -963,74 +888,18 @@ async function runInterview(
     conversationHistory.push({ role: 'assistant', content: agentText })
     lastAgentText = agentText
 
-    // Save turn to DB
-    const { data: newTurn } = await supabase
-      .from('turns')
-      .insert({
-        interview_id: interviewId,
-        turn_number: turnNumber,
-        user_input: personaResponse,
-        agent_response: agentText,
-      })
-      .select('id')
-      .single()
-
-    if (newTurn?.id) {
-      const transcript: TurnTranscript[] = [
-        ...dbHistory
-          .filter((_, i) => i % 2 === 0)
-          .map((u, i) => ({
-            user_input: u.content,
-            agent_response: dbHistory[i * 2 + 1]?.content ?? '',
-          })),
-        { user_input: personaResponse, agent_response: agentText },
-      ]
-      extractAndEmbed({ interviewId, workspaceId, turnId: newTurn.id, transcript, traceCtx }).catch(
-        err => console.error('[runner] extractAndEmbed failed:', err),
-      )
-    }
-
-    // Run Analyst every turn — Talker has zero tools so no duplicate step_tracker entries.
-    // Reload state so Analyst sees fresh DB after Talker streamed + turn was saved.
-    // next_briefing written here is picked up by loadAnalystBriefing at the start of the next turn.
-    // Simulate elapsed time proportionally to turn count (eval runs in seconds, real timer stays ~0).
-    let analystToolCalls: AnalystToolCallRecord[] = []
-    {
-      const freshAnalystState = await loadState(interviewId)
-      const analystResult = await runAnalyst({
-        context: {
-          interviewId,
-          workspaceId,
-          employeeName: persona.identity.name,
-          employeeRole: persona.identity.role,
-          department: persona.identity.department,
-          focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
-          phase: orchestratedPhase,
-          timerMinutes: simulatedTimerMinutes,
-          topicsCovered: freshAnalystState.topicsCovered,
-          topicsOpen: freshAnalystState.topicsOpen,
-          extractionsLog: freshAnalystState.extractionsLog,
-          maxDurationMinutes: 30,
-          stepTracker: freshAnalystState.stepTracker,
-        },
-        history: [...agentHistory, { role: 'assistant', content: agentText }],
-        traceCtx,
-      }).catch(err => { console.error('[runner] runAnalyst failed:', err); return null })
-      analystToolCalls = analystResult?.toolCalls ?? []
-
-      // Log tool calls for eval debugging
-      if (analystToolCalls.length > 0) {
-        console.log(`  [analyst tools] ${analystToolCalls.map(tc => tc.toolName).join(', ')}`)
-      }
-    }
-
     turnRecords.push({
       turnNumber,
       userInput: personaResponse,
       agentText,
-      phase: orchestratedPhase,
+      phase: turnResult.meta.phase,
       toolCalls: analystToolCalls,
     })
+
+    if (turnResult.meta.completed) {
+      console.log('\n[eval] Interview completed.')
+      break
+    }
 
     const { data: iv } = await supabase
       .from('interviews')

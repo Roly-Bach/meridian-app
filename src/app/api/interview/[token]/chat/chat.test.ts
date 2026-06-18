@@ -65,6 +65,14 @@ vi.mock('@/lib/ratelimit', () => ({
   extractIP: vi.fn().mockReturnValue('1.2.3.4'),
 }))
 
+vi.mock('@/services/runInterviewTurn', () => ({
+  runInterviewTurn: vi.fn().mockResolvedValue({
+    stream: { toTextStreamResponse: () => new Response('ok') },
+    background: vi.fn().mockResolvedValue(null),
+    meta: { phase: 'interview', completed: false, reason: null, stepTracker: [] },
+  }),
+}))
+
 import { POST } from './route'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -211,25 +219,12 @@ describe('POST /api/interview/[token]/chat', () => {
         update: updateMock,
         eq: eqUpdateMock,
       })
-      // interview_state fetch (parallel)
+      // turns fetch for timerMinutes (order + limit chain)
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { phase: 'intro', timer_minutes: 0, topics_covered: [], topics_open: [], step_tracker: [] },
-          error: null,
-        }),
-      })
-      // turns fetch (parallel)
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
-      // analyst_status='processing' non-blocking write
-      .mockReturnValueOnce({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       })
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
@@ -238,253 +233,4 @@ describe('POST /api/interview/[token]/chat', () => {
     expect(updateMock).toHaveBeenCalledWith({ status: 'active' })
   })
 
-  it('passes step_tracker from state to createTalkerStream context', async () => {
-    const { createTalkerStream } = await import('@/services/interviewTalker')
-
-    const stepTracker = [
-      {
-        title: 'Rechnung prüfen',
-        reihenfolge: 1,
-        governance: null,
-        abhaengigkeiten: null,
-        status: 'walkthrough',
-        potenzial: {
-          frequency_per_month: { value: 20, quote: '20 mal im Monat' },
-          duration_minutes: null,
-          error_rate_percent: null,
-          media_breaks: null,
-        },
-        slots: {
-          entscheidungslogik: null,
-          tazite_cues: null,
-          ausnahmen: null,
-          inputs: null,
-          outputs: null,
-          hilfsmittel: null,
-        },
-      },
-    ]
-
-    const updateMockNoop = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-
-    mockAdminFrom
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: {
-            id: 'iv-st',
-            workspace_id: 'ws-1',
-            employee_name: 'Maria',
-            employee_role: 'Buchhalterin',
-            department: 'Finance',
-            focus_topics: null,
-            status: 'active',
-            token_expires_at: FUTURE_EXPIRY,
-            max_duration_minutes: 30,
-            created_at: new Date().toISOString(),
-            analyst_status: 'idle',
-            next_briefing: null,
-          },
-          error: null,
-        }),
-      })
-      // interview_state (parallel)
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { phase: 'process_loop', timer_minutes: 5, topics_covered: [], topics_open: [], step_tracker: stepTracker },
-          error: null,
-        }),
-      })
-      // turns (parallel)
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
-      // analyst_status='processing' non-blocking write
-      .mockReturnValueOnce(updateMockNoop)
-
-    await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
-
-    expect(createTalkerStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({
-          stepTracker: expect.arrayContaining([
-            expect.objectContaining({ title: 'Rechnung prüfen', status: 'walkthrough' }),
-          ]),
-          workspaceId: 'ws-1',
-          phase: 'process_loop',
-        }),
-      })
-    )
-  })
-
-  it('injects missing slots into context when phase is coverage_check', async () => {
-    const { createTalkerStream } = await import('@/services/interviewTalker')
-
-    const stepTracker = [
-      {
-        title: 'Wareneingang buchen',
-        reihenfolge: 1,
-        governance: null,
-        abhaengigkeiten: null,
-        status: 'walkthrough',
-        potenzial: {
-          frequency_per_month: { value: 10, quote: 'zehnmal' },
-          duration_minutes: null,
-          error_rate_percent: null,
-          media_breaks: null,
-        },
-        slots: {
-          entscheidungslogik: null,
-          tazite_cues: null,
-          ausnahmen: null,
-          inputs: null,
-          outputs: null,
-          hilfsmittel: null,
-        },
-      },
-    ]
-
-    const updateMockNoop = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-
-    mockAdminFrom
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: {
-            id: 'iv-cc',
-            workspace_id: 'ws-2',
-            employee_name: 'Tom',
-            employee_role: null,
-            department: 'Lager',
-            focus_topics: null,
-            status: 'active',
-            token_expires_at: FUTURE_EXPIRY,
-            max_duration_minutes: 30,
-            created_at: new Date().toISOString(),
-            analyst_status: 'idle',
-            next_briefing: null,
-          },
-          error: null,
-        }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { phase: 'coverage_check', timer_minutes: 20, topics_covered: [], topics_open: [], step_tracker: stepTracker },
-          error: null,
-        }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
-      // analyst_status='processing' non-blocking write
-      .mockReturnValueOnce(updateMockNoop)
-
-    await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
-
-    expect(createTalkerStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({
-          phase: 'coverage_check',
-          missingSlotsForCoverageCheck: expect.arrayContaining([
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'duration_minutes' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'entscheidungslogik' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'hilfsmittel' }),
-          ]),
-        }),
-      })
-    )
-  })
-
-  it('injects missing slots into context when phase is slot_completion', async () => {
-    const { createTalkerStream } = await import('@/services/interviewTalker')
-
-    const stepTracker = [
-      {
-        title: 'Wareneingang buchen',
-        reihenfolge: 1,
-        governance: null,
-        abhaengigkeiten: null,
-        status: 'walkthrough',
-        potenzial: {
-          frequency_per_month: { value: 10, quote: 'zehnmal' },
-          duration_minutes: null,
-          error_rate_percent: null,
-          media_breaks: null,
-        },
-        slots: {
-          entscheidungslogik: null,
-          tazite_cues: null,
-          ausnahmen: null,
-          inputs: null,
-          outputs: null,
-          hilfsmittel: null,
-        },
-      },
-    ]
-
-    const updateMockNoop = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-
-    mockAdminFrom
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: {
-            id: 'iv-sc',
-            workspace_id: 'ws-3',
-            employee_name: 'Eva',
-            employee_role: null,
-            department: 'Einkauf',
-            focus_topics: null,
-            status: 'active',
-            token_expires_at: FUTURE_EXPIRY,
-            max_duration_minutes: 30,
-            created_at: new Date().toISOString(),
-            analyst_status: 'idle',
-            next_briefing: null,
-          },
-          error: null,
-        }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { phase: 'slot_completion', timer_minutes: 15, topics_covered: [], topics_open: [], step_tracker: stepTracker },
-          error: null,
-        }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
-      // analyst_status='processing' non-blocking write
-      .mockReturnValueOnce(updateMockNoop)
-
-    await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
-
-    expect(createTalkerStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({
-          phase: 'slot_completion',
-          missingSlotsForCoverageCheck: expect.arrayContaining([
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'duration_minutes' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'entscheidungslogik' }),
-            expect.objectContaining({ step_title: 'Wareneingang buchen', slot: 'hilfsmittel' }),
-          ]),
-        }),
-      })
-    )
-  })
 })

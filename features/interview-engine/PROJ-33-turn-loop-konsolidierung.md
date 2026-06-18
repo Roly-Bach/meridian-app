@@ -1,6 +1,6 @@
 # PROJ-33: Turn-Loop-Konsolidierung (runInterviewTurn)
 
-## Status: Planned
+## Status: In Review
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
@@ -151,3 +151,15 @@ if (turn.meta.completed) break
 - Neues `src/services/runInterviewTurn.test.ts`: Mocks aus `chat.test.ts` (Supabase, Talker, Analyst, Quick-Extract, Orchestrator) übernehmen; Assertions auf `meta`/`stream`/`background`-Rückgabe (z.B. `expect(r.meta.phase).toBe('wrap_up')`, `expect(r.meta.completed).toBe(true)`), nicht auf „Funktion X aufgerufen".
 - `chat.test.ts`: nur noch 404 (Token), 410 (Expiry), 409 (completed), 400 (Eingabe), Rate-Limit.
 - Orchestrator-Tests: unverändert (interne Naht, eigene Test-Oberfläche).
+
+## Implementation Notes (2026-06-18)
+
+Umgesetzt via `/build PROJ-33` (Sonnet, Worktree `refactor/deep-modules`).
+
+- **Neu:** `src/services/runInterviewTurn.ts` (483 LOC) mit der Schnittstelle `{ stream, background, meta }`. Das Modul entscheidet die Analyst-Variante intern (`runAnalystOnline` / `runAnalystCatchup` / `runAnalystFailureRetry`) und reicht sie als eine gebündelte `background()`-Aufgabe zurück. Kein `next/server`-Import.
+- **Aufrufer geschrumpft:** `chat/route.ts` 511→125 LOC (reiner HTTP-Adapter), `runner.ts`-Turn-Loop delegiert an `runInterviewTurn` + `await background()`. Gesamt 847 Zeilen entfernt.
+- **Tests:** `runInterviewTurn.test.ts` (498 LOC) prüft die Turn-Logik an der Schnittstelle; `chat.test.ts` 490→236 LOC (HTTP-Belange). Lint grün (`tsc --noEmit`), 610 Tests grün, 1 skipped.
+
+**Bewusste Abweichung von AC:** Der Eval-Runner ruft weiterhin `decideNextPhase` einmal **vor** `runInterviewTurn` (`runner.ts` ~Z. 845), ausschließlich für die Clarification-Vorprüfung. Clarification ist out-of-scope für `runInterviewTurn` (Prod hat einen eigenen Endpunkt, der Eval injiziert synthetische Antworten und bricht). Die Turn-Orchestrierung selbst liegt vollständig im Modul; dies ist die im Grilling beschlossene aufrufer-seitige Asymmetrie, kein Drift-Rest.
+
+**Offen:** Eval-Gate (`npm run eval:interview buchhalter`, `gemini-3.1-flash-lite`) gegen PROJ-22-Baseline — vor Übergang zu Approved. `Bugs`-Feld dann setzen (Hard Rule).
