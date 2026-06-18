@@ -112,7 +112,7 @@ export async function POST(
   const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
     supabase
       .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker')
+      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker, opener_text')
       .eq('interview_id', interview.id)
       .maybeSingle(),
     supabase
@@ -140,6 +140,11 @@ export async function POST(
     { role: 'user' as const, content: t.user_input },
     { role: 'assistant' as const, content: t.agent_response },
   ])
+  // B2: opener_text is saved to interview_state (not as a DB turn) — inject it
+  // as the first assistant message so the Talker doesn't re-greet the interviewee.
+  if (existingTurns.length === 0 && state?.opener_text) {
+    history.unshift({ role: 'assistant' as const, content: state.opener_text as string })
+  }
   history.push({ role: 'user', content: user_input })
 
   // ── Read Analyst briefing from previous turn ────────────────────────────────
@@ -191,6 +196,40 @@ export async function POST(
 
     // Trigger post-completion tasks fire-and-forget
     after(async () => {
+      try {
+        // B5: run Analyst on the final wrap-up user turn (shouldComplete path exits
+        // before the normal Analyst after() block, so this turn would be skipped).
+        const adminDb = getSupabaseAdmin()
+        const { data: freshStateRow } = await adminDb
+          .from('interview_state')
+          .select('step_tracker')
+          .eq('interview_id', interview.id)
+          .maybeSingle()
+        const freshStepTracker = ((freshStateRow?.step_tracker as unknown[] | null) ?? (stepTracker as unknown[]))
+          .map((raw, i) => normalizeStepEntry(raw, i + 1))
+        await runAnalystOnline({
+          context: {
+            interviewId: interview.id,
+            workspaceId: interview.workspace_id,
+            employeeName: interview.employee_name,
+            employeeRole: interview.employee_role,
+            department: interview.department,
+            focusTopics: interview.focus_topics,
+            phase: 'wrap_up',
+            timerMinutes,
+            topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+            topicsOpen: (state?.topics_open as string[] | null) ?? [],
+            extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
+            maxDurationMinutes: interview.max_duration_minutes ?? 30,
+            stepTracker: freshStepTracker,
+          },
+          history,
+          currentUserInput: user_input,
+          traceCtx: { interviewId: interview.id, environment: 'prod' },
+        })
+      } catch (err) {
+        console.error('[chat] post-complete analyst failed:', err)
+      }
       await createProcessStepsFromTracker({ interviewId: interview.id, workspaceId: interview.workspace_id })
       clusterProcessSteps(interview.workspace_id).catch((err) =>
         console.error('[chat] post-complete clusterProcessSteps failed:', err),

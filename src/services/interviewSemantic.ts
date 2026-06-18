@@ -153,12 +153,25 @@ interface LegacyStepEntry {
   embedding?: number[]
 }
 
-/** Normalizes a TaziteSlotArray: empty value:[] → value:null (spec: [] is invalid). */
-function normalizeArraySlot(slot: TaziteSlotArray | null | undefined): TaziteSlotArray | null {
-  if (slot == null) return null
-  if (Array.isArray(slot.value) && slot.value.length === 0) {
-    return { ...slot, value: null }
+/**
+ * Backward compat: before B1 fix, patch_interview_step_field received JSON.stringify(value),
+ * so objects were stored as JSONB strings. Parse them back to objects on read.
+ */
+function parseJsonIfString<T>(v: unknown): T | null {
+  if (v == null) return null
+  if (typeof v !== 'string') return v as T
+  try {
+    return JSON.parse(v) as T
+  } catch {
+    return v as T
   }
+}
+
+/** Normalizes a TaziteSlotArray: empty value:[] → value:null (spec: [] is invalid). */
+function normalizeArraySlot(raw: TaziteSlotArray | null | undefined): TaziteSlotArray | null {
+  if (raw == null) return null
+  const slot = parseJsonIfString<TaziteSlotArray>(raw) ?? raw
+  if (Array.isArray(slot.value) && slot.value.length === 0) return { ...slot, value: null }
   return slot
 }
 
@@ -221,17 +234,17 @@ export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): S
     }
   } else {
     potenzial = {
-      frequency_per_month: r.potenzial?.frequency_per_month ?? null,
-      duration_minutes: r.potenzial?.duration_minutes ?? null,
-      error_rate_percent: r.potenzial?.error_rate_percent ?? null,
-      media_breaks: r.potenzial?.media_breaks ?? null,
+      frequency_per_month: parseJsonIfString(r.potenzial?.frequency_per_month),
+      duration_minutes: parseJsonIfString(r.potenzial?.duration_minutes),
+      error_rate_percent: parseJsonIfString(r.potenzial?.error_rate_percent),
+      media_breaks: parseJsonIfString(r.potenzial?.media_breaks),
     }
-    entscheidungslogik = r.slots?.entscheidungslogik ?? null
-    hilfsmittel = r.slots?.hilfsmittel ?? null
+    entscheidungslogik = parseJsonIfString<TaziteSlot>(r.slots?.entscheidungslogik) ?? null
+    hilfsmittel = parseJsonIfString<TaziteSlotArray>(r.slots?.hilfsmittel) ?? null
   }
 
   // Governance: migrate free-text role if governance not yet set
-  let governance: GovernanceSlot | null = r.governance ?? null
+  let governance: GovernanceSlot | null = parseJsonIfString<GovernanceSlot>(r.governance) ?? null
   if (governance == null && r.role != null) {
     governance = {
       rolle: r.role,
@@ -246,9 +259,9 @@ export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): S
     title: r.title,
     reihenfolge: r.reihenfolge ?? fallbackReihenfolge,
     governance,
-    abhaengigkeiten: r.abhaengigkeiten ?? null,
+    abhaengigkeiten: parseJsonIfString<Abhaengigkeiten>(r.abhaengigkeiten) ?? null,
     potenzial,
-    status: r.status,
+    status: parseJsonIfString<string>(r.status) as StepEntry['status'],
     slots: {
       entscheidungslogik,
       tazite_cues: normalizeArraySlot(r.slots?.tazite_cues),

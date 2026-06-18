@@ -1422,14 +1422,14 @@ export function buildTools(
               p_interview_id: interviewId,
               p_step_index: stepIndex,
               p_sub_path: subPath,
-              p_value: JSON.stringify(newSlotValue),
+              p_value: newSlotValue,
             })
             if (newStatus !== step.status) {
               await supabase.rpc('patch_interview_step_field', {
                 p_interview_id: interviewId,
                 p_step_index: stepIndex,
                 p_sub_path: ['status'],
-                p_value: JSON.stringify(newStatus),
+                p_value: newStatus,
               })
             }
           } else if (isTaziteArray) {
@@ -1444,14 +1444,14 @@ export function buildTools(
               p_interview_id: interviewId,
               p_step_index: stepIndex,
               p_sub_path: subPath,
-              p_value: JSON.stringify(newSlotValue),
+              p_value: newSlotValue,
             })
             if (step.status === 'exploring') {
               await supabase.rpc('patch_interview_step_field', {
                 p_interview_id: interviewId,
                 p_step_index: stepIndex,
                 p_sub_path: ['status'],
-                p_value: JSON.stringify('walkthrough'),
+                p_value: 'walkthrough',
               })
             }
           } else {
@@ -1467,14 +1467,14 @@ export function buildTools(
               p_interview_id: interviewId,
               p_step_index: stepIndex,
               p_sub_path: subPath,
-              p_value: JSON.stringify(newSlotValue),
+              p_value: newSlotValue,
             })
             if (step.status === 'exploring') {
               await supabase.rpc('patch_interview_step_field', {
                 p_interview_id: interviewId,
                 p_step_index: stepIndex,
                 p_sub_path: ['status'],
-                p_value: JSON.stringify('walkthrough'),
+                p_value: 'walkthrough',
               })
             }
           }
@@ -1499,7 +1499,7 @@ export function buildTools(
               p_interview_id: interviewId,
               p_step_index: stepIndex,
               p_sub_path: ['status'],
-              p_value: JSON.stringify('done'),
+              p_value: 'done',
             })
           }
 
@@ -1591,7 +1591,7 @@ export function buildTools(
             p_interview_id: interviewId,
             p_step_index: stepIndex,
             p_sub_path: ['governance'],
-            p_value: JSON.stringify(merged),
+            p_value: merged,
           })
 
           return { success: true, step_title, governance: merged, quote: resolvedQuote, source_turn: source_turn ?? null }
@@ -1700,7 +1700,7 @@ export function buildTools(
             p_interview_id: interviewId,
             p_step_index: sourceIndex,
             p_sub_path: ['abhaengigkeiten'],
-            p_value: JSON.stringify(updated),
+            p_value: updated,
           })
 
           return { success: true, source_step_id, abhaengigkeiten: updated }

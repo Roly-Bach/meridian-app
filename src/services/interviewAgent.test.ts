@@ -552,7 +552,7 @@ describe('Tool Handlers', () => {
       const doneStatusCall = mockAdminRpc.mock.calls.find(
         (call: unknown[]) => {
           const p = call[1] as Record<string, unknown>
-          return Array.isArray(p?.p_sub_path) && (p.p_sub_path as string[]).join('.') === 'status' && p.p_value === JSON.stringify('done')
+          return Array.isArray(p?.p_sub_path) && (p.p_sub_path as string[]).join('.') === 'status' && p.p_value === 'done'
         }
       )
       expect(doneStatusCall).toBeDefined()
