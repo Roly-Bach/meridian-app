@@ -352,6 +352,7 @@ Abschluss-Turn: kurze Verabschiedung.
 Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
 Spannen konkretisieren vor dem Erfassen: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser für einen typischen Fall?"
+FLOSKEL-VERBOT: Keine inhaltsleeren Bestätigungen vor der Frage. Verboten: 'Das klingt nach...', 'Das ist ein wichtiger...', 'Gut zu wissen', 'Verstehe', 'Das ist interessant', 'Das ist ein klassischer...'. Wenn du reagierst: spezifisch auf ein konkretes Detail aus der letzten Antwort — oder direkt die Frage ohne Vorsatz.
 </turn_format>
 
 <tools>
@@ -641,7 +642,8 @@ Nach 1–2 Austauschen zur process_loop übergehen.`
 Ziel: Einen konkreten Prozessschritt identifizieren und mit register_step registrieren.
 Wenn ein Frequenz- oder Komplexitäts-Anker vorhanden ist, diesen Schritt wählen und mit einem Satz begründen.
 Gibt es im Schritt-Tracker einen Schritt mit Status 'exploring' oder 'walkthrough'? Erst diesen vollständig abschließen.
-Ausnahmen und Sonderfälle sind keine eigenständigen Prozesse — sie gehören als friction_point zu einem bestehenden Schritt.`
+Ausnahmen und Sonderfälle sind keine eigenständigen Prozesse — sie gehören als friction_point zu einem bestehenden Schritt.
+Sobald ein Schritt vollständig erfasst ist (alle Pflicht-Slots gefüllt oder Persona gibt keine weiteren Details): aktiv nach weiteren wiederkehrenden Aufgaben fragen — z.B. 'Welche andere regelmäßige Aufgabe nimmt bei dir viel Zeit ein?' — NICHT erst in der wrap_up-Phase. Breite vor Tiefe: lieber 3 Prozesse mit guten Basics als 1 Prozess übertief.`
   }
 
   if (phase === 'walkthrough_step') {
@@ -784,6 +786,9 @@ export function detectNumberAnchoring(talkerText: string, suggestedQuestion: str
 const FILLER_PATTERNS = [
   /^Das ist (ein|eine|einer|eines|kein|keine|sehr|ein sehr)\b/i,
   /^Das klingt\b/i,
+  /^Das klingt nach\b/i,
+  /^Das ist ein wichtiger\b/i,
+  /^Das ist interessant\b/i,
   /^Das macht\b/i,
   /^Das sind\b/i,
   /^Das war\b/i,
@@ -791,11 +796,15 @@ const FILLER_PATTERNS = [
   /^Danke\b/i,
   /^Ich danke\b/i,
   /^Gut[,.]?\s/i,
+  /^Gut zu wissen\b/i,
   /^Schön[,.]?\s/i,
   /^Sehr gut\b/i,
   /^Interessant\b/i,
   /^Verstanden[,.]?\s/i,
+  /^Verstehe\b/i,
   /^Alles klar\b/i,
+  /^Das ist ein klassischer\b/i,
+  /^Das ist ein klarer\b/i,
 ]
 
 // F1c: question-template fillers — repetitive estimation prompts that tank
