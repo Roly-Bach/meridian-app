@@ -2,20 +2,22 @@ import { resolveModel } from '@/lib/llm-provider'
 import { generateText, stepCountIs, tool } from 'ai'
 import { z } from 'zod'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
+import { buildTools } from './interviewAgent'
 import {
-  buildTools,
   MANDATORY_SLOTS,
   OPTIONAL_SLOTS,
   TAZITE_SLOT_NAMES,
   POTENZIAL_SLOT_NAMES,
   groupSemanticSteps,
-  type InterviewContext,
-  type TurnMessage,
-  type AnalystBriefing,
-  type ClarificationCard,
   type StepEntry,
   type SlotName,
-} from './interviewAgent'
+} from './interviewSemantic'
+import type {
+  InterviewContext,
+  TurnMessage,
+  AnalystBriefing,
+  ClarificationCard,
+} from './interviewTypes'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { emitSlotWrite } from './slotWriteTrail'
 

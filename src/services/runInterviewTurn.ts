@@ -12,12 +12,11 @@
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import {
   computeMissingMandatorySlots,
+  normalizeStepEntry,
   type Phase,
-  type TurnMessage,
   type StepEntry,
-  type AnalystBriefing,
-} from '@/services/interviewAgent'
-import { normalizeStepEntry } from '@/services/interviewSemantic'
+} from '@/services/interviewSemantic'
+import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
 import {
   decideNextPhaseWithMeta,
   checkLifecycle,

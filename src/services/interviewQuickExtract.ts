@@ -17,7 +17,8 @@
 
 import { resolveModel } from '@/lib/llm-provider'
 import { generateText, stepCountIs } from 'ai'
-import { buildTools, type StepEntry } from './interviewAgent'
+import { buildTools } from './interviewAgent'
+import type { StepEntry } from './interviewSemantic'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 

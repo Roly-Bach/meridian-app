@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { Database } from '@/lib/database.types'
-import type { ClarificationCard, AnalystBriefing } from '@/services/interviewAgent'
+import type { ClarificationCard, AnalystBriefing } from '@/services/interviewTypes'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
 type StateRow = Database['public']['Tables']['interview_state']['Row']

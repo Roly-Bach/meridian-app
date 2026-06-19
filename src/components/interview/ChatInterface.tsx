@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { MessageList, type Message } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { useInterviewStream } from '@/hooks/useInterviewStream'
-import type { ClarificationCard } from '@/services/interviewAgent'
+import type { ClarificationCard } from '@/services/interviewTypes'
 
 type Turn = {
   id: string

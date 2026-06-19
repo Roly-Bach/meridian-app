@@ -1,5 +1,5 @@
-import { computeMissingMandatorySlots, MANDATORY_SLOTS, POTENZIAL_SLOT_NAMES, groupSemanticSteps } from './interviewAgent'
-import type { Phase, StepEntry, AnalystBriefing } from './interviewAgent'
+import { computeMissingMandatorySlots, MANDATORY_SLOTS, POTENZIAL_SLOT_NAMES, groupSemanticSteps, type Phase, type StepEntry } from './interviewSemantic'
+import type { AnalystBriefing } from './interviewTypes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

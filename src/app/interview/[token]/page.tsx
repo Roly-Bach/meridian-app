@@ -5,7 +5,7 @@ import { ChatErrorScreen } from '@/components/interview/ChatErrorScreen'
 import { ChatCompletedScreen } from '@/components/interview/ChatCompletedScreen'
 import { ChatInterface } from '@/components/interview/ChatInterface'
 import { ClarificationView } from '@/components/interview/ClarificationView'
-import type { ClarificationCard } from '@/services/interviewAgent'
+import type { ClarificationCard } from '@/services/interviewTypes'
 
 type Interview = {
   id: string

@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { ClarificationCard } from '@/services/interviewAgent'
+import type { ClarificationCard } from '@/services/interviewTypes'
 
 // ─── Fixed options per slot type ─────────────────────────────────────────────
 

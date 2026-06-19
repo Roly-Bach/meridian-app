@@ -1,14 +1,9 @@
 import { resolveModel } from '@/lib/llm-provider'
 import { streamText } from 'ai'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
-import {
-  buildDynamicContext,
-  detectNumberAnchoring,
-  detectFillerPhrases,
-  type InterviewContext,
-  type TurnMessage,
-  type AnalystBriefing,
-} from './interviewAgent'
+import { buildDynamicContext, STATIC_PROMPT } from './talkerPrompt'
+import { extractNumericTokens } from './conversationSignals'
+import type { InterviewContext, TurnMessage, AnalystBriefing } from './interviewTypes'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 // ─── Talker Stream (Iteration 3) ──────────────────────────────────────────────
@@ -30,51 +25,87 @@ export interface TalkerStreamOptions {
   traceCtx?: TraceCtx
 }
 
-const STATIC_PROMPT = `Du bist KI-Interviewer. Erhebe implizites Prozesswissen von Mitarbeitern strukturiert.
-Führe das Gespräch auf Deutsch — sachlich, direkt, präzise.
-Sprich den Mitarbeiter mit Du an.
+// ─── Output Guards (PROJ-35 / ADR-017) ────────────────────────────────────────
+// Post-hoc detectors on the *generated* Talker text — they live next to their
+// only caller (onFinish below). Behaviour unchanged from interviewAgent.
 
-Phasenmodell: intro → process_loop → walkthrough_step → slot_completion → coverage_check → wrap_up
+/**
+ * Pt7: Detect whether a Talker response re-quotes numeric values from the briefing.
+ * Returns matched numbers if anchoring is found, empty array otherwise.
+ * Used in onFinish for observability logging.
+ */
+export function detectNumberAnchoring(talkerText: string, suggestedQuestion: string): string[] {
+  const numbers = extractNumericTokens(suggestedQuestion)
+  if (numbers.length === 0) return []
+  // Only flag if the number appears inside a question (ends with ?)
+  const sentences = talkerText.split(/[.!]\s+/)
+  const questionSentences = sentences.filter(s => s.includes('?'))
+  return numbers.filter(n => questionSentences.some(q => {
+    const re = new RegExp(`\\b${n.replace('.', '\\.')}\\b`)
+    return re.test(q)
+  }))
+}
 
-<turn_format>
-Ab Turn 2: Maximal ein kurzer Reaktionssatz (optional), dann eine direkte Frage — sonst nichts.
-Turn 1 (Opener): Kontext + offene Einstiegsfrage.
-Abschluss-Turn: kurze Verabschiedung.
-Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
-Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
-Spannen NICHT mehr konkretisieren wenn Wert bereits erfasst ist (✓ im Tracker). Nur bei echtem null.
-Ausweichen: Wenn Mitarbeiter keine konkrete Zahl nennen kann ("schwer zu sagen", "variiert stark"):
-→ Slot SOFORT akzeptieren und weitergehn — nicht mehr nachfragen.
-→ Akzeptanz-Phrase aus folgendem Pool wählen — und **JEDE NUR EINMAL pro Interview** verwenden, danach Avoidance-Liste konsultieren:
-  • "Ok, das passt so."
-  • "Lassen wir das so stehen."
-  • "Notieren wir das als variabel."
-  • "Halten wir das offen."
-  • "Verstanden — weiter im Ablauf."
-  • "Klar, dann holen wir das später nach."
-  • "Ich nehme das so auf."
-  • Eigene natürliche Variante bilden — alle Pool-Phrasen schon genutzt? Vollständig neu formulieren.
-→ NICHT direkt nach Akzeptanz "Nächster Punkt:" anhängen. Stattdessen direkt Anschlussfrage stellen ohne Trennfloskel.
-→ Falls Spanne genannt wurde ("ein bis zwei Tage"): NICHT mehr konkretisieren — Spanne reicht.
-→ Keinen eigenen Durchschnitt vorschlagen. Floskeln wie "Welcher Wert wäre eine grobe Schätzung" sind verboten — Repetition tankt Naturalness.
-</turn_format>
+/**
+ * Pt13: Detect formulaic acknowledgment phrases in Talker output.
+ * Extracts the opening clause of each sentence that matches known filler patterns.
+ * Stored in interview_state and injected back as an avoidance list each turn.
+ */
+const FILLER_PATTERNS = [
+  /^Das ist (ein|eine|einer|eines|kein|keine|sehr|ein sehr)\b/i,
+  /^Das klingt\b/i,
+  /^Das macht\b/i,
+  /^Das sind\b/i,
+  /^Das war\b/i,
+  /^Vielen Dank\b/i,
+  /^Danke\b/i,
+  /^Ich danke\b/i,
+  /^Gut[,.]?\s/i,
+  /^Schön[,.]?\s/i,
+  /^Sehr gut\b/i,
+  /^Interessant\b/i,
+  /^Verstanden[,.]?\s/i,
+  /^Alles klar\b/i,
+]
 
-<verboten>
-NIEMALS nach folgenden Details fragen — sie sind für die Prozesserhebung irrelevant und verschwenden Budget:
-- SAP-Transaktionscodes (z.B. FBL3N, F150, S_ALR_87012277, FB60, ME21N)
-- Excel-Formeln (SVERWEIS, VLOOKUP, INDEX/MATCH, Pivot-Formeln)
-- Systemspezifische Menüpfade oder Klick-Sequenzen
-- IT-technische Implementierungsdetails (Datenbankfelder, API-Aufrufe, Skripte)
-Frage stattdessen: Was passiert in diesem Schritt? Wie lange dauert es? Wie oft? Wer ist beteiligt?
-</verboten>
+// F1c: question-template fillers — repetitive estimation prompts that tank
+// naturalness when used >2× in a run. Scanned across the FULL text (not just
+// opener) and tracked alongside opener fillers so the avoidance list catches
+// both kinds.
+const QUESTION_TEMPLATE_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /welcher wert wäre (eine|deine)? ?grobe schätzung/i, label: 'Welcher Wert wäre eine grobe Schätzung' },
+  { pattern: /kannst du.*grobe schätzung/i, label: 'Kannst du eine grobe Schätzung geben' },
+  { pattern: /wie viel(e)? .*im durchschnitt/i, label: 'Wie viel im Durchschnitt' },
+  { pattern: /wie viel(e)? .*pro (rechnung|vorgang|beleg|fall)/i, label: 'Wie viel pro Vorgang' },
+  // F1d: acceptance-phrase templates — track so the avoidance list rotates them.
+  { pattern: /notiere ich als variabel/i, label: 'Notiere ich als variabel' },
+  { pattern: /notiere ich mit \d/i, label: 'Notiere ich mit Zahl' },
+  { pattern: /halten wir das offen/i, label: 'halten wir das offen' },
+  { pattern: /halten wir .* fest/i, label: 'halten wir das fest' },
+  { pattern: /das nehme ich so auf/i, label: 'Das nehme ich so auf' },
+  { pattern: /das halten wir so fest/i, label: 'Das halten wir so fest' },
+  { pattern: /gehen wir weiter zu/i, label: 'gehen wir weiter zu' },
+  { pattern: /nächster punkt/i, label: 'Nächster Punkt' },
+]
 
-<no_repeat>
-HARTE REGEL: Werte unter "Bereits erfasst" oder mit ✓ im Schritt-Tracker / READ_ONLY_STATE dürfen NICHT erneut erfragt werden.
-Wenn du auf einen bekannten Wert eingehen willst, beziehe dich darauf statt nachzufragen ("Du hast vorhin ~100 Rechnungen/Monat genannt — ...").
-Vor jeder Frage prüfen: Steht der Wert schon im Tracker? Wenn ja → andere Frage stellen oder Phase abschließen.
-</no_repeat>
-
-`
+export function detectFillerPhrases(text: string): string[] {
+  const matched: string[] = []
+  // Opener fillers — first sentence only
+  const firstSentence = text.split(/[.!?]\s+/)[0]?.trim() ?? ''
+  for (const pattern of FILLER_PATTERNS) {
+    if (pattern.test(firstSentence)) {
+      matched.push(firstSentence.slice(0, 50))
+      break
+    }
+  }
+  // F1c: Question-template fillers — full-text scan
+  for (const { pattern, label } of QUESTION_TEMPLATE_PATTERNS) {
+    if (pattern.test(text)) {
+      matched.push(label)
+    }
+  }
+  return matched
+}
 
 export function createTalkerStream(opts: TalkerStreamOptions) {
   // INTERVIEW_TALKER_MODEL overrides the shared INTERVIEW_MODEL for the Talker component

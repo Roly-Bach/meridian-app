@@ -3,8 +3,7 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
 import { generateEmbedding } from './embeddings'
-import type { StepEntry } from './interviewAgent'
-import { normalizeStepEntry } from './interviewSemantic'
+import { normalizeStepEntry, type StepEntry } from './interviewSemantic'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 
 // ── Slot coercions (safety net for legacy tracker data or LLM type errors) ──────

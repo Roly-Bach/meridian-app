@@ -7,7 +7,7 @@ vi.mock('@/lib/supabase-admin', () => ({
 }))
 
 import { decideNextPhase, checkLifecycle, computeTurnBudget, type OrchestratorContext } from './interviewOrchestrator'
-import type { StepEntry } from './interviewAgent'
+import type { StepEntry } from './interviewSemantic'
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 

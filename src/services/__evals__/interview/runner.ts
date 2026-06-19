@@ -34,13 +34,8 @@ import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
 import { initLangfuse, flushLangfuse } from '@/lib/langfuse'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import {
-  type Phase,
-  type TurnMessage,
-  type StepEntry,
-  type ClarificationCard,
-  type AnalystBriefing,
-} from '@/services/interviewAgent'
+import type { Phase, StepEntry } from '@/services/interviewSemantic'
+import type { TurnMessage, ClarificationCard, AnalystBriefing } from '@/services/interviewTypes'
 import { createTalkerStream, TALKER_THINKING_BUDGET } from '@/services/interviewTalker'
 import {
   decideNextPhase,

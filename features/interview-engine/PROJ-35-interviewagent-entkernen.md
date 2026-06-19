@@ -1,13 +1,13 @@
 # PROJ-35: interviewAgent.ts entkernen (Conversation-Signals-Modul + server-only-Naht)
 
-## Status: Planned
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** M (3–5d)
 **Bugs:** —
 **Created:** 2026-06-19
-**Last Updated:** 2026-06-19
+**Last Updated:** 2026-06-19 (Implementierung via /build PROJ-35)
 **Architecture:** ADR-017 (interviewAgent.ts Zerlegung entlang der server-only-Naht)
 
 ## Dependencies
@@ -76,18 +76,18 @@ Ein reiner Durchreicher ist per Löschtest flach. **Kein Dauer-Shim.** Stattdess
 
 ## Acceptance Criteria
 
-- [ ] `src/services/conversationSignals.ts` existiert mit `analyzeConversationSignals(ctx: InterviewContext, briefing?: AnalystBriefing | null): Signals` als einzigem öffentlichen Funktions-Export (plus `Signals`-Typ und `extractNumericTokens`); die sieben Detektoren sind **nicht** exportiert.
-- [ ] `src/services/talkerPrompt.ts` existiert und enthält `buildDynamicContext` + Format-Cluster + die Talker-`STATIC_PROMPT`; es ruft `analyzeConversationSignals` und enthält **keine** Detektor-Logik mehr.
-- [ ] `src/services/interviewTypes.ts` existiert mit `InterviewContext`, `TurnMessage`, `ClarificationCard`, `AnalystBriefing`.
-- [ ] `computeMissingMandatorySlots`, `computeWalkthroughSlotTarget` und `MissingSlot` liegen in `interviewSemantic.ts`.
-- [ ] `detectNumberAnchoring` und `detectFillerPhrases` liegen in `interviewTalker.ts`; `interviewTalker` importiert `buildDynamicContext` aus `talkerPrompt` und `extractNumericTokens` aus `conversationSignals`.
-- [ ] `interviewAgent.ts` enthält **keinen** Re-Export-Block für `interviewSemantic`-Primitiven mehr und exportiert nur noch `buildTools`, `createInterviewStream`, `buildStaticPrompt`; `extractSentenceAroundSpan` ist privat.
-- [ ] Alle ~18 Konsumenten importieren aus den echten Modulen (kein Import aus `interviewAgent` außer `buildTools` durch Analyst/Quick-Extract und `createInterviewStream` durch start/reconnect-Routes).
-- [ ] Keine `'use client'`-Komponente importiert mehr aus `interviewAgent` (oder einem anderen `server-only`-Modul).
-- [ ] Detektor-Logik, Regex-Tabellen und Prompt-Text sind **unverändert** (Diff zeigt nur Verschiebung + Sichtbarkeitswechsel + Signals-Bündelung, keine Logik-Edits).
-- [ ] `conversationSignals.test.ts` prüft die `analyzeConversationSignals`-Oberfläche; `interviewSemantic.test.ts` deckt die Slot-Compute-Funktionen; `interviewAgent.test.ts` behält die Tool-Handler-Tests.
-- [ ] **Gate:** `npm run lint` (`tsc --noEmit`) und `npm test` grün.
-- [ ] **Sanity (non-gating):** `npm run eval:interview buchhalter` nach der Umstellung, Metrik-Diff gegen die letzte Baseline ohne erkennbaren Regress.
+- [x] `src/services/conversationSignals.ts` existiert mit `analyzeConversationSignals(ctx: InterviewContext, briefing?: AnalystBriefing | null): Signals` als einzigem öffentlichen Funktions-Export (plus `Signals`-Typ und `extractNumericTokens`); die sieben Detektoren sind **nicht** exportiert.
+- [x] `src/services/talkerPrompt.ts` existiert und enthält `buildDynamicContext` + Format-Cluster + die Talker-`STATIC_PROMPT`; es ruft `analyzeConversationSignals` und enthält **keine** Detektor-Logik mehr.
+- [x] `src/services/interviewTypes.ts` existiert mit `InterviewContext`, `TurnMessage`, `ClarificationCard`, `AnalystBriefing`.
+- [x] `computeMissingMandatorySlots`, `computeWalkthroughSlotTarget` und `MissingSlot` liegen in `interviewSemantic.ts`.
+- [x] `detectNumberAnchoring` und `detectFillerPhrases` liegen in `interviewTalker.ts`; `interviewTalker` importiert `buildDynamicContext` aus `talkerPrompt` und `extractNumericTokens` aus `conversationSignals`.
+- [x] `interviewAgent.ts` enthält **keinen** Re-Export-Block für `interviewSemantic`-Primitiven mehr und exportiert nur noch `buildTools`, `createInterviewStream` (+ `AgentStreamOptions`-Typ); `buildStaticPrompt` bleibt als modulinterne Funktion (war auch im Original nicht exportiert); `extractSentenceAroundSpan` ist privat.
+- [x] Alle ~18 Konsumenten importieren aus den echten Modulen (kein Import aus `interviewAgent` außer `buildTools` durch Analyst/Quick-Extract und `createInterviewStream` durch start/reconnect-Routes).
+- [x] Keine `'use client'`-Komponente importiert mehr aus `interviewAgent` (oder einem anderen `server-only`-Modul).
+- [x] Detektor-Logik, Regex-Tabellen und Prompt-Text sind **unverändert** (Diff zeigt nur Verschiebung + Sichtbarkeitswechsel + Signals-Bündelung, keine Logik-Edits) — per `diff` gegen HEAD byte-identisch für Regex-Tabellen, `STATIC_PROMPT`, `buildPhaseMethodology`, `WALKTHROUGH_EXAMPLES`, `SLOT_PROMPT_HINT`; in `buildDynamicContext` nur Signal-Quelle `inline → s.<feld>`.
+- [x] `conversationSignals.test.ts` prüft die `analyzeConversationSignals`-Oberfläche; `interviewSemantic.test.ts` deckt die Slot-Compute-Funktionen; `interviewAgent.test.ts` behält die Tool-Handler-Tests. Output-Guard-Tests in `interviewTalker.test.ts`.
+- [x] **Gate:** `npm run lint` (`tsc --noEmit`) und `npm test` grün (46 Files, 613 passed / 1 skipped). Zusätzlich `npm run build` ✓ Compiled successfully.
+- [ ] **Sanity (non-gating):** `npm run eval:interview buchhalter` nach der Umstellung, Metrik-Diff gegen die letzte Baseline ohne erkennbaren Regress. *(offen — empfohlener nächster Schritt, nicht im Build-Gate.)*
 
 ## Edge Cases
 
@@ -179,6 +179,22 @@ const s = analyzeConversationSignals(ctx, briefing)
 - `conversationSignals.test.ts`: ~80 Fälle → `analyzeConversationSignals(ctx, briefing)` aufrufen, auf `Signals`-Felder asserten (Lokalisierung bleibt pro Feld erhalten).
 - `interviewSemantic.test.ts`: Slot-Compute-Blöcke (heute in `interviewAgent.test.ts`).
 - `interviewAgent.test.ts`: nur noch Tool-Handler (`register_step`, `record_slot`, `update_walkthrough_data`, `link_bottleneck`, `record_dependency`).
+
+## Implementation Notes (2026-06-19, /build PROJ-35)
+
+Umgesetzt entlang der 7-Schritt-Sequenz. `interviewAgent.ts` 1948 → 1071 LOC. Neue Module: `conversationSignals.ts` (328), `talkerPrompt.ts` (452), `interviewTypes.ts` (63). Neue Tests: `conversationSignals.test.ts`, `interviewSemantic.test.ts`, `interviewTalker.test.ts`.
+
+Abweichungen / Befunde aus dem Architect-Review (alle verhaltensneutral gelöst):
+- **D1 (blockade):** `buildDynamicContext` berechnete zwei Blockade-Werte. `Signals.blockade ← detectBlockade(ctx.lastUserTurn)` (= altes `currentBlockade`), `Signals.ladderingStreak ← computeLadderingStreak(...)` getrennt. Der 3-Wege-Render-Zweig bleibt strukturgleich.
+- **D2 (createInterviewStream):** zusätzlicher, in Spec/ADR nicht gelisteter `buildDynamicContext`-Konsument. `interviewAgent` importiert `buildDynamicContext` jetzt aus `talkerPrompt`; bleibt azyklisch.
+- **D3 / Test-Coverage:** Beim Verschieben der Detektoren wurden zunächst 13 `detectDrillStops`/`detectPersonaRefuse`-`it()` versehentlich gedroppt; wiederhergestellt als `drillWarnings`-Tests über die `analyzeConversationSignals`-Oberfläche (F1b-Refuse-Pfad über Threshold-Absenkung). `it()`-Summe 103 = 100 (HEAD) + 3 neu (Empty-History-Default, anchorNumbers).
+- **`buildStaticPrompt`** war auch im Original nicht exportiert — bleibt modulinterne Funktion in `interviewAgent` (kein Merge mit Talker-`STATIC_PROMPT` → PROJ-37).
+
+Verbatim-Neutralität per `diff` gegen HEAD bestätigt (Regex-Tabellen, `STATIC_PROMPT`, `buildPhaseMethodology`, `WALKTHROUGH_EXAMPLES`, `SLOT_PROMPT_HINT` byte-identisch).
+
+Verifikation: `tsc --noEmit` grün, `npm test` 613 passed / 1 skipped, `npm run build` ✓. Reviewer (5 Korrektheitspunkte) pass. Hinweis: Cross-Vendor-Review (Aider/Gemini) war in der Umgebung nicht aufrufbar — Review erfolgte Claude-seitig per Diff-Analyse.
+
+Offen: buchhalter-Eval-Sanity (non-gating), QA (`/qa PROJ-35`).
 
 ## QA Test Results
 _To be added by /qa_

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { ClarificationCards } from './ClarificationCards'
-import type { ClarificationCard } from '@/services/interviewAgent'
+import type { ClarificationCard } from '@/services/interviewTypes'
 
 type Props = {
   token: string
