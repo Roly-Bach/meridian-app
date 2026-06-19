@@ -1,13 +1,13 @@
 # PROJ-38: Slot-Write-Encoding-Fix (Eval-Signal wiederherstellen)
 
-## Status: In Progress
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-27
 **Appetite:** S (1-2d)
-**Bugs:** —
+**Bugs:** 0:0:0
 **Created:** 2026-06-19
-**Last Updated:** 2026-06-19 (Implementierung via /quick PROJ-38)
+**Last Updated:** 2026-06-20 (QA passed via /qa PROJ-38 — production-ready, 0:0:0)
 
 ## Dependencies
 - **Revidiert:** PROJ-27 (Schema-Bindung + verlustfreie Speicherung). Dessen Vertrag, Slot-Payloads verlustfrei als Objekt zu persistieren, ist verletzt.
@@ -87,8 +87,46 @@ Hinweis: Coder-Subagent wurde vom Session-Limit unterbrochen (Call-Sites gemacht
 ## Tech Design (Solution Architect)
 _To be added by /architecture_
 
-## QA Test Results
-_To be added by /qa_
+## QA Test Results (2026-06-20, /qa PROJ-38)
+
+**Verdict: PRODUCTION-READY** — 0 Critical / 0 High / 0 Medium / 0 Low (`0:0:0`).
+
+### Gates (unabhängig nachgefahren)
+| Gate | Ergebnis |
+|------|----------|
+| `npm run lint` (`tsc --noEmit`) | ✓ keine Fehler |
+| `npm test` (Vitest) | ✓ 46 Files, 613 passed / 1 skipped |
+| `npm run build` | ✓ Compiled successfully |
+
+### Acceptance Criteria — 9/9 PASS
+| AC | Status | Evidenz |
+|----|--------|---------|
+| slots.*/potenzial.* als jsonb-Objekte | PASS | `schema_conformance_rate=1.0` (Scorer liest Objekte) + Unit-Test (`p_value` ist Objekt). Direkt-SQL deferred (Supabase-MCP disconnected). |
+| status reiner String (nicht doppelt quotiert) | PASS | Unit-Test `p_value === 'done'`; Eval-Report: beide Schritte `done`. |
+| `schema_conformance_rate=1.0`, `hallucination_rate≈0` | PASS | Verifikationslauf: 1 bzw. 0 (Pre-Fix: 0 bzw. 1). |
+| `slot_coverage`/`depth_score` werten potenzial aus, nicht gedeckelt | PASS | `slot_coverage 0.89` (Pre-Fix 0.33), `depth_score 1.94` mit verteiltem p1/p2/p3. |
+| Label nicht durch Encoding-Artefakt FAIL | PASS | Gate nutzt `dedupSlotCoverage 0.89` (passt); Encoding-Metriken nicht im Gate; residualer FAIL = KI-3. |
+| Regressions-Test (Objekt-Encoding) | PASS | `interviewAgent.test.ts`: `p_value: expect.objectContaining({ value: 20 })` + Status-String-Assertion. |
+| Beide Schreibpfade Objekt-Encoding | PASS | Eval-Slot-Tabelle rendert echte Werte (90/5/1200…) statt `undefined`. |
+| Gate tsc+test+build grün | PASS | siehe oben. |
+| Frische Baseline dokumentiert | PASS | `docs/evals/interview/2026-06-19/2026-06-19-23-55-41-...md`. |
+
+### Edge Cases
+- **Bestandsdaten (fix-forward):** verifiziert, kein Backfill ausgeführt — konsistent mit Scope (→ KI-1).
+- **Concurrent/Priority-Conflict (ADR-016):** Logik wird durch den Fix scharf (las vorher String → `writeSource` undefined → faktisch tot). Im Verifikationslauf `blocked_writes=0`, kein legitimer Write blockiert. Intendiertes Verhalten, kein Bug.
+- **`nicht_befund_typ`-Slots / Status-Übergänge / is_correction:** durch denselben Schreibpfad abgedeckt; Tests grün.
+
+### Security Audit (Red-Team)
+Keine neue Angriffsfläche. `JSON.stringify(X)` → `X` an parametrisierten jsonb-RPC-Calls; `patch_interview_step_field` (SECURITY DEFINER, Grants unverändert) nicht angefasst. Keine neuen Routes/Inputs/Secrets, kein Auth-/RLS-/DB-Schema-Change. Slot-Werte gehen als jsonb-Parameter in `jsonb_set` (keine Injection).
+
+### Regression
+Volle Unit-/Integrations-Suite grün (inkl. der angepassten `interviewAgent.test.ts`). End-to-End durch den frischen buchhalter-Lauf bestätigt (Score-Flip, beide Schritte `done`). PROJ-27 (verlustfreie Speicherung) Vertrag wiederhergestellt; PROJ-33 (atomarer Schreibpfad) bleibt funktionsfähig.
+
+### E2E
+N/A — Service-Layer-Bugfix ohne neues nutzersichtbares Verhalten. Regressionsabdeckung liefert die Unit-Suite + der Eval-Verifikationslauf.
+
+### Beobachtung / Folgehinweis (kein PROJ-38-Bug)
+Der Eval-Lauf trägt weiterhin `FAIL`, aber allein wegen KI-3 (`dialog_naturalness 0.5 < Gate 0.7`, Judge-Parsing-Fallback). KI-3 ist in INDEX auf High eingestuft und der jetzt alleinige Blocker für ein grünes Eval-Label. Nächster empfohlener Schritt nach PROJ-38.
 
 ## Deployment
 _To be added by /deploy_
