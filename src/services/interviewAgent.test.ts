@@ -182,8 +182,10 @@ describe('Tool Handlers', () => {
       expect(result.slot).toBe('frequency_per_month')
       expect(result.value).toBe(20)
       // verify atomic rpc write was called with correct path
+      // PROJ-38: p_value must be the slot OBJECT, not a JSON-stringified string
       expect(mockAdminRpc).toHaveBeenCalledWith('patch_interview_step_field', expect.objectContaining({
         p_sub_path: ['potenzial', 'frequency_per_month'],
+        p_value: expect.objectContaining({ value: 20 }),
       }))
     })
 
@@ -243,7 +245,8 @@ describe('Tool Handlers', () => {
       const doneStatusCall = mockAdminRpc.mock.calls.find(
         (call: unknown[]) => {
           const p = call[1] as Record<string, unknown>
-          return Array.isArray(p?.p_sub_path) && (p.p_sub_path as string[]).join('.') === 'status' && p.p_value === JSON.stringify('done')
+          // PROJ-38: status is written as a plain jsonb string, not a double-encoded JSON.stringify
+          return Array.isArray(p?.p_sub_path) && (p.p_sub_path as string[]).join('.') === 'status' && p.p_value === 'done'
         }
       )
       expect(doneStatusCall).toBeDefined()
