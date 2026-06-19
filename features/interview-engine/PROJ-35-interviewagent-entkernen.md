@@ -1,13 +1,13 @@
 # PROJ-35: interviewAgent.ts entkernen (Conversation-Signals-Modul + server-only-Naht)
 
-## Status: In Progress
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** M (3–5d)
-**Bugs:** —
+**Bugs:** 0:0:0
 **Created:** 2026-06-19
-**Last Updated:** 2026-06-19 (Implementierung via /build PROJ-35)
+**Last Updated:** 2026-06-19 (QA passed via /qa PROJ-35 — production-ready, 0:0:0)
 **Architecture:** ADR-017 (interviewAgent.ts Zerlegung entlang der server-only-Naht)
 
 ## Dependencies
@@ -87,7 +87,7 @@ Ein reiner Durchreicher ist per Löschtest flach. **Kein Dauer-Shim.** Stattdess
 - [x] Detektor-Logik, Regex-Tabellen und Prompt-Text sind **unverändert** (Diff zeigt nur Verschiebung + Sichtbarkeitswechsel + Signals-Bündelung, keine Logik-Edits) — per `diff` gegen HEAD byte-identisch für Regex-Tabellen, `STATIC_PROMPT`, `buildPhaseMethodology`, `WALKTHROUGH_EXAMPLES`, `SLOT_PROMPT_HINT`; in `buildDynamicContext` nur Signal-Quelle `inline → s.<feld>`.
 - [x] `conversationSignals.test.ts` prüft die `analyzeConversationSignals`-Oberfläche; `interviewSemantic.test.ts` deckt die Slot-Compute-Funktionen; `interviewAgent.test.ts` behält die Tool-Handler-Tests. Output-Guard-Tests in `interviewTalker.test.ts`.
 - [x] **Gate:** `npm run lint` (`tsc --noEmit`) und `npm test` grün (46 Files, 613 passed / 1 skipped). Zusätzlich `npm run build` ✓ Compiled successfully.
-- [ ] **Sanity (non-gating):** `npm run eval:interview buchhalter` nach der Umstellung, Metrik-Diff gegen die letzte Baseline ohne erkennbaren Regress. *(offen — empfohlener nächster Schritt, nicht im Build-Gate.)*
+- [x] **Sanity (non-gating):** `npm run eval:interview buchhalter` nach der Umstellung gefahren (2026-06-19, interview_id `1b3a04c1…`, INTERVIEW_MODEL=google/gemini-3.5-flash). Strukturelles Slot-/Extraktionsverhalten identisch zu allen Baseline-Läufen (06:18/08:52/09:47), **kein Regress durch den Refactor**. Der automatische FAIL-Score wird ausschließlich durch das vorbestehende Slot-String-Kodierungs-Artefakt getrieben (`schema_conformance_rate 0`), das über alle Läufe konstant ist und nicht von dieser Naht berührt wird (Out-of-Scope-Block: Qualität → PROJ-28/29/30). Report: `docs/evals/interview/2026-06-19/2026-06-19-19-43-02-google-gemini-3-5-flash-buchhalter.md`.
 
 ## Edge Cases
 
@@ -194,10 +194,41 @@ Verbatim-Neutralität per `diff` gegen HEAD bestätigt (Regex-Tabellen, `STATIC_
 
 Verifikation: `tsc --noEmit` grün, `npm test` 613 passed / 1 skipped, `npm run build` ✓. Reviewer (5 Korrektheitspunkte) pass. Hinweis: Cross-Vendor-Review (Aider/Gemini) war in der Umgebung nicht aufrufbar — Review erfolgte Claude-seitig per Diff-Analyse.
 
-Offen: buchhalter-Eval-Sanity (non-gating), QA (`/qa PROJ-35`).
+buchhalter-Eval-Sanity erledigt (2026-06-19, kein Regress — siehe AC-Liste). Offen: QA (`/qa PROJ-35`) als Gate für Status=Approved.
 
-## QA Test Results
-_To be added by /qa_
+## QA Test Results (2026-06-19, /qa PROJ-35)
+
+**Verdict: PRODUCTION-READY** — 0 Critical / 0 High / 0 Medium / 0 Low (`0:0:0`).
+
+### Gates (unabhängig nachgefahren auf aktuellem Branch-Stand)
+| Gate | Ergebnis |
+|------|----------|
+| `npm run lint` (`tsc --noEmit`) | ✓ keine Fehler |
+| `npm test` (Vitest) | ✓ 46 Files, 613 passed / 1 skipped |
+| `npm run build` | ✓ Compiled successfully |
+
+### Acceptance Criteria — 11/11 erfüllt (strukturell verifiziert)
+- `conversationSignals.ts` exportiert nur `Signals`, `AmbiguityResult`, `extractNumericTokens`, `analyzeConversationSignals`; die 7 Detektoren sind nicht exportiert (Interface 9→1 bestätigt per `grep`).
+- `talkerPrompt.ts`: `STATIC_PROMPT` + `buildDynamicContext` vorhanden, keine Detektor-Logik.
+- `interviewTypes.ts`: genau `InterviewContext`, `TurnMessage`, `ClarificationCard`, `AnalystBriefing`.
+- `interviewAgent.ts`: nur `buildTools`, `createInterviewStream`, `AgentStreamOptions` exportiert; kein Re-Export-Block.
+- Importer-Scan: `interviewAgent` wird nur noch importiert von start/reconnect-Routes (`createInterviewStream`) und Analyst/Quick-Extract (`buildTools`) — exakt wie spezifiziert.
+- Verbatim-Neutralität: per Build-Zeit-Diff bereits byte-bestätigt (Implementation Notes).
+
+### Security Audit (Red-Team, fokussiert auf die server-only-Naht)
+Das adressierte Risiko war: vier `'use client'`-Komponenten importierten `ClarificationCard` aus dem `server-only`-Modul `interviewAgent`, tragfähig nur durch Compile-Zeit-Typ-Löschung.
+- **Verifiziert behoben:** `page.tsx`, `ChatInterface.tsx`, `ClarificationCards.tsx`, `ClarificationView.tsx` importieren `ClarificationCard` jetzt `type`-only aus dem reinen `interviewTypes`.
+- **Kein Leak:** kein `'use client'`-File importiert `interviewAgent` oder `supabase-admin` (Scan = none). Server-only-Werte können nicht ins Client-Bundle gelangen.
+- **Keine neue Angriffsfläche:** keine neuen Routes, kein Auth-/RLS-Change, keine neuen Env-Vars, keine DB-Migration.
+
+### Regression
+Volle Unit-/Integrations-Suite grün, inkl. der im Refactor umgeschriebenen Tests (`conversationSignals.test.ts`, `interviewSemantic.test.ts`, `interviewTalker.test.ts`) und der Tool-Handler-Tests in `interviewAgent.test.ts`. Eval-Sanity (buchhalter) ohne Regress (siehe AC-Liste).
+
+### E2E
+N/A — die ACs sind strukturell (Modulgrenzen, Sichtbarkeit, Import-Pfade), kein neues nutzersichtbares Verhalten. Playwright-Tests würden nichts Neues abdecken; die Unit-Suite ist die Regressionsabdeckung dieser Naht.
+
+### Abgrenzung (kein PROJ-35-Bug)
+Der Eval-Lauf 2026-06-19 zeigte ein Slot-Serialisierungs-Artefakt (O-Slots als JSON-Strings statt Objekte in `step_tracker`). Das ist ein **vorbestehender, branchunabhängiger** Zustand (konsistent über alle Baseline-Läufe) und liegt im `buildTools`/`record_slot`-Schreibpfad — explizit Out of Scope (→ PROJ-34 bzw. Qualität PROJ-28/29/30). Wird in einem konsolidierten Härtungs-PROJ (geplant PROJ-38) erfasst, zählt nicht gegen PROJ-35.
 
 ## Deployment
 _To be added by /deploy_
