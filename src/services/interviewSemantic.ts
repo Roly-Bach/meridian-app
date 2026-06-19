@@ -246,7 +246,13 @@ export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): S
     title: r.title,
     reihenfolge: r.reihenfolge ?? fallbackReihenfolge,
     governance,
-    abhaengigkeiten: r.abhaengigkeiten ?? null,
+    abhaengigkeiten: r.abhaengigkeiten != null
+      ? {
+          depends_on: Array.isArray(r.abhaengigkeiten.depends_on) ? r.abhaengigkeiten.depends_on : [],
+          influences: Array.isArray(r.abhaengigkeiten.influences) ? r.abhaengigkeiten.influences : [],
+          nicht_befund_typ: r.abhaengigkeiten.nicht_befund_typ ?? null,
+        }
+      : null,
     potenzial,
     status: r.status,
     slots: {

@@ -278,7 +278,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
       currentTurnNumber: nextTurnNumber,
       activeStepTitle: activeStep?.title ?? null,
     })
-    if (qeTracker !== null) freshStepTracker = qeTracker
+    if (qeTracker !== null) freshStepTracker = qeTracker.map((raw, i) => normalizeStepEntry(raw as unknown, i + 1))
   }
 
   // ── Missing slots ───────────────────────────────────────────────────────────

@@ -1,11 +1,11 @@
 # PROJ-33: Turn-Loop-Konsolidierung (runInterviewTurn)
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** M (3–5d)
-**Bugs:** —
+**Bugs:** 0:0:0
 **Created:** 2026-06-18
 **Last Updated:** 2026-06-18
 **Architecture:** ADR-016 (Interview-Turn-Seam)
@@ -162,4 +162,8 @@ Umgesetzt via `/build PROJ-33` (Sonnet, Worktree `refactor/deep-modules`).
 
 **Bewusste Abweichung von AC:** Der Eval-Runner ruft weiterhin `decideNextPhase` einmal **vor** `runInterviewTurn` (`runner.ts` ~Z. 845), ausschließlich für die Clarification-Vorprüfung. Clarification ist out-of-scope für `runInterviewTurn` (Prod hat einen eigenen Endpunkt, der Eval injiziert synthetische Antworten und bricht). Die Turn-Orchestrierung selbst liegt vollständig im Modul; dies ist die im Grilling beschlossene aufrufer-seitige Asymmetrie, kein Drift-Rest.
 
-**Offen:** Eval-Gate (`npm run eval:interview buchhalter`, `gemini-3.1-flash-lite`) gegen PROJ-22-Baseline — vor Übergang zu Approved. `Bugs`-Feld dann setzen (Hard Rule).
+**Eval-Gate (2026-06-19):** `npm run eval:interview buchhalter` (gemini-3.1-flash-lite) — **kein Regress** gegen die 2026-06-18-Baseline. Alle Metriken im oder über dem Baseline-Band (slot_coverage 0.33; tool_call_plausibility 0.70 > alle Baselines 0.51–0.68; phase_progression 1; completion_correctness true). Der Report-`status: FAIL` ist der Standing-State von flash-lite (absolute Ziele wie hallucination_rate < 0.01 werden schon vor PROJ-33 gerissen), kein durch diese Naht eingeführter Defekt. Lauf: `docs/evals/interview/2026-06-19/2026-06-19-08-23-10-google-gemini-3-1-flash-lite-buchhalter.md`.
+
+**Nachbesserung während Eval (defensiv):** `normalizeStepEntry` (`interviewSemantic.ts`) formt `abhaengigkeiten` robust (Arrays garantiert, `nicht_befund_typ` default null); `runInterviewTurn` schickt den Quick-Extract-Tracker vor Gebrauch durch `normalizeStepEntry`. Gates bleiben grün (Lint + 610 Tests).
+
+**Status → Approved** (kein Regress, Gates grün). `Bugs: 0:0:0` ist refactor-spezifisch; die absolute Interview-Qualität (hallucination_rate, coverage) ist ein bestehendes, separates Thema → PROJ-28/30/35, nicht diese Naht.
