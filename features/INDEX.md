@@ -50,12 +50,13 @@
 | PROJ-32 | Agenten-Architektur (Trennung, Preparator; vertagt) | Revision | Interview Engine | PROJ-22 | Roadmap | [BL-E4.1+E4.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021/024 | P2 | M | — |
 | PROJ-33 | Turn-Loop-Konsolidierung (runInterviewTurn) | Revision | Interview Engine | PROJ-22 | Approved | [spec](interview-engine/PROJ-33-turn-loop-konsolidierung.md) | P1 | M | 0:0:0 |
 | PROJ-34 | Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals) | Revision | Interview Engine | PROJ-33 | Roadmap | — | P2 | — | — |
-| PROJ-35 | interviewAgent.ts entkernen (Conversation-Signals + Re-Export-Hub) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
+| PROJ-35 | interviewAgent.ts entkernen (Conversation-Signals + server-only-Naht) | Revision | Interview Engine | PROJ-22 | Planned | [spec](interview-engine/PROJ-35-interviewagent-entkernen.md) | P2 | M | — |
 | PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Roadmap | — | P2 | — | — |
+| PROJ-37 | Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-37
+## Next Available ID: PROJ-38
 
 ## Known Issues
 
@@ -91,8 +92,14 @@ Gewählt und entschieden: PROJ-33 (Turn-Loop-Konsolidierung, [ADR-016](../docs/a
 `runInterviewTurn` als tiefes Modul, Prod-Route und Eval-Runner werden Adapter. Vertagt als ein
 kohärenter Folge-Kandidat: PROJ-34 (Werkzeug-Schreibabsichten + TurnStore-Port für DB-freie Evals).
 Weitere Kandidaten aus dem Review als Roadmap festgehalten: PROJ-35 (`interviewAgent.ts` entkernen —
-Conversation-Signals-Modul + Re-Export-Hub, #2+#3) und PROJ-36 (ProcessStepsTable Cluster-Aggregation, #4).
+#2+#3) und PROJ-36 (ProcessStepsTable Cluster-Aggregation, #4).
 Specs folgen erst bei Bau-Start (je `/write-spec` mit Grilling); Begründungen in ADR-016.
+PROJ-35 ist 2026-06-19 spezifiziert (Planned, [ADR-017](../docs/adr/ADR-017-interviewagent-zerlegung-server-only-naht.md)):
+Zerlegung entlang der server-only-Naht, conversation-signals als tiefes Modul (`analyzeConversationSignals`,
+Interface 9→1), Re-Export-Hub (#3) bewusst verworfen zugunsten Konsumenten-Migration.
+PROJ-37 (Static-Prompt-Drift Talker vs. Greeting/Reconnect) wurde 2026-06-19 beim PROJ-35-Grilling
+entdeckt: `STATIC_PROMPT` (interviewTalker) und `buildStaticPrompt()` (interviewAgent → createInterviewStream)
+sind inhaltlich auseinandergelaufen. Out of Scope für PROJ-35 (reine Verschiebung, keine Prompt-Konsolidierung).
 
 ## Architecture Notes
 
