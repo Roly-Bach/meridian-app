@@ -54,10 +54,11 @@
 | PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Roadmap | — | P2 | — | — |
 | PROJ-37 | Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
 | PROJ-38 | Slot-Write-Encoding-Fix (Eval-Signal wiederherstellen) | Revision | Interview Engine | PROJ-27 | Approved | [spec](interview-engine/PROJ-38-slot-write-encoding-eval-signal.md) | P1 | S | 0:0:0 |
+| PROJ-39 | Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth) | Revision | Interview Engine | PROJ-31 | Planned | [spec](interview-engine/PROJ-39-eval-judge-parsing-haertung.md) | P1 | S | — |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-39
+## Next Available ID: PROJ-40
 
 ## Known Issues
 
@@ -67,8 +68,8 @@
 |----|----------|-------------|-------------|-------------|
 | KI-1 | Medium | Bestehende `step_tracker`-Records (seit ~2026-06-18) haben string-kodierte Slots; PROJ-38 ist fix-forward, kein Backfill | Eval 2026-06-19 | Backfill-Migration (Approval-Gate) |
 | KI-2 | Low | Knowledge-Object-Tool-Duplikation: mehrere Records pro distinktem Tool (19 Records / 4 Tools im buchhalter-Lauf) | Eval 2026-06-19 | Dedup auf KO-Ebene |
-| KI-3 | High | `dialog_naturalness`-Judge gibt nicht-parsbares Format zurück → Fallback 0.5 < Gate-Schwelle 0.7. Erzwingt nach PROJ-38 **allein jeden Eval-FAIL** (sonst alle Gate-Bedingungen grün). Seit ~2026-06-18, gleiches Fenster wie der Encoding-Bug. | Eval 2026-06-19 | Parser-Robustheit im dialogNaturalness-Scorer; ggf. eigenes PROJ |
-| KI-4 | Low | `/eval-interview`-Skill-Doku prüft veraltete Slot-Namen (`frequency_per_month` etc. statt O-Slots + `potenzial`-Facette) | Eval 2026-06-19 | Skill-Doku auf PROJ-25/27-Schema aktualisieren |
+
+> KI-3 (dialog_naturalness-Parsing) und KI-4 (Skill-Doc) sind seit 2026-06-20 als PROJ-39 getrackt.
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6
