@@ -157,6 +157,43 @@ describe('scoreSlotDepth — Edge Cases', () => {
   })
 })
 
+// ─── Tolerantes JSON-Parsing ──────────────────────────────────────────────────
+
+describe('scoreSlotDepth — Tolerantes Judge-Parsing', () => {
+  beforeEach(() => {
+    mockGenerateText.mockReset()
+  })
+
+  it('JSON-Array in Prosatext eingebettet wird geparst (kein null)', async () => {
+    const slotNames = getSlotNames(shallowFixture.finalStepTracker as StepEntry[])
+    const jsonArray = makeJudgeResponse(slotNames[0], 2)
+    // Simulate judge wrapping the JSON in prose text
+    const prosaOutput = `Hier ist meine Bewertung:\n\n${jsonArray}\n\nIch hoffe das hilft.`
+    mockGenerateText.mockResolvedValue({ text: prosaOutput } as Awaited<ReturnType<typeof generateText>>)
+
+    const result = await scoreSlotDepth(shallowFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
+    expect(result.depth_score).not.toBeNull()
+  })
+
+  it('JSON-Array mit abweichender Fence-Variante (```JSON statt ```json) wird geparst', async () => {
+    const slotNames = getSlotNames(adequateFixture.finalStepTracker as StepEntry[])
+    const jsonArray = makeJudgeResponse(slotNames[0], 3)
+    // Uppercase JSON fence — handled by the first-pass strip regex (/i flag); prose-embedded
+    // case above is what exercises the second-pass bracket extraction.
+    const fenceOutput = `\`\`\`JSON\n${jsonArray}\n\`\`\``
+    mockGenerateText.mockResolvedValue({ text: fenceOutput } as Awaited<ReturnType<typeof generateText>>)
+
+    const result = await scoreSlotDepth(adequateFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
+    expect(result.depth_score).not.toBeNull()
+  })
+
+  it('echtes Nicht-JSON gibt null zurück (Edge Case bleibt erhalten)', async () => {
+    mockGenerateText.mockResolvedValue({ text: 'invalid json — kein Array hier' } as Awaited<ReturnType<typeof generateText>>)
+    const result = await scoreSlotDepth(shallowFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
+    expect(result.depth_score).toBeNull()
+  })
+})
+
 // ─── Order-Swap-Test (BL-E5.2) ────────────────────────────────────────────────
 //
 // Verifiziert, dass die Parser-Logik invariant gegenüber Slot-Reihenfolge im

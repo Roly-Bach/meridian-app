@@ -117,8 +117,23 @@ Antworte ausschließlich als JSON-Array:
   try {
     const model = resolveModel(judgeModelString)
     const { text } = await generateText({ model, prompt, temperature: 0, maxOutputTokens: 2048 })
+    // First attempt: strip Markdown fences and parse directly
     const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
-    const parsed = JSON.parse(cleaned) as unknown[]
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(cleaned)
+    } catch {
+      // Second attempt: extract JSON array by finding first '[' and last ']'
+      // Handles prose-wrapped outputs or fence variants the first pass missed
+      const start = text.indexOf('[')
+      const end = text.lastIndexOf(']')
+      if (start === -1 || end === -1 || end <= start) return null
+      try {
+        parsed = JSON.parse(text.slice(start, end + 1))
+      } catch {
+        return null
+      }
+    }
     if (!Array.isArray(parsed)) return null
     return parsed.filter(
       (j): j is SlotJudgment =>

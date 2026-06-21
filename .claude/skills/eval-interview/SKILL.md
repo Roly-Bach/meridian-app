@@ -46,7 +46,7 @@ TESTER_MODEL            = <Wert> (fallback: google/gemini-3.1-flash-lite)
 
 Thinking-Budgets (hardcoded in Services, nicht via env — Orchestrator ist rule-based, kein LLM):
 - Talker:  `TALKER_THINKING_BUDGET`  (aus `interviewTalker.ts` — aktuell 512)
-- Analyst: `ANALYST_THINKING_BUDGET` (aus `interviewAnalyst.ts` — aktuell 0, war 2048)
+- Analyst: `ANALYST_THINKING_BUDGET` (aus `interviewAnalyst.ts` — aktuell 2048)
 
 Zeige die Liste dem Nutzer und frage via `AskUserQuestion`:
 - Frage: „Passt die Modell-Konfiguration?"
@@ -109,7 +109,10 @@ SELECT step_tracker FROM interview_state WHERE interview_id = '<interviewId>';
 
 Lies `step_tracker` vollständig aus — enthält pro registriertem Schritt:
 - `title`, `status` (`exploring` | `walkthrough` | `done`)
-- `slots`: `frequency_per_month`, `duration_minutes`, `rule_based`, `data_sources`, `error_rate_percent`, `media_breaks` (je `null` oder `{ value, quote, confidence }`)
+- `slots` (O1–O6-Coverage, PROJ-25/27-Schema): `bezeichnung` (O1, =Titel), `reihenfolge` (O1), `entscheidungslogik` (O2), `tazite_cues` (O2), `ausnahmen` (O3), `inputs` (O4), `outputs` (O4), `hilfsmittel` (O5), `abhaengigkeiten` (O6 — direkt unter `step`, nicht unter `slots`)
+  - Slot-Wert: `null` oder `{ value, quote, confidence }` (arrays für Listen-Felder)
+- `potenzial`-Facette (separat, nicht in Coverage gezählt): `frequency_per_month`, `duration_minutes`, `error_rate_percent`, `media_breaks` (je `null` oder `{ value, quote }`)
+- `governance` (separat): `rolle`, `organisationseinheit`, `systeme`
 
 **Turns (für Transcript-Rekonstruktion):**
 ```sql
@@ -130,7 +133,7 @@ ORDER BY created_at;
 Ein Eval-Lauf gilt als **PASS** wenn:
 1. `interview.status = 'completed'`
 2. Mindestens 2 Prozessschritte in `step_tracker` mit `status != 'exploring'`
-3. Mindestens 1 Schritt mit allen 4 Pflicht-Slots gefüllt (`frequency_per_month`, `duration_minutes`, `rule_based`, `data_sources`)
+3. Mindestens 1 Schritt mit gefüllten taziten O-Slots: mind. ein Wert in `entscheidungslogik` (O2), `tazite_cues` (O2) oder `ausnahmen` (O3) ist nicht null
 4. Kein Turn mit leerem `agent_response`
 5. Kein Dreiwiederholungsmuster bei Agent-Fragen (visuell aus stdout prüfen)
 
@@ -188,9 +191,9 @@ status: PASS | FAIL | PARTIAL PASS
 
 ## Slot-Filling-Stand
 
-| Schritt | Status | frequency | duration | rule_based | data_sources | error_rate | media_breaks |
-|---------|--------|-----------|----------|------------|--------------|------------|--------------|
-| <title> | done   | <wert>    | <wert>   | <wert>     | <wert>       | <wert>     | <wert>       |
+| Schritt | Status | entscheidungslogik (O2) | tazite_cues (O2) | ausnahmen (O3) | inputs (O4) | outputs (O4) | hilfsmittel (O5) | frequency | duration | error_rate | media_breaks |
+|---------|--------|------------------------|------------------|----------------|-------------|--------------|------------------|-----------|----------|------------|--------------|
+| <title> | done   | <wert>                 | <wert>           | <wert>         | <wert>      | <wert>       | <wert>           | <wert>    | <wert>   | <wert>     | <wert>       |
 
 ## Extrahierte Wissensobjekte
 

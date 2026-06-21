@@ -47,6 +47,37 @@ describe('parseJudgeResponse — Stufe mapping', () => {
   })
 })
 
+describe('parseJudgeResponse — Zahlwort-Toleranz', () => {
+  it('Stufe: zwei → 0.67 (kein console.warn)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = parseJudgeResponse('Überwiegend natürliche Sprache.\n\nStufe: zwei')
+    expect(result.score).toBe(0.67)
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('Stufe: eins → 0.33 (kein console.warn)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = parseJudgeResponse('Viele Floskeln erkannt.\n\nStufe: eins')
+    expect(result.score).toBe(0.33)
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('Stufe: drei → 1.0 (kein console.warn)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = parseJudgeResponse('Exzellente Gesprächsqualität.\n\nStufe: drei')
+    expect(result.score).toBe(1.0)
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('Zahlwort case-insensitive: "Stufe: ZWEI" → 0.67', () => {
+    const result = parseJudgeResponse('Angemessen.\nStufe: ZWEI')
+    expect(result.score).toBe(0.67)
+  })
+})
+
 describe('parseJudgeResponse — Markdown-toleranz', () => {
   it('bold Stufe: **Stufe: 2** → 0.67', () => {
     const result = parseJudgeResponse('Die Texte sind angemessen.\n\n**Stufe: 2**')

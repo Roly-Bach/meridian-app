@@ -22,7 +22,7 @@ Rubrik:
 - Stufe 2 (angemessen): überwiegend natürliche Sprache, vereinzelte Mängel, Du-Form meist eingehalten
 - Stufe 3 (exzellent): durchgehend natürlich, höflich, keine generischen Floskeln, konsequente Du-Form, keine abrupten Themensprünge
 
-Schreibe zuerst deine Begründung (Beobachtungen zu Natürlichkeit, Du-Form, Floskeln, Themenübergängen, Grammatik). Dann am Ende exakt: \`Stufe: X\` (X = 1, 2 oder 3)`
+Schreibe deine Begründung in maximal 4 Sätzen (Beobachtungen zu Natürlichkeit, Du-Form, Floskeln, Themenübergängen, Grammatik). Die allerletzte Zeile deiner Antwort muss IMMER exakt lauten: \`Stufe: X\` (X = 1, 2 oder 3) — keine weiteren Zeilen danach.`
 
 const MAX_SAMPLE_TURNS = 8
 
@@ -36,9 +36,15 @@ export interface DialogNaturalnessResult {
  * Returns { score, rationale } where score is 0.33 / 0.67 / 1.00.
  * Falls back to 0.5 with a warning on unexpected format.
  */
+const WORD_TO_DIGIT: Record<string, string> = { eins: '1', zwei: '2', drei: '3' }
+
 export function parseJudgeResponse(text: string): { score: number; rationale: string } {
-  // Find the last occurrence of "Stufe: X" (tolerant for bold markdown, extra spaces, colon variants)
-  const regex = /\*{0,2}Stufe\s*[:\s]\s*([123])\*{0,2}/gi
+  // Find the last occurrence of "Stufe: X" — tolerant for:
+  //   - bold markdown (**Stufe: 2**)
+  //   - extra spaces/colon variants
+  //   - case-insensitive
+  //   - German number words (eins/zwei/drei) in addition to digits
+  const regex = /\*{0,2}Stufe\s*[:\s]\s*([123]|eins|zwei|drei)\*{0,2}/gi
   let lastMatch: RegExpExecArray | null = null
   let match: RegExpExecArray | null
   while ((match = regex.exec(text)) !== null) {
@@ -50,7 +56,9 @@ export function parseJudgeResponse(text: string): { score: number; rationale: st
     return { score: 0.5, rationale: text.trim() }
   }
 
-  const stufe = parseInt(lastMatch[1], 10) as 1 | 2 | 3
+  const rawValue = lastMatch[1].toLowerCase()
+  const digitStr = WORD_TO_DIGIT[rawValue] ?? rawValue
+  const stufe = parseInt(digitStr, 10) as 1 | 2 | 3
   const scoreMap: Record<1 | 2 | 3, number> = { 1: 0.33, 2: 0.67, 3: 1.0 }
   const score = scoreMap[stufe] ?? 0.5
 
@@ -92,7 +100,7 @@ export async function scoreDialogNaturalness(
       model,
       system: JUDGE_SYSTEM,
       prompt: `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`,
-      maxOutputTokens: 300,
+      maxOutputTokens: 600,
       temperature: 0,
     })
 
@@ -116,27 +124,27 @@ const ISOLATED_CRITERIA: Array<{ criterion: string; weight: number; prompt: stri
   {
     criterion: 'Natürlichkeit',
     weight: 0.3,
-    prompt: 'Bewerte ausschließlich die Natürlichkeit der Sprache (kein Behördendeutsch, kein Denglisch). Stufe 1 = sehr unnatürlich, Stufe 2 = teils natürlich, Stufe 3 = durchgehend natürlich. Schreibe deine Begründung, dann: `Stufe: X`',
+    prompt: 'Bewerte ausschließlich die Natürlichkeit der Sprache (kein Behördendeutsch, kein Denglisch). Stufe 1 = sehr unnatürlich, Stufe 2 = teils natürlich, Stufe 3 = durchgehend natürlich. Schreibe deine Begründung in maximal 2 Sätzen. Die allerletzte Zeile deiner Antwort muss IMMER exakt lauten: `Stufe: X`',
   },
   {
     criterion: 'Du-Form',
     weight: 0.2,
-    prompt: 'Bewerte ausschließlich die Konsistenz der Du-Form. Stufe 1 = oft falsch/gemischt, Stufe 2 = meistens korrekt, Stufe 3 = immer korrekt. Schreibe deine Begründung, dann: `Stufe: X`',
+    prompt: 'Bewerte ausschließlich die Konsistenz der Du-Form. Stufe 1 = oft falsch/gemischt, Stufe 2 = meistens korrekt, Stufe 3 = immer korrekt. Schreibe deine Begründung in maximal 2 Sätzen. Die allerletzte Zeile deiner Antwort muss IMMER exakt lauten: `Stufe: X`',
   },
   {
     criterion: 'Keine Floskeln',
     weight: 0.2,
-    prompt: 'Bewerte ausschließlich ob generische Einleitungsfloskeln ("Sicher!", "Natürlich!", "Gerne!", "Das ist eine gute Frage!") verwendet werden. Stufe 1 = häufig, Stufe 2 = selten, Stufe 3 = nie. Schreibe deine Begründung, dann: `Stufe: X`',
+    prompt: 'Bewerte ausschließlich ob generische Einleitungsfloskeln ("Sicher!", "Natürlich!", "Gerne!", "Das ist eine gute Frage!") verwendet werden. Stufe 1 = häufig, Stufe 2 = selten, Stufe 3 = nie. Schreibe deine Begründung in maximal 2 Sätzen. Die allerletzte Zeile deiner Antwort muss IMMER exakt lauten: `Stufe: X`',
   },
   {
     criterion: 'Kein Themensprung',
     weight: 0.2,
-    prompt: 'Bewerte ausschließlich ob abrupte Themensprünge ohne verbindende Formulierung vorkommen. Stufe 1 = häufig, Stufe 2 = selten, Stufe 3 = nie. Schreibe deine Begründung, dann: `Stufe: X`',
+    prompt: 'Bewerte ausschließlich ob abrupte Themensprünge ohne verbindende Formulierung vorkommen. Stufe 1 = häufig, Stufe 2 = selten, Stufe 3 = nie. Schreibe deine Begründung in maximal 2 Sätzen. Die allerletzte Zeile deiner Antwort muss IMMER exakt lauten: `Stufe: X`',
   },
   {
     criterion: 'Grammatik',
     weight: 0.1,
-    prompt: 'Bewerte ausschließlich die Grammatik und Lesbarkeit. Stufe 1 = viele Fehler, Stufe 2 = wenige Fehler, Stufe 3 = fehlerfrei. Schreibe deine Begründung, dann: `Stufe: X`',
+    prompt: 'Bewerte ausschließlich die Grammatik und Lesbarkeit. Stufe 1 = viele Fehler, Stufe 2 = wenige Fehler, Stufe 3 = fehlerfrei. Schreibe deine Begründung in maximal 2 Sätzen. Die allerletzte Zeile deiner Antwort muss IMMER exakt lauten: `Stufe: X`',
   },
 ]
 
@@ -154,7 +162,7 @@ async function scoreWithIsolatedCriteria(
         model,
         system: crit.prompt,
         prompt: promptBase,
-        maxOutputTokens: 300,
+        maxOutputTokens: 600,
         temperature: 0,
       })
       const parsed = parseJudgeResponse(text)
