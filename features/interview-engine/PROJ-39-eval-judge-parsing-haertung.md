@@ -134,6 +134,16 @@ Volle Unit-/Integrations-Suite grün (620 passed / 1 skipped), inkl. der vorbest
 ### E2E
 N/A — Eval-Service- und Doku-Härtung ohne nutzersichtbares UI-Verhalten. Regressionsabdeckung liefert die Unit-Suite + der buchhalter-Verifikationslauf (End-to-End durch die echte Judge-Pipeline).
 
+## Merge-Integration (2026-06-21)
+
+Beim Merge von `origin/main` (PROJ-27/29/31, 2026-06-18) in den Deep-Modules-Branch zeigte sich, dass `main` dasselbe Judge-Parsing-Problem parallel gelöst hat — über einen **JSON-Judge-Kontrakt** (`{"stufe": X, "begruendung": "..."}`) statt PROJ-39s gehärtetem Text-Marker. Entscheidung (genehmigt 2026-06-21): mains JSON-Variante übernommen, PROJ-39s Text-Parser + Zahlwort-Tests durch JSON-Parser-Tests ersetzt. `maxOutputTokens: 600` behalten.
+
+- **KI-3** (Parser-Fallback) gelöst durch den JSON-Judge (kein `Stufe: X`-Truncation mehr). Lauf 2026-06-21: `dialog_naturalness 0.67` echt, kein Fallback.
+- **KI-5** (Gate-Schwelle) gelöst durch mains Gate-Senkung auf `≥ 0.65` (auto-merge in `runner.ts`). Lauf 2026-06-21: `0.67 ≥ 0.65` → Gesamt-Label **PASS**.
+- **KI-4** (SKILL.md-Doku) bleibt der eigenständige PROJ-39-Beitrag (kein Konflikt).
+
+Der PROJ-39-Parser-Code ist damit supersediert; der Doku-Fix und die Erkenntnis (Truncation-Root-Cause) bleiben gültig. Verifikation: [Lauf 2026-06-21](../../docs/evals/interview/2026-06-21/2026-06-21-18-51-07-google-gemini-3-5-flash-buchhalter.md), `status: PASS`.
+
 ## Deployment
 _To be added by /deploy_
 

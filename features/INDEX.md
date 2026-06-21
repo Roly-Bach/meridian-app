@@ -66,12 +66,12 @@
 
 | ID | Severity | Beschreibung | Entdeckt in | Fix-Aufwand |
 |----|----------|-------------|-------------|-------------|
-| KI-1 | Medium | Bestehende `step_tracker`-Records (seit ~2026-06-18) haben string-kodierte Slots; PROJ-38 ist fix-forward, kein Backfill | Eval 2026-06-19 | Backfill-Migration (Approval-Gate) |
+| KI-1 | ✅ Resolved | ~~Bestehende `step_tracker`-Records haben string-kodierte Slots; PROJ-38 fix-forward, kein Backfill~~ → gelöst durch mains Read-Compat `parseJsonIfString` ([interviewSemantic.ts](../src/services/interviewSemantic.ts)), integriert im Merge 2026-06-21. Parst Altdaten beim Lesen, kein Backfill nötig. Lauf 2026-06-21: `slot_coverage 1.0` | Eval 2026-06-19 | — (gelöst 2026-06-21) |
 | KI-2 | Low | Knowledge-Object-Tool-Duplikation: mehrere Records pro distinktem Tool (19 Records / 4 Tools im buchhalter-Lauf) | Eval 2026-06-19 | Dedup auf KO-Ebene |
-| KI-5 | Medium | `dialog_naturalness`-Gate (`≥ 0.70`) vs. diskretes Mapping {Stufe1→0.33, Stufe2→0.67, Stufe3→1.0}: nur Stufe 3 passiert das Gate, ein gutes-aber-formelles Stufe-2-Gespräch scheitert um 0.03. Faktisch verlangt das Gate perfekte Natürlichkeit. Verifiziert im PROJ-39-Lauf (dialog_naturalness 0.67 → FAIL). Out of Scope von PROJ-39 (ändert Mapping/Schwelle bewusst nicht) | Eval 2026-06-20 (PROJ-39-Verifikation) | Gate-Schwelle/Mapping abstimmen ODER Agent-Natürlichkeit (Eröffnungsfloskel, vgl. PROJ-37) |
-| KI-6 | Low | `/eval-interview`-Skill Schritt-4 (manuelle PASS-Kriterien) und das automatische Runner-Gate (`runner.ts`) divergieren: die manuellen Kriterien kennen die `dialog_naturalness ≥ 0.70`-Bedingung nicht, daher kann ein Lauf nach Schritt 4 PASS, nach Runner-Gate FAIL sein | Eval 2026-06-20 | Schritt-4-Kriterien an Runner-Gate angleichen |
+| KI-5 | ✅ Resolved | ~~`dialog_naturalness`-Gate `≥ 0.70` vs. Mapping {0.33/0.67/1.0}: nur Stufe 3 passiert~~ → gelöst durch mains PROJ-31 (Gate auf `≥ 0.65` gesenkt, [runner.ts](../src/services/__evals__/interview/runner.ts)), integriert im Merge 2026-06-21. Lauf 2026-06-21: `dialog_naturalness 0.67 ≥ 0.65` → **PASS** | Eval 2026-06-20 | — (gelöst 2026-06-21) |
+| KI-6 | Low | `/eval-interview`-Skill Schritt-4 (manuelle PASS-Kriterien) und das automatische Runner-Gate (`runner.ts`) divergieren: die manuellen Kriterien kennen die `dialog_naturalness`-Gate-Bedingung nicht (Gate jetzt `≥ 0.65`), daher kann ein Lauf nach Schritt 4 PASS, nach Runner-Gate FAIL sein | Eval 2026-06-20 | Schritt-4-Kriterien an Runner-Gate angleichen |
 
-> KI-3 (dialog_naturalness-Parsing) und KI-4 (Skill-Doc) sind seit 2026-06-20 als PROJ-39 getrackt.
+> KI-3 (dialog_naturalness-Parsing) ✅ gelöst durch mains JSON-Judge (kein `Stufe: X`-Truncation mehr; Lauf 2026-06-21 echter 0.67-Score, kein Fallback). KI-4 (Skill-Doc) bleibt via PROJ-39 (SKILL.md-Fix). Beide waren als PROJ-39 getrackt; der Parser-Teil ist durch den Merge mit mains JSON-Variante supersediert.
 
 ## Build Order
 PROJ-1 → PROJ-2 → PROJ-3 & PROJ-4 (parallel) → PROJ-5 → PROJ-6

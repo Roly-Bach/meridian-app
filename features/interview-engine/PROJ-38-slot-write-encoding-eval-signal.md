@@ -128,6 +128,10 @@ N/A — Service-Layer-Bugfix ohne neues nutzersichtbares Verhalten. Regressionsa
 ### Beobachtung / Folgehinweis (kein PROJ-38-Bug)
 Der Eval-Lauf trägt weiterhin `FAIL`, aber allein wegen KI-3 (`dialog_naturalness 0.5 < Gate 0.7`, Judge-Parsing-Fallback). KI-3 ist in INDEX auf High eingestuft und der jetzt alleinige Blocker für ein grünes Eval-Label. Nächster empfohlener Schritt nach PROJ-38.
 
+## Merge-Integration (2026-06-21)
+
+Beim Merge von `origin/main` (PROJ-27/29/31) zeigte sich, dass `main` denselben Write-Side-Encoding-Fix (`p_value` als jsonb-Objekt statt `JSON.stringify`) parallel hat — **konvergent**, im Merge einmal behalten. Zusätzlich bringt `main` eine **Read-Side-Compat** (`parseJsonIfString` in [interviewSemantic.ts](../../src/services/interviewSemantic.ts)), die string-kodierte Altdaten beim Lesen parst und damit **KI-1** ohne Backfill löst (war als PROJ-38-Folge-Issue offen). Lauf 2026-06-21: `slot_coverage 1.0`, `schema_conformance_rate 1`.
+
 ## Deployment
 _To be added by /deploy_
 
