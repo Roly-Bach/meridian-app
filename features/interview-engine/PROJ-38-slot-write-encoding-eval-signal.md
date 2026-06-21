@@ -1,6 +1,6 @@
 # PROJ-38: Slot-Write-Encoding-Fix (Eval-Signal wiederherstellen)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-27

@@ -1,6 +1,6 @@
 # PROJ-35: interviewAgent.ts entkernen (Conversation-Signals-Modul + server-only-Naht)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22

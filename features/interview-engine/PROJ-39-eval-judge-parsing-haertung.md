@@ -1,6 +1,6 @@
 # PROJ-39: Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-31
