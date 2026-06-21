@@ -54,7 +54,7 @@
 | PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Roadmap | — | P2 | — | — |
 | PROJ-37 | Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
 | PROJ-38 | Slot-Write-Encoding-Fix (Eval-Signal wiederherstellen) | Revision | Interview Engine | PROJ-27 | Approved | [spec](interview-engine/PROJ-38-slot-write-encoding-eval-signal.md) | P1 | S | 0:0:0 |
-| PROJ-39 | Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth) | Revision | Interview Engine | PROJ-31 | Planned | [spec](interview-engine/PROJ-39-eval-judge-parsing-haertung.md) | P1 | S | — |
+| PROJ-39 | Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth) | Revision | Interview Engine | PROJ-31 | Approved | [spec](interview-engine/PROJ-39-eval-judge-parsing-haertung.md) | P1 | S | 0:0:1 |
 
 <!-- Add features above this line -->
 
@@ -68,6 +68,8 @@
 |----|----------|-------------|-------------|-------------|
 | KI-1 | Medium | Bestehende `step_tracker`-Records (seit ~2026-06-18) haben string-kodierte Slots; PROJ-38 ist fix-forward, kein Backfill | Eval 2026-06-19 | Backfill-Migration (Approval-Gate) |
 | KI-2 | Low | Knowledge-Object-Tool-Duplikation: mehrere Records pro distinktem Tool (19 Records / 4 Tools im buchhalter-Lauf) | Eval 2026-06-19 | Dedup auf KO-Ebene |
+| KI-5 | Medium | `dialog_naturalness`-Gate (`≥ 0.70`) vs. diskretes Mapping {Stufe1→0.33, Stufe2→0.67, Stufe3→1.0}: nur Stufe 3 passiert das Gate, ein gutes-aber-formelles Stufe-2-Gespräch scheitert um 0.03. Faktisch verlangt das Gate perfekte Natürlichkeit. Verifiziert im PROJ-39-Lauf (dialog_naturalness 0.67 → FAIL). Out of Scope von PROJ-39 (ändert Mapping/Schwelle bewusst nicht) | Eval 2026-06-20 (PROJ-39-Verifikation) | Gate-Schwelle/Mapping abstimmen ODER Agent-Natürlichkeit (Eröffnungsfloskel, vgl. PROJ-37) |
+| KI-6 | Low | `/eval-interview`-Skill Schritt-4 (manuelle PASS-Kriterien) und das automatische Runner-Gate (`runner.ts`) divergieren: die manuellen Kriterien kennen die `dialog_naturalness ≥ 0.70`-Bedingung nicht, daher kann ein Lauf nach Schritt 4 PASS, nach Runner-Gate FAIL sein | Eval 2026-06-20 | Schritt-4-Kriterien an Runner-Gate angleichen |
 
 > KI-3 (dialog_naturalness-Parsing) und KI-4 (Skill-Doc) sind seit 2026-06-20 als PROJ-39 getrackt.
 
