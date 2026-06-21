@@ -22,7 +22,9 @@ Rubrik:
 - Stufe 2 (angemessen): überwiegend natürliche Sprache, vereinzelte Mängel, Du-Form meist eingehalten
 - Stufe 3 (exzellent): durchgehend natürlich, höflich, keine generischen Floskeln, konsequente Du-Form, keine abrupten Themensprünge
 
-Schreibe deine Begründung in maximal 4 Sätzen (Beobachtungen zu Natürlichkeit, Du-Form, Floskeln, Themenübergängen, Grammatik). Die allerletzte Zeile deiner Antwort muss IMMER exakt lauten: \`Stufe: X\` (X = 1, 2 oder 3) — keine weiteren Zeilen danach.`
+WICHTIG: Antworte AUSSCHLIESSLICH mit einem JSON-Objekt. Kein Markdown, keine Überschriften, kein Fließtext davor oder danach.
+Exaktes Format (beginne direkt mit der öffnenden geschweifte Klammer):
+{"stufe": 2, "begruendung": "kurze Begründung in max 80 Wörtern"}`
 
 const MAX_SAMPLE_TURNS = 8
 
@@ -36,15 +38,28 @@ export interface DialogNaturalnessResult {
  * Returns { score, rationale } where score is 0.33 / 0.67 / 1.00.
  * Falls back to 0.5 with a warning on unexpected format.
  */
-const WORD_TO_DIGIT: Record<string, string> = { eins: '1', zwei: '2', drei: '3' }
-
 export function parseJudgeResponse(text: string): { score: number; rationale: string } {
-  // Find the last occurrence of "Stufe: X" — tolerant for:
-  //   - bold markdown (**Stufe: 2**)
-  //   - extra spaces/colon variants
-  //   - case-insensitive
-  //   - German number words (eins/zwei/drei) in addition to digits
-  const regex = /\*{0,2}Stufe\s*[:\s]\s*([123]|eins|zwei|drei)\*{0,2}/gi
+  // 1. Try JSON format: {"stufe": X, "begruendung": "..."}
+  try {
+    // Extract JSON object from text (judge may wrap it in markdown code fences)
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
+      const stufeRaw = parsed['stufe']
+      if (typeof stufeRaw === 'number' && stufeRaw >= 1 && stufeRaw <= 5) {
+        const stufe = Math.round(stufeRaw) as 1 | 2 | 3
+        const scoreMap: Record<number, number> = { 1: 0.33, 2: 0.67, 3: 1.0, 4: 1.0, 5: 1.0 }
+        const score = scoreMap[stufe] ?? 0.5
+        const rationale = typeof parsed['begruendung'] === 'string' ? parsed['begruendung'].trim() : ''
+        return { score, rationale }
+      }
+    }
+  } catch {
+    // JSON parse failed — fall through to regex
+  }
+
+  // 2. Fallback: regex for "Stufe: X" (tolerant for bold markdown, extra spaces, colon variants)
+  const regex = /\*{0,2}Stufe\s*[:\s]\s*([123])\*{0,2}/gi
   let lastMatch: RegExpExecArray | null = null
   let match: RegExpExecArray | null
   while ((match = regex.exec(text)) !== null) {
@@ -56,9 +71,7 @@ export function parseJudgeResponse(text: string): { score: number; rationale: st
     return { score: 0.5, rationale: text.trim() }
   }
 
-  const rawValue = lastMatch[1].toLowerCase()
-  const digitStr = WORD_TO_DIGIT[rawValue] ?? rawValue
-  const stufe = parseInt(digitStr, 10) as 1 | 2 | 3
+  const stufe = parseInt(lastMatch[1], 10) as 1 | 2 | 3
   const scoreMap: Record<1 | 2 | 3, number> = { 1: 0.33, 2: 0.67, 3: 1.0 }
   const score = scoreMap[stufe] ?? 0.5
 

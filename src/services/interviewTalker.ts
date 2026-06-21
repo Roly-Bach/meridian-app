@@ -54,6 +54,9 @@ export function detectNumberAnchoring(talkerText: string, suggestedQuestion: str
 const FILLER_PATTERNS = [
   /^Das ist (ein|eine|einer|eines|kein|keine|sehr|ein sehr)\b/i,
   /^Das klingt\b/i,
+  /^Das klingt nach\b/i,
+  /^Das ist ein wichtiger\b/i,
+  /^Das ist interessant\b/i,
   /^Das macht\b/i,
   /^Das sind\b/i,
   /^Das war\b/i,
@@ -61,11 +64,15 @@ const FILLER_PATTERNS = [
   /^Danke\b/i,
   /^Ich danke\b/i,
   /^Gut[,.]?\s/i,
+  /^Gut zu wissen\b/i,
   /^Schön[,.]?\s/i,
   /^Sehr gut\b/i,
   /^Interessant\b/i,
   /^Verstanden[,.]?\s/i,
+  /^Verstehe\b/i,
   /^Alles klar\b/i,
+  /^Das ist ein klassischer\b/i,
+  /^Das ist ein klarer\b/i,
 ]
 
 // F1c: question-template fillers — repetitive estimation prompts that tank

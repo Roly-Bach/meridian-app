@@ -70,27 +70,43 @@ export async function extractAndEmbed({
 
   // ── LLM Extraction ──────────────────────────────────────────────────────────
   let extractions: RawExtraction[] = []
-  try {
-    const { text } = await generateText({
-      model: resolveModel(process.env.EXTRACTION_MODEL),
-      system: EXTRACTION_SYSTEM_PROMPT,
-      prompt: buildExtractionPrompt(transcript),
-      maxOutputTokens: 2000,
-      experimental_telemetry: buildTraceMetadata('extraction.extractAndEmbed', {
-        interviewId,
-        model: process.env.EXTRACTION_MODEL ?? 'google/gemini-3.1-flash-lite',
-        environment: 'prod',
-        ...traceCtx,
-      }),
-    })
+  const extractionParams = {
+    model: resolveModel(process.env.EXTRACTION_MODEL),
+    system: EXTRACTION_SYSTEM_PROMPT,
+    prompt: buildExtractionPrompt(transcript),
+    maxOutputTokens: 2000,
+    experimental_telemetry: buildTraceMetadata('extraction.extractAndEmbed', {
+      interviewId,
+      model: process.env.EXTRACTION_MODEL ?? 'google/gemini-3.1-flash-lite',
+      environment: 'prod',
+      ...traceCtx,
+    }),
+  }
 
+  function parseExtractionText(text: string): RawExtraction[] {
     const cleaned = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
     const parsed = JSON.parse(cleaned)
     if (!Array.isArray(parsed)) throw new Error('Response is not an array')
-    extractions = parsed
-  } catch (err) {
-    console.error('[extraction] LLM extraction failed:', err)
-    return []
+    return parsed as RawExtraction[]
+  }
+
+  try {
+    const { text } = await generateText(extractionParams)
+    extractions = parseExtractionText(text)
+  } catch (firstErr) {
+    console.error('[extraction] LLM extraction failed (attempt 1):', firstErr)
+    // Retry once with explicit JSON-only instruction appended to prompt
+    try {
+      const { text: retryText } = await generateText({
+        ...extractionParams,
+        prompt: buildExtractionPrompt(transcript) + '\n\nWICHTIG: Antworte NUR mit dem JSON-Array. Beginne direkt mit [',
+      })
+      extractions = parseExtractionText(retryText)
+      console.log('[extraction] retry succeeded')
+    } catch (retryErr) {
+      console.error('[extraction] LLM extraction failed (attempt 2):', retryErr)
+      return []
+    }
   }
 
   if (extractions.length === 0) return []

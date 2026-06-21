@@ -47,33 +47,38 @@ describe('parseJudgeResponse — Stufe mapping', () => {
   })
 })
 
-describe('parseJudgeResponse — Zahlwort-Toleranz', () => {
-  it('Stufe: zwei → 0.67 (kein console.warn)', () => {
+describe('parseJudgeResponse — JSON-Format (Primärpfad, PROJ-31)', () => {
+  it('{"stufe": 2} → 0.67 (kein console.warn)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = parseJudgeResponse('Überwiegend natürliche Sprache.\n\nStufe: zwei')
+    const result = parseJudgeResponse('{"stufe": 2, "begruendung": "Überwiegend natürliche Sprache."}')
     expect(result.score).toBe(0.67)
+    expect(result.rationale).toBe('Überwiegend natürliche Sprache.')
     expect(warnSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 
-  it('Stufe: eins → 0.33 (kein console.warn)', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = parseJudgeResponse('Viele Floskeln erkannt.\n\nStufe: eins')
+  it('{"stufe": 1} → 0.33', () => {
+    const result = parseJudgeResponse('{"stufe": 1, "begruendung": "Viele Floskeln."}')
     expect(result.score).toBe(0.33)
-    expect(warnSpy).not.toHaveBeenCalled()
-    warnSpy.mockRestore()
   })
 
-  it('Stufe: drei → 1.0 (kein console.warn)', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = parseJudgeResponse('Exzellente Gesprächsqualität.\n\nStufe: drei')
+  it('{"stufe": 3} → 1.0', () => {
+    const result = parseJudgeResponse('{"stufe": 3, "begruendung": "Exzellent."}')
     expect(result.score).toBe(1.0)
-    expect(warnSpy).not.toHaveBeenCalled()
-    warnSpy.mockRestore()
   })
 
-  it('Zahlwort case-insensitive: "Stufe: ZWEI" → 0.67', () => {
-    const result = parseJudgeResponse('Angemessen.\nStufe: ZWEI')
+  it('JSON in Markdown-Fence wird geparst', () => {
+    const result = parseJudgeResponse('```json\n{"stufe": 2, "begruendung": "Angemessen."}\n```')
+    expect(result.score).toBe(0.67)
+  })
+
+  it('Stufe 4/5 (clamped) → 1.0', () => {
+    const result = parseJudgeResponse('{"stufe": 5, "begruendung": "Sehr gut."}')
+    expect(result.score).toBe(1.0)
+  })
+
+  it('Fallback auf Regex wenn kein JSON: "Stufe: 2" → 0.67', () => {
+    const result = parseJudgeResponse('Überwiegend natürliche Sprache.\n\nStufe: 2')
     expect(result.score).toBe(0.67)
   })
 })

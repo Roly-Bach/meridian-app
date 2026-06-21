@@ -105,6 +105,7 @@ Abschluss-Turn: kurze Verabschiedung.
 Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
 Spannen konkretisieren vor dem Erfassen: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser für einen typischen Fall?"
+FLOSKEL-VERBOT: Keine inhaltsleeren Bestätigungen vor der Frage. Verboten: 'Das klingt nach...', 'Das ist ein wichtiger...', 'Gut zu wissen', 'Verstehe', 'Das ist interessant', 'Das ist ein klassischer...'. Wenn du reagierst: spezifisch auf ein konkretes Detail aus der letzten Antwort — oder direkt die Frage ohne Vorsatz.
 </turn_format>
 
 <tools>
@@ -414,8 +415,21 @@ export function buildTools(
         const isPotenzial = (POTENZIAL_SLOT_NAMES as readonly string[]).includes(slot)
         const isTaziteArray = ((['tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel'] as const) as readonly string[]).includes(slot)
 
+        // F2: Parse NICHT-BEFUND string that quick-extract LLM may pass as raw value
+        // e.g. value="NICHT-BEFUND:unbekannt" with no nicht_befund_typ set → convert to structured mode
+        let resolvedValue = value
+        let resolvedNichtBefundTyp = nicht_befund_typ
+        if (typeof value === 'string' && value.startsWith('NICHT-BEFUND:')) {
+          const parsed = value.split(':')[1] as 'unbekannt' | 'nicht_zutreffend' | 'verweigert' | undefined
+          const validTypes = ['unbekannt', 'nicht_zutreffend', 'verweigert'] as const
+          if (parsed !== undefined && (validTypes as readonly string[]).includes(parsed)) {
+            resolvedValue = undefined
+            resolvedNichtBefundTyp = parsed as 'unbekannt' | 'nicht_zutreffend' | 'verweigert'
+          }
+        }
+
         // PROJ-28/BL-E2.1 — Nicht-Befund mode: only for potenzial slots, no value required
-        const isNichtBefundMode = nicht_befund_typ !== undefined && value === undefined
+        const isNichtBefundMode = resolvedNichtBefundTyp !== undefined && resolvedValue === undefined
         if (isNichtBefundMode) {
           if (!isPotenzial) {
             return { success: false, error: `nicht_befund_typ ist nur für potenzial-Slots gültig (frequency_per_month, duration_minutes, error_rate_percent, media_breaks). Für tazite-Slots: Slot leer lassen.` }
@@ -530,10 +544,10 @@ export function buildTools(
                   value: null,
                   quote: verbatimQuote,
                   writeSource: writeSource as WriteSource,
-                  nicht_befund_typ: nicht_befund_typ!,
+                  nicht_befund_typ: resolvedNichtBefundTyp!,
                 } as SlotValue
               : {
-                  value: value!,
+                  value: resolvedValue!,
                   quote: verbatimQuote,
                   writeSource: writeSource as WriteSource,
                   ...(confidence !== undefined ? { confidence } : {}),
@@ -558,7 +572,7 @@ export function buildTools(
             }
           } else if (isTaziteArray) {
             newSlotValue = {
-              value: value as string[],
+              value: resolvedValue as string[],
               quote: verbatimQuote,
               nicht_befund_typ: null,
               ...(confidence !== undefined ? { confidence } : {}),
@@ -581,7 +595,7 @@ export function buildTools(
           } else {
             // entscheidungslogik (TaziteSlot)
             newSlotValue = {
-              value: value as string,
+              value: resolvedValue as string,
               quote: verbatimQuote,
               nicht_befund_typ: null,
               ...(confidence !== undefined ? { confidence } : {}),
@@ -634,7 +648,7 @@ export function buildTools(
             source: writeSource,
             stepTitle: step.title,
             slot,
-            value: isNichtBefundMode ? `NICHT-BEFUND:${nicht_befund_typ}` : value,
+            value: isNichtBefundMode ? `NICHT-BEFUND:${resolvedNichtBefundTyp}` : resolvedValue,
             prevValue: prevSlotValue?.value,
             overwrite: isOverwrite,
             sourceTurn: source_turn ?? null,
@@ -646,7 +660,7 @@ export function buildTools(
             step_id: step.id,
             step_title: step.title,
             slot,
-            ...(isNichtBefundMode ? { nicht_befund_typ } : { value }),
+            ...(isNichtBefundMode ? { nicht_befund_typ: resolvedNichtBefundTyp } : { value: resolvedValue }),
             source_turn: source_turn ?? null,
           }
         } catch (err) {

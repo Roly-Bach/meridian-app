@@ -1,0 +1,2015 @@
+{
+  "evalRunId": "c89c3c86-7b1c-43b8-8994-4c5d35fa825f",
+  "interviewId": "09f8f929-c856-4c90-aa1e-d4ee081468f4",
+  "model": "google/gemini-3.5-flash",
+  "persona": "buchhalter",
+  "status": "completed",
+  "turns": [
+    {
+      "turnNumber": 1,
+      "userInput": "Mein Arbeitsalltag ist geprägt von einer sorgfältigen buchhalterischen Überwachung, die sich primär auf den Abgleich offener Posten und die gewissenhafte Erfassung von Rückstellungen konzentriert. Dabei stelle ich sicher, dass alle relevanten Daten für eine fundierte Übergabe an das Controlling korrekt aufbereitet sind. Besonders intensiv gestaltet sich dabei die Phase zum Ende des Monats, in der die termingerechte Fertigstellung unserer Abschlüsse meine volle Aufmerksamkeit beansprucht.",
+      "agentText": "Hallo Andreas. Schön, dass du dir die Zeit nimmst. Unser Ziel heute ist es, dein praktisches Prozesswissen strukturiert zu dokumentieren, um die Abläufe in deiner Abteilung besser zu verstehen. Alles, was wir besprechen, wird vertraulich behandelt.\n\nDu hast bereits den Abgleich offener Posten und die Erfassung von Rückstellungen genannt. Welcher dieser Abläufe nimmt in deinem Arbeitsalltag die meiste Zeit in Anspruch, und wie sieht dabei dein erster Schritt aus?",
+      "phase": "intro",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 2,
+      "userInput": "Beim Monatsabschluss stellt die enorme Arbeitsbelastung gegen Ende der Periode die größte zeitliche Beanspruchung dar. Mein erster Schritt besteht darin, sämtliche eingegangenen Rechnungen zu sichten, die über elektronische Post eingehen. Dabei kontrolliere ich akribisch die Lieferantendaten, den Rechnungsbetrag sowie den Leistungszeitraum, bevor ich die Unterlagen für die weitere Bearbeitung aufbereite.",
+      "agentText": "Verstanden, wir starten mit der Sichtung und Prüfung der eingehenden Rechnungen.\n\nWie genau gehst du bei dieser Prüfung vor, nachdem du die Rechnungen per E-Mail erhalten hast?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 3,
+      "userInput": "Im Rahmen des Monatsabschlusses überführe ich die geprüften Rechnungsdaten nach der inhaltlichen Kontrolle in unser Buchhaltungssystem. Sobald die Verbuchung erfolgt ist, archiviere ich die Belege elektronisch, um eine lückenlose Dokumentation zu gewährleisten. Sollte dabei eine bestimmte Wertgrenze überschritten werden, leite ich den Vorgang proaktiv an die zuständigen Stellen weiter, um die notwendige zusätzliche Genehmigung einzuholen.",
+      "agentText": "Wir halten als ersten Schritt die Sichtung und inhaltliche Prüfung der eingehenden Rechnungen fest.\n\nWie viele dieser Rechnungen prüfst du im Rahmen eines typischen Monatsabschlusses?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 4,
+      "userInput": "Wenn ich die Zahlen sehe, bearbeite ich im Zuge des Monatsabschlusses eine monatliche Menge von rund 80 bis 100 Rechnungen. Diese Arbeit erstreckt sich dabei über eine intensive Phase von zwei bis drei Tagen. Für die Verbuchung und Archivierung nutze ich hierbei die Systeme SAP FI sowie DocuWare.",
+      "agentText": "Das hilft mir sehr, um die Dimensionen zu verstehen.\n\nWie viel Zeit benötigst du im Schnitt für die Prüfung einer einzelnen Rechnung, bevor sie verbucht wird?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 5,
+      "userInput": "Grundsätzlich gilt für den gesamten Prozess der Rechnungsprüfung, dass ich für die Bearbeitung von Rechnungen ohne Bestellbezug einen zeitlichen Aufwand von etwa einer Stunde pro Woche einplane, um die notwendigen Informationen in den verschiedenen Systemen manuell zu recherchieren. Dabei ist zu berücksichtigen, dass bei Unstimmigkeiten, wie beispielsweise fehlerhaften Mehrwertsteuersätzen oder fehlenden Angaben zu Kostenstellen, eine manuelle Nachpflege über externe Listen erforderlich ist, was den Zeitaufwand pro Einzelfall beeinflusst. In diesen Fällen greife ich neben den regulären Systemen zur Dokumentenverwaltung und Buchhaltung auch auf mein Tabellenkalkulationsprogramm zurück, um die Ausnahme ordnungsgemäß abzubilden.",
+      "agentText": "Das ist ein wichtiger Sonderfall. \n\nWie häufig kommt es vor, dass Rechnungen solche Unstimmigkeiten aufweisen oder ohne Bestellbezug bei dir eingehen?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 6,
+      "userInput": "Bei der Rechnungsprüfung zeigen etwa fünf Prozent der Dokumente Unstimmigkeiten, beispielsweise durch fehlerhafte Mehrwertsteuersätze oder fehlende Kostenstellen, auf. Diese Ausnahmefälle erfordern eine manuelle Nachpflege, wobei Rechnungen ohne Bestellbezug einen zusätzlichen wöchentlichen Rechercheaufwand von rund einer Stunde in den eingesetzten Systemen verursachen. Insgesamt verarbeite ich bei einer monatlichen Menge von achtzig bis einhundert Rechnungen diese Unregelmäßigkeiten durch manuelle Korrekturen in meinen Listen.",
+      "agentText": "Verstanden, das betrifft also etwa fünf Prozent der Rechnungen.\n\nWie viel Zeit benötigst du im Durchschnitt für die Prüfung und Erfassung einer fehlerfreien Standardrechnung?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 7,
+      "userInput": "Für die Bearbeitung einer fehlerfreien Standardrechnung kann ich keine pauschale Zeitangabe nennen, da der Aufwand stark von der Vollständigkeit der gelieferten Daten abhängt. Mein Fokus liegt hierbei stets auf einer gewissenhaften Kontrolle der Lieferantenangaben und der korrekten Zuordnung der Leistungszeiträume. Erst nach dieser sorgfältigen Prüfung erfolgt die abschließende Verbuchung in das System und die revisionssichere Archivierung der Unterlagen.",
+      "agentText": "Eher wenige Minuten oder eher eine Stunde pro Standardrechnung?",
+      "phase": "process_loop",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Rechnungsprüfung und Verbuchung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Abstimmung offener Posten"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Erfassung von Rückstellungen"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "monatsabschluss"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "frequency_per_month",
+            "value": 90,
+            "evidence_span": "80 bis 100",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 80 bis 100 Rechnungen",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "duration_minutes",
+            "value": 1200,
+            "evidence_span": "zwei bis drei Tagen",
+            "confidence": "estimate",
+            "qualifier": "Spanne: zwei bis drei Tage",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "error_rate_percent",
+            "value": 5,
+            "evidence_span": "fünf Prozent",
+            "confidence": "confirmed",
+            "source_turn": 6
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "hilfsmittel",
+            "value": [
+              "SAP FI",
+              "DocuWare"
+            ],
+            "evidence_span": "SAP FI sowie DocuWare",
+            "confidence": "confirmed",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "monatsabschluss",
+            "rolle": "Buchhalter",
+            "organisationseinheit": "Finanzbuchhaltung",
+            "systeme": [
+              "SAP FI",
+              "DocuWare"
+            ],
+            "evidence_span": "SAP FI sowie DocuWare",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "monatsabschluss",
+            "process_steps": [
+              "Sichtung eingehender Rechnungen per E-Mail",
+              "Kontrolle von Lieferantendaten, Rechnungsbetrag und Leistungszeitraum",
+              "Verbuchung im Buchhaltungssystem SAP FI",
+              "Elektronische Archivierung in DocuWare",
+              "Proaktive Weiterleitung bei Wertgrenzenüberschreitung zur Genehmigung"
+            ],
+            "friction_points": [
+              "Unstimmigkeiten bei Rechnungen (fehlerhafte Mehrwertsteuersätze, fehlende Kostenstellen) erfordern manuelle Nachpflege über externe Listen"
+            ],
+            "friction_tools": [
+              "Tabellenkalkulationsprogramm"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "monatsabschluss"
+            ],
+            "open": [
+              "Abgleich offener Posten",
+              "Erfassung von Rückstellungen"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "monatsabschluss: standard_duration",
+            "suggested_question": "Wie viel Zeit verbringst du durchschnittlich mit der Bearbeitung einer einzelnen, fehlerfreien Standardrechnung, wenn du die verschiedenen Schritte von der ersten Sichtung bis zur Verbuchung zusammennimmst?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "frequency_per_month",
+            "value": 90,
+            "evidence_quote": "bearbeite ich im Zuge des Monatsabschlusses eine monatliche Menge von rund 80 bis 100 Rechnungen",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 80 bis 100 Rechnungen",
+            "source_turn": 3
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "duration_minutes",
+            "value": 1200,
+            "evidence_quote": "Diese Arbeit erstreckt sich dabei über eine intensive Phase von zwei bis drei Tagen",
+            "confidence": "estimate",
+            "qualifier": "Spanne: zwei bis drei Tage",
+            "source_turn": 3
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "error_rate_percent",
+            "value": 5,
+            "evidence_quote": "Bei der Rechnungsprüfung zeigen etwa fünf Prozent der Dokumente Unstimmigkeiten",
+            "confidence": "confirmed",
+            "source_turn": 5
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "hilfsmittel",
+            "value": [
+              "SAP FI",
+              "DocuWare"
+            ],
+            "evidence_quote": "Für die Verbuchung und Archivierung nutze ich hierbei die Systeme SAP FI sowie DocuWare",
+            "confidence": "confirmed",
+            "source_turn": 3
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "monatsabschluss",
+            "rolle": "Buchhalter",
+            "organisationseinheit": "Finanzbuchhaltung",
+            "systeme": [
+              "SAP FI",
+              "DocuWare"
+            ],
+            "evidence_quote": "Für die Verbuchung und Archivierung nutze ich hierbei die Systeme SAP FI sowie DocuWare",
+            "source_turn": 3
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "monatsabschluss: standard_duration",
+            "suggested_question": "Wie viel Zeit verbringst du durchschnittlich mit der Bearbeitung einer einzelnen, fehlerfreien Standardrechnung, wenn du die verschiedenen Schritte von der ersten Sichtung bis zur Verbuchung zusammennimmst?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 8,
+      "userInput": "Die Bearbeitung einer Standardrechnung liegt deutlich näher an wenigen Minuten als an einer Stunde, da der Prozess bei vollständigen Informationen zügig abläuft. Dennoch muss ich bei jedem Beleg sicherstellen, dass sämtliche Stammdaten und buchhalterischen Zuordnungen präzise sind, um die Qualität der Datenbasis im System zu gewährleisten. Der Zeitaufwand variiert daher je nachdem, wie schnell ich die entsprechenden Informationen in den Belegen validieren kann.",
+      "agentText": "Ok, das passt so.\n\nDu hast erwähnt, dass du Daten aus den E-Mails in SAP FI überträgst und bei Fehlern auch Excel-Listen nutzt. Wie genau kommen die Daten von einem System in das andere – tippst du diese manuell ab oder gibt es dafür Schnittstellen?",
+      "phase": "walkthrough_step",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 9,
+      "userInput": "Die Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell, da ich die Informationen aus den E-Mail-Anhängen direkt in das Buchhaltungssystem eingebe. Für die notwendige Nachpflege von Ausnahmefällen oder Unstimmigkeiten erfasse ich die entsprechenden Daten ergänzend in meinen Tabellenkalkulationslisten. Diese manuelle Vorgehensweise gewährleistet für mich eine präzise Kontrolle jedes einzelnen Datensatzes vor der finalen Verbuchung.",
+      "agentText": "Du hast vorhin erwähnt, dass du Rechnungen ab einer bestimmten Wertgrenze proaktiv zur Genehmigung weiterleitest. \n\nAb welchem Betrag greift diese Regelung, und wie entscheidest du, an wen die Rechnung zur Freigabe geht?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "media_breaks",
+            "value": [
+              "E-Mail-Anhang zu SAP FI (manuell abgetippt)",
+              "SAP FI zu Tabellenkalkulation (manuelle Nachpflege)"
+            ],
+            "evidence_span": "Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell",
+            "confidence": "confirmed",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Datenquellen und Systeme",
+              "Medienbrüche",
+              "Mengengerüst und Zeiten (Schätzung)"
+            ],
+            "open": [
+              "Freigabegrenzen und Entscheidungslogik",
+              "Ausnahmen und Fehlerbehandlung"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Freigabegrenzen und Entscheidungslogik (Wertgrenzen für Weiterleitung)",
+            "suggested_question": "Ab welchem Betrag leitest du Rechnungen zur Freigabe weiter, und wer ist für diese Freigabe zuständig?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "media_breaks",
+            "value": [
+              "E-Mail-Anhang zu SAP FI (manuell abgetippt)",
+              "SAP FI zu Tabellenkalkulation (manuelle Nachpflege)"
+            ],
+            "evidence_span": "Die Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell",
+            "confidence": "confirmed",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "media_breaks",
+            "value": [
+              "E-Mail-Anhang zu SAP FI (manuell abgetippt)",
+              "SAP FI zu Tabellenkalkulation (manuelle Nachpflege)"
+            ],
+            "evidence_quote": "Die Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell, da ich die Informationen aus den E-Mail-Anhängen direkt in das Buchhaltungssystem eingebe.",
+            "confidence": "confirmed",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "media_breaks",
+            "value": 2,
+            "evidence_quote": "Die Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell, da ich die Informationen aus den E-Mail-Anhängen direkt in das Buchhaltungssystem eingebe.",
+            "confidence": "confirmed",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Freigabegrenzen und Entscheidungslogik (Wertgrenzen für Weiterleitung)",
+            "suggested_question": "Ab welchem Betrag leitest du Rechnungen zur Freigabe weiter, und wer ist für diese Freigabe zuständig?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 10,
+      "userInput": "Für den Monatsabschluss gilt eine interne Richtlinie, nach der Rechnungen mit einem Betrag ab 5.000 EUR einer zusätzlichen Genehmigung unterliegen. Die Auswahl des richtigen Ansprechpartners für diese Freigabe leite ich aus dem jeweiligen Sachverhalt sowie der dokumentierten Kostenstelle ab. Sobald ich diese Prüfung vorgenommen habe, stelle ich den Prozess sicher, indem ich den Beleg zur weiteren zeichnungsberechtigten Instanz weiterreiche.",
+      "agentText": "Du hast vorhin erwähnt, dass sich diese Arbeit über eine intensive Phase von zwei bis drei Tagen erstreckt, was umgerechnet etwa 1.200 bis 1.800 Minuten entspricht – gleichzeitig sprichst du bei den Standardrechnungen von nur wenigen Minuten pro Beleg. Wie erklärt sich dieser Unterschied im zeitlichen Gesamtaufwand?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 11,
+      "userInput": "Der Zeitaufwand während des Monatsabschlusses umfasst weit mehr als die bloße Erfassung einzelner Rechnungen, da die intensive Phase auch den Abgleich sämtlicher offener Posten sowie die sorgfältige Erfassung der Rückstellungen beinhaltet. Zudem fließt ein erheblicher Anteil der Zeit in die Kommunikation mit dem Controlling, um eine konsistente Datenbasis für den gesamten Abschluss zu gewährleisten. Die reine Erfassungszeit pro Beleg bildet somit nur einen Teilaspekt dieses komplexen Prozesses ab, der durch die notwendige Vorbereitung und die abschließende Abstimmung der Konten geprägt ist.",
+      "agentText": "Das macht den Gesamtzusammenhang verständlich. Du hast vorhin erwähnt, dass du bei der Prüfung besonders auf Lieferantendaten, Leistungszeiträume und die korrekte Zuordnung der Kostenstellen achtest.\n\nWorauf kommt es bei dieser Zuordnung und Abstimmung aus deiner Erfahrung heraus besonders an – was ist dabei das nötige Fingerspitzengefühl, das man nicht einfach in einer Anleitung nachlesen kann?",
+      "phase": "walkthrough_step",
+      "toolCalls": [
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "monatsabschluss",
+            "process_steps": [
+              "Rechnungen sichten und inhaltlich prüfen (Lieferantendaten, Betrag, Leistungszeitraum)",
+              "Verbuchung in SAP FI und Archivierung in DocuWare",
+              "Freigabeprozess anstoßen ab 5.000 EUR",
+              "Abgleich offener Posten",
+              "Erfassung von Rückstellungen",
+              "Kommunikation mit dem Controlling"
+            ],
+            "friction_points": [
+              "Manuelle Übertragung aus E-Mail-Anhängen",
+              "Manuelle Nachpflege fehlerhafter Rechnungen via Excel"
+            ],
+            "friction_tools": [
+              "Excel"
+            ]
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "duration_minutes",
+            "value": 1200,
+            "evidence_span": "zwei bis drei Tagen",
+            "confidence": "estimate",
+            "source_turn": 7
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "frequency_per_month",
+            "value": 90,
+            "evidence_span": "80 bis 100 Rechnungen",
+            "confidence": "estimate",
+            "source_turn": 7
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "error_rate_percent",
+            "value": 5,
+            "evidence_span": "etwa fünf Prozent",
+            "confidence": "confirmed",
+            "source_turn": 11
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "media_breaks",
+            "value": 1,
+            "evidence_span": "manuell",
+            "confidence": "confirmed",
+            "source_turn": 17
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Häufigkeit und Dauer des Monatsabschlusses",
+              "Systeme und Medienbrüche",
+              "Fehlerrate und Freigabegrenzen"
+            ],
+            "open": [
+              "Implizites Wissen und Fingerspitzengefühl bei der Kontenzuordnung",
+              "Abstimmungsprozess mit dem Controlling"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "tazite_cues",
+            "suggested_question": "Worauf achtest du besonders, wenn du die Zuordnungen vornimmst, um Fehler im Vorfeld zu vermeiden?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "frequency_per_month",
+            "value": 90,
+            "evidence_quote": "bearbeite ich im Zuge des Monatsabschlusses eine monatliche Menge von rund 80 bis 100 Rechnungen",
+            "confidence": "estimate",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "duration_minutes",
+            "value": 1200,
+            "evidence_quote": "Diese Arbeit erstreckt sich dabei über eine intensive Phase von zwei bis drei Tagen",
+            "confidence": "estimate",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "error_rate_percent",
+            "value": 5,
+            "evidence_quote": "Bei der Rechnungsprüfung zeigen etwa fünf Prozent der Dokumente Unstimmigkeiten",
+            "confidence": "confirmed",
+            "source_turn": 6
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "monatsabschluss",
+            "slot": "media_breaks",
+            "value": 1,
+            "evidence_quote": "Die Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell",
+            "confidence": "confirmed",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "tazite_cues",
+            "suggested_question": "Worauf achtest du besonders, wenn du die Zuordnungen vornimmst, um Fehler im Vorfeld zu vermeiden?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 12,
+      "userInput": "Bei der Zuordnung ist es entscheidend, ein tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen zu entwickeln, um Unstimmigkeiten bereits im Ansatz zu erkennen. Man muss ein Gespür dafür entwickeln, welche Leistungszeiträume plausibel sind und bei welchen Buchungen eine Rücksprache mit den Fachabteilungen zwingend erforderlich ist. Diese Erfahrung ermöglicht es mir, auch bei unvollständigen Angaben die korrekte Zuordnung vorzunehmen, die in reinen Arbeitsanweisungen so nicht abbildbar ist.",
+      "agentText": "Das ist ein wertvoller Einblick in das nötige Fachwissen.\n\nNachdem die Rechnungen verbucht und freigegeben sind, folgt der Abgleich der offenen Posten. Wie gehst du bei diesem Abgleich konkret vor?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "tazite_cues",
+            "value": [
+              "Gespür dafür entwickeln, welche Leistungszeiträume plausibel sind",
+              "tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen"
+            ],
+            "evidence_span": "Gespür dafür entwickeln, welche Leistungszeiträume plausibel sind",
+            "confidence": "confirmed",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "tazite_cues",
+            "value": [
+              "Gespür dafür entwickeln, welche Leistungszeiträume plausibel sind",
+              "tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen"
+            ],
+            "evidence_span": "Struktur der Kostenstellen",
+            "confidence": "confirmed",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "tazite_cues",
+            "value": [
+              "Gespür dafür entwickeln, welche Leistungszeiträume plausibel sind",
+              "tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen"
+            ],
+            "evidence_span": "Struktur der Kostenstellen",
+            "confidence": "confirmed",
+            "source_turn": 12
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "monatsabschluss",
+            "slot": "tazite_cues",
+            "value": [
+              "Gespür dafür entwickeln, welche Leistungszeiträume plausibel sind",
+              "tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen"
+            ],
+            "evidence_quote": "Bei der Zuordnung ist es entscheidend, ein tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen zu entwickeln, um Unstimmigkeiten bereits im Ansatz zu erkennen.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Eingangsprüfung",
+              "Rechnungsprüfung",
+              "Kostenstellenzuordnung"
+            ],
+            "open": [
+              "Abgleich offener Posten",
+              "Rückstellungen"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Abgleich offener Posten",
+            "suggested_question": "Welche Schritte führst du nacheinander aus, wenn du die offenen Posten abgleichst?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 13,
+      "userInput": "Für den Abgleich der offenen Posten gehe ich systematisch vor, indem ich die in SAP FI verbuchten Beträge mit den tatsächlich eingegangenen Zahlungen gegenüberstelle. Ich prüfe dabei fortlaufend, ob die Buchungssätze in der Buchhaltung mit den entsprechenden Kontobewegungen übereinstimmen und korrigiere etwaige Differenzen zeitnah. Dieser Prozess bildet für mich das Fundament, um sicherzustellen, dass unser Forderungsbestand präzise die aktuelle finanzielle Situation widerspiegelt, bevor der Monat final abgeschlossen wird.",
+      "agentText": "Verstanden. Wir betrachten nun diesen Abgleich der offenen Posten genauer.\n\nWie viel Zeit benötigst du für diesen Abgleich der offenen Posten im Rahmen eines Monatsabschlusses insgesamt?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 14,
+      "userInput": "In Bezug auf diesen Prozess ist es schwierig, eine exakte Minutenzahl für den Abgleich der offenen Posten isoliert zu benennen, da er untrennbar mit den anderen Aufgaben des Monatsabschlusses verwoben ist. Er bildet einen wesentlichen Bestandteil der zwei- bis dreitägigen intensiven Arbeitsphase, in der ich kontinuierlich zwischen der Kontrolle der Buchungen und der Abstimmung der Konten wechsle. Erst wenn alle Posten in SAP FI bereinigt sind, kann ich die Daten mit der notwendigen Sorgfalt an das Controlling übergeben.",
+      "agentText": "Eher wenige Stunden oder eher ein ganzer Arbeitstag für diesen Abgleich?",
+      "phase": "walkthrough_step",
+      "toolCalls": [
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "monatsabschluss_ueberblick",
+              "rechnungsprüfung_prozess",
+              "rechnungsprüfung_mengen",
+              "rechnungsprüfung_systeme",
+              "freigabegrenzen"
+            ],
+            "open": [
+              "abgleich_offene_posten_details",
+              "rückstellungen_erfassung",
+              "controlling_übergabe"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Dauer des Abgleichs der offenen Posten (Monatsabschluss)",
+            "suggested_question": "Könntest du den zeitlichen Aufwand für den Abgleich der offenen Posten im Verhältnis zu den gesamten zwei bis drei Tagen des Monatsabschlusses grob einordnen?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 15,
+      "userInput": "Da der Abgleich der offenen Posten ein integraler Bestandteil des gesamten Abschlusses ist, nimmt dieser Vorgang zeitlich betrachtet durchaus einen signifikanten Teil eines Arbeitstages in Anspruch. Die Dauer variiert dabei stark je nach Komplexität der anstehenden Buchungen und der Anzahl der notwendigen Abstimmungen mit den internen Systemen. Ich wende für diese Tätigkeit daher üblicherweise mehrere Stunden auf, um eine saubere Datenbasis für die finale Übergabe an das Controlling zu gewährleisten.",
+      "agentText": "Lassen wir das so stehen.\n\nWie läuft die Erfassung der Rückstellungen ab, nachdem der Abgleich der offenen Posten erledigt ist?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Erfassung der Rückstellungen"
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Monatsabschluss: Erfassung der Rückstellungen",
+            "process_steps": [
+              "Sichtung der Rückstellungsbedarfe"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Rechnungsprüfung",
+              "Abstimmung offener Posten"
+            ],
+            "open": [
+              "Erfassung der Rückstellungen"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Monatsabschluss: Erfassung der Rückstellungen",
+            "suggested_question": "Wie läuft die Erfassung der Rückstellungen konkret ab und welche Systeme nutzt du dafür?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 16,
+      "userInput": "Wenn ich die Rückstellungen erfasse, prüfe ich zunächst, für welche noch nicht abgerechneten Leistungen aus dem vergangenen Monat ein Aufwand zu erwarten ist. Ich identifiziere diese Positionen auf Basis vorliegender Verträge oder Lieferantenhinweise und leite daraus die notwendigen Buchungssätze für SAP FI ab. Abschließend stimme ich diese vorläufigen Beträge noch einmal mit dem Controlling ab, um sicherzustellen, dass die finanzielle Bewertung korrekt in den Monatsabschluss einfließt.",
+      "agentText": "Verstanden, das ist der detaillierte Ablauf für die Rückstellungen.\n\nWie viel Zeit nimmst du dir üblicherweise für diesen gesamten Abstimmungs- und Erfassungsprozess der Rückstellungen pro Monatsabschluss?",
+      "phase": "process_loop",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Rechnungsprüfung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Offene-Posten-Abgleich"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Rückstellungserfassung"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Monatsabschluss: Rechnungsprüfung",
+            "slot": "hilfsmittel",
+            "value": [
+              "SAP FI",
+              "DocuWare"
+            ],
+            "evidence_span": "SAP FI sowie DocuWare",
+            "confidence": "confirmed",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Monatsabschluss: Offene-Posten-Abgleich",
+            "slot": "hilfsmittel",
+            "value": [
+              "SAP FI"
+            ],
+            "evidence_span": "SAP FI",
+            "confidence": "confirmed",
+            "source_turn": 11
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Monatsabschluss: Rückstellungserfassung",
+            "slot": "hilfsmittel",
+            "value": [
+              "SAP FI"
+            ],
+            "evidence_span": "SAP FI",
+            "confidence": "confirmed",
+            "source_turn": 14
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Rechnungsprüfung: Mengen & Systeme",
+              "Rechnungsprüfung: Fehler & Ausnahmen",
+              "Rechnungsprüfung: Freigabegrenzen",
+              "Offene-Posten-Abgleich: Ablauf & Aufwand"
+            ],
+            "open": [
+              "Rückstellungserfassung: Aufwand",
+              "Rückstellungserfassung: Systeme & Details"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Aufwand der Rückstellungserfassung (Monatsabschluss: Rückstellungserfassung)",
+            "suggested_question": "Wie viel Zeit nimmst du dir üblicherweise für diesen gesamten Abstimmungs- und Erfassungsprozess der Rückstellungen pro Monatsabschluss?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 17,
+      "userInput": "Für den Prozess der Rückstellungen plane ich im Rahmen der zwei- bis dreitägigen Abschlussphase ebenfalls einen signifikanten Zeitanteil ein, da hier die Abstimmung mit dem Controlling besonders präzise erfolgen muss. Es lässt sich hierbei schwer eine isolierte Stundenanzahl angeben, da die Erfassung direkt mit der Prüfung ausstehender Leistungen und der anschließenden buchhalterischen Abbildung in SAP FI korrespondiert. Insgesamt betrachtet ist dieser Vorgang jedoch ein wesentlicher Bestandteil, der maßgeblich dazu beiträgt, den Zeitrahmen während der intensiven Abschlussphase auszufüllen.",
+      "agentText": "Eher ein bis zwei Stunden oder eher ein ganzer Arbeitstag für die Rückstellungen?",
+      "phase": "walkthrough_step",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 18,
+      "userInput": "Bei der Erfassung der Rückstellungen bewege ich mich zeitlich eher in Richtung eines ganzen Arbeitstages, da dieser Prozess eine sehr gründliche Analyse der Leistungsstände sowie eine enge Abstimmung mit dem Controlling erfordert. Es genügt nicht, lediglich Beträge einzugeben; vielmehr ist eine sorgfältige inhaltliche Prüfung der Verträge und Leistungen die Grundvoraussetzung für eine korrekte Abbildung. Aufgrund dieser erforderlichen Detailtiefe beansprucht dieser Arbeitsschritt einen erheblichen Teil der für den Abschluss vorgesehenen Zeitressourcen.",
+      "agentText": "Halten wir das offen.\n\nDamit haben wir die Rechnungsprüfung, den Abgleich der offenen Posten und die Rückstellungen erfasst. Baust du diese drei Schritte beim Monatsabschluss immer in genau dieser Reihenfolge nacheinander auf, oder laufen diese teilweise parallel?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Rechnungsprüfung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Abstimmung offener Posten"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Monatsabschluss: Erfassung von Rückstellungen"
+          }
+        },
+        {
+          "toolName": "record_dependency",
+          "args": {
+            "source_step_id": "S001",
+            "target_step_id": "S001",
+            "richtung": "depends_on",
+            "typ": "voraussetzung",
+            "beschreibung": "Rechnungsprüfung schafft die Datenbasis für den Abgleich der offenen Posten"
+          }
+        },
+        {
+          "toolName": "record_dependency",
+          "args": {
+            "source_step_id": "S001",
+            "beschreibung": "Die Buchungen aus der Rechnungsprüfung und die erfassten Leistungen sind die Grundlage für die Rückstellungen",
+            "nicht_befund_typ": "nicht_zutreffend"
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Häufigkeit und Menge der Rechnungen",
+              "Dauer und Aufwand der Standardprüfung",
+              "Systeme und Schnittstellen (SAP FI, DocuWare, Excel, E-Mails)",
+              "Entscheidungsregeln (Wertgrenzen, Freigaben)",
+              "Sonderfälle und Ausnahmen (Fehlerquote, manuelle Nachpflege)",
+              "Abgleich offener Posten und Rückstellungen"
+            ],
+            "open": []
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Wrap-up und Verabschiedung",
+            "suggested_question": "Vielen Dank für deine umfassenden Beschreibungen des Monatsabschlusses und der dazugehörigen Schritte. Gibt es aus deiner Sicht noch einen wichtigen Aspekt oder ein Detail, das wir bisher nicht besprochen haben?",
+            "wrap_up_question_asked": true
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 19,
+      "userInput": "Bei der Abwicklung des Monatsabschlusses gehen diese Tätigkeiten häufig fließend ineinander über, da sich die einzelnen Prozessschritte gegenseitig beeinflussen. Während ich beispielsweise noch offene Posten bereinige, können durch die laufende Kontrolle bereits Rückstellungsbedarfe identifiziert werden, die ich unmittelbar im System vermerke. Diese parallele Arbeitsweise ist erforderlich, um die intensive Phase von zwei bis drei Tagen effizient zu nutzen und die Daten für das Controlling zeitgerecht bereitzustellen.",
+      "agentText": "Vielen Dank, Andreas. Damit haben wir alle wesentlichen Schritte deines Prozesses zum Monatsabschluss – von der Rechnungsprüfung über den Abgleich offener Posten bis hin zu den Rückstellungen – sehr präzise und strukturiert erfasst. Deine Angaben helfen uns enorm weiter. Ich wünsche dir einen schönen Tag und weiterhin viel Erfolg bei deiner Arbeit.",
+      "phase": "coverage_check",
+      "toolCalls": []
+    }
+  ],
+  "finalStepTracker": [
+    {
+      "id": "S001",
+      "slots": {
+        "inputs": {
+          "quote": "Die Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell, da ich die Informationen aus den E-Mail-Anhängen direkt in das Buchhaltungssystem eingebe.",
+          "value": [
+            "E-Mail-Anhänge"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "outputs": {
+          "quote": "Für die notwendige Nachpflege von Ausnahmefällen oder Unstimmigkeiten erfasse ich die entsprechenden Daten ergänzend in meinen Tabellenkalkulationslisten.",
+          "value": [
+            "Tabellenkalkulationslisten"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "ausnahmen": {
+          "quote": "Für die notwendige Nachpflege von Ausnahmefällen oder Unstimmigkeiten erfasse ich die entsprechenden Daten ergänzend in meinen Tabellenkalkulationslisten.",
+          "value": [
+            "Nachpflege von Ausnahmefällen oder Unstimmigkeiten"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "hilfsmittel": {
+          "quote": "Für die Verbuchung und Archivierung nutze ich hierbei die Systeme SAP FI sowie DocuWare",
+          "value": [
+            "SAP FI",
+            "DocuWare"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": {
+          "quote": "Bei der Zuordnung ist es entscheidend, ein tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen zu entwickeln, um Unstimmigkeiten bereits im Ansatz zu erkennen.",
+          "value": [
+            "Gespür dafür entwickeln, welche Leistungszeiträume plausibel sind",
+            "tiefes Verständnis für die betrieblichen Abläufe und die Struktur der Kostenstellen"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "entscheidungslogik": {
+          "quote": "Für den Monatsabschluss gilt eine interne Richtlinie, nach der Rechnungen mit einem Betrag ab 5.000 EUR einer zusätzlichen Genehmigung unterliegen.",
+          "value": "Rechnungen ab 5.000 EUR benötigen eine zusätzliche Genehmigung, die anhand des Sachverhalts und der Kostenstelle der zuständigen zeichnungsberechtigten Instanz zugewiesen wird.",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "monatsabschluss",
+      "status": "done",
+      "embedding": [
+        0.06668086,
+        -0.06993826,
+        -0.00496793,
+        0.04637002,
+        -0.03211092,
+        -0.06757504,
+        -0.05898446,
+        0.14907387,
+        0.06310411,
+        -0.04454971,
+        -0.05298062,
+        0.08367042,
+        -0.10053226,
+        -0.04352778,
+        -0.06064509,
+        -0.12339791,
+        -0.044901,
+        0.11681925,
+        0.04812646,
+        0.05863317,
+        -0.01449063,
+        0.06917181,
+        -0.0969555,
+        0.04780711,
+        -0.11566957,
+        0.04681711,
+        -0.02658612,
+        0.06121992,
+        -0.18484138,
+        0.06904407,
+        0.04640196,
+        -0.05923994,
+        -0.09267617,
+        -0.03372365,
+        0.0141593,
+        0.08699169,
+        -0.00234125,
+        0.04601873,
+        -0.03408991,
+        0.06878859,
+        0.05221418,
+        0.03605493,
+        -0.00773532,
+        0.00821136,
+        -0.09650841,
+        0.07594209,
+        -0.07083244,
+        -0.02874175,
+        -0.0702576,
+        0.034538,
+        0.02211518,
+        -0.02286566,
+        -0.0876304,
+        0.05713221,
+        0.0470726,
+        0.03797105,
+        -0.05342772,
+        -0.01032907,
+        -0.02419097,
+        -0.06377475,
+        0.0172211,
+        -0.03311688,
+        0.0356238,
+        0.04167553,
+        0.01011949,
+        0.04400681,
+        -0.00440807,
+        -0.02981158,
+        -0.02328181,
+        -0.00354881,
+        0.0678944,
+        0.01007957,
+        0.01471418,
+        0.08124334,
+        0.00558668,
+        -0.02377581,
+        0.03563977,
+        -0.03623057,
+        0.00751639,
+        -0.02692144,
+        0.07067277,
+        0.00828022,
+        -0.00064669,
+        0.00686608,
+        -0.05700447,
+        0.04787098,
+        -0.02518097,
+        0.03116883,
+        -0.04135618,
+        0.06476474,
+        0.02120502,
+        -0.04956355,
+        0.04512455,
+        0.07064083,
+        0.03377156,
+        0.02705317,
+        -0.05690866,
+        0.03001916,
+        -0.02213115,
+        0.0112971,
+        -0.06371088,
+        0.03998297,
+        -0.04368746,
+        0.00392006,
+        -0.02925271,
+        -0.01576405,
+        0.03043432,
+        -0.00816745,
+        -0.00990393,
+        -0.01170428,
+        0.06166702,
+        -0.06329572,
+        -0.02267405,
+        0.04340004,
+        0.04403875,
+        0.01634088,
+        0.04017458,
+        0.01908133,
+        0.02767192,
+        -0.03298914,
+        0.07479242,
+        0.06594634,
+        0.00908958,
+        0.07230147,
+        -0.06508409,
+        0.0111015,
+        -0.07166276,
+        0.04122844,
+        0.01354255,
+        -0.06450926,
+        -0.00371048,
+        -0.0037514,
+        -0.02885352,
+        -0.01436688,
+        0.02216308,
+        0.01449063,
+        0.05349158,
+        -0.01023027,
+        -0.0224505,
+        -0.003455,
+        0.01012747,
+        -0.03316478,
+        -0.04994677,
+        0.01124222,
+        0.00713354,
+        -0.03789121,
+        -0.04831807,
+        -0.00336917,
+        -0.00064669,
+        -0.00733314,
+        0.09139876,
+        -0.07779434,
+        -0.0076006,
+        -0.01318927,
+        -0.01056858,
+        -0.03573557,
+        -0.00762654,
+        0.01519012,
+        0.01378007,
+        -0.03049819,
+        -0.00707267,
+        -0.00222948,
+        0.01510938,
+        -0.03781136,
+        -0.01344475,
+        0.05355546,
+        -0.03678944,
+        0.04138812,
+        0.06096444,
+        0.00749281,
+        -0.06224186,
+        0.01046579,
+        0.08628912,
+        0.0099159,
+        0.04119651,
+        0.00592399,
+        0.03196721,
+        0.0767724,
+        0.01714176,
+        0.04525229,
+        0.00479428,
+        0.07108793,
+        0.01406749,
+        0.01651852,
+        -0.00099498,
+        0.00653675,
+        -0.00021656,
+        -0.0211651,
+        0.02527677,
+        -0.02936449,
+        0.02377581,
+        -0.02075793,
+        0.01977991,
+        0.01165238,
+        0.01747658,
+        0.03418671,
+        0.01274617,
+        0.03793911,
+        -0.05738769,
+        -0.01610885,
+        0.04389504,
+        -0.0035503,
+        -0.0376996,
+        -0.02275389,
+        0.03841814,
+        0.06313604,
+        0.01387588,
+        -0.01744464,
+        -0.0477113,
+        0.00314712,
+        -0.02490951,
+        0.05674898,
+        -0.00262468,
+        0.02794237,
+        -0.05186289,
+        0.00310571,
+        0.00710759,
+        -0.0040448,
+        0.04126038,
+        0.00842892,
+        -0.06003832,
+        0.00743867,
+        -0.02885352,
+        0.07313178,
+        0.02265409,
+        -0.04589099,
+        0.02718291,
+        0.02633064,
+        0.0323185,
+        -0.03541622,
+        -0.03129657,
+        -0.01039094,
+        0.01206954,
+        -0.02947626,
+        -0.03706089,
+        0.039472,
+        0.0351288,
+        0.03809878,
+        -0.01245675,
+        0.029604,
+        -0.02842239,
+        -0.02222196,
+        -0.03536832,
+        0.03509687,
+        -0.02045255,
+        -0.03064389,
+        0.03083351,
+        -0.00111773,
+        0.06846923,
+        -0.06195444,
+        0.00914047,
+        0.00850975,
+        0.01134501,
+        0.01232901,
+        -0.01448265,
+        0.05202257,
+        0.00311768,
+        0.00006287,
+        0.0312327,
+        -0.0032075,
+        -0.02853417,
+        0.03045029,
+        0.04403875,
+        0.04895678,
+        -0.0262508,
+        0.04450181,
+        0.00719342,
+        0.01690174,
+        -0.00220952,
+        -0.01192383,
+        -0.02051841,
+        -0.01791569,
+        -0.04340004,
+        0.03409091,
+        -0.00788901,
+        -0.0050832,
+        0.02712902,
+        0.04930807,
+        0.01961225,
+        0.00699782,
+        0.00956561,
+        0.02085374,
+        -0.03599105,
+        -0.03314882,
+        -0.00524138,
+        0.00683415,
+        -0.0271889,
+        0.05793059,
+        -0.03155205,
+        -0.01177514,
+        -0.0099159,
+        0.04965935,
+        -0.00327312,
+        -0.01077816,
+        -0.07798594,
+        -0.02511709,
+        0.00979116,
+        -0.00012974,
+        0.00020059,
+        -0.00294004,
+        0.0145545,
+        0.07626144,
+        0.03359591,
+        -0.0184506,
+        0.02604322,
+        -0.02819885,
+        0.00913149,
+        -0.07811368,
+        -0.00055325,
+        0.04419842,
+        0.00479029,
+        -0.01257452,
+        -0.00610163,
+        -0.030099,
+        -0.01279008,
+        -0.03528848,
+        -0.01906935,
+        0.03158399,
+        0.00915045,
+        -0.01436688,
+        -0.02096152,
+        -0.01265735,
+        0.014802,
+        0.03677347,
+        0.00805667,
+        -0.00437114,
+        0.04748775,
+        -0.02261018,
+        0.03982329,
+        -0.02784756,
+        -0.01720164,
+        0.03445816,
+        0.05224611,
+        0.03714073,
+        0.05649351,
+        0.01511337,
+        -0.03421865,
+        -0.02214712,
+        0.01259847,
+        -0.01192633,
+        0.00209974,
+        -0.0323664,
+        0.01251663,
+        0.02618693,
+        -0.00871035,
+        -0.00782714,
+        0.03203108,
+        -0.07364275,
+        -0.02976368,
+        0.03793911,
+        -0.0382904,
+        -0.0084868,
+        -0.02824675,
+        -0.01964019,
+        -0.02601128,
+        0.01883183,
+        -0.00536612,
+        -0.03896103,
+        0.00477906,
+        0.01680494,
+        0.00977219,
+        -0.02481371,
+        -0.01130908,
+        -0.0351288,
+        -0.00425787,
+        -0.00160575,
+        -0.00094708,
+        0.00866843,
+        -0.00644494,
+        0.01434892,
+        0.02938045,
+        0.00476634,
+        0.01379604,
+        -0.00726278,
+        0.00738503,
+        0.01571216,
+        -0.03267777,
+        -0.01173621,
+        -0.01118932,
+        -0.02938844,
+        -0.01364435,
+        -0.01374814,
+        -0.04177134,
+        0.03504897,
+        0.00796136,
+        -0.04063764,
+        0.09708324,
+        -0.06495635,
+        -0.02045454,
+        -0.01249468,
+        -0.00464259,
+        -0.00595593,
+        -0.02139664,
+        -0.0077211,
+        -0.00840097,
+        -0.01144281,
+        0.01674207,
+        -0.05106451,
+        0.03132851,
+        -0.00834309,
+        0.01766021,
+        0.06150734,
+        -0.03554396,
+        0.0189456,
+        0.03089738,
+        0.02459016,
+        -0.02585959,
+        -0.02261018,
+        0.01025122,
+        0.03426655,
+        0.01576006,
+        0.00524487,
+        0.01689376,
+        -0.03717266,
+        -0.0361188,
+        0.03929636,
+        -0.00711358,
+        0.0021716,
+        -0.03308495,
+        -0.02364009,
+        -0.00159177,
+        0.01418725,
+        -0.02800724,
+        -0.01258948,
+        -0.01309446,
+        0.06176282,
+        -0.04736001,
+        0.0079459,
+        -0.03654194,
+        -0.05345965,
+        -0.00828321,
+        0.0110037,
+        0.00104089,
+        0.01369225,
+        -0.00702975,
+        0.00414285,
+        0.03037045,
+        0.02902917,
+        -0.0139168,
+        0.02904513,
+        -0.00267458,
+        -0.01489781,
+        -0.01762827,
+        -0.03445816,
+        0.01616224,
+        -0.02182776,
+        0.0323185,
+        -0.00061376,
+        -0.03722056,
+        0.00791596,
+        -0.00018762,
+        0.00401786,
+        -0.03089738,
+        -0.01451658,
+        0.00094059,
+        -0.00318255,
+        0.02643842,
+        0.04713647,
+        -0.00293605,
+        0.02245848,
+        -0.00496194,
+        -0.02415904,
+        -0.03819459,
+        -0.02813498,
+        0.02571588,
+        0.00169357,
+        0.01218131,
+        -0.02638253,
+        0.03608686,
+        0.03966361,
+        0.0383862,
+        -0.00095407,
+        -0.02000745,
+        0.03987119,
+        -0.03482542,
+        -0.02277783,
+        0.00857662,
+        -0.01347244,
+        0.00903369,
+        -0.00121055,
+        0.0030099,
+        -0.00904367,
+        0.03902491,
+        0.00801176,
+        -0.04167553,
+        0.02585161,
+        -0.01445171,
+        0.00366457,
+        0.01456648,
+        0.03276559,
+        -0.0042903,
+        0.00124747,
+        -0.03220673,
+        -0.0074988,
+        0.00853869,
+        -0.00856265,
+        0.02484565,
+        0.03196721,
+        -0.01573611,
+        0.00680221,
+        -0.04710453,
+        -0.00922331,
+        0.00698983,
+        0.03476155,
+        0.0312806,
+        -0.01527704,
+        0.00599984,
+        -0.01198271,
+        -0.03803491,
+        -0.02085374,
+        0.00398792,
+        -0.03595912,
+        -0.03809878,
+        -0.0156403,
+        0.04515648,
+        0.03656589,
+        -0.04231424,
+        -0.02098148,
+        0.02351235,
+        -0.01585587,
+        0.03972748,
+        0.01527305,
+        0.0411007,
+        -0.03282946,
+        0.00432124,
+        0.04448584,
+        -0.02931658,
+        -0.035033,
+        0.02636257,
+        -0.02439855,
+        -0.00014371,
+        -0.01512135,
+        -0.03875346,
+        -0.01783984,
+        -0.0449968,
+        -0.00484817,
+        0.03755588,
+        0.01257452,
+        -0.02826272,
+        -0.01578002,
+        0.03030658,
+        -0.01187194,
+        -0.04062167,
+        -0.00184227,
+        0.01207553,
+        -0.0234884,
+        -0.01794563,
+        0.00160924,
+        -0.01287191,
+        0.02703321,
+        -0.02585161,
+        -0.02946029,
+        -0.02282574,
+        0.00219156,
+        0.0059205,
+        -0.0028622,
+        0.05754737,
+        -0.01481797,
+        0.01982382,
+        -0.02441452,
+        -0.01166336,
+        -0.0262508,
+        -0.01575607,
+        0.00052893,
+        0.03664573,
+        -0.03619864,
+        -0.01975197,
+        -0.00850676,
+        0.01194779,
+        0.03832233,
+        0.00128939,
+        -0.0021217,
+        0.02558016,
+        -0.00337528,
+        -0.01313338,
+        -0.06495635,
+        -0.00089618,
+        0.04470938,
+        -0.02473749,
+        -0.01664626,
+        0.02071003,
+        0.02502129,
+        -0.01516127,
+        0.02152438,
+        -0.03860975,
+        -0.00408815,
+        -0.0121873,
+        0.01170029,
+        -0.0123829,
+        -0.03854588,
+        -0.00036626,
+        -0.01688578,
+        -0.00017864,
+        0.02319299,
+        -0.02775175,
+        0.0183069,
+        0.00768443,
+        -0.00418352,
+        0.02636257,
+        -0.02550032,
+        -0.0312327,
+        0.01557643,
+        0.00279034,
+        0.01138493,
+        0.04876517,
+        0.0317277,
+        -0.0312806,
+        -0.00384421,
+        -0.03793911,
+        -0.04512455,
+        -0.03265382,
+        0.02233873,
+        0.00525734,
+        -0.01160049,
+        -0.0389291,
+        0.01012149,
+        0.0260512,
+        0.03037843,
+        -0.01122126,
+        0.01746061,
+        -0.02609112,
+        -0.03758782,
+        -0.01583191,
+        0.01641473,
+        -0.01374414,
+        0.00337316,
+        0.0041456,
+        0.04525229,
+        -0.01526905,
+        0.00364861,
+        -0.02357622,
+        0.05939961,
+        -0.02380775,
+        -0.04094103,
+        0.02961997,
+        -0.00395299,
+        -0.02672983,
+        -0.00179536,
+        0.0184506,
+        0.00993387,
+        -0.0432723,
+        0.01736481,
+        0.02173195,
+        -0.00157481,
+        -0.03354003,
+        -0.00543848,
+        0.01682989,
+        0.00896982,
+        -0.03985522,
+        -0.00590403,
+        0.00750479,
+        -0.01122525,
+        0.01665425,
+        -0.05048967,
+        0.01895359,
+        -0.04959549,
+        -0.01768416,
+        0.03000319,
+        0.03337236,
+        0.00911952,
+        0.02594741,
+        0.01150468,
+        0.03155205,
+        -0.00457872,
+        -0.02360017,
+        -0.00495196,
+        -0.005919,
+        -0.00743094,
+        0.03672557,
+        0.02152038,
+        0.01116263,
+        0.01949649,
+        0.01546665,
+        -0.02463507,
+        0.02005535,
+        0.01786779,
+        0.0273845,
+        0.03230253,
+        -0.00301788,
+        -0.0058711,
+        0.01109352,
+        0.07702789,
+        -0.00261869,
+        -0.04413455,
+        -0.03199915,
+        -0.0102113,
+        0.00048402,
+        -0.02324888,
+        -0.00437114,
+        0.00134976,
+        0.00209775,
+        -0.00215962,
+        0.02094954,
+        -0.02382372,
+        0.05885671,
+        0.02383968,
+        -0.00878819,
+        -0.01639078,
+        -0.01130509,
+        0.02258622,
+        -0.00648486,
+        -0.00877621,
+        0.01366431,
+        -0.0104588,
+        0.01541676,
+        0.01188791,
+        -0.01992761,
+        0.03289333,
+        -0.0045388,
+        -0.01630096,
+        -0.04847775,
+        -0.02229881,
+        0.05077709,
+        -0.01076618,
+        -0.00258975,
+        0.00085227,
+        -0.00130735,
+        -0.0124827,
+        -0.00790398,
+        0.00213667,
+        0.03912072,
+        -0.00138544,
+        -0.02821482,
+        -0.01433095,
+        -0.04605067,
+        -0.01143682,
+        0.02647435,
+        0.029109,
+        0.01684586,
+        0.04493294,
+        0.01451059,
+        -0.02676176,
+        -0.0075966,
+        -0.00385618,
+        0.00950873,
+        -0.00576232,
+        0.02092559,
+        0.02188365,
+        -0.029604,
+        0.01079812,
+        0.01981584,
+        0.07032148,
+        -0.04260166,
+        -0.00657467,
+        -0.01633489,
+        -0.01612731,
+        0.00556073,
+        0.00156358,
+        0.03683734,
+        -0.01238091,
+        -0.02288163,
+        -0.02783159,
+        -0.01252262,
+        -0.03025868,
+        -0.02486161,
+        0.00050647,
+        -0.02409517,
+        -0.00215863,
+        -0.02088567,
+        -0.00221252,
+        0.00416955,
+        -0.01004764,
+        -0.02569193,
+        0.00968038,
+        0.02532467,
+        -0.0355759,
+        -0.01902544,
+        -0.00615004,
+        -0.00911752,
+        0.00125146,
+        0.03071375,
+        0.01422717,
+        0.02794337,
+        0.01683787,
+        -0.03100915,
+        0.00839499,
+        0.01104761,
+        -0.01964019,
+        0.02340856,
+        0.0180115,
+        -0.05904832,
+        -0.00247498,
+        0.00560763,
+        -0.00363264,
+        0.01178611,
+        -0.00676529,
+        -0.00949875,
+        -0.0071031,
+        0.00642697,
+        0.00529327,
+        0.00150545,
+        -0.03599105,
+        -0.00991016,
+        -0.00791795,
+        -0.02043858,
+        0.00778123,
+        -0.01341282,
+        -0.00456974,
+        0.00255978,
+        0.00428731,
+        0.02985948,
+        -0.01934479,
+        -0.00097403,
+        -0.0127302,
+        0.02746035,
+        0.0238796,
+        0.01369225,
+        0.00580424,
+        0.01291782,
+        -0.03522461,
+        -0.00263595,
+        -0.02855014,
+        -0.04234618,
+        -0.01556046,
+        -0.00096804,
+        -0.00993087,
+        -0.00257678,
+        -0.0200314,
+        -0.02246647,
+        0.03104109,
+        -0.01239089,
+        -0.00936502,
+        0.01832286,
+        -0.01037497,
+        0.03959974,
+        -0.02203534,
+        -0.02558016,
+        0.05154354,
+        0.0176163,
+        0.0159357,
+        0.0096205,
+        0.03500106,
+        0.02556419,
+        0.01604748,
+        0.01932783,
+        -0.02920481,
+        -0.00354282,
+        0.01055361,
+        0.01284996,
+        0.0284703,
+        -0.01076019,
+        0.00987598,
+        -0.04279327,
+        -0.02680966,
+        -0.00410368,
+        -0.01967213,
+        -0.02388759,
+        -0.03532042,
+        -0.01825101,
+        0.00308974,
+        -0.03139238,
+        0.00920734,
+        0.01362439,
+        -0.00704173,
+        0.0015778,
+        -0.04375133,
+        0.03522461,
+        -0.00094608,
+        -0.00135026,
+        -0.00130024,
+        -0.03752395,
+        0.00232329,
+        -0.04876517,
+        0.02558814,
+        -0.014309,
+        0.01850649,
+        -0.00229435,
+        -0.00940494,
+        -0.0277278,
+        0.00089119,
+        0.00979914,
+        -0.01543272,
+        0.00192809,
+        0.0328614,
+        -0.0311848,
+        -0.04202682,
+        0.00650182,
+        -0.00280232,
+        0.00208777,
+        -0.02784756,
+        -0.00058282,
+        0.04138812,
+        -0.0048231,
+        0.02800724,
+        -0.02641047,
+        -0.0111035,
+        0.02976368,
+        0.02714499,
+        -0.00854668,
+        0.02685757,
+        -0.02704918,
+        0.00213567,
+        -0.01941665,
+        0.00943188,
+        -0.03247818,
+        -0.02550032,
+        0.02197147,
+        0.02922078,
+        -0.00561063,
+        -0.00251291,
+        0.0163828,
+        0.00370848,
+        0.0520545,
+        -0.00225942,
+        -0.02230679,
+        -0.00352835,
+        0.00043113,
+        0.01204359,
+        -0.02265808,
+        -0.00471744,
+        0.00531323,
+        -0.01896955,
+        0.01030711,
+        -0.02476581,
+        -0.00274444,
+        -0.00162072,
+        -0.00674733,
+        0.05393868,
+        0.01178811,
+        0.02454226,
+        0.04857355,
+        0.00055987,
+        -0.01909729,
+        -0.00972429,
+        0.00634813,
+        0.02470194,
+        -0.02449436,
+        -0.00553478,
+        0.00448242,
+        0.00496594,
+        -0.02102938,
+        -0.01288389,
+        -0.01606344,
+        0.02235469,
+        -0.03413881,
+        -0.0230892,
+        -0.01437087,
+        0.01428704,
+        0.00869438,
+        0.03404301,
+        -0.00129537,
+        -0.02342452,
+        -0.00209126,
+        0.04349585,
+        0.01358048,
+        -0.01354854,
+        -0.00728074,
+        0.01603151,
+        -0.03033851,
+        -0.02779966,
+        0.02673781,
+        0.0057738,
+        0.00194406,
+        0.00607968,
+        0.0006175,
+        -0.00125446,
+        0.01737279,
+        -0.00637608,
+        -0.0016766,
+        0.02046253,
+        0.00218407,
+        0.00107233,
+        0.04736001,
+        0.00430328,
+        -0.00497392,
+        -0.00508469,
+        0.03245423,
+        -0.00945683,
+        -0.01268629,
+        0.00575234,
+        0.01070979,
+        -0.01948052,
+        0.00702576,
+        0.03099319,
+        0.00184975,
+        -0.00910555,
+        -0.00802374,
+        -0.00183902,
+        0.0060677,
+        0.01350538,
+        -0.05282094,
+        0.03819459,
+        0.02942836,
+        0.00765249,
+        0.00708464,
+        -0.00296299,
+        0.00436316,
+        0.00875027,
+        0.02118107,
+        0.02447839,
+        -0.00507372,
+        -0.01058654,
+        -0.0306898,
+        -0.01172623,
+        -0.00056685,
+        -0.01552054,
+        0.02745635,
+        -0.01575981,
+        0.02399936,
+        -0.02696934,
+        0.01741396,
+        -0.00255258,
+        0.02596338,
+        -0.02320896,
+        -0.02942836,
+        0.00260871,
+        0.02356325,
+        -0.00415957,
+        0.00730519,
+        -0.00466854,
+        -0.00095207,
+        0.04767936,
+        0.03089738,
+        -0.00998676,
+        0.01399838,
+        0.01071029,
+        0.00707766,
+        -0.05013838,
+        0.00770039,
+        -0.02288163,
+        0.00294603,
+        -0.01264475,
+        -0.06080477,
+        0.0109538
+      ],
+      "potenzial": {
+        "media_breaks": {
+          "quote": "Die Übertragung der Daten erfolgt in meinem Arbeitsalltag manuell",
+          "value": 1,
+          "confidence": "confirmed",
+          "writeSource": "analyst"
+        },
+        "duration_minutes": {
+          "quote": "Diese Arbeit erstreckt sich dabei über eine intensive Phase von zwei bis drei Tagen",
+          "value": 1200,
+          "qualifier": "Spanne: zwei bis drei Tage",
+          "confidence": "estimate",
+          "writeSource": "analyst"
+        },
+        "error_rate_percent": {
+          "quote": "Bei der Rechnungsprüfung zeigen etwa fünf Prozent der Dokumente Unstimmigkeiten",
+          "value": 5,
+          "confidence": "confirmed",
+          "writeSource": "analyst"
+        },
+        "frequency_per_month": {
+          "quote": "bearbeite ich im Zuge des Monatsabschlusses eine monatliche Menge von rund 80 bis 100 Rechnungen",
+          "value": 90,
+          "qualifier": "Spanne: 80 bis 100 Rechnungen",
+          "confidence": "estimate",
+          "writeSource": "analyst"
+        }
+      },
+      "governance": {
+        "rolle": "Buchhalter",
+        "systeme": [
+          "SAP FI",
+          "DocuWare"
+        ],
+        "nicht_befund_typ": null,
+        "organisationseinheit": "Finanzbuchhaltung"
+      },
+      "reihenfolge": 1,
+      "process_steps": [
+        "Prüfung ausstehender Leistungen",
+        "buchhalterische Abbildung in SAP FI"
+      ],
+      "friction_tools": [
+        "SAP FI"
+      ],
+      "abhaengigkeiten": {
+        "depends_on": [],
+        "influences": [],
+        "nicht_befund_typ": "nicht_zutreffend"
+      },
+      "friction_points": [
+        "Abstimmung mit dem Controlling besonders präzise erfolgen muss"
+      ],
+      "pain_point_primary": null
+    }
+  ],
+  "scores": {
+    "slotCoverage": 1,
+    "dedupSlotCoverage": 1,
+    "slotCoveragePreClarification": 1,
+    "dedupSlotCoveragePreClarification": 1,
+    "clarificationCoverageDelta": 0,
+    "phaseAdherence": 1,
+    "phaseProgression": 0.6,
+    "anchoringViolations": 0,
+    "toolCallPlausibility": 0.82,
+    "dialogNaturalness": 0.5,
+    "dialogNaturalnessRationale": "# Bewertung der Agent-Texte\n\n## Begründung\n\n**Natürlichkeit und Gesprächsfluss:**\nDie Texte zeigen insgesamt eine strukturierte, professionelle Gesprächsführung. Der Interviewer arbeitet systematisch durch die Prozessschritte und baut logisch aufeinander auf. Allerdings gibt es mehrere Stellen, die die Natürlichkeit beeinträchtigen:\n\n**Floskeln und generische Wendungen:**\n- [1] „Schön, dass du dir die Zeit nimmst\" – klassische Eröffnungsfloskel\n- [2] „Verstanden\" – wirkt mechanisch und wird mehrfach wiederholt ([2], [5])\n- [5] „Das ist der detaillierte Ablauf\" – generische Bestätigung\n- [8] „Vielen Dank, Andreas\" + „Damit haben wir...\" – sehr formale, vorbereitete Abschlussfloskel\n\n**Du-Form:**\nKonsequent eingehalten durchgehend. Keine Inkonsistenzen erkennbar.\n\n**Themenübergänge:**\nÜberwiegend flüssig und logisch. Allerdings",
+    "completionCorrectness": true,
+    "stepRegistrationCoverage": 0.5,
+    "schemaConformanceRate": 1,
+    "hallucinationRate": 0,
+    "confidenceTriggerRate": 1,
+    "depth_score": 2,
+    "depth_distribution": {
+      "p1": 0.1,
+      "p2": 0.8,
+      "p3": 0.1
+    },
+    "slotDepthRationale": "[monatsabschluss/ausnahmen] Stufe 2: Der Wert benennt eine Ausnahmekategorie (Nachpflege von Ausnahmefällen oder Unstimmigkeiten) und beschreibt die konkrete Handlung (Erfassung in Tabellenkalkulationslisten). Das Beleg zeigt, dass Ausnahmefälle erkannt und durch ein spezifisches Verfahren (manuelle Erfassung in Tabellen) behandelt werden. Dies geht über eine bloße Benennung hinaus und enthält einen erklärenden Kontext (Unter welcher Bedingung: bei Ausnahmefällen oder Unstimmigkeiten; Wie: ergänzende Erfassung in Tabellen). Eine tiefere Kausalstruktur (Warum entstehen diese Ausnahmefälle, welche Bedingungen führen zu ihnen) wird jedoch nicht offengelegt.\n[monatsabschluss/entscheidungslogik] Stufe 2: Der Wert beschreibt eine Entscheidungsregel mit Bedingung (ab 5.000 EUR) und Konsequenz (zusätzliche Genehmigung). Das Beleg nennt die Wertgrenze und verweist auf eine interne Richtlinie. Allerdings fehlt die konkrete Antwort auf die Agent-Frage nach dem Zuordnungskriterium (an wen die Rechnung geht und nach welcher Logik). Der Wert enthält zwar eine Bedingung, aber keine vollständige Erklärung der Zuordnungslogik zu den zeichnungsberechtigten Instanzen. Dies ist ein adäquater, aber nicht tiefgründiger Wissensstand.\n[monatsabschluss/hilfsmittel] Stufe 2: Der Wert nennt zwei Systeme (SAP FI, DocuWare) mit ihren Funktionen (Verbuchung und Archivierung). Das Beleg ordnet diese Systeme ihren Einsatzzwecken zu. Dies ist eine sachliche Benennung mit funktionalem Kontext (Wofür werden die Systeme genutzt), aber ohne tiefere Erklärung von Abhängigkeiten, Schnittstellen oder Besonderheiten in der Nutzung.\n[monatsabschluss/inputs] Stufe 2: Der Wert identifiziert E-Mail-Anhänge als Input-Quelle. Das Beleg beschreibt den Prozess (manuelle Übertragung aus E-Mail-Anhängen in das Buchhaltungssystem) und enthält damit einen erklärenden Kontext (Wie erfolgt die Datenübernahme, welche Quelle wird genutzt). Dies geht über eine bloße Benennung hinaus, bleibt aber auf die Beschreibung des Verfahrens begrenzt, ohne tiefere Bedingungen oder Ausnahmefälle zu adressieren.\n[monatsabschluss/outputs] Stufe 2: Der Wert nennt Tabellenkalkulationslisten als Output und ordnet diese einer spezifischen Funktion zu (Nachpflege von Ausnahmefällen oder Unstimmigkeiten). Das Beleg zeigt, dass dieser Output nicht für alle Rechnungen, sondern nur für Ausnahmefälle erzeugt wird. Dies enthält einen erklärenden Kontext (Unter welcher Bedingung: bei Ausnahmefällen; Wofür: Nachpflege). Eine tiefere Kausalstruktur oder Ausnahmefälle innerhalb dieses Outputs werden nicht beschrieben.\n[monatsabschluss/tazite_cues] Stufe 3: Der Wert beschreibt implizites Wissen (Gespür für Plausibilität, tiefes Verständnis für betriebliche Abläufe und Kostenstellen). Das Beleg zeigt, dass dieses Wissen durch konversationelles Nachfragen des Agenten explizit gemacht wurde (Agent fragt nach dem 'nötigen Fingerspitzengefühl'). Der Mitarbeiter offenbart dabei eine Kausalstruktur: Das tiefe Verständnis ermöglicht es, Unstimmigkeiten im Ansatz zu erkennen und auch bei unvollständigen Angaben korrekt zuzuordnen. Dies ist ein explizit gemachter, taciter Aspekt, der durch Nachfragen zutage gefördert wurde.\n[monatsabschluss/frequency_per_month] Stufe 2: Der Wert quantifiziert die Häufigkeit (90 Rechnungen pro Monat) basierend auf einer Spanne (80 bis 100). Das Beleg enthält einen zeitlichen Kontext (monatlich im Zuge des Monatsabschlusses). Dies ist eine sachliche Benennung mit quantitativem und zeitlichem Kontext, aber ohne Erklärung von Schwankungsgründen oder Bedingungen, die zu Variationen führen.\n[monatsabschluss/duration_minutes] Stufe 2: Der Wert quantifiziert die Gesamtdauer (1200 Minuten = 20 Stunden) basierend auf einer Zeitspanne (zwei bis drei Tage). Das Beleg nennt diese Zeitspanne, aber der Kontext ist begrenzt. Der Mitarbeiter hat zuvor erklärt, dass die Gesamtdauer weit mehr als nur Rechnungserfassung umfasst (Abgleich offener Posten, Rückstellungen, Controlling-Kommunikation). Der Wert selbst ist jedoch eine sachliche Quantifizierung ohne tiefere Erklärung der Kausalstruktur oder Bedingungen, die die Dauer beeinflussen.\n[monatsabschluss/error_rate_percent] Stufe 2: Der Wert quantifiziert eine Fehlerquote (5 Prozent) und ordnet diese einer Kategorie zu (Unstimmigkeiten bei der Rechnungsprüfung). Das Beleg nennt diese Quote mit Bezug zur Rechnungsprüfung. Dies ist eine sachliche Benennung mit funktionalem Kontext (bei welcher Aktivität treten Fehler auf), aber ohne Erklärung der Fehlerursachen, Fehlertypen oder Bedingungen, die zu Fehlern führen.\n[monatsabschluss/media_breaks] Stufe 1: Der Wert quantifiziert Medienwechsel (1) und das Beleg beschreibt, dass die Datenübertragung manuell erfolgt (von E-Mail-Anhängen in das Buchhaltungssystem). Dies ist eine sachliche Benennung eines Medienwechsels (E-Mail zu SAP FI) ohne tiefere Erklärung von Konsequenzen, Fehlerquellen oder Bedingungen, die mit diesem Medienwechsel verbunden sind."
+  },
+  "generatedAt": "2026-06-18T08:51:45.668Z"
+}

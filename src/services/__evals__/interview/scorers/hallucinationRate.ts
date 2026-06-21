@@ -40,7 +40,12 @@ export function scoreHallucinationRate(turns: TurnRecord[], finalStepTracker: St
 }
 
 function quoteFoundInTranscript(quote: string | null | undefined, transcript: string): boolean {
-  if (!quote || quote.trim().length < 5) return true // too short to verify — assume ok
-  const prefix = quote.trim().substring(0, 10)
-  return transcript.includes(prefix)
+  if (!quote || quote.trim().length === 0) return true // empty quote — assume ok
+  const trimmed = quote.trim()
+  if (trimmed.startsWith('[')) return true // backfill marker (e.g. [auto-backfill...]) — not a hallucination
+  if (trimmed.length < 5) return true // too short to verify — assume ok
+  const normalizedQuote = trimmed.toLowerCase().replace(/\s+/g, ' ')
+  const normalizedTranscript = transcript.toLowerCase().replace(/\s+/g, ' ')
+  const prefix = normalizedQuote.substring(0, 10)
+  return normalizedTranscript.includes(prefix)
 }

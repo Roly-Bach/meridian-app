@@ -135,6 +135,7 @@ export async function createProcessStepsFromTracker({
     steps.map((s) => ({
       step_title: s.title,
       role: s.governance?.rolle ?? null,
+      friction_points: s.friction_points ?? [],
       pain_point_primary: s.pain_point_primary ?? null,
     }))
   )
