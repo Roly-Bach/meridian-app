@@ -68,8 +68,10 @@ Lifecycle (linear): `Roadmap → Planned → Architected → In Progress → In 
 | `Type` | Epic / Feature / Extension / Revision |
 | `Domain` | eine der 5 Domains |
 | `Extends` | PROJ-X bei Extension/Revision, sonst `—` |
-| `Appetite` | S (1-2d) / M (3-5d) / L (1-2w) / XL (>2w), Schätzung vor Implementierung |
+| `Appetite` | S (Stunden–½ Tag) / M (½–1 Tag) / L (1–3 Tage) / XL (>3 Tage), Schätzung vor Implementierung |
 | `Bugs` | H:M:L nach QA (z.B. `0:2:1`), vor QA `—` |
+
+<!-- source: PROJ-25/26/27/28/29 (2026-06-22) — Agentic Pipeline verkürzt Bauzeit drastisch; frühere Definitionen (S=1-2d, M=3-5d, L=1-2w) basieren auf manueller Arbeit. Wenn ADR + vollständige ACs vorhanden, eliminiert die Pipeline das Architektur-Rätselraten. -->
 
 ### Bookkeeping-Regeln
 
@@ -175,3 +177,17 @@ Die folgenden Operationen erfordern zwingend User-Approval **vor** der Ausführu
 ### Vor jedem Deploy: Test-Status prüfen
 <!-- source: PROJ-17 (2026-05-26) — empfohlen aus Post-Mortem: bekannte Bugs sichtbar machen -->
 Falls E2E-Tests bekannte Failures haben: Diese explizit im Deploy-Commit oder Deploy-Kommentar nennen. Nicht still ignorieren. `/qa` vor `/deploy` ausführen wenn Tests in unbekanntem Zustand.
+
+## Interview-Engine-Features: Eval-Gate vor Approved
+<!-- source: PROJ-22 (2026-06-22) — 351 grüne Unit-Tests verdeckten zwei Critical-Completion-Bugs; erst der Eval-Lauf hat sie aufgedeckt -->
+Bei Features der Domain "Interview Engine" muss vor dem Übergang zu Status=Approved mindestens ein erfolgreicher `eval:interview`-Lauf nachgewiesen sein. Unit-Tests allein sind kein ausreichendes Gate. Ohne Eval-Nachweis darf `/qa` keinen Approved-Status setzen.
+
+## Security: Object-Ownership bei jeder neuen [id]-Route
+<!-- source: PROJ-24 (2026-06-22) — IDOR auf Use-Case-Detail-Route erst in QA entdeckt; fremde Workspace-IDs waren zugreifbar -->
+Bei jeder neuen Detail- oder `[id]`-Route ist als Pflichtpunkt in `/qa` zu prüfen: Kann eine fremde Workspace-ID diesen Record abrufen? Nur wenn der Ownership-Check explizit dokumentiert und verifiziert ist, darf die Route als sicher gelten.
+
+## Branch-Hygiene: origin/main vor parallelen Fixes prüfen
+<!-- source: PROJ-38/39 (2026-06-22) — main hatte denselben Fix bereits besser gelöst; PROJ-39s Text-Parser wurde beim Merge verworfen -->
+Bevor eine Eval-Signal-, Infra- oder Fix-Spec gestartet wird: `git fetch && git diff origin/main -- <relevante Dateien>` ausführen. Wenn main bereits eine gleichwertige oder überlegene Lösung enthält, nicht neu bauen.
+
+Wenn parallele Entwicklung aktiv ist (Mitgründer committet auf main oder einem weiteren Branch): täglich `git fetch` und bei inhaltlicher Überschneidung sofort mergen statt auf Feature-Completion zu warten. Langlebige Branches akkumulieren semantische Merge-Schulden.
