@@ -1,6 +1,6 @@
 # PROJ-34: Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals)
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-33
@@ -8,7 +8,7 @@
 **Bugs:** —
 **Created:** 2026-06-22
 **Last Updated:** 2026-06-22
-**Architecture:** ADR-016 (Vertagungsnotiz) — ein eigener ADR folgt in `/architecture`
+**Architecture:** [ADR-018](../../docs/adr/ADR-018-werkzeug-schreibabsichten-turnstore-port.md) (Proposed, 2026-06-22) hebt die ADR-016-Vertagung auf. Tech Design unten.
 
 ## Dependencies
 - Requires: PROJ-33 (Turn-Loop-Konsolidierung) — `runInterviewTurn` ist das tiefe Modul, das den injizierten `ports`-Parameter bekommt; heute lädt und persistiert es selbst via `getSupabaseAdmin()`.
@@ -114,7 +114,124 @@ Die komponierte Schreib-Wirkung (was im `step_tracker` und den übrigen Zielen l
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+> Erstellt 2026-06-22. Audience: PM-lesbar, keine Code-Details. Die zugrunde liegenden Bau-Entscheidungen gehören in einen eigenen ADR (ADR-018, siehe unten).
+
+### Ziel in einem Satz
+
+Die acht Wissens-Werkzeuge des Interviews schreiben heute selbst in die Datenbank. Nach PROJ-34 melden sie nur noch ihre Schreib-**Absicht**; eine einzige Stelle (der `TurnStore`) entscheidet über Konflikte und persistiert. Dadurch wird ein Eval-Lauf ohne Cloud-Datenbank möglich und die Konfliktlogik isoliert testbar.
+
+### A) Komponenten-Struktur
+
+Heute (Schreiben als versteckter Seiteneffekt zwei Ebenen tief):
+
+```
+runInterviewTurn  (lädt + persistiert selbst via Supabase)
+  └─ interviewAnalyst / interviewQuickExtract / createInterviewStream
+       └─ buildTools  (8 Werkzeuge)
+            └─ record_slot.execute()  →  liest DB, prüft Konflikt, SCHREIBT DB
+            └─ register_step.execute() →  liest DB, dedupt, SCHREIBT DB
+            └─ … (6 weitere)
+```
+
+Nach PROJ-34 (Schreiben als sichtbare Absicht an einer Stelle):
+
+```
+runInterviewTurn  (bekommt ports = { store, onCompleted } injiziert)
+  │  öffnet eigene Session für Orchestrierungs-Writes (turns, phase, status)
+  │
+  ├─ TurnStore-Port
+  │    ├─ openTurn(interviewId) → Session
+  │    │     ├─ snapshot()              Wahrheit während des Passes
+  │    │     ├─ stage(WriteIntent)      wendet an + meldet accepted | skipped | blocked
+  │    │     └─ commit()                schreibt am Pass-Ende in die DB
+  │    │
+  │    ├─ SupabaseTurnStore  (Prod, echte DB, wie heute)
+  │    └─ PGliteTurnStore    (Eval, lokale DB, ohne Netz)
+  │
+  ├─ interviewQuickExtract   öffnet Session, Werkzeuge stagen, committet
+  ├─ interviewAnalyst        öffnet Session (online + catchup + produce_briefing)
+  ├─ createInterviewStream   öffnet Session (Begrüßung/Reconnect)
+  └─ onCompleted             Prod = Pipeline, Eval = No-op
+
+  buildTools(8 Werkzeuge)
+       └─ jedes execute() liest aus session.snapshot(), entscheidet,
+          gibt eine WriteIntent zurück und ruft session.stage() statt DB
+```
+
+Unverändert: der **Talker** (`interviewTalker`) bleibt werkzeug- und schreibfrei (ADR-011 D3). Die HTTP-Route und der Eval-Runner bleiben dünne Adapter (ADR-016). `after()` bleibt beim Prod-Aufrufer.
+
+### B) Datenmodell (Klartext)
+
+Es ändert sich **kein** Datenbankschema. Es kommen zwei neue In-Code-Konzepte hinzu:
+
+**Schreibabsicht (`WriteIntent`).** Eine unterscheidbare Liste mit genau einer Variante pro Werkzeug (8 insgesamt). Jede Variante trägt, was geschrieben werden soll, plus die Herkunft (`analyst_online`, `quick`, `backfill` usw.) für die Prioritätsentscheidung. Beispiele in Klartext:
+- „Lege Schritt mit Titel X an" (register_step)
+- „Setze Slot frequency_per_month von Schritt S001 auf 90, Beleg ‚80 bis 100‘, Quelle analyst_online" (record_slot)
+- „Verknüpfe Pain Point mit Schritt X" (link_bottleneck, schreibt zwei Ziele: ein knowledge_objects-Eintrag und ein extractions_log-Anhang)
+
+**Snapshot.** Beim Öffnen der Session lädt der Store einmal den aktuellen Stand (`step_tracker` + `topics` + `extractions_log`). Während des Passes ist der Snapshot die Wahrheit: jede `stage`-Anwendung verändert ihn sofort im Speicher, sodass ein zweites Werkzeug im selben Pass den Effekt des ersten sieht (Read-after-Write, siehe Edge Cases). Am Pass-Ende schreibt `commit()` die gestageten Writes in die DB.
+
+**Persistenz-Ziele (alle bleiben wie heute):**
+
+| Ziel | Schreibende Werkzeuge / Pfade | Läuft durch `stage()`-Konfliktlogik? |
+|------|------|------|
+| `interview_state.step_tracker` (Slots, Governance, Kanten, Status) | record_slot, register_step, record_governance, record_dependency, update_walkthrough_data, data_sources-Backfill | Ja (Konflikt/Idempotenz/done betreffen Slots) |
+| `interview_state.topics_*` | update_topics | Apply, ohne Prioritätskonflikt |
+| `interview_state.extractions_log` + `knowledge_objects` | link_bottleneck | Apply, ohne Prioritätskonflikt |
+| `interviews.next_briefing`, `interviews.analyst_status` | produce_briefing | Apply, ohne Prioritätskonflikt |
+| `turns`, `interview_state.phase`, `analyst_status='processing'`, Lifecycle-Complete | runInterviewTurn (Orchestrierung) | Store-Methoden, kein Intent |
+
+### C) Architektur-Entscheidungen (Begründung)
+
+**D1: Schreibabsicht statt Seiteneffekt.** Heute mischt jedes Werkzeug Lesen, Entscheiden und Schreiben in einem `execute()`-Körper, fest an Supabase verschweißt. Die Lese- und Entscheid-Logik bleibt im Werkzeug (das LLM braucht sofortiges Feedback, etwa die Embedding-Dedup in register_step oder die Beleg-Auflösung in record_slot). Nur der Schreibvorgang wird zur zurückgegebenen Absicht. Erst dadurch existiert eine Naht, an der ein zweiter Adapter andocken kann. Halber Ausbau (nur record_slot) ist ausgeschlossen, weil der Port sonst undicht bliebe.
+
+**D2: TurnStore-Port mit zustandsbehafteter Session.** Eine Session pro Schreib-Pass (ein LLM-Aufruf = ein `openTurn`/`commit`-Zyklus). Das spiegelt das heutige „jeder Pass liest frisch" sauber wider und macht das Read-after-Write innerhalb des Passes garantiert statt zufällig. Mehrere Pässe pro Turn (Quick-Extract, dann Talker ohne Session, dann Analyst im Hintergrund) öffnen nacheinander je eine eigene Session und sehen so die committeten Writes des Vorgängers. Die Annahme „ein Schreiber pro Turn" wird bewusst eingebacken (Edge Cases).
+
+**D3: `stage()` als tiefes Modul.** Konfliktauflösung (`canOverwrite`), Idempotenz-Prüfung und der done-Übergang wandern unverändert aus dem record_slot-Körper hinter `stage`. Das ist der Kern-Gewinn: diese Logik wird ohne LLM und ohne DB als reine Funktion auf einem Schritt-Array testbar. Damit wird die `overwrite_churn`-Pathologie erstmals isoliert prüfbar (der eigentliche Fix bleibt ein Folge-Feature, Out of Scope).
+
+**D4: Zwei Adapter, ein Vertrag.** Prod = `SupabaseTurnStore`, schreibt wie heute (`patch_interview_step_field` für jsonb-Felder, gleiche Semantik). Eval = `PGliteTurnStore`, lokale Postgres-Engine im Prozess, ohne Netz und ohne `EVAL_WORKSPACE_ID`. Beide erfüllen denselben Port und dieselbe Commit-Semantik, sonst wäre der gemessene Eval-Vorteil durch eine Test-gegen-Prod-Divergenz erkauft.
+
+**D5: Commit pro Schreib-Pass (entschieden 2026-06-22).** `commit()` schreibt am Pass-Ende alle gestageten Writes sequenziell, nicht-transaktional (Prod-Parität: auch heute laufen die Writes nicht in einer Transaktion). Alternative „Write-through pro stage" wurde verworfen: sie behielte zwar exakte Crash-Parität (jeder Slot sofort persistent), verwässerte aber das „Snapshot ist die Wahrheit"-Modell und erzeugte mehr DB-Roundtrips. Bewusster Trade-off: ein Crash mitten im Pass verliert den ganzen Pass statt einzelner Slots. Fenster ist ein LLM-Pass, für einen Solo-MVP akzeptabel; für den synthetischen Eval ohnehin irrelevant.
+
+**D6: Post-Completion injiziert (`onCompleted`).** Die nachgelagerte Ableitung (Prozessschritte erzeugen, Clustern, Knowledge-Object-Dedup, Embeddings) bleibt außerhalb des Ports. Prod fährt die echte Pipeline, Eval ein No-op. Begründung: der Interview-Eval bewertet den `step_tracker`, nicht die Ableitung; die Embeddings sind eine externe API, die kein DB-Adapter ersetzen kann.
+
+**D7: PGlite lädt das echte Repo-Schema über einen inerten Bootstrap.** Die Migrations in `supabase/migrations/` bleiben die einzige Schema-Wahrheit, auch für PGlite. Damit die Supabase-spezifischen Zeilen laden (`GRANT … TO authenticated/service_role`, `CREATE POLICY`, `vector`-Spalten, `auth`-Schema), legt ein Bootstrap-Vorspann vorher Stub-Rollen, ein leeres `auth`-Schema und das Vektor-Modul an, ohne dass die Tests Auth berühren. Eine handgepflegte PGlite-Schema-Kopie wurde verworfen (würde driften). Wenn eine Migration trotz Bootstrap nicht lädt, schlägt der Adapter-Setup-Test hart fehl statt still zu driften.
+
+**D8: Drei Test-Stufen.** (1) Reine Logik ohne DB: Konfliktauflösung/Idempotenz/done als Funktion auf einem Snapshot, hier die Masse der Tests. (2) Dev-Test gegen PGlite, hermetisch: Persistenz-Rundreise inklusive jsonb-Treue (PROJ-38-Klasse); hier läuft der DB-freie Eval. (3) Gegateter Prod-Test gegen echte Supabase: dieselben Persistenz-Behauptungen, nightly/vor Deploy, als Treue-Anker gegen Schema-Drift. Ein Zwei-Adapter-Vertrag-Test prüft dieselben Behauptungen gegen beide.
+
+### D) Abhängigkeiten (neu zu installieren)
+
+- **`@electric-sql/pglite`** plus das mitgelieferte Vektor-Modul. Lokale Postgres-Engine im Prozess für den Eval-Adapter und die hermetischen Dev-Tests. Kein Netz, keine separate DB-Instanz. Das Vektor-Modul wird allein dafür gebraucht, dass die `vector`-Spalten der Migrations als DDL laden (knowledge_objects), nicht für Vektor-Suche im Eval.
+- Keine Major-Upgrades bestehender Pakete. Keine DB-Migration und kein Schema-Change in Prod.
+
+### E) Auswirkung auf /eval-interview (Dev-Eval vs. Prod-Eval)
+
+Nach PROJ-34 wählt der Eval-Nutzer zwischen zwei Pfaden. Die Auswahl ist explizit, nicht nur ein interner Default.
+
+| | Dev-Eval (neu, Default) | Prod-Eval (heutiges Verhalten) |
+|---|---|---|
+| Adapter | `PGliteTurnStore` (lokale DB im Prozess) | `SupabaseTurnStore` (echte Cloud-DB) |
+| Netz / `EVAL_WORKSPACE_ID` | nicht nötig | nötig (wie heute) |
+| Geschwindigkeit / Reproduzierbarkeit | schnell, hermetisch | netzabhängig, langsamer |
+| Rolle | Tagesgeschäft, Modellvergleich, CI | Treue-Anker (Stufe 3), nightly/vor Deploy |
+| Post-Run-Analyse | aus Runner-Artefakten | via Supabase MCP (wie heute) |
+
+**Auswahl-Mechanismus.** Ein CLI-Flag `--store pglite|supabase` am Runner (Default `pglite`), alternativ env `EVAL_STORE`. Im Skill `/eval-interview` kommt die Auswahl als zweite Frage in Schritt 0 dazu (neben der Modell-Bestätigung): „Dev-Eval (PGlite, DB-frei)" als empfohlene Vorauswahl, „Prod-Eval (echte Supabase)" als Alternative.
+
+**Konsequenz für die Post-Run-Analyse (Skill Schritt 3).** Heute liest der Skill `step_tracker`, `turns` und `knowledge_objects` per Supabase MCP aus der Cloud-DB. Im Dev-Eval landet dort nichts. Die Analyse liest stattdessen aus den Artefakten, die der Runner ohnehin erzeugt: `transcript.json` (enthält `finalStepTracker` + `scores`), die `.slot-trail.jsonl` (Trail-Metriken) und der MD-Report. Im Prod-Eval bleiben die Supabase-MCP-Queries. Diese Verzweigung gehört zwingend in die Build-Arbeit (`SKILL.md`-Update), sonst entsteht eine Skill-gegen-Runner-Divergenz wie bei KI-6.
+
+**Antwort auf die Kernfrage:** Ja, die Auswahl Dev-Eval vs. Prod-Eval ist Teil des Designs. Der DB-freie Dev-Eval wird der Default; der Prod-Eval bleibt jederzeit wählbar und ist zugleich der gegatete Treue-Nachweis. Beide müssen auf gleicher Persona und gleichem Seed identische Scores liefern (Acceptance Criteria).
+
+### Risiken / offene Punkte
+
+- **Migrations-Kompatibilität mit PGlite** ist das Hauptrisiko (D7). Mitigation: harter Setup-Fehler statt stiller Drift, plus Stufe-3-Vertrag-Test gegen echte Supabase.
+- **Verhaltensneutralität** ist die Erfolgsbedingung, nicht eine Verbesserung. Nach PROJ-34 müssen die Kern-Scores (slot_coverage, depth, overwrite_churn ≈ 0.38) gleich bleiben; jede Abweichung ist ein Regress-Alarm. Der Slot-Write-Trail feuert weiter pro Absicht, damit die Trail-Metriken vergleichbar bleiben.
+- **Treue-Nachweis:** PGlite-Eval (Stufe 2) und echte-Supabase-Eval (Stufe 3) müssen auf derselben Persona und demselben Seed identische Scores liefern.
+
+### ADR-Hinweis
+
+Diese Design-Entscheidungen (insbesondere D1, D2, D3, D5) gehören als immutable Eintrag in **ADR-018** (Werkzeug-Schreibabsichten + TurnStore-Port). ADR-016 hatte den Port bewusst vertagt; ADR-018 hebt die Vertagung auf, weil der DB-freie Eval der zweite Adapter ist, der den Port rechtfertigt. Empfehlung: `/adr` vor `/backend` ausführen.
 
 ## QA Test Results
 _To be added by /qa_
