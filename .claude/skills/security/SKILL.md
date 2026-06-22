@@ -19,6 +19,7 @@ Never trust the client. Every workspace_id, user role, and feature flag must be 
 2. **LLM calls** — chat, process-step enrichment, and use-case generation all call external AI APIs. No rate limiting means a leaked token or credential can drain billing.
 3. **Supabase service_role usage** — several API routes use `getSupabaseAdmin()` (service_role bypasses RLS). These routes must enforce authorization themselves.
 4. **Workspace isolation** — all data is scoped to workspaces. The workspace_members table is the authorization boundary. Any query missing the membership check leaks cross-workspace data.
+5. **New `[id]`/detail routes — IDOR** <!-- source: PROJ-24 (/retro 2026-06-22) — use-case detail route accepted any ID, cross-workspace object access never checked until QA --> Every new route that takes a resource ID (`[id]`, query param, or body field) must explicitly verify the resource belongs to the caller's workspace before returning or mutating it — a valid auth session is not enough, the object itself must be ownership-checked.
 
 ## Audit Process
 

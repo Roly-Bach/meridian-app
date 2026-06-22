@@ -106,6 +106,10 @@ These tests become the permanent regression suite for this feature.
 - Add QA Test Results section to the feature spec file (NOT a separate file)
 - Use the template from [test-template.md](test-template.md)
 
+### 8b. Eval-Gate Pflicht bei Conversation-Logic-Features
+<!-- source: PROJ-22 (/retro 2026-06-22) — 351 grüne Unit-Tests verdeckten 2 Critical Completion-Bugs (Farewell-Loop), die erst der buchhalter-Eval-Lauf aufdeckte -->
+Betrifft ein Feature die Interview-Conversation-Logic (Agent-Verhalten, Completion-/Closing-Heuristik, Slot-Writes, Dialog-Führung): grüne Unit-/E2E-Tests allein reichen nicht für Status=Approved. Zusätzlich einen Eval-Lauf (`/eval-interview` bzw. `npm run eval:interview`) gegen mindestens eine Persona fahren und das Ergebnis im QA-Abschnitt dokumentieren. Unit-Tests prüfen Code-Pfade, der Eval-Lauf prüft tatsächliches Konversationsverhalten — beides ist nötig, keins ersetzt das andere.
+
 ### 9. Bug-Tally + INDEX.md Bugs-Feld
 
 Zähle alle gefundenen Bugs nach Schweregrad und schreibe das Ergebnis ins `Bugs`-Feld in `features/INDEX.md`:
