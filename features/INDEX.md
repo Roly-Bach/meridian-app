@@ -30,8 +30,8 @@
 | PROJ-12 | Rate Limiting | Feature | Platform | — | Deployed | [spec](platform/PROJ-12-rate-limiting.md) | P1 | — | — |
 | PROJ-13 | LLM Observability & Tracing | Feature | Platform | — | Deployed | [spec](platform/PROJ-13-llm-observability-tracing.md) | P1 | M | 0:0:2 |
 | PROJ-14 | Embedding-Modell Auswahl | Extension | Wissensbank | PROJ-4 | Deployed | → PROJ-20 | P1 | — | — |
-| PROJ-15 | CSP Hardening | Feature | Platform | — | Blocked | [spec](platform/PROJ-15-csp-hardening.md) | P1 | — | — |
-| PROJ-16 | Supabase Hardening + Dependency Hygiene | Feature | Platform | — | Planned | [spec](platform/PROJ-16-supabase-hardening.md) | P1 | — | — |
+| PROJ-15 | CSP Hardening | Feature | Platform | — | Approved | [spec](platform/PROJ-15-csp-hardening.md) | P1 | S | 0:0:1 |
+| PROJ-16 | Supabase Hardening + Dependency Hygiene | Feature | Platform | — | Approved | [spec](platform/PROJ-16-supabase-hardening.md) | P1 | M | 0:0:0 |
 | PROJ-17 | Adaptive Eval-Harness + Start-Endpoint | Feature | Interview Engine | — | Deployed | [spec](interview-engine/PROJ-17-adaptive-eval-harness-start-endpoint.md) | P1 | M | 0:0:2 |
 | PROJ-18 | Prozessschritt-Deduplication | Feature | Wissensbank | PROJ-5 | Deployed | → PROJ-20 | P1 | M | 0:0:2 |
 | PROJ-19 | Knowledge-Informed Interviewing | Extension | Interview Engine | PROJ-2 | Roadmap | — | P2 | — | — |
@@ -70,6 +70,7 @@
 | KI-2 | Low | Knowledge-Object-Tool-Duplikation: mehrere Records pro distinktem Tool (19 Records / 4 Tools im buchhalter-Lauf) | Eval 2026-06-19 | Dedup auf KO-Ebene |
 | KI-5 | ✅ Resolved | ~~`dialog_naturalness`-Gate `≥ 0.70` vs. Mapping {0.33/0.67/1.0}: nur Stufe 3 passiert~~ → gelöst durch mains PROJ-31 (Gate auf `≥ 0.65` gesenkt, [runner.ts](../src/services/__evals__/interview/runner.ts)), integriert im Merge 2026-06-21. Lauf 2026-06-21: `dialog_naturalness 0.67 ≥ 0.65` → **PASS** | Eval 2026-06-20 | — (gelöst 2026-06-21) |
 | KI-6 | Low | `/eval-interview`-Skill Schritt-4 (manuelle PASS-Kriterien) und das automatische Runner-Gate (`runner.ts`) divergieren: die manuellen Kriterien kennen die `dialog_naturalness`-Gate-Bedingung nicht (Gate jetzt `≥ 0.65`), daher kann ein Lauf nach Schritt 4 PASS, nach Runner-Gate FAIL sein | Eval 2026-06-20 | Schritt-4-Kriterien an Runner-Gate angleichen |
+| KI-7 | **Critical** | **Mitarbeiter-Interview-Link bricht für echte (nicht eingeloggte) Mitarbeiter:** `/interview/[token]` und `/api/interview/[token]/chat` werden von `src/middleware.ts` zu `/login` redirected, weil `PUBLIC_ROUTES` (`['/login','/signup','/auth/callback']`) `/interview` nie enthielt — seit der ersten Middleware-Version (git-history geprüft), nicht durch PROJ-15/16 verursacht. In Dev UND Production-Build reproduziert (`curl` ohne Session-Cookie → 307 zu `/login`). Eval-Runner umgeht das (ruft `runInterviewTurn` direkt in-process, keine HTTP/Middleware) — deshalb nie in Evals aufgefallen. Vermutlich auch nie manuell gefunden, weil Entwickler-Browser meist eine eigene Meridian-Session hat, die das Maskiert. Fix-Form: `/interview` und `/api/interview` zu `PUBLIC_ROUTES` ergänzen (Token-Auth läuft ohnehin pro Route eigenständig, nicht über Supabase-Session). | QA-Regression PROJ-15/16, 2026-06-22 | S — ein Array-Eintrag, aber Production-kritisch, eigener Review/Deploy-Zyklus nötig |
 
 > KI-3 (dialog_naturalness-Parsing) ✅ gelöst durch mains JSON-Judge (kein `Stufe: X`-Truncation mehr; Lauf 2026-06-21 echter 0.67-Score, kein Fallback). KI-4 (Skill-Doc) bleibt via PROJ-39 (SKILL.md-Fix). Beide waren als PROJ-39 getrackt; der Parser-Teil ist durch den Merge mit mains JSON-Variante supersediert.
 
