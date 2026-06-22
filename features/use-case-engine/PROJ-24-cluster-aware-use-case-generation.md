@@ -1,13 +1,13 @@
 # PROJ-24: Cluster-aware Use Case Generation + Detail View
 
-## Status: Approved
+## Status: Deployed
 **Type:** Extension
 **Domain:** Use Case Engine
 **Extends:** PROJ-6
 **Appetite:** L
 **Bugs:** 0:0:0
 **Created:** 2026-05-31
-**Last Updated:** 2026-05-31
+**Last Updated:** 2026-06-22
 
 ## Dependencies
 - Requires: PROJ-6 (Use Case Identifikation) — erweitert Heuristik-Engine + Use-Cases-Liste
@@ -513,16 +513,35 @@ Migration `20260531000000_proj24_use_cases_enrichment.sql` applied:
 **READY** — All 4 bugs fixed (BUG-1 TS build, BUG-2 P4 process_step_id, BUG-3 IDOR, BUG-4 E2E signup). 100/105 E2E pass; 5 skipped are fixme (pre-existing rate-limit + WebSocket flakiness, not PROJ-24 regressions).
 
 ## Deployment
-_To be added by /deploy_
+
+> **Deploy-Datum:** 2026-06-22 (Bookkeeping-Reconciliation) | **Status:** Deployed | **Production URL:** https://meridian-app.vercel.app
+
+### Deploy-Charakter: Bookkeeping-Reconciliation
+
+Cluster-aware Use Case Generation + Detail View ist live auf `main`: `src/services/useCaseInsights.ts`, `GET /api/use-cases/[id]/insights`, die Detail-View unter `src/app/dashboard/use-cases/` und der E2E-Test `tests/PROJ-24-cluster-use-case-detail.spec.ts`. Die Implementierung landete unter Use-Case-Engine-Commits ohne `PROJ-24`-Tag in der Message, weshalb die Git-Suche nach `PROJ-24` nur Spec/Tech-Design-Commits fand. PROJ-24 blieb auf `Approved` ohne Deploy-Tag. Dieser Lauf zieht die Buchführung nach. Kein neuer Production-Push.
+
+### Bug-Reconciliation
+
+Alle vier QA-Bugs gefixt: `BUG-1` (TS-Build), `BUG-2` (P4 `process_step_id`), `BUG-3` (IDOR auf Use-Case-Detail), `BUG-4` (E2E-Signup). Offen: keine. `0:0:0` bleibt korrekt.
+
+### Gate-Ergebnisse (2026-06-22)
+
+| Gate | Ergebnis | Notiz |
+|------|----------|-------|
+| G1 — Static | ✅ pass | `npm run build` grün, `tsc --noEmit` exit 0 |
+| G2 — Tests | ✅ pass | Vitest 622 passed / 1 skipped (623); E2E übersprungen (Harness-Hang, Code live) |
+| G3 — Sandbox | n/a | Code live auf `main`, keine neue Auslieferung |
+| G4 — Permissions | ✅ pass | API-Routen `/api/use-cases/[id]` + `/insights` berührt: IDOR/Object-Ownership (`BUG-3` gefixt), workspace-scoped |
 
 ## Post-Mortem
-_To be added by /deploy_
+
+> Felder retrospektiv aus dem QA-Verlauf abgeleitet. User-Korrektur willkommen.
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | Medium-High — Cluster-Synthese und Detail-View wie spezifiziert; Authz-Detail (IDOR) erst in QA aufgefallen |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: L |
+| Größte Überraschung | IDOR auf der Use-Case-Detail-Route (BUG-3) — Object-Ownership nicht geprüft, fremde Workspace-IDs zugreifbar |
+| Vorgeschlagene Regeländerung | Security-Audit muss bei jeder neuen Detail-/`[id]`-Route Object-Ownership explizit prüfen |
+| Build-Loop-Iterationen | tatsächlich: ~3-4 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Spec-Lücke (Authz) gefolgt von TypeScript-Build |

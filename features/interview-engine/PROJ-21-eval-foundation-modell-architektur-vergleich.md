@@ -1,14 +1,14 @@
 # PROJ-21: Eval-Foundation für Modell- und Architektur-Vergleich
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-29
-**Last Updated:** 2026-05-30
+**Last Updated:** 2026-06-22
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-17
 **Appetite:** M (3-5 Tage)
 **Priority:** P1
-**Bugs:** 0:1:1
+**Bugs:** 0:0:0 (1 M + 1 L gefunden, alle behoben)
 
 ## Dependencies
 - Requires: PROJ-17 (Adaptive Eval-Harness + Start-Endpoint) — bestehender Runner, Personas, Markdown-Reports werden erweitert
@@ -311,3 +311,37 @@ Keine. Alle benötigten Packages bereits im Projekt:
 | Compare-Datenquelle | Lokale Markdown-Reports | Langfuse API-Query | Kein Netzwerk-Zugriff, kein Race |
 | Tool-Call-Capture | In-Memory (AI SDK `steps[]`) | Langfuse-Trace nachträglich | Kein Async-Query |
 | LLM-as-Judge | Claude Haiku 4.5 (cross-vendor) | Gleiches Modell wie Eval | Vendor-Bias vermeiden |
+
+## Deployment
+
+> **Deploy-Datum:** 2026-06-22 (Bookkeeping-Reconciliation) | **Status:** Deployed | **Production URL:** https://meridian-app.vercel.app
+
+### Deploy-Charakter: Bookkeeping-Reconciliation
+
+Die Eval-Foundation (Quality-Scorer-Suite, Modell-Matrix, A/B-Compare, Baseline) ist seit Commit `f0e582b` live auf `main`. Sie wird seit Wochen produktiv für Eval-Läufe genutzt (zuletzt buchhalter-Lauf 2026-06-21). PROJ-21 blieb auf Status `Approved` ohne eigenen Deploy-Tag; dieser Lauf zieht nur die Buchführung nach. Kein neuer Production-Push.
+
+### Bug-Reconciliation
+
+Alle drei QA-Bugs gefixt: `QA-21-1` (Anthropic-Judge-Key invalid → Key ergänzt, Judge bestätigt 0.72), `QA-21-2` (alphabetische Modell-Sortierung ergänzt), `QA-21-3` (`toolCallPlausibility`-Crash bei `args===undefined` → Guard). Offen: keine. Header `0:1:1` → `0:0:0`.
+
+### Gate-Ergebnisse (2026-06-22)
+
+| Gate | Ergebnis | Notiz |
+|------|----------|-------|
+| G1 — Static | ✅ pass | `npm run build` grün, `tsc --noEmit` exit 0 |
+| G2 — Tests | ✅ pass | Vitest 622 passed / 1 skipped (623) |
+| G3 — Sandbox | n/a | Code live auf `main`, keine neue Auslieferung |
+| G4 — Permissions | n/a | Eval-Harness (`src/services/__evals__/`), keine produktive User-Surface |
+
+## Post-Mortem
+
+> Felder retrospektiv aus dem QA-Verlauf abgeleitet. User-Korrektur willkommen.
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | High — Scorer-Suite und Compare-Format wie spezifiziert geliefert |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: M |
+| Größte Überraschung | Cross-Vendor-Judge lieferte still einen `0.5`-Fallback, weil der Anthropic-Key ungültig war — Scores sahen plausibel aus, waren aber tot (QA-21-1) |
+| Vorgeschlagene Regeländerung | Eval-Preflight muss Judge-API-Key validieren, bevor Scores geschrieben werden (kein stiller Fallback) |
+| Build-Loop-Iterationen | tatsächlich: ~3 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Tool-Call / Config (Judge-Key, Tool-Call-Capture-Guards) |

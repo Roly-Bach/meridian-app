@@ -1,13 +1,13 @@
 # PROJ-23: Adaptive Clarification Questions
 
-## Status: Approved
+## Status: Deployed
 **Type:** Extension
 **Domain:** Interview Engine
 **Extends:** PROJ-2
 **Appetite:** M (3-5d)
-**Bugs:** —
+**Bugs:** 0:0:0 (1 M + 2 L gefunden, alle behoben)
 **Created:** 2026-05-29
-**Last Updated:** 2026-05-29
+**Last Updated:** 2026-06-22
 
 ## Dependencies
 - **Hard Prerequisite: PROJ-22** (ADR-011 Dual-Loop Implementierung) — Analyst-Komponente, `produce_briefing`-Schema mit `clarification_cards`, `clarification`-Phase im Orchestrator müssen existieren bevor PROJ-23 gebaut werden kann
@@ -374,16 +374,35 @@ No new npm packages. Uses: shadcn `Card` + `Button` (installed), `after` (next/s
 **✅ READY** — No Critical or High bugs. Medium bug (BUG-23-1) impacts reload-during-partial-answering edge case only; golden path (answer → submit → completed) works correctly. Low bugs are defensive gaps, not user-facing failures.
 
 ## Deployment
-_To be added by /deploy_
+
+> **Deploy-Datum:** 2026-06-22 (Bookkeeping-Reconciliation) | **Status:** Deployed | **Production URL:** https://meridian-app.vercel.app
+
+### Deploy-Charakter: Bookkeeping-Reconciliation
+
+Adaptive Clarification Questions ist seit Commit `4c4fc21` (full implementation) live auf `main`, inkl. `ClarificationView`, `POST /api/interview/[token]/clarification` und der Eval-Runner-Integration (`3f62e14`, `d12bda8`). PROJ-23 blieb auf `Approved` mit leerem `Bugs:`-Feld (Hard-Rule-Verletzung) und ohne Deploy-Tag. Dieser Lauf zieht die Buchführung nach. Kein neuer Production-Push.
+
+### Bug-Reconciliation
+
+Alle drei QA-Bugs gefixt: `BUG-23-1` (Reload verliert Teilantworten → `localStorage`-Persistenz), `BUG-23-2` (kein Rate-Limit auf Clarification-Endpoint → `checkTokenEndpointLimits`), `BUG-23-3` (`answer: []` passiert Zod → `.min(1)`). Offen: keine. Leeres Feld `—` → `0:0:0`.
+
+### Gate-Ergebnisse (2026-06-22)
+
+| Gate | Ergebnis | Notiz |
+|------|----------|-------|
+| G1 — Static | ✅ pass | `npm run build` grün, `tsc --noEmit` exit 0 |
+| G2 — Tests | ✅ pass | Vitest 622 passed / 1 skipped (623) |
+| G3 — Sandbox | n/a | Code live auf `main`, keine neue Auslieferung |
+| G4 — Permissions | ✅ pass | LLM/Token-Endpoint berührt: Rate-Limit (`BUG-23-2` gefixt), Zod-Input-Validation (`BUG-23-3` gefixt), Token-Validierung wie `/chat` |
 
 ## Post-Mortem
-_To be added by /deploy_
+
+> Felder retrospektiv aus dem QA-Verlauf abgeleitet. User-Korrektur willkommen.
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: — |
-| Größte Überraschung | — |
+| Spec-Genauigkeit | High — Card-Schema und Phase-Wiring wie in PROJ-22 vorbereitet umgesetzt |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: M |
+| Größte Überraschung | Reload während des Beantwortens verlor Teilantworten — `produce_briefing`-Cards waren serverseitig da, aber die UI-Auswahl nicht persistent (BUG-23-1) |
 | Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Build-Loop-Iterationen | tatsächlich: ~3 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | Spec-Lücke (Client-State-Persistenz bei Reload) |
