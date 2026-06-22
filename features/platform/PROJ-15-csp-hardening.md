@@ -1,17 +1,19 @@
 # PROJ-15: CSP Hardening (Nonce-basiertes CSP)
 
-## Status: Blocked (Next.js 16.1.1 Bug)
+## Status: Approved
 **Created:** 2026-05-23
-**Blocked:** 2026-05-24
+**Blocked:** 2026-05-24 → **Entblockt:** 2026-06-22
 **Type:** Feature
 **Domain:** Platform
 **Extends:** —
-**Appetite:** —
-**Bugs:** —
+**Appetite:** S
+**Bugs:** 0:0:1
 
-## Blocker
+## Blocker (gelöst 2026-06-22)
 
 Next.js 16.1.1 verwirft alle Custom-Response-Header, die aus `proxy.ts`/`middleware.ts` gesetzt werden — sowohl im Dev-Modus (Turbopack) als auch im Production-Build (`next start`). Auth-Logik (Redirects) funktioniert nachweislich, aber `response.headers.set('Content-Security-Policy', ...)` und Header über den NextResponse-Konstruktor erscheinen nicht in der HTTP-Response. Damit ist nonce-basiertes CSP nach offiziellem Pattern (Doku: nextjs.org/docs/app/guides/content-security-policy) in dieser Next.js-Version nicht implementierbar.
+
+**Re-Test 2026-06-22 (Next.js 16.2.6, Projekt-Dependency bereits aktuell):** Spike mit temporärer `src/middleware.ts`, die einen Custom-Header setzt — Header erscheint korrekt in der Response (`x-proj-15-spike-test: nonce-header-check`), auch auf einem 307-Redirect. Bug ist behoben, wie in der Spec vorausgesagt ("Bei Next.js 16.2+ erneut versuchen"). Spike-Datei wieder entfernt, kein Produktionscode betroffen.
 
 **Aktueller Zustand (Pre-PROJ-15 minus `unsafe-eval`):**
 CSP zurück in `next.config.ts` mit `script-src 'self' 'unsafe-inline' blob:`. Kein `unsafe-eval`, restliche Security-Header (HSTS, X-Frame-Options, etc.) bleiben aktiv.
@@ -103,6 +105,40 @@ Kein `'unsafe-inline'`, kein `'unsafe-eval'`. Jeder Script-Tag, der ausgeführt 
 3. Manueller Interview-Durchlauf inkl. Voice Input: keine CSP-Violations in der Konsole
 4. Unit-Test für CSP-Header grün
 
+## Tech Design (Solution Architect)
+
+### Was sich seit dem Blocker geändert hat — und was die Architektur-Annahme unten falsch hatte
+
+Ursprüngliche Annahme (vor Implementierung): Next.js-16.1.1-Bug ist gefixt, Logik gehört in den bestehenden Root-`proxy.ts`. **Das zweite war falsch, durch Implementierung widerlegt — siehe Implementation Notes.** `proxy.ts`/`proxy`-Export liefert in 16.2.6 weiterhin keine selbst gesetzten Header aus, weder bei `NextResponse.redirect()` noch bei `NextResponse.next()`. Einzig `src/middleware.ts`/`middleware`-Export (der offiziell deprecated Name) funktioniert korrekt. Tatsächlich umgesetzt: Auth-Logik + CSP/Nonce zusammen in `src/middleware.ts`, kein separater Root-`proxy.ts` mehr.
+
+### Datenfluss (wie tatsächlich gebaut)
+
+```
+Request
+  → src/middleware.ts: Supabase-Auth-Check (migriert aus dem alten Root-proxy.ts, Verhalten unverändert)
+  → src/middleware.ts: Nonce erzeugen, CSP-Header + x-nonce-Header auf die Response setzen
+  → Response geht an Browser
+  → Root Layout (Server Component) liest x-nonce aus den Request-Headers
+  → Next.js reicht den Nonce automatisch an seine eigenen generierten Scripts weiter (curl-verifiziert, auch auf <link rel=preload>)
+```
+
+### `next.config.ts`-Fallback entfernt, nicht "vorerst behalten"
+
+Ursprünglicher Plan war, den `next.config.ts`-CSP-Eintrag erst nach Verifikation zu entfernen. Tatsächlicher Verifikationslauf zeigte einen Zwischenschritt-Befund: `next.config.ts`-`headers()` **überschreibt** gleichnamige Proxy-/Middleware-Header (Next.js-Präzedenz, kein Bug) — mit beiden aktiv kam der alte `unsafe-inline`-Wert durch, kein Nonce sichtbar. Also musste der Fallback **vor** dem finalen grünen Test entfernt werden, nicht danach. Reihenfolge real: Header in `next.config.ts` entfernt → neu gebaut → curl zeigte zunächst gar keinen CSP-Header (Beweis für das `proxy.ts`-Problem oben) → nach Umzug auf `middleware.ts` zeigte curl den korrekten Nonce-Header.
+
+### Tech-Entscheidungen
+
+| Entscheidung | Begründung |
+|---|---|
+| Nonce-Logik in bestehendem Root-`proxy.ts`, keine neue Datei | Vermeidet die Mehrdeutigkeit, die letztes Mal zum Fehlschlag führte (mehrere konkurrierende Einstiegspunkte) |
+| `next.config.ts`-CSP bleibt bis Production-`curl`-Verifikation | Verhindert eine Phase ganz ohne CSP-Schutz, falls der neue Ansatz wieder nicht greift |
+| Kein neues NPM-Package | Web Crypto API (`crypto.randomUUID()`) ist in Next.js Edge-Runtime und Node.js nativ verfügbar |
+| Verifikation zuerst per `curl` gegen `next start`, dann erst Browser-DevTools | Letztes Mal zeigte der Dev-Server-Log "proxy läuft", obwohl der Header fehlte — Code-Ausführung beweist nicht Header-Anwesenheit |
+
+### Abhängigkeiten (Pakete)
+
+Keine neuen Pakete.
+
 ## Implementation Notes
 
 **Pre-Step erledigt (2026-05-23):** `'unsafe-eval'` aus `next.config.ts` entfernt (Security-Audit PROJ-8). Aktueller Stand in `script-src`: `'self' 'unsafe-inline' blob:`. PROJ-15 setzt hier an und entfernt `'unsafe-inline'` durch nonce-basiertes CSP.
@@ -156,7 +192,85 @@ Theoretisch sollte `src/proxy.ts` erkannt werden. Mögliche Ursachen für Fehler
 - `knownFiles` enthält `src/proxy.ts` nicht beim Start (Timing/Watch-Issue)
 - Next.js 16.1.1-spezifischer Bug mit Turbopack + proxy.ts in src/
 
-## QA Test Results
+### Re-Versuch 2026-06-22 (Next.js 16.2.6) — erfolgreich, mit Korrektur der Architektur-Annahme
+
+**Befund 1 — Next.js-16.1.1-Header-Drop-Bug ist gefixt:** Spike mit `src/middleware.ts` (`middleware`-Export) zeigte korrekt gesetzten Custom-Header in der Response.
+
+**Befund 2 — `proxy.ts`/`proxy`-Export ist weiterhin defekt, unabhängig vom Header-Drop-Bug:** Isolierter Test mit minimaler Root-`proxy.ts` (nur `NextResponse.redirect()` + Header, kein Supabase) zeigte **keinen** Header. Zweiter isolierter Test mit `NextResponse.next()` statt `redirect()` — ebenfalls **kein** Header. Damit ausgeschlossen, dass es am Redirect-Pfad liegt; es liegt an der Datei/Export-Konvention selbst. Build-Log nennt den Slot in beiden Fällen identisch `ƒ Proxy (Middleware)`, aber nur der `middleware.ts`/`middleware`-Pfad liefert tatsächlich aus.
+
+**Befund 3 — `next.config.ts`-`headers()` überschreibt gleichnamige Proxy-Header:** Mit CSP gleichzeitig in `next.config.ts` UND im Proxy gesetzt, kam ausschließlich die `next.config.ts`-Variante (mit `unsafe-inline`) durch — kein Next.js-Bug, sondern dokumentierte Präzedenz (Framework-Level-Headers gewinnen). `next.config.ts`-CSP musste daher entfernt werden, *bevor* der Proxy-Pfad sauber verifizierbar war, nicht erst danach wie ursprünglich geplant.
+
+**Finale Lösung:** Komplette Auth+CSP-Logik in `src/middleware.ts` (`middleware`-Export, deprecated Name, aber einzige funktionierende Variante in 16.2.6). Kein Root-`proxy.ts` mehr. `src/middleware.test.ts` mit 5 Tests für `buildCsp`.
+
+**Curl-Verifikation gegen `next build && next start` (nicht nur Dev-Server):**
+- `/login`: `content-security-policy: ... script-src 'self' 'nonce-{uuid}' blob: ...`, kein `unsafe-inline`, `x-nonce`-Header gesetzt
+- HTML-Body: `nonce="{uuid}"` korrekt auf 3 von Next.js generierten Tags (inkl. `<link rel=preload>`), Wert identisch zum Header
+- `/` (nicht eingeloggt): 307 → `/login`, CSP-Header auch auf der Redirect-Response vorhanden
+- Auth-Redirect-Logik unverändert funktional (migriert 1:1 aus dem alten Root-`proxy.ts`)
+- `npm test`: 627 passed / 1 skipped, keine Regression
+- `npm run lint` (`tsc --noEmit`): keine Fehler
+
+## QA Test Results (2026-06-22, gegen `src/middleware.ts`)
+
+**QA-Datum:** 2026-06-22
+**Tester:** /qa PROJ-15
+**Environment:** Next.js 16.2.6, Production-Build (`next build && next start`) für curl/Header-Checks, Playwright Dev-Server für E2E
+
+### Acceptance Criteria
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| D1.1 | Kryptographisch zufälliger Nonce pro Request | PASS (`crypto.randomUUID()`, curl zeigt unterschiedlichen Wert pro Request) |
+| D1.2 | `x-nonce`-Response-Header gesetzt | PASS |
+| D1.3 | CSP-Header mit `nonce-{value}` statt `unsafe-inline` im `script-src` | PASS |
+| D1.4 | `next.config.ts` ohne CSP-Header | PASS |
+| D1.5 | Bestehende Auth-Redirect-Logik erhalten | PASS (`/` → 307 → `/login`, unverändert) |
+| D2.1 | `layout.tsx` liest `x-nonce` aus Request-Headers | PASS |
+| D2.2 | Nonce als Prop an `<html>` | PASS (HTML-Body enthält `nonce="{uuid}"`) |
+| D2.3 | Next.js reicht Nonce automatisch an eigene Scripts weiter | PASS (`<link rel=preload>`-Header trägt denselben Nonce) |
+| D3.1 | `npm run build` ohne Fehler | PASS |
+| D3.2 | Kein `unsafe-inline`/`unsafe-eval` in `script-src` | PASS |
+| D3.3 | Keine CSP-Violations im Browser-Console | PASS (Playwright Console-Listener, 0 CSP-Violation-Messages über 2 Browser-Projekte) |
+| D3.4 | Voice Input/AudioWorklet (`blob:` in `script-src`+`worker-src`) | PASS strukturell (Direktiven korrekt gesetzt) — **nicht end-to-end mit echtem Mikrofon-Input getestet**, kein Test-User-Setup in dieser Runde |
+| D3.5 | PDF-Report Download funktioniert | Nicht getestet in dieser Runde (kein Test-User-Setup) |
+| D4.1 | Unit-Test: CSP enthält `nonce-` | PASS |
+| D4.2 | Unit-Test: kein `unsafe-inline`/`unsafe-eval` | PASS |
+| D4.3 | Unit-Test: `blob:` in `script-src` | PASS |
+
+**Passed:** 14 / **Not tested:** 2 (D3.4 Voice-Input-Live-Test, D3.5 PDF-Download — beide brauchen eingeloggten Test-User, nicht Teil dieser QA-Runde)
+
+### Automated Tests
+
+- `npm test`: 627 passed / 1 skipped — keine Regression
+- `npm run lint` (`tsc --noEmit`): clean
+- Unit-Tests `src/middleware.test.ts`: 5/5 grün
+- E2E `tests/PROJ-15-csp-hardening.spec.ts`: 4 Tests × 2 Browser-Projekte (Chromium, Mobile Safari) = 8/8 grün
+
+### Bugs
+
+#### QA-15-L1 [Low]: Hydration-Mismatch-Warning auf `nonce`-Attribut im Dev-Mode
+
+**Beschreibung:** React-Console-Warning beim Laden von `/login` im Dev-Server (`npm run dev`, von Playwright automatisch gestartet): `<html nonce="...">` unterscheidet sich zwischen Server- und Client-Render, weil jeder Request einen neuen Nonce erzeugt — React kann das beim Hydration-Diff nicht wissen.
+
+**Impact:** Rein kosmetisch im Dev-Mode-Console-Output. Kein funktionaler Fehler — Seite rendert korrekt, CSP greift korrekt (kein Violation). React dokumentiert selbst, dass `eval()`-bezogene Dev-Warnings "nie in Production" auftreten; die Hydration-Warning ist ebenfalls ein Dev-Mode-Artefakt der ständig wechselnden Nonce, nicht in der Produktion verifiziert (Production-Build unterdrückt React-Dev-Warnings standardmäßig).
+
+**Fix-Empfehlung:** Kein Fix nötig für Deploy. Falls störend: `suppressHydrationWarning` auf `<html>` wäre die Standard-React-Lösung für bewusst client/server-divergente Attribute, aber das verschleiert auch andere echte Hydration-Bugs auf diesem Element — nicht ohne weitere Abwägung umsetzen.
+
+### Security Audit
+
+- Nonce ist pro Request einzigartig (`crypto.randomUUID()`), nicht vorhersagbar, nicht wiederverwendet zwischen Requests — verifiziert über mehrere curl-Aufrufe mit unterschiedlichen Werten.
+- Auth-Bypass: unverändert getestet, Redirect-Logik unangetastet (migriert 1:1, kein Verhaltensunterschied).
+- Keine Secrets im Response-Header oder HTML-Body (Nonce ist per Design öffentlich sichtbar, kein Secret — das ist beabsichtigtes CSP-Pattern, kein Leak).
+- `style-src 'unsafe-inline'` bleibt bewusst (Out-of-Scope laut Spec, CSS-Injection kein relevantes Threat-Model hier).
+
+### Regression Testing
+
+- `npm test` komplett grün (627/628), keine der 47 Test-Dateien betroffen außer den neuen `middleware.test.ts`.
+- Auth-Flow (Route Protection, Redirects) unverändert funktional — selbe Logik wie vorher, nur Datei/Export-Name geändert.
+
+### Production-Ready Decision
+
+**YES** — keine Critical/High/Medium Bugs. QA-15-L1 ist Dev-Mode-Cosmetic, kein Production-Risiko. D3.4/D3.5 (Low-Risk, strukturell korrekt, aber nicht live end-to-end verifiziert) sollten bei nächster Gelegenheit mit echtem Test-User nachgezogen werden — kein Deploy-Blocker.
 
 **QA-Datum:** 2026-05-23
 **Tester:** /qa PROJ-15
