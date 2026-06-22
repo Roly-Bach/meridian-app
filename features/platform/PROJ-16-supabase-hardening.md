@@ -108,7 +108,7 @@ Default angewendet: droppen — bei MVP-Datenmenge gibt es Re-Index in <1s falls
 
 ## Out of Scope
 
-- **`vector`-Extension aus `public`-Schema verschieben:** Architektonisch sauberer, aber alle PROJ-4-Embeddings-Calls referenzieren das Schema implizit. Migration wäre invasiv, Risiko hoch, Nutzen niedrig (Restrisiko des Vectors selbst ist gering — wenn ein Angreifer schon DB-Schema-Zugriff hat, ist die Extension-Position nachrangig).
+- ~~**`vector`-Extension aus `public`-Schema verschieben:** Architektonisch sauberer, aber alle PROJ-4-Embeddings-Calls referenzieren das Schema implizit. Migration wäre invasiv, Risiko hoch, Nutzen niedrig (Restrisiko des Vectors selbst ist gering — wenn ein Angreifer schon DB-Schema-Zugriff hat, ist die Extension-Position nachrangig).~~ **Nachgezogen 2026-06-22** (Migration `move_vector_extension_to_extensions_schema`): DB-`search_path` enthielt bereits `extensions`, daher war die Migration risikoärmer als hier angenommen — nur `match_process_cluster` und `search_knowledge_objects` (fixer `search_path=public, pg_temp`) mussten explizit um `extensions` erweitert werden. Beide live gegen echte Embeddings smoke-getestet, `npm test` 627/628 unverändert grün, Security-Advisor `extension_in_public` weg.
 - **Komplettes Eslint-/Vite-Toolchain-Upgrade:** Größerer Aufwand, eigener Ticket-Scope. PROJ-16 begnügt sich mit dem minimal nötigen Parent-Bump pro Override-Reduktion.
 - **Automatisierte Audit-Pipeline (CI-Check):** Wäre wertvoll, aber separater Scope — PROJ-16 setzt nur den manuellen Anker.
 
