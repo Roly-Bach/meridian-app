@@ -50,7 +50,7 @@
 | PROJ-31 | Eval-Schärfung (Judge, Perturbation, Robustheit) | Revision | Interview Engine | PROJ-21 | Deployed | [spec](interview-engine/PROJ-31-eval-schaerfung.md) | P1 | L | 0:0:0 |
 | PROJ-32 | Agenten-Architektur (Trennung, Preparator; vertagt) | Revision | Interview Engine | PROJ-22 | Zurückgestellt | [BL-E4.1+E4.2](../../meridian-ma/requirements/build-backlog-etappe2.md) · REQ-021/024 | P2 | M | — |
 | PROJ-33 | Turn-Loop-Konsolidierung (runInterviewTurn) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-33-turn-loop-konsolidierung.md) | P1 | M | 0:0:0 |
-| PROJ-34 | Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals) | Revision | Interview Engine | PROJ-33 | Roadmap | — | P2 | — | — |
+| PROJ-34 | Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals) | Revision | Interview Engine | PROJ-33 | Planned | [spec](interview-engine/PROJ-34-werkzeug-schreibabsichten-turnstore-port.md) | P2 | L | — |
 | PROJ-35 | interviewAgent.ts entkernen (Conversation-Signals + server-only-Naht) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-35-interviewagent-entkernen.md) | P2 | M | 0:0:0 |
 | PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Roadmap | — | P2 | — | — |
 | PROJ-37 | Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
@@ -71,6 +71,7 @@
 | KI-2 | Low | Knowledge-Object-Tool-Duplikation: mehrere Records pro distinktem Tool (19 Records / 4 Tools im buchhalter-Lauf) | Eval 2026-06-19 | Dedup auf KO-Ebene |
 | KI-5 | ✅ Resolved | ~~`dialog_naturalness`-Gate `≥ 0.70` vs. Mapping {0.33/0.67/1.0}: nur Stufe 3 passiert~~ → gelöst durch mains PROJ-31 (Gate auf `≥ 0.65` gesenkt, [runner.ts](../src/services/__evals__/interview/runner.ts)), integriert im Merge 2026-06-21. Lauf 2026-06-21: `dialog_naturalness 0.67 ≥ 0.65` → **PASS** | Eval 2026-06-20 | — (gelöst 2026-06-21) |
 | KI-6 | Low | `/eval-interview`-Skill Schritt-4 (manuelle PASS-Kriterien) und das automatische Runner-Gate (`runner.ts`) divergieren: die manuellen Kriterien kennen die `dialog_naturalness`-Gate-Bedingung nicht (Gate jetzt `≥ 0.65`), daher kann ein Lauf nach Schritt 4 PASS, nach Runner-Gate FAIL sein | Eval 2026-06-20 | Schritt-4-Kriterien an Runner-Gate angleichen |
+| KI-7 | Medium | Talker-Halluzination wird von `hallucination_rate` nicht erfasst: Metrik greift nur auf Extraktions-/Schema-Ebene (evidence_quote-Kontamination), nicht auf konversationelle Faktentreue. Buchhalter-Lauf 2026-06-22 Turn 2: Agent erfand falsche Prämisse („Du hast vorhin 20 Rechnungen erwähnt") obwohl Persona in Turn 1 keine Zahl nannte — `hallucination_rate = 0` trotzdem. Falsches Vertrauen ins Signal. | Eval 2026-06-22 | Eigenes Eval-Signal „Talker-Faktentreue gegen History" (Judge prüft Agent-Fragen gegen bisherige Persona-Aussagen) |
 
 > KI-3 (dialog_naturalness-Parsing) ✅ gelöst durch mains JSON-Judge (kein `Stufe: X`-Truncation mehr; Lauf 2026-06-21 echter 0.67-Score, kein Fallback). KI-4 (Skill-Doc) bleibt via PROJ-39 (SKILL.md-Fix). Beide waren als PROJ-39 getrackt; der Parser-Teil ist durch den Merge mit mains JSON-Variante supersediert.
 
