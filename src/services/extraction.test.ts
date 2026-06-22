@@ -2,14 +2,36 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockInsert } = vi.hoisted(() => ({
+const { mockInsert, mockUpdatePayload, mockUpdateEq, mockDelete, dedupSelectResultsByType } = vi.hoisted(() => ({
   mockInsert: vi.fn(),
+  mockUpdatePayload: vi.fn(),
+  mockUpdateEq: vi.fn().mockResolvedValue({ error: null }),
+  mockDelete: vi.fn().mockResolvedValue({ error: null }),
+  dedupSelectResultsByType: {} as Record<string, { data: unknown[] | null; error: { message: string } | null }>,
 }))
 
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({
     from: vi.fn().mockReturnValue({
       insert: mockInsert,
+      // Dedup select chain: .select().eq('workspace_id', ..).eq('type', type).not().order()
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockImplementation((_col: string, type: string) => ({
+            not: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue(
+                dedupSelectResultsByType[type] ?? { data: [], error: null },
+              ),
+            }),
+          })),
+        }),
+      }),
+      // Dedup update/delete chains
+      update: vi.fn().mockImplementation((payload: unknown) => {
+        mockUpdatePayload(payload)
+        return { eq: mockUpdateEq }
+      }),
+      delete: vi.fn().mockReturnValue({ in: mockDelete }),
     }),
   }),
 }))
@@ -26,7 +48,7 @@ vi.mock('./embeddings', () => ({
   generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
 }))
 
-import { extractAndEmbed, levenshtein } from './extraction'
+import { extractAndEmbed, levenshtein, deduplicateKnowledgeObjects } from './extraction'
 import { generateText } from 'ai'
 import { generateEmbedding } from './embeddings'
 
@@ -351,5 +373,64 @@ describe('levenshtein', () => {
     expect(levenshtein('aaaaaaaa', 'bbbbbbbb')).toBe(8)
     // 9 substitutions -> > 8 -> blocked
     expect(levenshtein('aaaaaaaaa', 'bbbbbbbbb')).toBe(9)
+  })
+})
+
+// ─── deduplicateKnowledgeObjects (KI-2: tool-type dedup) ───────────────────────
+
+describe('deduplicateKnowledgeObjects', () => {
+  beforeEach(() => {
+    for (const key of Object.keys(dedupSelectResultsByType)) delete dedupSelectResultsByType[key]
+    mockUpdatePayload.mockClear()
+    mockUpdateEq.mockClear().mockResolvedValue({ error: null })
+    mockDelete.mockClear().mockResolvedValue({ error: null })
+  })
+
+  it('merges near-duplicate tool-type knowledge objects (KI-2 regression)', async () => {
+    dedupSelectResultsByType['tool'] = {
+      data: [
+        { id: 'tool-a', content: { name: 'E-Mail', purpose: 'Empfang von Rechnungen' }, embedding: [1, 0, 0], existing_count: 1 },
+        { id: 'tool-b', content: { name: 'Email', purpose: 'Empfang neuer Rechnungen' }, embedding: [1, 0, 0], existing_count: 1 },
+      ],
+      error: null,
+    }
+    dedupSelectResultsByType['pain_point'] = { data: [], error: null }
+
+    await deduplicateKnowledgeObjects('ws-1')
+
+    expect(mockUpdatePayload).toHaveBeenCalledWith(
+      expect.objectContaining({ existing_count: 2 }),
+    )
+    expect(mockDelete).toHaveBeenCalledWith('id', ['tool-b'])
+  })
+
+  it('does not merge tool-type objects with different names even at high cosine similarity', async () => {
+    dedupSelectResultsByType['tool'] = {
+      data: [
+        { id: 'tool-a', content: { name: 'Buchhaltungssoftware DATEV', purpose: 'Buchung' }, embedding: [1, 0, 0], existing_count: 1 },
+        { id: 'tool-b', content: { name: 'E-Mail-Postfach Outlook', purpose: 'Empfang' }, embedding: [1, 0, 0], existing_count: 1 },
+      ],
+      error: null,
+    }
+    dedupSelectResultsByType['pain_point'] = { data: [], error: null }
+
+    await deduplicateKnowledgeObjects('ws-1')
+
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
+  it('still dedupes pain_point objects via content.description (pre-existing behaviour preserved)', async () => {
+    dedupSelectResultsByType['pain_point'] = {
+      data: [
+        { id: 'pp-a', content: { description: 'Rechnungen kommen verspätet an' }, embedding: [1, 0, 0], existing_count: 1 },
+        { id: 'pp-b', content: { description: 'Rechnungen kommen verspätet an.' }, embedding: [1, 0, 0], existing_count: 1 },
+      ],
+      error: null,
+    }
+    dedupSelectResultsByType['tool'] = { data: [], error: null }
+
+    await deduplicateKnowledgeObjects('ws-1')
+
+    expect(mockDelete).toHaveBeenCalledWith('id', ['pp-b'])
   })
 })

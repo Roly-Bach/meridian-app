@@ -146,9 +146,12 @@ export async function extractAndEmbed({
   return inserted
 }
 
-// D13/ADR-006: Workspace-level deduplication of process_step knowledge objects.
+// D13/ADR-006: Workspace-level deduplication of knowledge objects.
 // Run async after interview completion. Merges objects with cosine similarity > 0.92
-// and the same role into the older entry; increments existing_count on the survivor.
+// and matching dedup-text into the older entry; increments existing_count on the survivor.
+// KI-2: originally pain_point-only (hardcoded .eq('type', 'pain_point') + content.description) —
+// tool-type objects were never deduped, leaving multiple records per distinct tool. Generalized
+// to run per ALLOWED_TYPES with a type-aware text field.
 const DEDUP_THRESHOLD = 0.92
 
 export function levenshtein(a: string, b: string): number {
@@ -161,19 +164,27 @@ export function levenshtein(a: string, b: string): number {
   return dp[a.length][b.length]
 }
 
-export async function deduplicateKnowledgeObjects(workspaceId: string): Promise<void> {
-  const supabase = getSupabaseAdmin()
+// pain_point content: { description, severity? } — tool content: { name, purpose }.
+function dedupText(type: KnowledgeObjectType, content: Record<string, unknown>): string {
+  const field = type === 'tool' ? 'name' : 'description'
+  return (content?.[field] as string | undefined) ?? ''
+}
 
+async function deduplicateByType(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  workspaceId: string,
+  type: KnowledgeObjectType,
+): Promise<void> {
   const { data: objects, error } = await supabase
     .from('knowledge_objects')
     .select('id, content, embedding, existing_count')
     .eq('workspace_id', workspaceId)
-    .eq('type', 'pain_point')
+    .eq('type', type)
     .not('embedding', 'is', null)
     .order('created_at', { ascending: true })
 
   if (error) {
-    console.error('[dedup] fetch failed:', error.message)
+    console.error(`[dedup] fetch failed (type=${type}):`, error.message)
     return
   }
   if (!objects || objects.length < 2) return
@@ -193,9 +204,9 @@ export async function deduplicateKnowledgeObjects(workspaceId: string): Promise<
       const sim = cosineSim(rows[i].embedding, rows[j].embedding)
       if (sim < DEDUP_THRESHOLD) continue
 
-      const descI = (rows[i].content?.description as string | undefined) ?? ''
-      const descJ = (rows[j].content?.description as string | undefined) ?? ''
-      if (levenshtein(descI.toLowerCase(), descJ.toLowerCase()) > 8) continue
+      const textI = dedupText(type, rows[i].content)
+      const textJ = dedupText(type, rows[j].content)
+      if (levenshtein(textI.toLowerCase(), textJ.toLowerCase()) > 8) continue
 
       toDelete.add(rows[j].id)
       const merged = (countUpdates.get(rows[i].id) ?? rows[i].existing_count) + rows[j].existing_count
@@ -220,5 +231,12 @@ export async function deduplicateKnowledgeObjects(workspaceId: string): Promise<
     .delete()
     .in('id', [...toDelete])
   if (delErr) console.error('[dedup] delete failed:', delErr.message)
-  else console.info(`[dedup] removed ${toDelete.size} duplicate(s) in workspace ${workspaceId}`)
+  else console.info(`[dedup] removed ${toDelete.size} duplicate(s) of type=${type} in workspace ${workspaceId}`)
+}
+
+export async function deduplicateKnowledgeObjects(workspaceId: string): Promise<void> {
+  const supabase = getSupabaseAdmin()
+  for (const type of ALLOWED_TYPES) {
+    await deduplicateByType(supabase, workspaceId, type)
+  }
 }
