@@ -46,43 +46,33 @@ next-env.d.ts
 .aider*
 .eval-last-usage.json
 
-# mattpocock/skills — lokales Werkzeug, nicht versioniert.
-# Wiederherstellen mit: npx skills@latest add mattpocock/skills
-# Projekteigene Skills unter .claude/skills/ sind echte Verzeichnisse und bleiben getrackt;
-# die Einträge hier sind die vom Installer angelegten Symlinks. Falls je eine projekteigene
-# Skill mit gleichem Namen entsteht, deren Zeile hier entfernen.
+# mattpocock/skills — Installer-Werkzeug (npx skills@latest add mattpocock/skills).
+# Ausgewählte Engineering-Skills sind bewusst als ECHTE Verzeichnisse vendored/getrackt
+# (improve-codebase-architecture + Deps codebase-design/grilling/design-an-interface,
+# resolving-merge-conflicts, diagnosing-bugs, tdd, domain-modeling, ubiquitous-language,
+# review, handoff, grill-with-docs, grill-me) — sie stehen dem Team per git zur Verfügung
+# und sind damit vom Installer entkoppelt (`npx skills update` aktualisiert sie NICHT).
+# Die Einträge unten bleiben lokal (Installer-Symlinks / nicht projektrelevant, nicht versioniert).
+# Projekteigene Skills (architecture, backend, qa, …) sind ohnehin echte getrackte Verzeichnisse.
 /.agents/
 /skills-lock.json
 /.claude/skills/ask-matt
-/.claude/skills/codebase-design
 /.claude/skills/decision-mapping
-/.claude/skills/design-an-interface
-/.claude/skills/diagnosing-bugs
-/.claude/skills/domain-modeling
 /.claude/skills/edit-article
 /.claude/skills/git-guardrails-claude-code
-/.claude/skills/grill-me
-/.claude/skills/grill-with-docs
-/.claude/skills/grilling
-/.claude/skills/handoff
 /.claude/skills/implement
-/.claude/skills/improve-codebase-architecture
 /.claude/skills/mattpocock-qa
 /.claude/skills/migrate-to-shoehorn
 /.claude/skills/obsidian-vault
 /.claude/skills/prototype
 /.claude/skills/request-refactor-plan
-/.claude/skills/resolving-merge-conflicts
-/.claude/skills/review
 /.claude/skills/scaffold-exercises
 /.claude/skills/setup-matt-pocock-skills
 /.claude/skills/setup-pre-commit
-/.claude/skills/tdd
 /.claude/skills/teach
 /.claude/skills/to-issues
 /.claude/skills/to-prd
 /.claude/skills/triage
-/.claude/skills/ubiquitous-language
 /.claude/skills/writing-beats
 /.claude/skills/writing-fragments
 /.claude/skills/writing-great-skills
