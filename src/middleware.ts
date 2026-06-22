@@ -1,7 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback']
+// Trailing slash matters: '/interview' (no slash) would also match '/api/interviews'
+// (the authenticated dashboard CRUD endpoint) via startsWith — token-routes only.
+const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback', '/interview/', '/api/interview/']
 
 /**
  * Pure function for testability (PROJ-15). Nonce replaces 'unsafe-inline' in script-src.
@@ -56,7 +58,11 @@ export async function middleware(request: NextRequest) {
 
   let response: NextResponse
   if (!user && !isPublicRoute) {
-    response = NextResponse.redirect(new URL('/login', request.url))
+    // API routes are consumed by fetch()/programmatic clients, not browser navigation —
+    // a 307 redirect to an HTML login page is the wrong contract (caller expects JSON).
+    response = pathname.startsWith('/api/')
+      ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      : NextResponse.redirect(new URL('/login', request.url))
   } else if (user && (pathname === '/' || pathname === '/login' || pathname === '/signup')) {
     response = NextResponse.redirect(new URL('/dashboard', request.url))
   } else {
