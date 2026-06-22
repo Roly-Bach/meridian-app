@@ -1,12 +1,12 @@
 # PROJ-9: LLM Provider Optimierung
 
-## Status: Roadmap
+## Status: Planned
 **Created:** 2026-05-20
-**Last Updated:** 2026-05-21
+**Last Updated:** 2026-06-22
 **Type:** Feature
 **Domain:** Platform
 **Extends:** —
-**Appetite:** —
+**Appetite:** M
 **Bugs:** —
 
 ## Dependencies
@@ -73,17 +73,17 @@ Das Interview ist der Kern-Use-Case. Qualität, Latenz und Kosten des LLM haben 
 
 ### Research-Phase (muss vor Modell-Empfehlung abgeschlossen sein)
 
-- [ ] Vergleich der Modelle anhand Interview-spezifischer Anforderungen:
+- [x] Vergleich der Modelle anhand Interview-spezifischer Anforderungen:
   - Zuverlässige Tool Use / Function Calling (Phase-Transitions, update_topics)
   - Gesprächsqualität (natürliche Folgefragen, Paraphrasierung)
   - Latenz (Zeit bis erster SSE-Token < 3s)
   - Kosten ($/1M Tokens Input + Output)
   - Rate-Limits auf kostenpflichtigen Plänen
-- [ ] Kandidaten Interview-Agent (Echtzeit, Tool Use): `kimi-k2.6` via Nebius, `gemini-3.5-flash`, `claude-sonnet-4-6`, `deepseek-v4-pro` via Nebius
-- [ ] Kandidaten Extraktion/Anreicherung (async, JSON-Output): `deepseek-v4-flash` via Nebius, `gemini-3.5-flash`, `kimi-k2.6` via Nebius
-- [ ] Getrennte Empfehlung für Interview-Agent vs. Extraction/Enrichment (unterschiedliche Anforderungen)
-- [ ] Nebius als neuer Provider in `llm-provider.ts` evaluieren (OpenAI-kompatibler Endpoint)
-- [ ] Empfehlung dokumentiert in diesem Spec
+- [x] Kandidaten Interview-Agent (Echtzeit, Tool Use): `kimi-k2.6` via Nebius, `gemini-3.5-flash`, `claude-sonnet-4-6`, `deepseek-v4-pro` via Nebius
+- [x] Kandidaten Extraktion/Anreicherung (async, JSON-Output): `deepseek-v4-flash` via Nebius, `gemini-3.5-flash`, `kimi-k2.6` via Nebius
+- [x] Getrennte Empfehlung für Interview-Agent vs. Extraction/Enrichment (unterschiedliche Anforderungen)
+- [x] Nebius als neuer Provider in `llm-provider.ts` evaluieren (OpenAI-kompatibler Endpoint) — Architektur-Entscheidung getroffen (siehe Tech Design unten), Implementierung selbst ist Backend-Scope
+- [x] Empfehlung dokumentiert in diesem Spec — final übernommen 2026-06-22, kein Re-Validierungsbedarf trotz 1 Monat Alter (User-Entscheidung)
 
 ### Implementierung (bereits abgeschlossen)
 
