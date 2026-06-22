@@ -1,6 +1,6 @@
 # PROJ-15: CSP Hardening (Nonce-basiertes CSP)
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-23
 **Blocked:** 2026-05-24 → **Entblockt:** 2026-06-22
 **Type:** Feature
@@ -352,3 +352,25 @@ Konkrete Änderungen wieder aktiv:
 - `proxy.test.ts` entfernt (testete `buildCsp` aus reverted Code).
 
 **Sicherheits-Delta gegenüber Pre-PROJ-15:** Reduktion um `'unsafe-eval'` (über PROJ-8 Pre-Step bereits durchgeführt) bleibt erhalten. `'unsafe-inline'` weiterhin notwendig, bis Next.js den Header-Drop-Bug behebt.
+
+## Deployment (2026-06-22)
+
+**Production URL:** https://meridian-app-bendewar10s-projects.vercel.app (Vercel-Projekt `meridian-app`, neu gelinkt — vorheriges Projekt existierte nicht mehr im Account, siehe Implementation Notes unten)
+
+- G1 (Static): pass — `npm run build`, `npm run lint` (tsc --noEmit), Security-Header in `next.config.ts` geprüft
+- G2 (Tests): pass — `npm test` 627/628 (1 skipped), E2E (`PROJ-15`, `PROJ-1`, `PROJ-3`) 84 passed / 8 skipped
+- G3 (Sandbox): pass — Deploy lief (CLI-Eigenheit bei neu gelinktem Projekt ohne vorherigen Prod-Deploy) direkt auf Production statt Preview-Slot; Build erfolgreich, danach voll smoke-getestet
+- G4 (Permissions): pass — curl-Verifikation gegen Live-URL: CSP-Header mit `nonce-`, kein `unsafe-inline`, HSTS/X-Frame-Options/X-Content-Type-Options gesetzt, `/api/use-cases` ohne Session → `401 {"error":"Unauthorized"}` (kein Stacktrace-Leak)
+
+**Abweichung vom Standard-Workflow:** Vercel-Projekt `meridian-app` war im Account nicht mehr vorhanden (vermutlich gelöscht). Neu gelinkt + 19 Env-Vars aus `.env.local` nach Production gepusht (User-Approval eingeholt). Erster `vercel deploy` eines frisch gelinkten Projekts landet automatisch auf Production-Target, nicht auf Preview — kein Override-Versuch, sondern beobachtetes CLI-Verhalten. User wurde sofort informiert und hat Fortsetzung (statt Rollback) freigegeben.
+
+## Post-Mortem
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | Medium — der Next.js-16.1.1-Header-Drop-Bug war beim Spec-Schreiben nicht vorhersehbar, hat einen vollen Blocker-Zyklus gekostet |
+| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: deutlich über S (Blocker 2026-05-24 → 2026-06-22) |
+| Größte Überraschung | `proxy.ts` (der offiziell empfohlene, nicht-deprecated Name) liefert in Next.js 16.2.6 weiterhin keine Custom-Header aus — nur das deprecated `middleware.ts` funktioniert |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: 2 (Erstversuch 2026-05-23 BUG-1, Re-Versuch 2026-06-22 nach Next.js-Bump) |
+| Häufigste Fehlerkategorie im Loop | Tool-Call (Next.js Proxy/Middleware-Registrierung — Framework-Bug, nicht Code-Logik) |

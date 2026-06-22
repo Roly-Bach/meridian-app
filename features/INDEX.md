@@ -30,8 +30,8 @@
 | PROJ-12 | Rate Limiting | Feature | Platform | — | Deployed | [spec](platform/PROJ-12-rate-limiting.md) | P1 | — | — |
 | PROJ-13 | LLM Observability & Tracing | Feature | Platform | — | Deployed | [spec](platform/PROJ-13-llm-observability-tracing.md) | P1 | M | 0:0:2 |
 | PROJ-14 | Embedding-Modell Auswahl | Extension | Wissensbank | PROJ-4 | Deployed | → PROJ-20 | P1 | — | — |
-| PROJ-15 | CSP Hardening | Feature | Platform | — | Approved | [spec](platform/PROJ-15-csp-hardening.md) | P1 | S | 0:0:1 |
-| PROJ-16 | Supabase Hardening + Dependency Hygiene | Feature | Platform | — | Approved | [spec](platform/PROJ-16-supabase-hardening.md) | P1 | M | 0:0:0 |
+| PROJ-15 | CSP Hardening | Feature | Platform | — | Deployed | [spec](platform/PROJ-15-csp-hardening.md) | P1 | S | 0:0:1 |
+| PROJ-16 | Supabase Hardening + Dependency Hygiene | Feature | Platform | — | Deployed | [spec](platform/PROJ-16-supabase-hardening.md) | P1 | M | 0:0:0 |
 | PROJ-17 | Adaptive Eval-Harness + Start-Endpoint | Feature | Interview Engine | — | Deployed | [spec](interview-engine/PROJ-17-adaptive-eval-harness-start-endpoint.md) | P1 | M | 0:0:2 |
 | PROJ-18 | Prozessschritt-Deduplication | Feature | Wissensbank | PROJ-5 | Deployed | → PROJ-20 | P1 | M | 0:0:2 |
 | PROJ-19 | Knowledge-Informed Interviewing | Extension | Interview Engine | PROJ-2 | Roadmap | — | P2 | — | — |

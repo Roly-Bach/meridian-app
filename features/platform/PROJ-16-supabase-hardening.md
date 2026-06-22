@@ -1,6 +1,6 @@
 # PROJ-16: Supabase Hardening + Dependency Hygiene
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-05-24
 **Type:** Feature
 **Domain:** Platform
@@ -229,3 +229,25 @@ Keine Bugs, die PROJ-16 selbst zuzuordnen sind. KI-7 ist pre-existing und wird s
 ### Production-Ready Decision
 
 **YES** — keine Critical/High/Medium Bugs in PROJ-16 selbst. Ausstehend: Leaked-Password-Protection-Toggle im Dashboard (manuell, User-Aktion, kein Code-Blocker für Deploy der Code-Änderungen).
+
+## Deployment (2026-06-22)
+
+**Production URL:** https://meridian-app-bendewar10s-projects.vercel.app (zusammen mit PROJ-15 deployed — gleicher Build, gleicher Deploy-Lauf)
+
+- G1 (Static): pass
+- G2 (Tests): pass — `npm test` 627/628 (1 skipped); RLS-Isolation bereits in QA gegen Live-Supabase verifiziert (siehe oben)
+- G3 (Sandbox): pass (mit Abweichung — siehe PROJ-15-Spec, Deployment-Sektion: Erstdeploy eines neu gelinkten Vercel-Projekts landet direkt auf Production)
+- G4 (Permissions): pass — `/api/use-cases`, `/api/interviews` ohne Session → `401` JSON, kein Leak; RLS-Migrationen bereits live in Supabase appliziert (Implementation Notes), Advisor-Restzustand unverändert seit QA (`extension_in_public/vector` dokumentiert akzeptiert, `auth_leaked_password_protection` weiterhin offen — manueller Dashboard-Schritt)
+
+**Noch offen nach Deploy:** Leaked Password Protection im Supabase Dashboard aktivieren (kein Code-Zugriff, reiner Toggle) — siehe Known-Issues-Empfehlung im Analyse-Schritt vor diesem Deploy.
+
+## Post-Mortem
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | Medium — Live-Advisor-Stand war seit Spec-Snapshot (2026-05-24) gedriftet (neue Tabellen/Functions durch PROJ-18/25/26), musste zur Laufzeit neu erhoben werden |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: M (13 statt 12 Migrationen, ein Korrektur-Pass, aber im Appetite-Rahmen) |
+| Größte Überraschung | `REVOKE ... FROM anon, authenticated` allein reichte nicht — Postgres vergibt `EXECUTE` implizit zusätzlich an `PUBLIC`, brauchte separates `REVOKE ... FROM PUBLIC` |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: 2 (12 Migrationen + 1 Korrektur-Pass `proj16_13`) |
+| Häufigste Fehlerkategorie im Loop | Spec-Lücke (Advisor-Drift gegenüber Spec-Snapshot, nicht Code-Fehler) |
