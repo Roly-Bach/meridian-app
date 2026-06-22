@@ -19,7 +19,8 @@ import type {
   ClarificationCard,
 } from './interviewTypes'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { emitSlotWrite } from './slotWriteTrail'
+import type { TurnStore, TurnSession } from './turnStore/port'
+import type { TurnSnapshot } from './turnStore/intents'
 
 // ─── Analyst (Iteration 3) ────────────────────────────────────────────────────
 // Runs async via after() in chat/route.ts (Vercel Fluid Compute).
@@ -40,6 +41,8 @@ export interface AnalystRunOptions {
   /** The raw user input for the current turn — enables evidence_quote contamination guard */
   currentUserInput?: string
   traceCtx?: TraceCtx
+  /** TurnStore for the analyst's staged writes. Defaults to the prod Supabase store. */
+  store?: TurnStore
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -281,12 +284,12 @@ const STATUS_RANK: Record<StepEntry['status'], number> = { done: 2, walkthrough:
  * - process_steps / friction_points / friction_tools: union, deduplicated
  *
  * Idempotent: running twice produces the same result.
- * Called at the start of runAnalyst so the LLM sees a clean tracker.
+ * Pure (PROJ-34): the caller stages the result through the session; this no
+ * longer writes to the DB itself.
  */
-async function mergeFragmentedSteps(
-  interviewId: string,
+function computeMergedSteps(
   tracker: StepEntry[],
-): Promise<{ merged: StepEntry[]; changed: boolean }> {
+): { merged: StepEntry[]; changed: boolean } {
   const groups = groupSemanticSteps(tracker, 0.2)
   if (groups.every(g => g.length === 1)) return { merged: tracker, changed: false }
 
@@ -338,15 +341,6 @@ async function mergeFragmentedSteps(
       friction_tools: allFrictionTools.length > 0 ? allFrictionTools : canonical.friction_tools,
     }
   })
-
-  const supabase = getSupabaseAdmin()
-  await supabase
-    .from('interview_state')
-    .update({
-      step_tracker: merged as unknown as import('@/lib/database.types').Json,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('interview_id', interviewId)
 
   console.log(`[analyst] merged ${tracker.length} → ${merged.length} steps`)
   return { merged, changed: true }
@@ -420,16 +414,22 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
   const promptMode = opts.promptMode ?? 'default'
   const writeSource = opts.writeSource ?? 'analyst'
 
+  // PROJ-34/ADR-018: one session per analyst pass. openTurn loads the snapshot;
+  // merge + tools + briefing + backfill all stage into it; commit persists at pass end.
+  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
+  const session: TurnSession = await store.openTurn(interviewId, workspaceId)
+
   if (!opts.skipMerge) {
     // Merge fragmented steps before building LLM context so the Analyst sees a clean
-    // tracker and generates correct clarification cards.
+    // tracker and generates correct clarification cards. Staged through the session.
     try {
-      const { merged, changed } = await mergeFragmentedSteps(interviewId, opts.context.stepTracker)
+      const { merged, changed } = computeMergedSteps(session.snapshot().stepTracker)
       if (changed) {
+        session.stage({ kind: 'register_step', tracker: merged })
         opts = { ...opts, context: { ...opts.context, stepTracker: merged } }
       }
     } catch (err) {
-      console.error('[analyst] mergeFragmentedSteps failed (non-fatal):', err)
+      console.error('[analyst] computeMergedSteps failed (non-fatal):', err)
     }
   }
 
@@ -446,7 +446,7 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
     suggested_question: '',
   }
 
-  const knowledgeTools = buildTools(interviewId, workspaceId, opts.currentUserInput, {
+  const knowledgeTools = buildTools(session, opts.currentUserInput, {
     source: writeSource,
     allowedTools: opts.allowedTools,
   })
@@ -463,21 +463,9 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
         capturedBriefing = { ...capturedBriefing, clarification_cards: undefined }
       }
 
-      try {
-        // PROJ-27/BL-E1.5: conditional update — skip if catchup already wrote 'done'
-        // to prevent online analyst briefing from overwriting a more complete catchup result
-        await supabase
-          .from('interviews')
-          .update({
-            next_briefing: capturedBriefing as unknown as import('@/lib/database.types').Json,
-            analyst_status: 'done',
-          })
-          .eq('id', interviewId)
-          .neq('analyst_status', 'done')
-      } catch (err) {
-        console.error('[analyst] produce_briefing DB write failed:', err)
-      }
-
+      // PROJ-34: stage the interviews write (next_briefing + analyst_status='done').
+      // onlyIfNotDone preserves the PROJ-27/BL-E1.5 .neq('analyst_status','done') guard.
+      session.stage({ kind: 'produce_briefing', briefing: capturedBriefing })
       return { success: true }
     },
   })
@@ -530,14 +518,17 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
     throw err
   }
 
-  // Post-processing: deterministic data_sources backfill from friction_tools +
-  // extractions_log (type=tool). Analyst frequently forgets data_sources even
-  // when systems are explicitly named (eval 2026-06-03 Monatsabschluss case).
+  // Post-processing: deterministic data_sources backfill, staged through the same
+  // session so it runs through stage's conflict logic + trail emission (ADR-018 §C).
   try {
-    await backfillDataSourcesFromMentions(interviewId)
+    const backfill = computeDataSourcesBackfill(session.snapshot())
+    if (backfill) session.stage({ kind: 'backfill_data_sources', tracker: backfill.tracker, emits: backfill.emits })
   } catch (err) {
     console.error('[analyst] data_sources backfill failed:', err)
   }
+
+  // Commit the whole pass (merge + tool writes + briefing + backfill) at pass end (D5).
+  await session.commit()
 
   return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
 }
@@ -565,7 +556,8 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
   const modelString =
     process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
   const model = resolveModel(modelString)
-  const supabase = getSupabaseAdmin()
+  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
+  const session: TurnSession = await store.openTurn(interviewId, workspaceId)
   const isGoogleModel = modelString.startsWith('google/')
 
   const systemPrompt = buildCatchupSystemPrompt(opts.context, opts.history)
@@ -576,7 +568,7 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
   // but does not regenerate the conversation briefing (M2 fix).
   // F2: Pass user turn texts for evidence_quote Jaccard validation in record_slot
   const userTurns = opts.history.filter(t => t.role === 'user').map(t => t.content)
-  const catchupTools = buildTools(interviewId, workspaceId, undefined, {
+  const catchupTools = buildTools(session, undefined, {
     source: 'analyst_catchup',
     allowedTools: ['record_slot'],
     userTurns,
@@ -621,6 +613,7 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
     throw err
   }
 
+  await session.commit()
   return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
 }
 
@@ -655,21 +648,20 @@ export async function runAnalystFailureRetry(opts: AnalystRunOptions & { previou
  * Only fills steps where data_sources is null. Existing values are never overwritten.
  * Sets confidence=unknown so downstream consumers can distinguish from
  * Analyst-recorded values.
+ *
+ * Pure (PROJ-34): reads the live session snapshot, returns the post-backfill
+ * tracker + the per-step trail payloads. The caller stages a
+ * `backfill_data_sources` intent (trail emission happens in stage). Returns null
+ * when nothing changed.
  */
-async function backfillDataSourcesFromMentions(interviewId: string): Promise<void> {
-  const supabase = getSupabaseAdmin()
-  const { data: row } = await supabase
-    .from('interview_state')
-    .select('step_tracker, extractions_log')
-    .eq('interview_id', interviewId)
-    .maybeSingle()
-
-  if (!row) return
-  const tracker = (row.step_tracker as StepEntry[] | null) ?? []
-  if (tracker.length === 0) return
+function computeDataSourcesBackfill(
+  snapshot: TurnSnapshot,
+): { tracker: StepEntry[]; emits: Array<{ stepTitle: string; value: string[] }> } | null {
+  const tracker = snapshot.stepTracker
+  if (tracker.length === 0) return null
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const extractions = (row.extractions_log as any[] | null) ?? []
+  const extractions = (snapshot.extractionsLog as any[] | null) ?? []
   const globalToolMentions: string[] = extractions
     .filter((e) => e?.type === 'tool')
     .map((e) => {
@@ -679,7 +671,7 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
     .filter((n) => n.length > 0)
 
   let mutated = false
-  const backfillEmits: Array<{ stepTitle: string; value: string[] }> = []
+  const emits: Array<{ stepTitle: string; value: string[] }> = []
   const updated = tracker.map((step) => {
     // hilfsmittel replaces data_sources (PROJ-25)
     const hilfsmittelFilled = step.slots.hilfsmittel?.value != null || step.slots.hilfsmittel?.nicht_befund_typ != null
@@ -691,7 +683,7 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
     if (deduped.length === 0) return step
 
     mutated = true
-    backfillEmits.push({ stepTitle: step.title, value: deduped })
+    emits.push({ stepTitle: step.title, value: deduped })
     return {
       ...step,
       slots: {
@@ -706,28 +698,7 @@ async function backfillDataSourcesFromMentions(interviewId: string): Promise<voi
     }
   })
 
-  if (!mutated) return
-  await supabase
-    .from('interview_state')
-    .update({
-      step_tracker: updated as unknown as import('@/lib/database.types').Json,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('interview_id', interviewId)
-
-  // Emit trail events for each backfilled step (ADR-015) — fire-and-forget
-  const now = new Date().toISOString()
-  for (const { stepTitle, value } of backfillEmits) {
-    emitSlotWrite({
-      ts: now,
-      interviewId,
-      source: 'backfill',
-      stepTitle,
-      slot: 'data_sources',
-      value,
-      overwrite: false,
-      evidence: '[auto-backfill aus erwähnten Tools/Systemen]',
-    }).catch(() => {})
-  }
+  if (!mutated) return null
+  return { tracker: updated, emits }
 }
 

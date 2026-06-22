@@ -13,10 +13,14 @@ Führt einen vollständigen Eval-Lauf des Interview-Agenten durch. Seit PROJ-13 
 
 ## Voraussetzungen
 
-- `EVAL_WORKSPACE_ID` in `.env.local` gesetzt (seit 2026-05-28 bereits gesetzt)
 - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` in `.env.local` gesetzt
-- Supabase MCP verbunden (für Post-Run-Analyse)
 - Dev-Server NICHT nötig — der Runner läuft direkt via tsx, kein localhost
+
+**Nur im Supabase-Backend (`--store supabase`, Default):**
+- `EVAL_WORKSPACE_ID` in `.env.local` gesetzt (seit 2026-05-28 bereits gesetzt)
+- Supabase MCP verbunden (für die Post-Run-Analyse)
+
+**Im PGlite-Backend (`--store pglite`):** keine dieser beiden nötig. Die DB ist eine lokale In-Process-Instanz, die am Lauf-Ende verworfen wird — kein `EVAL_WORKSPACE_ID`, kein Supabase, keine Netzwerkverbindung (PROJ-34 / ADR-018).
 
 ## Aufruf
 
@@ -55,6 +59,16 @@ Zeige die Liste dem Nutzer und frage via `AskUserQuestion`:
 
 Bei Option B: Ablauf beenden. Kein Runner-Start.
 
+### Schritt 0b: Persistenz-Backend wählen (`--store`)
+
+Frage via `AskUserQuestion`: „Welches Persistenz-Backend?"
+- Option A (Default): „Supabase — gegen die echte DB, volle Pipeline (Extraktion, Clustering, process_steps/use_cases)". Braucht `EVAL_WORKSPACE_ID` + Supabase MCP. Der Lauf schreibt echte Records (bleiben in der DB).
+- Option B: „PGlite — DB-frei, lokal in-process". Kein `EVAL_WORKSPACE_ID`, kein Netz. Extraktion/Embedding und die Post-Completion-Pipeline laufen **nicht** (No-op-Ports). Der bewertete `step_tracker` ist davon unberührt, also bleiben die Kern-Scores vergleichbar.
+
+Merke die Wahl als `<store>` (`supabase` | `pglite`). Sie bestimmt **sowohl** das `--store`-Flag in Schritt 2 **als auch** die Datenquelle der Post-Run-Analyse in Schritt 3.
+
+**Divergenz-Warnung (KI-6-Klasse):** Im PGlite-Lauf existiert nach Lauf-Ende keine abfragbare DB. Schritt 3 darf dann **niemals** Supabase MCP / SQL nutzen — die Analyse liest ausschließlich die vom Runner geschriebenen Artefakte. Wer die Backend-Wahl in Schritt 3 ignoriert, erzeugt genau die Skill-gegen-Runner-Divergenz, die KI-6 beschreibt.
+
 ### Schritt 1: Persona-Datei lesen
 
 Lese die Persona-Datei um PASS-Kriterien ableiten zu können:
@@ -68,11 +82,17 @@ Extrahiere:
 
 ### Schritt 2: Runner starten
 
-Baue den Befehl aus den Argumenten:
+Baue den Befehl aus Persona und Backend-Wahl (`<store>` aus Schritt 0b):
 
 ```bash
+# Supabase (Default) — das Flag kann entfallen:
 npm run eval:interview <persona>
+
+# PGlite (DB-frei):
+npm run eval:interview -- --personas <persona> --store pglite
 ```
+
+Alternativ steuert `EVAL_STORE=pglite` in `.env.local` denselben Schalter; das `--store`-Flag hat Vorrang. Default ist `supabase`, damit der Standard-Lauf byte-genau das bisherige Verhalten zeigt (PROJ-34 / ADR-018).
 
 Alle Modell-Env-Vars (`INTERVIEW_MODEL`, `EXTRACTION_MODEL`, `ENRICHMENT_MODEL`, `TESTER_MODEL`) werden vom Runner via dotenv aus `.env.local` geladen. Kein CLI-Prefix nötig.
 
@@ -83,7 +103,8 @@ Führe den Befehl aus (timeout 10 Minuten — ein vollständiges Interview dauer
 **Beide Modelle — Interview-Agent und Tester-Persona — verwenden dieselbe Google AI API** (`GOOGLE_GENERATIVE_AI_API_KEY`). Das Tester-Modell ist per Default `google/gemini-3.1-flash-lite` und kann via `TESTER_MODEL` überschrieben werden. Für Benchmarking-Läufe immer den Tester auf Flash Lite lassen, damit nur der Agent variiert.
 
 Der Runner gibt auf stdout aus:
-- `[eval] persona=<p> model=<m> evalRunId=<uuid>` — merke `evalRunId`
+- `[runner] seed=<n> runs=<n> … store=<supabase|pglite>` — bestätigt das gewählte Backend
+- `[eval] model=<m> persona=<p> store=<supabase|pglite> evalRunId=<uuid>` — merke `evalRunId`
 - `[eval] Interview created: <uuid>` — merke `interviewId`
 - Pro Turn: `[Agent]: <text>` und `[<persona.name>]: <text>`
 - Am Ende: `[eval] Done.` + Langfuse-Session-URL + `eval_run_id`
@@ -95,7 +116,15 @@ Falls der Runner mit Fehler abbricht:
 - Supabase-Verbindungsfehler → Supabase-Keys in `.env.local` prüfen
 - LLM-API-Fehler → API-Key oder Modell-Name prüfen
 
-### Schritt 3: Post-Run-Analyse (Supabase MCP)
+### Schritt 3: Post-Run-Analyse (verzweigt nach Backend aus Schritt 0b)
+
+**Wahl der Datenquelle:**
+- `<store> = supabase` → **Variante A** (Supabase MCP / SQL).
+- `<store> = pglite` → **Variante B** (Runner-Artefakte). Die DB ist nach Lauf-Ende weg; Supabase MCP ist hier verboten und würde fremde oder leere Daten liefern.
+
+---
+
+#### Variante A — Supabase-Backend (Supabase MCP)
 
 **Interview-Status:**
 ```sql
@@ -128,7 +157,25 @@ WHERE interview_id = '<interviewId>'
 ORDER BY created_at;
 ```
 
+---
+
+#### Variante B — PGlite-Backend (Runner-Artefakte, kein Supabase)
+
+Der Runner schreibt nach `docs/evals/interview/<YYYY-MM-DD>/` drei Dateien (Basisname `<YYYY-MM-DD>-<HH-MM-SS>-<modelslug>-<persona>`):
+
+| Datei | Inhalt | ersetzt welche SQL-Abfrage |
+|-------|--------|---------------------------|
+| `*.transcript.json` | `finalStepTracker` (voller Slot-Tracker, gleiche Form wie `step_tracker`), `scores`, `status` (Lifecycle: `completed`/`active`), `turns` (`turnNumber`, `userInput`, `agentText`, `phase`, `toolCalls`) | Interview-Status, Slot-Tracker, Turns |
+| `*.md` | Report mit Frontmatter-`status:` (das automatische PASS/FAIL-Gate), Score-Tabelle, `trail:`-Block, Slot-Tabelle, Judge-Begründung | menschenlesbare Aufbereitung |
+| `*.slot-trail.jsonl` | eine Zeile pro Schreibabsicht (`blocked`, `overwrite`, `source`) | Schreibpfad-Diagnose |
+
+Lies mit dem `Read`-Tool die `*.transcript.json` (maschinell, für `finalStepTracker` + `scores`) und die `*.md` (für die fertige Slot-/Score-Tabelle). **Kein** Supabase MCP, **kein** `SELECT`.
+
+**Wissensobjekte / process_steps gibt es im PGlite-Lauf nicht** — Extraktion und Pipeline sind No-op (DB-frei). Das ist erwartet, kein Befund. Die Treue-Aussage stützt sich auf `finalStepTracker` + `scores`, nicht auf abgeleitete Records.
+
 ### Schritt 4: PASS/FAIL bestimmen
+
+**Maßgeblich ist das automatische Gate** aus dem Runner: das Frontmatter-`status:`-Feld im `*.md`-Report (identisch in beiden Backends, berechnet in `runner.ts` aus `completion_correctness`, `dedup_slot_coverage ≥ 0.75`, `step_registration_coverage ≥ 0.8`, `dialog_naturalness ≥ 0.65`, `blocked_rate < 0.10`). Die folgenden manuellen Kriterien sind ein menschlicher Gegencheck. Weichen sie vom Runner-Gate ab, gewinnt das Runner-Gate; die Abweichung ist als Befund zu notieren (das ist die KI-6-Schuld — Gate und manuelle Kriterien sind noch nicht deckungsgleich).
 
 Ein Eval-Lauf gilt als **PASS** wenn:
 1. `interview.status = 'completed'`
@@ -225,12 +272,14 @@ Langfuse MCP-Queries (Beispiele):
   "Compare tool-call sequences between two eval runs by eval_run_id"
   "What was the total token cost for interview session <interviewId>?"
 
-Nächste Schritte (manuelle Pipeline-Tests):
+Nächste Schritte (manuelle Pipeline-Tests — nur Supabase-Backend):
   → Prozessschritte prüfen: SELECT * FROM process_steps WHERE interview_id = '<id>';
   → Use Cases prüfen:       SELECT * FROM use_cases WHERE process_step_id IN (
                               SELECT id FROM process_steps WHERE interview_id = '<id>'
                             );
 ```
+
+Im PGlite-Backend entfallen diese Schritte: keine persistente DB, keine Pipeline. Für den Treue-Nachweis (PROJ-34) denselben Lauf mit `--store supabase` und `--store pglite` auf gleicher Persona + gleichem `--seed` fahren und die Kern-Scores (`slot_coverage`, `dedup_slot_coverage`, `step_registration_coverage`, `dialog_naturalness`) der beiden Reports vergleichen — Gleichstand belegt Backend-Neutralität.
 
 ---
 

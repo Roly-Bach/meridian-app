@@ -83,7 +83,7 @@ export async function POST(
 
   const history: TurnMessage[] = []
 
-  const stream = createInterviewStream({
+  const stream = await createInterviewStream({
     context: {
       interviewId: interview.id,
       workspaceId: interview.workspace_id,

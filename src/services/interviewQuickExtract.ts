@@ -20,7 +20,7 @@ import { generateText, stepCountIs } from 'ai'
 import { buildTools } from './interviewAgent'
 import type { StepEntry } from './interviewSemantic'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
-import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import type { TurnStore } from './turnStore/port'
 
 export interface QuickExtractOptions {
   interviewId: string
@@ -31,6 +31,8 @@ export interface QuickExtractOptions {
   /** Title of the step currently being explored/walked through. Restricts writes to prevent cross-step contamination. */
   activeStepTitle?: string | null
   traceCtx?: TraceCtx
+  /** TurnStore for the staged slot writes. Defaults to the prod Supabase store. */
+  store?: TurnStore
 }
 
 const QUICK_EXTRACT_SYSTEM_PROMPT = `Du bist ein schneller Slot-Extraktor für ein laufendes Interview.
@@ -79,7 +81,11 @@ export async function runQuickExtract(opts: QuickExtractOptions): Promise<StepEn
   const model = resolveModel(modelString)
   const isGoogleModel = modelString.startsWith('google/')
 
-  const knowledgeTools = buildTools(opts.interviewId, opts.workspaceId, opts.userInput, { source: 'quick' })
+  // PROJ-34/ADR-018: one session per pass; tools stage, commit persists at the end.
+  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
+  const session = await store.openTurn(opts.interviewId, opts.workspaceId)
+
+  const knowledgeTools = buildTools(session, opts.userInput, { source: 'quick' })
   // Restrict toolset: only filling tools, no register_step.
   const tools = {
     record_slot: knowledgeTools.record_slot,
@@ -137,18 +143,16 @@ export async function runQuickExtract(opts: QuickExtractOptions): Promise<StepEn
     return null
   }
 
-  // Return fresh tracker only when tool calls were made (avoid unnecessary DB read).
+  // Return fresh tracker only when tool calls were made.
   if (!madeToolCalls) return null
 
   try {
-    const supabase = getSupabaseAdmin()
-    const { data } = await supabase
-      .from('interview_state')
-      .select('step_tracker')
-      .eq('interview_id', opts.interviewId)
-      .maybeSingle()
-    return (data?.step_tracker as StepEntry[] | null) ?? null
-  } catch {
+    // Persist the staged writes, then hand back the post-pass snapshot tracker
+    // (same end state as the previous DB re-read, without the round-trip).
+    await session.commit()
+    return session.snapshot().stepTracker
+  } catch (err) {
+    console.error('[quick_extract] commit failed (non-fatal):', err)
     return null
   }
 }

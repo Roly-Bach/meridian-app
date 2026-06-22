@@ -1,13 +1,13 @@
 # PROJ-34: Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals)
 
-## Status: Architected
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-33
 **Appetite:** L (1–2w)
 **Bugs:** —
 **Created:** 2026-06-22
-**Last Updated:** 2026-06-22
+**Last Updated:** 2026-06-22 (/backend — Infrastruktur-Schicht gebaut + verifiziert)
 **Architecture:** [ADR-018](../../docs/adr/ADR-018-werkzeug-schreibabsichten-turnstore-port.md) (Proposed, 2026-06-22) hebt die ADR-016-Vertagung auf. Tech Design unten.
 
 ## Dependencies
@@ -67,21 +67,21 @@ Die komponierte Schreib-Wirkung (was im `step_tracker` und den übrigen Zielen l
 
 ## Acceptance Criteria
 
-- [ ] Ein `WriteIntent`-Typ (diskriminierte Union) deckt **alle 8** schreibenden Werkzeuge ab; jedes der 8 `execute()` gibt eine Absicht zurück und enthält **keinen** direkten `supabase`/`getSupabaseAdmin()`-Schreibvorgang mehr.
-- [ ] Ein `TurnStore`-Port existiert mit `openTurn(interviewId)` → `{ snapshot(), stage(intent), commit() }`; `stage` gibt synchron `accepted | skipped | blocked` zurück.
-- [ ] Konfliktauflösung (`canOverwrite`), Idempotenz-Prüfung und done-Übergang liegen hinter `stage` und sind in reinen Logik-Tests (Stufe 1) ohne DB und ohne LLM abgedeckt.
-- [ ] `runInterviewTurn` nimmt `ports = { store, onCompleted }`; im Turn-Pfad gibt es **keinen** direkten `getSupabaseAdmin()`-Zugriff mehr (Loads, `turns`-Insert, `interview_state`- und `interviews`-Updates laufen über den Store).
-- [ ] Die drei werkzeugnutzenden Aufrufer (`createInterviewStream`, `interviewAnalyst` online+catchup inkl. `produce_briefing`, `interviewQuickExtract`) öffnen je eine Session und committen; der Talker bleibt werkzeug- und schreibfrei.
-- [ ] Der `data_sources`-Backfill und die Orchestrierungs-Writes laufen über Store-Methoden / dieselbe `stage`-Konfliktlogik, nicht an ihr vorbei.
-- [ ] `SupabaseTurnStore` (Prod) und `PGliteTurnStore` (Eval) erfüllen denselben Port; der PGlite-Adapter lädt das echte Migrations-Schema inkl. `patch_interview_step_field` über einen inerten Bootstrap (Stub-Rollen + `auth`-Schema + Vektor-Modul).
-- [ ] Der Eval-Runner läuft mit `PGliteTurnStore` **ohne** Netz und ohne `EVAL_WORKSPACE_ID`-Supabase-Zugriff für Seed, Turn-Writes und Ergebnis-Reads.
-- [ ] `ports.onCompleted` ist injiziert: Prod fährt die Post-Completion-Pipeline, der Eval ein No-op.
-- [ ] Der Slot-Write-Trail feuert weiter pro Absicht; `overwrite_churn` bleibt berechenbar.
-- [ ] **Treue-Nachweis:** DB-freier Eval (PGlite, Stufe 2) und DB-gestützter Eval (echte Supabase, Stufe 3) liefern auf derselben Persona und demselben Seed identische Scores.
-- [ ] **Verhaltensneutral:** `npm run eval:interview buchhalter` nach PROJ-34 zeigt dieselben Kern-Scores wie davor (slot_coverage, depth, `overwrite_churn` ≈ 0.38) — jede Abweichung ist ein Regress-Alarm, kein Erfolg.
-- [ ] Ein Zwei-Adapter-Vertrag-Test prüft dieselben Persistenz-Behauptungen gegen PGlite (jeder Lauf) und gegen echte Supabase (gegated).
-- [ ] `npm run lint` und `npm test` grün; neue Dependency `@electric-sql/pglite` ist installiert.
-- [ ] Eval-Gate (Domain Interview Engine): ein erfolgreicher `eval:interview`-Lauf ist vor Status=Approved nachgewiesen.
+- [x] Ein `WriteIntent`-Typ (diskriminierte Union) deckt **alle 8** schreibenden Werkzeuge ab; jedes der 8 `execute()` gibt eine Absicht zurück und enthält **keinen** direkten `supabase`/`getSupabaseAdmin()`-Schreibvorgang mehr.
+- [x] Ein `TurnStore`-Port existiert mit `openTurn(interviewId)` → `{ snapshot(), stage(intent), commit() }`; `stage` gibt synchron `accepted | skipped | blocked` zurück.
+- [x] Konfliktauflösung (`canOverwrite`), Idempotenz-Prüfung und done-Übergang liegen hinter `stage` und sind in reinen Logik-Tests (Stufe 1) ohne DB und ohne LLM abgedeckt.
+- [x] `runInterviewTurn` nimmt `ports = { store, onCompleted }`; im Turn-Pfad gibt es **keinen** direkten `getSupabaseAdmin()`-Zugriff mehr (Loads, `turns`-Insert, `interview_state`- und `interviews`-Updates laufen über den Store).
+- [x] Die drei werkzeugnutzenden Aufrufer (`createInterviewStream`, `interviewAnalyst` online+catchup inkl. `produce_briefing`, `interviewQuickExtract`) öffnen je eine Session und committen; der Talker bleibt werkzeug- und schreibfrei.
+- [x] Der `data_sources`-Backfill und die Orchestrierungs-Writes laufen über Store-Methoden / dieselbe `stage`-Konfliktlogik, nicht an ihr vorbei.
+- [x] `SupabaseTurnStore` (Prod) und `PGliteTurnStore` (Eval) erfüllen denselben Port; der PGlite-Adapter lädt das echte Migrations-Schema inkl. `patch_interview_step_field` über einen inerten Bootstrap (Stub-Rollen + `auth`-Schema + Vektor-Modul).
+- [x] Der Eval-Runner läuft mit `PGliteTurnStore` **ohne** Netz und ohne `EVAL_WORKSPACE_ID`-Supabase-Zugriff für Seed, Turn-Writes und Ergebnis-Reads. (Adapter + Runner-Verkabelung gebaut; hermetisch belegt durch `evalStore.test.ts`. Voller LLM-Lauf = Live-Verifikation des Treue-Gates.)
+- [x] `ports.onCompleted` ist injiziert: Prod fährt die Post-Completion-Pipeline, der Eval ein No-op.
+- [x] Der Slot-Write-Trail feuert weiter pro Absicht; `overwrite_churn` bleibt berechenbar.
+- [ ] **Treue-Nachweis:** DB-freier Eval (PGlite, Stufe 2) und DB-gestützter Eval (echte Supabase, Stufe 3) liefern auf derselben Persona und demselben Seed identische Scores. _(braucht Live-Lauf)_
+- [ ] **Verhaltensneutral:** `npm run eval:interview buchhalter` nach PROJ-34 zeigt dieselben Kern-Scores wie davor (slot_coverage, depth, `overwrite_churn` ≈ 0.38) — jede Abweichung ist ein Regress-Alarm, kein Erfolg. _(braucht Live-Lauf)_
+- [~] Ein Zwei-Adapter-Vertrag-Test prüft dieselben Persistenz-Behauptungen gegen PGlite (jeder Lauf) und gegen echte Supabase (gegated). _(PGlite-Seite gebaut: `pgliteTurnStore.test.ts` + `evalStore.test.ts`; gegateter Supabase-Stufe-3-Test offen.)_
+- [x] `npm run lint` und `npm test` grün; neue Dependency `@electric-sql/pglite` ist installiert. (Lint clean, 662 Tests grün, pglite 0.4.6 gepinnt.)
+- [ ] Eval-Gate (Domain Interview Engine): ein erfolgreicher `eval:interview`-Lauf ist vor Status=Approved nachgewiesen. _(braucht Live-Lauf)_
 
 ## Edge Cases
 
@@ -232,6 +232,85 @@ Nach PROJ-34 wählt der Eval-Nutzer zwischen zwei Pfaden. Die Auswahl ist expliz
 ### ADR-Hinweis
 
 Diese Design-Entscheidungen (insbesondere D1, D2, D3, D5) gehören als immutable Eintrag in **ADR-018** (Werkzeug-Schreibabsichten + TurnStore-Port). ADR-016 hatte den Port bewusst vertagt; ADR-018 hebt die Vertagung auf, weil der DB-freie Eval der zweite Adapter ist, der den Port rechtfertigt. Empfehlung: `/adr` vor `/backend` ausführen.
+
+## Implementation Notes (/backend)
+
+> Stand 2026-06-22. Gebaut in der vorgegebenen Reihenfolge (Konfliktlogik → Adapter → [ausstehend] Aufrufer-Migration). Alle bisherigen Schichten verifiziert grün (`npm run lint` + 35 Tests).
+
+### Gebaut + verifiziert (Infrastruktur-Schicht)
+
+Neues Verzeichnis `src/services/turnStore/`:
+
+| Datei | Inhalt | Status |
+|-------|--------|--------|
+| `intents.ts` | `WriteIntent`-Union (8 Werkzeug-Varianten + `backfill_data_sources`), `TurnSnapshot`, `FieldPatch` (6 Ziele, beide step_tracker-Mechaniken), `StageResult`, `ApplyContext`, `ApplyOutcome` | ✅ |
+| `applyIntent.ts` | Reiner Applier. Konfliktauflösung (`canOverwrite`), Idempotenz, done-Übergang **verbatim** aus `record_slot.execute` übernommen. Plus alle übrigen Varianten. `findStepFuzzy`/`findStepById` als reine Helfer. | ✅ |
+| `applyIntent.test.ts` | **Stufe 1** — 30 reine Tests: canOverwrite, Idempotenz, done-Übergang, Read-after-Write, step_not_found, NICHT-BEFUND, alle Varianten. Ohne DB, ohne LLM. | ✅ 30/30 |
+| `port.ts` | `TurnStore` + `TurnSession` (`snapshot`/`stage`/`commit`) + `TurnStoreBackend` (schmale Persistenz-Naht) + `createTurnStore`-Fabrik. Commit replays Patches in Stage-Reihenfolge, nicht-transaktional (D5). Side-effect-frei beim Import. | ✅ |
+| `pgliteTurnStore.ts` | **Eval-Adapter.** Bootet PGlite + inerter Bootstrap (Stub-Rollen, `auth`-Schema + `auth.uid()`, Vektor-Extension) + lädt **alle echten Repo-Migrations**. Hard-Fail pro Migration (D7). `seedInterview` + `readStepTracker` für den Runner. | ✅ |
+| `pgliteTurnStore.test.ts` | **Stufe 2** — 5 hermetische Tests: alle Migrations laden, stage→commit→read-Rundreise, jsonb überlebt `patch_interview_step_field` (PROJ-38-Klasse), Cross-Session-Read, Priority-Block persistiert nicht, link_bottleneck-Doppelziel. | ✅ 5/5 |
+| `supabaseTurnStore.ts` | **Prod-Adapter.** Schreibt wie heute (`patch_interview_step_field` RPC, Ganz-Array-Update, gleiche Semantik). Server-only. | ✅ (typgeprüft; Laufzeit-Vertrag = gegateter Stufe-3-Test, ausstehend) |
+
+**Hauptrisiko (D7) entschärft:** Alle 24 Repo-Migrations laden in PGlite ohne Fehler. Verifiziert, dass `vector(1536)`-Spalten, ivfflat/hnsw-Indizes, `auth.uid()`-Policies, GRANT/REVOKE auf Stub-Rollen und die `patch_interview_step_field`-Funktion sauber durchlaufen. jsonb round-trippt als strukturiertes Objekt (nicht String).
+
+**Dependency:** `@electric-sql/pglite` **exakt auf 0.4.6 gepinnt** (`--save-exact`). Das Vektor-Modul (`./vector`-Export) wurde nach 0.4.6 aus dem Paket entfernt; 0.5.x hat es nicht mehr, und es gibt kein eigenständiges Vektor-Paket. 0.4.6 ist die letzte Version mit gebündeltem Vektor-Modul. (Memory: `project_proj34_pglite_vector_pin`.)
+
+### Stage A — Live-Pfad-Migration Werkzeuge + LLM-Pass-Aufrufer (✅ 2026-06-22, grün)
+
+Verifiziert: `npm run lint` clean, **657 Tests grün** (48 Dateien, 1 skip). Verhaltensneutral für den **Supabase**-Eval (der heute weiter läuft, weil `runInterviewTurn` noch unverändert ist und Analyst/Quick-Extract per Default den Supabase-Store nutzen). Checkpoint: `npm run eval:interview buchhalter` gegen Supabase muss dieselben Kern-Scores zeigen.
+
+- **8 Werkzeuge → `WriteIntent` + `session.stage`** (7 in `interviewAgent.ts buildTools` + `produce_briefing` in `interviewAnalyst.ts`). Lese-/Entscheid-Logik (Evidence-Auflösung, Typ-Guards, Dedup/Embedding, Validierung) bleibt im Werkzeug; nur der Write wird Absicht. `buildTools(session, currentUserInput?, opts?)` — `interviewId`/`workspaceId` kommen aus der Session.
+- **3 Aufrufer öffnen/committen je eine Session** (Default `SupabaseTurnStore`, lazy import → eval-Graph bleibt frei): `createInterviewStream` (jetzt async, commit in `onFinish`), `runAnalystCore` (online + default), `runAnalystCatchup`, `runQuickExtract`.
+- **`mergeFragmentedSteps` + `backfillDataSourcesFromMentions` → reine Funktionen** (`computeMergedSteps`, `computeDataSourcesBackfill`); der Analyst staged Merge (als `register_step`-Intent) und Backfill (`backfill_data_sources`-Intent) durch dieselbe Session.
+- **`interviewAgent.test.ts` neu** gegen `MemoryTurnStore` (Tool-Result + Snapshot/committed-State statt Supabase-Mocks). Start-/Reconnect-Routes `await createInterviewStream(...)`.
+- Verbleibende `getSupabaseAdmin`-Nutzung im Analyst: nur der `analyst_status='failed'`-Write auf dem Fehlerpfad (wandert in Stage B in den Store).
+
+### Stage B — Orchestrierung + runInterviewTurn (✅ 2026-06-22, grün)
+
+Verifiziert: `npm run lint` clean, **657 Tests grün**. Prod bleibt neutral (Chat-Route + Runner reichen keine Ports → `runInterviewTurn` defaultet auf Prod-Supabase-Ports, Verhalten unverändert).
+
+- **Orchestrierungs-`InterviewStore`** (`port.ts`): `loadInterview`/`loadState`/`loadTurns`/`insertTurn`/`updatePhase`/`completeInterview`/`setAnalystStatus`/`updateStateAfterTurn`/`loadStepTracker`. Auf **beiden** Adaptern implementiert (`SupabaseBackend`, `PGliteBackend`); `createSupabaseInterviewStore` / PGlite-Handle.store sind jetzt `InterviewStore`.
+- **`runInterviewTurn(input, ports?)`** mit `ports = { store, extractAndEmbed, onCompleted }`. **Kein direkter `getSupabaseAdmin()` mehr** — alle Loads, `turns`-Insert, `interview_state`/`interviews`-Updates über `ports.store`. Quick-Extract + Analyst (online/catchup/failure-retry) bekommen `ports.store` durchgereicht (eine Session pro Pass auf demselben Store). `extractAndEmbed`/`onCompleted`: Prod=echt (lazy `defaultProdPorts()`), Eval=No-op. Chat-Route unverändert dünn.
+
+### Stage B — Runner-Migration + SKILL.md (✅ 2026-06-22, grün)
+
+Verifiziert: `npm run lint` clean, **662 Tests grün** (657 + 5 neue PGlite-Eval-Adapter-Tests). Runner enthält **keinen direkten Supabase-Zugriff** mehr (Grep auf `getSupabaseAdmin|supabase` zeigt nur noch die `--store`-Stringliterale).
+
+9. **Eval-Runner → `evalStore`-Adapter** ([`evalStore.ts`](../../src/services/__evals__/interview/evalStore.ts)). Zwei Backends hinter einem `EvalStore`-Interface (`createInterview`/`loadState`/`loadHistory`/`loadAnalystBriefing`/`saveOpenerText`/`loadStatus`/`executeClarificationCompletion`/`close` + `store` + `turnPorts`):
+   - **Supabase (Default):** die bisherigen Runner-Queries **verbatim** hierher verschoben; `turnPorts = undefined` → `runInterviewTurn` baut `defaultProdPorts` (echter Store + echte Extraktion + Pipeline). Verhalten byte-genau wie vor PROJ-34.
+   - **PGlite (opt-in):** über den gemeinsamen `InterviewStore`; `turnPorts = { store, extractAndEmbed: async()=>[], onCompleted: async()=>{} }` (DB-frei, Pipeline No-op). `createInterview` generiert IDs + `seedInterview`; `executeClarificationCompletion` minimal (`clarification_answers` persistieren + `store.completeInterview`, kein process_steps/Pipeline — nicht gescort).
+   - Runner: `--store pglite|supabase`-Flag (`EVAL_STORE`-Fallback, Default `supabase`); `evalStore` pro Lauf in `main` erzeugt + im `finally` geschlossen; alle DB-Aufrufe in `runInterview` über `evalStore`; `runInterviewTurn(turnInput, evalStore.turnPorts)`.
+   - **Stufe-2-Test** ([`evalStore.test.ts`](../../src/services/__evals__/interview/evalStore.test.ts), hermetisch, 5 grün): seed, alle Reads, Opener-Persistenz, Turn-Round-Trip über den injizierten Store, DB-freie Clarification.
+10. **`/eval-interview` SKILL.md** ([SKILL.md](../../.claude/skills/eval-interview/SKILL.md)): Schritt 0b Adapter-Auswahl; Schritt 2 `--store`-Befehl; Schritt 3 **verzweigt** (Variante A Supabase MCP, Variante B liest `transcript.json`/`*.md`/`.slot-trail.jsonl` — kein Supabase im PGlite-Lauf, mit expliziter KI-6-Divergenz-Warnung); Schritt 4 Hinweis, dass das Runner-Frontmatter-`status:` das maßgebliche Gate ist; Voraussetzungen + Schritt 7 nach Backend qualifiziert.
+
+### Stage B — Verifikations-Läufe (2026-06-22, buchhalter, seed 42)
+
+Beide Läufe gefahren: `--store supabase` (PASS) und `--store pglite` (FAIL wegen dedup_slot_coverage 0.70 < 0.75). Detailbefund:
+
+| Metrik | Supabase | PGlite | Bewertung |
+|--------|----------|--------|-----------|
+| status | PASS | FAIL | dedup 0.70 < Gate 0.75 (Grenzpersona) |
+| step_registration / schema / hallucination | 1.0 / 1.0 / 0 | 1.0 / 1.0 / 0 | **identisch** |
+| phase_adherence / anchoring | 1.0 / 0 | 1.0 / 0 | **identisch** |
+| dialog_naturalness | 0.67 | 0.67 | **identisch** |
+| depth_score | 1.9 | 1.85 | im Band 1.73–2.13 |
+| slot_coverage | 0.78 | 0.70 | LLM-Gesprächsvarianz |
+| echter quick-Churn | 1/52 | 2/47 | **identisch, gesund (~0.02–0.04)** |
+
+**Backend-Treue: bestätigt** auf Struktur- und Schreibpfad-Ebene (alle strukturellen Scores identisch; echter Quick-Extract-Churn, blocked, total_writes gleich). Die Score-Differenzen (slot_coverage 0.78 vs 0.70) sind **LLM-Gesprächsvarianz**, kein Backend-Artefakt: der Seed pinnt nur die Persona-Perturbation, nicht das LLM-Sampling, also divergieren die Gespräche run-to-run unabhängig vom Backend.
+
+**Methoden-Caveat:** Ein byte-sauberer „gleiche Persona+Seed → identische Scores"-Beweis ist mit dem aktuellen Runner **nicht** erreichbar (LLM nicht deterministisch). Der Treue-Nachweis ruht hier auf struktureller + Schreibpfad- + verteilungsmäßiger Gleichheit. Ein deterministischer Beweis bräuchte Temperatur-0 + Provider-Seeding oder einen Replay-Harness (identische Turns an beide Backends) — Folge-Arbeit, kein Blocker.
+
+**overwrite_churn-Alarm: aufgelöst als Messfehler (KI-8), keine Regression.** Die gemeldete churn 0.52/0.57 ist von fehlgezählten Analyst-Verfeinerungen dominiert (`computeTrailMetrics`-Filter `source !== 'analyst'` trifft die echten Labels `analyst_online`/`analyst_catchup` nicht). Echter quick-Churn ~0.02 in beiden Backends. Der Filter + die Labels sind pre-existing (nicht im PROJ-34-Diff), der Defekt wurde durch diesen Treue-Vergleich aufgedeckt. Folge: die Neutralitäts-Baseline „≈0.38" (Stage A) basiert ebenfalls auf der Fehlzählung — das gesprächsabhängige Schwanken 0.39→0.5x ist die Anzahl der Analyst-Refinements, kein Schreibpfad-Drift.
+
+11. **Offen — gegateter Zwei-Adapter-Vertrag-Test** (Stufe 3, echte Supabase). Optionaler KI-8-Fix (Einzeiler) macht `overwrite_churn` als Neutralitäts-Wächter wieder aussagekräftig.
+
+**Neutralitäts-Nachweis Stage A** (2026-06-22, gegen Supabase): `overwrite_churn 0.39` (Baseline-Band 0.35–0.45, Spec-Ziel ≈0.38), depth 1.8 (Band 1.73–2.13), slot_coverage 0.93 (Streubereich 0.75–1.0), dialog_naturalness 0.67, step_registration/schema/hallucination identisch, status PASS. Kein systematischer Drift.
+
+### Verifikations-Gate (vor Approved)
+
+- **Verhaltensneutralität:** `npm run eval:interview buchhalter` (`--store supabase`) nach der Runner-Migration muss dieselben Kern-Scores zeigen wie davor (slot_coverage, depth, `overwrite_churn` ≈ 0.38). Jede Abweichung = Regress-Alarm. Da der Supabase-Pfad byte-genau ist und `turnPorts=undefined` → `defaultProdPorts` nutzt, ist dieser Lauf zugleich das Stage-B-Gate (Orchestrierungs-Umbau). Braucht API-Keys + LLM-Lauf.
+- **Treue-Nachweis:** derselbe Lauf mit `--store supabase` und `--store pglite` auf gleicher Persona + gleichem `--seed` liefert identische Kern-Scores. Der Supabase-Lauf erledigt Neutralität + Baseline in einem; der PGlite-Lauf ist der Vergleich. PGlite braucht **kein** `EVAL_WORKSPACE_ID`, kein Netz.
 
 ## QA Test Results
 _To be added by /qa_

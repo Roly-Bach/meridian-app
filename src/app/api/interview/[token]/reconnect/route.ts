@@ -95,7 +95,7 @@ export async function POST(
     { role: 'assistant' as const, content: t.agent_response },
   ])
 
-  const stream = createInterviewStream({
+  const stream = await createInterviewStream({
     context: {
       interviewId: interview.id,
       workspaceId: interview.workspace_id,

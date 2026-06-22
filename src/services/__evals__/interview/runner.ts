@@ -33,25 +33,19 @@ import { randomUUID } from 'crypto'
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
 import { initLangfuse, flushLangfuse } from '@/lib/langfuse'
-import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { Phase, StepEntry } from '@/services/interviewSemantic'
-import type { TurnMessage, ClarificationCard, AnalystBriefing } from '@/services/interviewTypes'
+import type { TurnMessage, ClarificationCard } from '@/services/interviewTypes'
 import { createTalkerStream, TALKER_THINKING_BUDGET } from '@/services/interviewTalker'
 import {
   decideNextPhase,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
-import { deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
 import { ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/interviewAnalyst'
-import { createProcessStepsFromTracker } from '@/services/processEnrichment'
-import { clusterProcessSteps } from '@/services/processClustering'
 import { runInterviewTurn } from '@/services/runInterviewTurn'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
-import type { Database } from '@/lib/database.types'
 import { perturbPersona } from './perturbation'
-
-type ProcessStepUpdate = Database['public']['Tables']['process_steps']['Update']
+import { createEvalStore, type EvalStore, type EvalStoreKind, type ClarificationAnswer } from './evalStore'
 import { runAllScorers, type TurnRecord, type ScoreSet } from './scorers'
 
 // ─── Persona loader ───────────────────────────────────────────────────────────
@@ -72,6 +66,7 @@ interface RunArgs {
   seed: number
   noPerturbation: boolean
   isolatedCriteria: boolean
+  store: EvalStoreKind
 }
 
 function printUsage(): void {
@@ -87,6 +82,7 @@ function printUsage(): void {
   console.error('  --seed S      Seeded PRNG seed (default: random)')
   console.error('  --no-perturbation  Skip persona perturbation (default: false)')
   console.error('  --isolated-criteria  Use isolated criteria mode for dialogNaturalness (default: false)')
+  console.error('  --store           Persistence backend: supabase | pglite (default: supabase, env: EVAL_STORE)')
   console.error('  --baseline-label  Label for this run (stored in report frontmatter)')
 }
 
@@ -99,6 +95,7 @@ function parseArgs(): RunArgs {
   let seed: number | null = null
   let noPerturbation = false
   let isolatedCriteria = false
+  let store: string | null = null
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--models' && args[i + 1]) {
@@ -127,6 +124,8 @@ function parseArgs(): RunArgs {
       noPerturbation = true
     } else if (args[i] === '--isolated-criteria') {
       isolatedCriteria = true
+    } else if (args[i] === '--store' && args[i + 1]) {
+      store = args[++i].trim()
     } else if (!args[i].startsWith('--') && !personas) {
       // Backward-compatible: positional persona arg
       personas = [args[i]]
@@ -136,6 +135,16 @@ function parseArgs(): RunArgs {
   // If seed not provided, generate one and log it
   if (seed === null) {
     seed = Math.floor(Math.random() * 100000)
+  }
+
+  // Persistence backend: flag > EVAL_STORE env > supabase default.
+  // Supabase stays the default so the standard eval is byte-intact; pglite is
+  // opt-in until the fidelity proof flips it (PROJ-34 / ADR-018 §C).
+  const storeRaw = (store ?? process.env.EVAL_STORE ?? 'supabase').toLowerCase()
+  if (storeRaw !== 'supabase' && storeRaw !== 'pglite') {
+    console.error(`[runner] --store must be 'supabase' or 'pglite', got: ${storeRaw}`)
+    printUsage()
+    process.exit(1)
   }
 
   // Normalize bare model IDs (no provider prefix) → google/ default
@@ -149,90 +158,19 @@ function parseArgs(): RunArgs {
     seed,
     noPerturbation,
     isolatedCriteria,
+    store: storeRaw,
   }
-}
-
-// ─── DB helpers ───────────────────────────────────────────────────────────────
-
-interface DBState {
-  phase: Phase
-  timerMinutes: number
-  topicsCovered: string[]
-  topicsOpen: string[]
-  extractionsLog: RawExtraction[]
-  stepTracker: StepEntry[]
-}
-
-async function loadState(interviewId: string): Promise<DBState> {
-  const supabase = getSupabaseAdmin()
-  const [{ data: stateRow }, { data: turns }] = await Promise.all([
-    supabase
-      .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker')
-      .eq('interview_id', interviewId)
-      .maybeSingle(),
-    supabase
-      .from('turns')
-      .select('created_at')
-      .eq('interview_id', interviewId)
-      .order('turn_number', { ascending: true })
-      .limit(1),
-  ])
-
-  const firstTurnCreated = (turns as Array<{ created_at: string }> | null)?.[0]?.created_at
-  const timerMinutes = firstTurnCreated
-    ? Math.floor((Date.now() - new Date(firstTurnCreated).getTime()) / 60000)
-    : 0
-
-  return {
-    phase: ((stateRow as Record<string, unknown> | null)?.phase ?? 'intro') as Phase,
-    timerMinutes,
-    topicsCovered: ((stateRow as Record<string, unknown> | null)?.topics_covered as string[]) ?? [],
-    topicsOpen: ((stateRow as Record<string, unknown> | null)?.topics_open as string[]) ?? [],
-    extractionsLog:
-      ((stateRow as Record<string, unknown> | null)?.extractions_log as RawExtraction[]) ?? [],
-    stepTracker:
-      ((stateRow as Record<string, unknown> | null)?.step_tracker as StepEntry[]) ?? [],
-  }
-}
-
-async function loadAnalystBriefing(interviewId: string): Promise<AnalystBriefing | null> {
-  const supabase = getSupabaseAdmin()
-  const { data } = await supabase
-    .from('interviews')
-    .select('next_briefing')
-    .eq('id', interviewId)
-    .single()
-  return (data?.next_briefing as AnalystBriefing | null) ?? null
-}
-
-async function loadHistory(interviewId: string): Promise<TurnMessage[]> {
-  const supabase = getSupabaseAdmin()
-  const { data: rows } = await supabase
-    .from('turns')
-    .select('user_input, agent_response')
-    .eq('interview_id', interviewId)
-    .order('turn_number', { ascending: true })
-
-  return (
-    (rows as Array<{ user_input: string; agent_response: string }> | null) ?? []
-  ).flatMap(t => [
-    { role: 'user' as const, content: t.user_input },
-    { role: 'assistant' as const, content: t.agent_response },
-  ])
 }
 
 // ─── Clarification helpers (PROJ-23) ─────────────────────────────────────────
-
-// Slot answer maps (mirror of POST /clarification route)
-const FREQUENCY_MAP: Record<string, number> = { 'Täglich': 22, 'Wöchentlich': 4, 'Mehrfach/Monat': 8, 'Monatlich': 1 }
-const DURATION_MAP: Record<string, number> = { '< 5 Min': 3, '5–15 Min': 10, '15–30 Min': 22, '> 30 Min': 45 }
-const RULE_BASED_MAP: Record<string, boolean> = { 'Immer gleich': true, 'Meistens gleich': true, 'Variiert stark': false }
-const ERROR_RATE_MAP: Record<string, number> = { 'Selten Fehler': 2, 'Gelegentlich': 10, 'Häufig': 30 }
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+//
+// All DB access (state/history/briefing reads, interview creation, clarification
+// completion) moved behind the EvalStore adapter (evalStore.ts) — the runner is
+// now persistence-agnostic (PROJ-34 / ADR-018 §C). Only the pure card→answer
+// mapping stays here.
 
 // Deterministic synthetic answers for each card type
-function buildSyntheticClarificationAnswers(cards: ClarificationCard[]): Array<{ process_step_id: string; slot_key: string; answer: string | string[] }> {
+function buildSyntheticClarificationAnswers(cards: ClarificationCard[]): ClarificationAnswer[] {
   const SLOT_DEFAULTS: Record<string, string> = {
     frequency_per_month: 'Wöchentlich',
     duration_minutes: '15–30 Min',
@@ -252,62 +190,6 @@ function buildSyntheticClarificationAnswers(cards: ClarificationCard[]): Array<{
       answer: card.answer_type === 'multi' ? [chosen] : chosen,
     }
   })
-}
-
-async function executeClarificationCompletion(
-  interviewId: string,
-  workspaceId: string,
-  answers: Array<{ process_step_id: string; slot_key: string; answer: string | string[] }>,
-): Promise<void> {
-  const supabase = getSupabaseAdmin()
-
-  // Persist clarification_answers
-  const clarificationRecord: Record<string, string | string[]> = {}
-  for (const a of answers) clarificationRecord[`${a.process_step_id}__${a.slot_key}`] = a.answer
-  await supabase
-    .from('interviews')
-    .update({ clarification_answers: clarificationRecord as unknown as import('@/lib/database.types').Json })
-    .eq('id', interviewId)
-
-  // Process SlotCards → update process_steps
-  const SLOT_KEYS = ['frequency_per_month', 'duration_minutes', 'rule_based', 'error_rate_percent']
-  for (const a of answers) {
-    if (!SLOT_KEYS.includes(a.slot_key) || typeof a.answer !== 'string' || a.answer === 'Weiß ich nicht') continue
-    const update: ProcessStepUpdate = {}
-    if (a.slot_key === 'frequency_per_month' && FREQUENCY_MAP[a.answer] !== undefined) update.frequency_per_month = FREQUENCY_MAP[a.answer]
-    else if (a.slot_key === 'duration_minutes' && DURATION_MAP[a.answer] !== undefined) update.duration_minutes = DURATION_MAP[a.answer]
-    else if (a.slot_key === 'rule_based' && RULE_BASED_MAP[a.answer] !== undefined) update.rule_based = RULE_BASED_MAP[a.answer]
-    else if (a.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[a.answer] !== undefined) update.error_rate_percent = ERROR_RATE_MAP[a.answer]
-    if (Object.keys(update).length === 0) continue
-    const isUuid = UUID_RE.test(a.process_step_id)
-    if (isUuid) {
-      await supabase.from('process_steps').update(update).eq('id', a.process_step_id).eq('interview_id', interviewId)
-    } else {
-      await supabase.from('process_steps').update(update).eq('title', a.process_step_id).eq('interview_id', interviewId)
-    }
-  }
-
-  // Process OpenItemCards (Ja/Manchmal) → insert knowledge_objects
-  for (const a of answers) {
-    if (a.slot_key !== 'open_item' || typeof a.answer !== 'string') continue
-    if (a.answer !== 'Ja' && a.answer !== 'Manchmal') continue
-    await supabase.from('knowledge_objects').insert({
-      interview_id: interviewId,
-      workspace_id: workspaceId,
-      type: 'process_step',
-      content: { title: a.process_step_id, confirmed_via: 'clarification', answer: a.answer },
-    })
-  }
-
-  // Complete interview + post-completion pipeline
-  await supabase.from('interviews').update({ status: 'completed', extractions_pending: true }).eq('id', interviewId)
-  try {
-    await createProcessStepsFromTracker({ interviewId, workspaceId })
-  } catch (err) {
-    console.error('[runner] clarification createProcessStepsFromTracker failed:', err)
-  }
-  clusterProcessSteps(workspaceId).catch(err => console.error('[runner] clarification clusterProcessSteps failed:', err))
-  deduplicateKnowledgeObjects(workspaceId).catch(err => console.error('[runner] clarification deduplicateKnowledgeObjects failed:', err))
 }
 
 // ─── Persona simulator ────────────────────────────────────────────────────────
@@ -707,6 +589,7 @@ async function runInterview(
   persona: Persona,
   personaName: string,
   baselineLabel: string | null,
+  evalStore: EvalStore,
   runIndex?: number,
   totalRuns?: number,
 ): Promise<InterviewResult> {
@@ -714,10 +597,6 @@ async function runInterview(
   process.env.INTERVIEW_MODEL = model
 
   const evalRunId = randomUUID()
-  const supabase = getSupabaseAdmin()
-
-  const workspaceId = process.env.EVAL_WORKSPACE_ID
-  if (!workspaceId) throw new Error('[runner] EVAL_WORKSPACE_ID not set in .env.local')
 
   // Activate slot-write trail for this eval run (ADR-015)
   const now = new Date()
@@ -733,39 +612,17 @@ async function runInterview(
   process.env.SLOT_TRAIL_FILE = path.join(runDir, `${evalDateStr}-${evalTimeStr}-${modelSlug(model)}-${personaName}${trailSuffix}.slot-trail.jsonl`)
 
   console.log(`\n${'─'.repeat(60)}`)
-  console.log(`[eval] model=${model} persona=${personaName} evalRunId=${evalRunId}`)
+  console.log(`[eval] model=${model} persona=${personaName} store=${evalStore.kind} evalRunId=${evalRunId}`)
 
-  // Create interview record
-  const { data: interview, error: insertError } = await supabase
-    .from('interviews')
-    .insert({
-      workspace_id: workspaceId,
-      employee_name: persona.identity.name,
-      employee_role: persona.identity.role,
-      department: persona.identity.department,
-      focus_topics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
-      status: 'active',
-      access_token: randomUUID(),
-      token_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      max_duration_minutes: 30,
-    })
-    .select('id')
-    .single()
-
-  if (insertError || !interview) throw new Error(`[runner] Interview insert failed: ${insertError?.message}`)
-
-  const interviewId: string = interview.id
-  console.log(`[eval] Interview created: ${interviewId}`)
-
-  await supabase.from('interview_state').insert({
-    interview_id: interviewId,
-    phase: 'intro',
-    timer_minutes: 0,
-    topics_covered: [],
-    topics_open: [],
-    extractions_log: [],
-    step_tracker: [],
+  // Create interview record (workspace + interview + interview_state)
+  const { interviewId, workspaceId } = await evalStore.createInterview({
+    employeeName: persona.identity.name,
+    employeeRole: persona.identity.role,
+    department: persona.identity.department,
+    focusTopics: persona.processKnowledge.processes.map(p => p.name).join(', ') || null,
+    maxDurationMinutes: 30,
   })
+  console.log(`[eval] Interview created: ${interviewId}`)
 
   const traceCtx: TraceCtx = {
     interviewId,
@@ -801,7 +658,7 @@ async function runInterview(
     traceCtx,
     onFinish: async (text) => {
       if (!text) return
-      await supabase.from('interview_state').update({ opener_text: text }).eq('interview_id', interviewId)
+      await evalStore.saveOpenerText(interviewId, text)
     },
   })
 
@@ -819,9 +676,9 @@ async function runInterview(
     conversationHistory.push({ role: 'user', content: personaResponse })
 
     const [dbState, dbHistory, analystBriefing] = await Promise.all([
-      loadState(interviewId),
-      loadHistory(interviewId),
-      loadAnalystBriefing(interviewId),
+      evalStore.loadState(interviewId),
+      evalStore.loadHistory(interviewId),
+      evalStore.loadAnalystBriefing(interviewId),
     ])
 
     // Simulate elapsed time: eval runs in seconds so real timerMinutes stays ~0.
@@ -856,18 +713,20 @@ async function runInterview(
       for (const a of syntheticAnswers) {
         console.log(`  [card] ${a.slot_key} → ${JSON.stringify(a.answer)}`)
       }
-      await executeClarificationCompletion(interviewId, workspaceId, syntheticAnswers)
+      await evalStore.executeClarificationCompletion(interviewId, workspaceId, syntheticAnswers)
       console.log('[eval] Clarification complete → interview completed')
       break
     }
 
     // Delegate full turn logic to runInterviewTurn (PROJ-33 / ADR-016).
+    // Supabase: turnPorts=undefined → defaultProdPorts (byte-intact). PGlite:
+    // no-op ports → DB-free (PROJ-34 / ADR-018 §C).
     const turnResult = await runInterviewTurn({
       interviewId,
       userInput: personaResponse,
       timerMinutes: simulatedTimerMinutes,
       traceCtx: traceCtx as Record<string, unknown>,
-    })
+    }, evalStore.turnPorts)
 
     const agentText = await turnResult.stream.text
 
@@ -901,25 +760,16 @@ async function runInterview(
       break
     }
 
-    const { data: iv } = await supabase
-      .from('interviews')
-      .select('status')
-      .eq('id', interviewId)
-      .single()
-    if ((iv as { status: string } | null)?.status === 'completed') {
+    const status = await evalStore.loadStatus(interviewId)
+    if (status === 'completed') {
       console.log('\n[eval] Interview completed.')
       break
     }
   }
 
   // Load final state for scorers
-  const finalState = await loadState(interviewId)
-  const { data: finalInterview } = await supabase
-    .from('interviews')
-    .select('status')
-    .eq('id', interviewId)
-    .single()
-  const finalInterviewStatus = (finalInterview as { status: string } | null)?.status ?? 'created'
+  const finalState = await evalStore.loadState(interviewId)
+  const finalInterviewStatus = await evalStore.loadStatus(interviewId)
 
   return {
     interviewId,
@@ -1107,7 +957,7 @@ function writeAggregateReport(opts: {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { models, personas, baselineLabel, runs, seed, noPerturbation, isolatedCriteria } = parseArgs()
+  const { models, personas, baselineLabel, runs, seed, noPerturbation, isolatedCriteria, store } = parseArgs()
 
   if (personas.length === 0) {
     printUsage()
@@ -1122,7 +972,7 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`[runner] seed=${seed} runs=${runs} noPerturbation=${noPerturbation} isolatedCriteria=${isolatedCriteria}`)
+  console.log(`[runner] seed=${seed} runs=${runs} noPerturbation=${noPerturbation} isolatedCriteria=${isolatedCriteria} store=${store}`)
 
   // Enable Langfuse tracing for all eval runs
   process.env.LANGFUSE_ENABLED = 'true'
@@ -1145,8 +995,9 @@ async function main() {
           persona = { ...basePersona, processKnowledge: perturbedKnowledge }
         }
 
+        const evalStore = await createEvalStore(store)
         try {
-          const result = await runInterview(model, persona, personaName, baselineLabel, runIndex, runs)
+          const result = await runInterview(model, persona, personaName, baselineLabel, evalStore, runIndex, runs)
 
           // Flush OTel spans before scoring (ensures traces are in Langfuse)
           await flushLangfuse().catch(() => {})
@@ -1200,6 +1051,8 @@ async function main() {
           const errMsg = err instanceof Error ? err.message : String(err)
           console.error(`[runner] Run failed for model=${model} persona=${personaName} run=${runIndex}:`, err)
           results.push({ model, persona: personaName, scores: null, reportPath: null, error: errMsg })
+        } finally {
+          await evalStore.close()
         }
       }
 

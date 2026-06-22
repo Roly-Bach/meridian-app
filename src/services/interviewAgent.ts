@@ -2,10 +2,8 @@ import { resolveModel } from '@/lib/llm-provider'
 import { streamText, tool } from 'ai'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import { z } from 'zod'
-import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import type { RawExtraction } from './extraction'
-import { emitSlotWrite } from './slotWriteTrail'
-import { canOverwrite, type WriteSource } from './slotConflictResolver'
+import type { TurnSession, TurnStore } from './turnStore/port'
+import type { WriteSource } from './slotConflictResolver'
 import { generateEmbedding } from './embeddings'
 import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD, SOFT_THRESHOLD } from './stepIdentity'
 import {
@@ -125,20 +123,20 @@ PFLICHT: Nach Tool-Calls IMMER eine Textantwort generieren — auch nur ein Reak
 // removed — Orchestrator (interviewOrchestrator.ts) handles all phase transitions deterministically.
 
 export function buildTools(
-  interviewId: string,
-  workspaceId: string,
+  session: TurnSession,
   currentUserInput?: string,
   opts?: {
     source?: 'quick' | 'analyst' | 'analyst_online' | 'analyst_catchup'
     /** When set, only tools whose names are in this list are included in the returned object. */
     allowedTools?: string[]
-    /** User turn texts indexed 0-based. When provided, evidence_quote is validated against source_turn. */
+    /** User turn texts indexed 0-based. Reserved for catchup evidence validation. */
     userTurns?: string[]
   },
 ) {
-  const writeSource = opts?.source ?? 'analyst'
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = getSupabaseAdmin() as any
+  // PROJ-34/ADR-018: tools keep their read/decide logic but return a WriteIntent
+  // via session.stage() instead of writing to Supabase. Conflict resolution,
+  // idempotency and the done-transition live behind stage (applyIntent).
+  const writeSource = (opts?.source ?? 'analyst') as WriteSource
 
   const allTools = {
     update_topics: tool({
@@ -148,20 +146,10 @@ export function buildTools(
         open: z.array(z.string()),
       }),
       execute: async ({ covered, open }) => {
-        try {
-          await supabase
-            .from('interview_state')
-            .update({
-              topics_covered: covered,
-              topics_open: open,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('interview_id', interviewId)
-          return { success: true }
-        } catch (err) {
-          console.error('[update_topics] failed:', err)
-          return { success: false, error: (err as Error).message }
-        }
+        const res = session.stage({ kind: 'update_topics', covered, open })
+        return res.status === 'accepted'
+          ? { success: true }
+          : { success: false, error: 'update_topics not applied' }
       },
     }),
 
@@ -172,14 +160,7 @@ export function buildTools(
       }),
       execute: async ({ title }) => {
         try {
-          const { data: stateRow } = await supabase
-            .from('interview_state')
-            .select('step_tracker')
-            .eq('interview_id', interviewId)
-            .maybeSingle()
-
-          let current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
-            .map((raw, i) => normalizeStepEntry(raw, i + 1))
+          let current: StepEntry[] = session.snapshot().stepTracker
 
           // ── Layer 1: exact / substring match (free, always runs) ──────────
           const normalizedTitle = title.trim().toLowerCase()
@@ -254,10 +235,8 @@ export function buildTools(
             const anyNew = hydrated.some((s, i) => s.embedding && !current[i].embedding)
             if (anyNew) {
               current = hydrated
-              await supabase
-                .from('interview_state')
-                .update({ step_tracker: current, updated_at: new Date().toISOString() })
-                .eq('interview_id', interviewId)
+              // Persist hydrated embeddings (full-array write, same as today).
+              session.stage({ kind: 'register_step', tracker: current })
             }
 
             const match = classifyStepSimilarity(titleEmbedding, current)
@@ -346,10 +325,7 @@ export function buildTools(
           }
 
           const updated = [...current, newEntry]
-          await supabase
-            .from('interview_state')
-            .update({ step_tracker: updated, updated_at: new Date().toISOString() })
-            .eq('interview_id', interviewId)
+          session.stage({ kind: 'register_step', tracker: updated })
 
           return {
             success: true,
@@ -462,211 +438,44 @@ export function buildTools(
 
         const verbatimQuote = resolvedQuote
 
-        try {
-          const { data: stateRow } = await supabase
-            .from('interview_state')
-            .select('step_tracker')
-            .eq('interview_id', interviewId)
-            .maybeSingle()
+        // PROJ-34/ADR-018: lookup, idempotency, priority (canOverwrite) and the
+        // done-transition live behind session.stage (applyIntent). The tool keeps
+        // evidence resolution + type guards above; here it just stages the intent
+        // and maps the result back to the same LLM-facing response as before.
+        const result = session.stage({
+          kind: 'record_slot',
+          ...(step_id !== undefined ? { stepId: step_id } : {}),
+          stepTitle: step_title,
+          slot,
+          value: resolvedValue,
+          nichtBefundTyp: resolvedNichtBefundTyp,
+          isNichtBefundMode,
+          quote: verbatimQuote,
+          ...(confidence !== undefined ? { confidence } : {}),
+          ...(qualifier !== undefined ? { qualifier } : {}),
+          sourceTurn: source_turn ?? null,
+          isCorrection: is_correction,
+          writeSource,
+        })
 
-          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
-            .map((raw, i) => normalizeStepEntry(raw, i + 1))
-
-          // ID-first lookup (PROJ-27/BL-E1.4): stable reference, falls back to fuzzy title match
-          const stepIndex = step_id !== undefined
-            ? (() => {
-                const byId = findStepById(current, step_id)
-                return byId !== -1 ? byId : findStepFuzzy(current, step_title)
-              })()
-            : findStepFuzzy(current, step_title)
-
-          if (stepIndex === -1) {
-            const available = current.map(s => `"${s.title}" (${s.id ?? 'no-id'})`).join(', ')
-            return { success: false, error: `Schritt "${step_id ?? step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel oder IDs exakt.` }
-          }
-
-          const step = current[stepIndex]
-
-          // Read current value from correct location
-          const prevSlotValue: SlotValue | TaziteSlot | TaziteSlotArray | null = isPotenzial
-            ? step.potenzial[slot as PotenzialSlotName]
-            : step.slots[slot as TaziteSlotName]
-          const isOverwrite = prevSlotValue !== null && prevSlotValue !== undefined
-
-          // Idempotency: skip DB write when value is identical (Pt11)
-          if (isOverwrite && !is_correction) {
-            const prevVal = prevSlotValue?.value
-            const same = Array.isArray(value) && Array.isArray(prevVal)
-              ? value.length === (prevVal as string[]).length && (value as string[]).every((v, i) => v === (prevVal as string[])[i])
-              : value === prevVal
-            if (same) {
-              return {
-                success: true,
-                skipped: true,
-                message: `Slot "${slot}" für "${step.title}" enthält bereits diesen Wert. STOPP — kein weiterer record_slot-Aufruf für diesen Slot nötig. Fahre mit dem nächsten fehlenden Slot fort.`,
-              }
-            }
-          }
-
-          // Priority conflict check (ADR-016): potenzial slots only (multiple writers compete there)
-          if (isPotenzial) {
-            const prevAsSlotValue = prevSlotValue as SlotValue | null
-            const priorityBlocked = isOverwrite && !is_correction && !canOverwrite(prevAsSlotValue?.writeSource, writeSource as WriteSource)
-            if (priorityBlocked) {
-              emitSlotWrite({
-                ts: new Date().toISOString(),
-                interviewId,
-                source: writeSource,
-                stepTitle: step.title,
-                slot,
-                value,
-                prevValue: prevAsSlotValue?.value,
-                overwrite: true,
-                blocked: true,
-                sourceTurn: source_turn ?? null,
-                evidence: verbatimQuote,
-              }).catch(() => {})
-              return {
-                success: false,
-                error: `Slot "${slot}" already owned by higher-priority source "${prevAsSlotValue?.writeSource ?? 'unknown'}". Current source "${writeSource}" may not overwrite it. Use is_correction=true only if the interviewee explicitly corrected this value.`,
-              }
-            }
-          }
-
-          // Build new slot value object
-          let newSlotValue: SlotValue | TaziteSlot | TaziteSlotArray
-          let subPath: string[]
-
-          if (isPotenzial) {
-            const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
-            newSlotValue = isNichtBefundMode
-              ? {
-                  value: null,
-                  quote: verbatimQuote,
-                  writeSource: writeSource as WriteSource,
-                  nicht_befund_typ: resolvedNichtBefundTyp!,
-                } as SlotValue
-              : {
-                  value: resolvedValue!,
-                  quote: verbatimQuote,
-                  writeSource: writeSource as WriteSource,
-                  ...(confidence !== undefined ? { confidence } : {}),
-                  ...(qualifier !== undefined ? { qualifier } : {}),
-                }
-            subPath = ['potenzial', slot]
-            // Atomic per-slot write via jsonb_set (PROJ-27/BL-E1.5 — prevents lost-update race)
-            // p_value is jsonb-typed: pass the object directly, supabase-js/PostgREST serializes correctly (PROJ-38)
-            await supabase.rpc('patch_interview_step_field', {
-              p_interview_id: interviewId,
-              p_step_index: stepIndex,
-              p_sub_path: subPath,
-              p_value: newSlotValue,
-            })
-            if (newStatus !== step.status) {
-              await supabase.rpc('patch_interview_step_field', {
-                p_interview_id: interviewId,
-                p_step_index: stepIndex,
-                p_sub_path: ['status'],
-                p_value: newStatus,
-              })
-            }
-          } else if (isTaziteArray) {
-            newSlotValue = {
-              value: resolvedValue as string[],
-              quote: verbatimQuote,
-              nicht_befund_typ: null,
-              ...(confidence !== undefined ? { confidence } : {}),
-            } as TaziteSlotArray
-            subPath = ['slots', slot]
-            await supabase.rpc('patch_interview_step_field', {
-              p_interview_id: interviewId,
-              p_step_index: stepIndex,
-              p_sub_path: subPath,
-              p_value: newSlotValue,
-            })
-            if (step.status === 'exploring') {
-              await supabase.rpc('patch_interview_step_field', {
-                p_interview_id: interviewId,
-                p_step_index: stepIndex,
-                p_sub_path: ['status'],
-                p_value: 'walkthrough',
-              })
-            }
-          } else {
-            // entscheidungslogik (TaziteSlot)
-            newSlotValue = {
-              value: resolvedValue as string,
-              quote: verbatimQuote,
-              nicht_befund_typ: null,
-              ...(confidence !== undefined ? { confidence } : {}),
-            } as TaziteSlot
-            subPath = ['slots', slot]
-            await supabase.rpc('patch_interview_step_field', {
-              p_interview_id: interviewId,
-              p_step_index: stepIndex,
-              p_sub_path: subPath,
-              p_value: newSlotValue,
-            })
-            if (step.status === 'exploring') {
-              await supabase.rpc('patch_interview_step_field', {
-                p_interview_id: interviewId,
-                p_step_index: stepIndex,
-                p_sub_path: ['status'],
-                p_value: 'walkthrough',
-              })
-            }
-          }
-
-          // Check auto-transition to 'done' using in-memory snapshot + new value
-          const mergedPotenzial = isPotenzial
-            ? { ...step.potenzial, [slot]: newSlotValue }
-            : step.potenzial
-          const mergedSlots = !isPotenzial
-            ? { ...step.slots, [slot]: newSlotValue }
-            : step.slots
-          const allPotenzialFilled = POTENZIAL_SLOT_NAMES.every(s => {
-            const sv = mergedPotenzial[s]
-            return sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
-          })
-          const allTaziteFilled = TAZITE_SLOT_NAMES.every(s => {
-            const sv = mergedSlots[s]
-            return sv != null && (sv.value != null || sv.nicht_befund_typ != null)
-          })
-          if (allPotenzialFilled && allTaziteFilled && step.status !== 'done') {
-            await supabase.rpc('patch_interview_step_field', {
-              p_interview_id: interviewId,
-              p_step_index: stepIndex,
-              p_sub_path: ['status'],
-              p_value: 'done',
-            })
-          }
-
-          // Emit slot-write trail event (ADR-015) — non-blocking, never throws
-          emitSlotWrite({
-            ts: new Date().toISOString(),
-            interviewId,
-            source: writeSource,
-            stepTitle: step.title,
-            slot,
-            value: isNichtBefundMode ? `NICHT-BEFUND:${resolvedNichtBefundTyp}` : resolvedValue,
-            prevValue: prevSlotValue?.value,
-            overwrite: isOverwrite,
-            sourceTurn: source_turn ?? null,
-            evidence: verbatimQuote,
-          }).catch(() => {})
-
+        if (result.status === 'blocked' && result.reason === 'step_not_found') {
+          const avail = (result.detail?.available as Array<{ title: string; id: string | null }> | undefined ?? [])
+            .map((s) => `"${s.title}" (${s.id ?? 'no-id'})`)
+            .join(', ')
+          return { success: false, error: `Schritt "${step_id ?? step_title}" nicht gefunden. Verfügbare Schritte: ${avail || '(keine)'}. Nutze einen dieser Titel oder IDs exakt.` }
+        }
+        if (result.status === 'blocked' && result.reason === 'priority') {
+          return { success: false, error: `Slot "${slot}" already owned by higher-priority source "${result.detail?.prevSource ?? 'unknown'}". Current source "${writeSource}" may not overwrite it. Use is_correction=true only if the interviewee explicitly corrected this value.` }
+        }
+        if (result.status === 'skipped' && result.reason === 'idempotent') {
           return {
             success: true,
-            step_id: step.id,
-            step_title: step.title,
-            slot,
-            ...(isNichtBefundMode ? { nicht_befund_typ: resolvedNichtBefundTyp } : { value: resolvedValue }),
-            source_turn: source_turn ?? null,
+            skipped: true,
+            message: `Slot "${slot}" für "${result.detail?.stepTitle ?? step_title}" enthält bereits diesen Wert. STOPP — kein weiterer record_slot-Aufruf für diesen Slot nötig. Fahre mit dem nächsten fehlenden Slot fort.`,
           }
-        } catch (err) {
-          console.error('[record_slot] failed:', err)
-          return { success: false, error: (err as Error).message }
         }
+        // accepted — detail carries step_id, step_title, slot, value|nicht_befund_typ, source_turn
+        return { success: true, ...result.detail }
       },
     }),
 
@@ -699,45 +508,21 @@ export function buildTools(
           resolvedQuote = evidence_quote.trim()
         }
 
-        try {
-          const { data: stateRow } = await supabase
-            .from('interview_state')
-            .select('step_tracker')
-            .eq('interview_id', interviewId)
-            .maybeSingle()
-
-          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
-            .map((raw, i) => normalizeStepEntry(raw, i + 1))
-          const stepIndex = findStepFuzzy(current, step_title)
-
-          if (stepIndex === -1) {
-            const available = current.map(s => `"${s.title}"`).join(', ')
-            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbar: ${available || '(keine)'}.` }
-          }
-
-          const existing = current[stepIndex].governance
-          // Partial merge: only overwrite provided fields
-          const merged: GovernanceSlot = {
-            rolle: rolle !== undefined ? rolle : (existing?.rolle ?? null),
-            organisationseinheit: organisationseinheit !== undefined ? organisationseinheit : (existing?.organisationseinheit ?? null),
-            systeme: systeme !== undefined ? systeme : (existing?.systeme ?? null),
-            nicht_befund_typ: nicht_befund_typ !== undefined ? nicht_befund_typ : (existing?.nicht_befund_typ ?? null),
-          }
-
-          // Atomic per-field write (PROJ-27/BL-E1.5)
-          // p_value is jsonb-typed: pass object directly (PROJ-38)
-          await supabase.rpc('patch_interview_step_field', {
-            p_interview_id: interviewId,
-            p_step_index: stepIndex,
-            p_sub_path: ['governance'],
-            p_value: merged,
-          })
-
-          return { success: true, step_title, governance: merged, quote: resolvedQuote, source_turn: source_turn ?? null }
-        } catch (err) {
-          console.error('[record_governance] failed:', err)
-          return { success: false, error: (err as Error).message }
+        const result = session.stage({
+          kind: 'record_governance',
+          stepTitle: step_title,
+          ...(rolle !== undefined ? { rolle } : {}),
+          ...(organisationseinheit !== undefined ? { organisationseinheit } : {}),
+          ...(systeme !== undefined ? { systeme } : {}),
+          ...(nicht_befund_typ !== undefined ? { nichtBefundTyp: nicht_befund_typ } : {}),
+          quote: resolvedQuote,
+          sourceTurn: source_turn ?? null,
+        })
+        if (result.status === 'blocked' && result.reason === 'step_not_found') {
+          const avail = (result.detail?.available as Array<{ title: string }> | undefined ?? []).map((s) => `"${s.title}"`).join(', ')
+          return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbar: ${avail || '(keine)'}.` }
         }
+        return { success: true, step_title, governance: result.detail?.governance, quote: resolvedQuote, source_turn: source_turn ?? null }
       },
     }),
 
@@ -776,78 +561,28 @@ export function buildTools(
           }
         }
 
-        try {
-          const { data: stateRow } = await supabase
-            .from('interview_state')
-            .select('step_tracker')
-            .eq('interview_id', interviewId)
-            .maybeSingle()
-
-          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
-            .map((raw, i) => normalizeStepEntry(raw, i + 1))
-
-          const sourceIndex = current.findIndex(s => s.id === source_step_id)
-          if (sourceIndex === -1) {
-            const available = current.map(s => s.id ?? s.title).join(', ')
-            return { success: false, error: `Quell-Schritt "${source_step_id}" nicht im step_tracker. Verfügbar: ${available || '(keine)'}.` }
-          }
-
-          if (isEdgeMode) {
-            const targetExists = current.some(s => s.id === target_step_id)
-            if (!targetExists) {
-              const available = current.map(s => s.id ?? s.title).join(', ')
-              return { success: false, error: `Ziel-Schritt "${target_step_id}" nicht im step_tracker. Zuerst via register_step anlegen. Verfügbar: ${available || '(keine)'}.` }
-            }
-          }
-
-          const existing: Abhaengigkeiten = current[sourceIndex].abhaengigkeiten ?? {
-            depends_on: [],
-            influences: [],
-            nicht_befund_typ: null,
-          }
-
-          let updated: Abhaengigkeiten
-
-          if (isNichtBefundMode) {
-            updated = { ...existing, nicht_befund_typ: nicht_befund_typ! }
-          } else if (richtung === 'depends_on') {
-            const isDuplicate = existing.depends_on.some(k => k.schritt_id === target_step_id && k.typ === typ)
-            if (isDuplicate) {
-              return { success: true, message: 'Kante bereits vorhanden (idempotent)', skipped: true }
-            }
-            const newKante: AbhaengigkeitsKante = {
-              schritt_id: target_step_id!,
-              typ: typ as AbhaengigkeitsKante['typ'],
-              beschreibung: beschreibung ?? null,
-            }
-            updated = { ...existing, depends_on: [...existing.depends_on, newKante] }
-          } else {
-            const isDuplicate = existing.influences.some(k => k.schritt_id === target_step_id && k.typ === typ)
-            if (isDuplicate) {
-              return { success: true, message: 'Kante bereits vorhanden (idempotent)', skipped: true }
-            }
-            const newKante: EinflussKante = {
-              schritt_id: target_step_id!,
-              typ: typ as EinflussKante['typ'],
-              beschreibung: beschreibung ?? null,
-            }
-            updated = { ...existing, influences: [...existing.influences, newKante] }
-          }
-
-          // TOCTOU-safe write (PROJ-27/BL-E1.5) — only touches abhaengigkeiten sub-path
-          // p_value is jsonb-typed: pass object directly (PROJ-38)
-          await supabase.rpc('patch_interview_step_field', {
-            p_interview_id: interviewId,
-            p_step_index: sourceIndex,
-            p_sub_path: ['abhaengigkeiten'],
-            p_value: updated,
-          })
-
-          return { success: true, source_step_id, abhaengigkeiten: updated }
-        } catch (err) {
-          console.error('[record_dependency] failed:', err)
-          return { success: false, error: (err as Error).message }
+        const result = session.stage({
+          kind: 'record_dependency',
+          mode: isNichtBefundMode ? 'nicht_befund' : 'edge',
+          sourceStepId: source_step_id,
+          ...(target_step_id !== undefined ? { targetStepId: target_step_id } : {}),
+          ...(richtung !== undefined ? { richtung } : {}),
+          ...(typ !== undefined ? { typ } : {}),
+          ...(beschreibung !== undefined ? { beschreibung } : {}),
+          ...(nicht_befund_typ !== undefined ? { nichtBefundTyp: nicht_befund_typ } : {}),
+        })
+        if (result.status === 'blocked' && result.reason === 'step_not_found') {
+          const available = (result.detail?.available as string[] | undefined ?? []).join(', ')
+          return { success: false, error: `Quell-Schritt "${source_step_id}" nicht im step_tracker. Verfügbar: ${available || '(keine)'}.` }
         }
+        if (result.status === 'blocked' && result.reason === 'target_not_found') {
+          const available = (result.detail?.available as string[] | undefined ?? []).join(', ')
+          return { success: false, error: `Ziel-Schritt "${target_step_id}" nicht im step_tracker. Zuerst via register_step anlegen. Verfügbar: ${available || '(keine)'}.` }
+        }
+        if (result.status === 'skipped' && result.reason === 'duplicate_edge') {
+          return { success: true, message: 'Kante bereits vorhanden (idempotent)', skipped: true }
+        }
+        return { success: true, source_step_id, abhaengigkeiten: result.detail?.abhaengigkeiten }
       },
     }),
 
@@ -859,47 +594,10 @@ export function buildTools(
         severity: z.enum(['high', 'medium', 'low']),
       }),
       execute: async ({ step_title, description, severity }) => {
-        try {
-          await supabase
-            .from('knowledge_objects')
-            .insert({
-              interview_id: interviewId,
-              workspace_id: workspaceId,
-              type: 'pain_point',
-              content: {
-                description,
-                severity,
-                step_ref: step_title,
-              },
-              source_quote: null,
-            })
-
-          // Append to extractions_log so subsequent system prompts reflect this pain point
-          const { data: stateForLog } = await supabase
-            .from('interview_state')
-            .select('extractions_log')
-            .eq('interview_id', interviewId)
-            .maybeSingle()
-
-          const currentLog = (stateForLog?.extractions_log as RawExtraction[] | null) ?? []
-          const logEntry: RawExtraction = {
-            type: 'pain_point',
-            content: { description, severity, step_ref: step_title },
-            source_quote: '',
-          }
-          await supabase
-            .from('interview_state')
-            .update({
-              extractions_log: [...currentLog, logEntry],
-              updated_at: new Date().toISOString(),
-            })
-            .eq('interview_id', interviewId)
-
-          return { success: true, step_title, severity }
-        } catch (err) {
-          console.error('[link_bottleneck] failed:', err)
-          return { success: false, error: (err as Error).message }
-        }
+        const result = session.stage({ kind: 'link_bottleneck', stepTitle: step_title, description, severity })
+        return result.status === 'accepted'
+          ? { success: true, step_title, severity }
+          : { success: false, error: 'link_bottleneck not applied' }
       },
     }),
 
@@ -913,43 +611,19 @@ export function buildTools(
         pain_point_primary: z.string().nullable().optional(),
       }),
       execute: async ({ step_title, process_steps, friction_points, friction_tools, pain_point_primary }) => {
-        try {
-          const { data: stateRow } = await supabase
-            .from('interview_state')
-            .select('step_tracker')
-            .eq('interview_id', interviewId)
-            .maybeSingle()
-
-          const current: StepEntry[] = ((stateRow?.step_tracker as unknown[]) ?? [])
-            .map((raw, i) => normalizeStepEntry(raw, i + 1))
-          const stepIndex = findStepFuzzy(current, step_title)
-
-          if (stepIndex === -1) {
-            const available = current.map(s => `"${s.title}"`).join(', ')
-            return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${available || '(keine)'}. Nutze einen dieser Titel exakt.` }
-          }
-
-          const existing = current[stepIndex]
-          const updated = [...current]
-          updated[stepIndex] = {
-            ...existing,
-            status: existing.status === 'exploring' ? 'walkthrough' : existing.status,
-            process_steps: process_steps !== undefined ? process_steps : (existing.process_steps ?? []),
-            friction_points: friction_points !== undefined ? friction_points : (existing.friction_points ?? []),
-            friction_tools: friction_tools !== undefined ? friction_tools : (existing.friction_tools ?? []),
-            pain_point_primary: pain_point_primary !== undefined ? pain_point_primary : existing.pain_point_primary,
-          }
-
-          await supabase
-            .from('interview_state')
-            .update({ step_tracker: updated, updated_at: new Date().toISOString() })
-            .eq('interview_id', interviewId)
-
-          return { success: true, step_title }
-        } catch (err) {
-          console.error('[update_walkthrough_data] failed:', err)
-          return { success: false, error: (err as Error).message }
+        const result = session.stage({
+          kind: 'update_walkthrough_data',
+          stepTitle: step_title,
+          ...(process_steps !== undefined ? { process_steps } : {}),
+          ...(friction_points !== undefined ? { friction_points } : {}),
+          ...(friction_tools !== undefined ? { friction_tools } : {}),
+          ...(pain_point_primary !== undefined ? { pain_point_primary } : {}),
+        })
+        if (result.status === 'blocked' && result.reason === 'step_not_found') {
+          const avail = (result.detail?.available as Array<{ title: string }> | undefined ?? []).map((s) => `"${s.title}"`).join(', ')
+          return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${avail || '(keine)'}. Nutze einen dieser Titel exakt.` }
         }
+        return { success: true, step_title }
       },
     }),
   }
@@ -980,11 +654,19 @@ export interface AgentStreamOptions {
   briefing?: AnalystBriefing | null
   onFinish?: (text: string) => Promise<void>
   traceCtx?: TraceCtx
+  /** TurnStore for the greeting/reconnect tool writes. Defaults to the prod Supabase store. */
+  store?: TurnStore
 }
 
-export function createInterviewStream(opts: AgentStreamOptions) {
+export async function createInterviewStream(opts: AgentStreamOptions) {
   const modelString = process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(modelString)
+
+  // PROJ-34/ADR-018: open one session for this pass; the tools stage intents and
+  // commit() persists at pass end (in the stream's onFinish). Default to the prod
+  // Supabase store (lazy import keeps the eval/tsx graph free of supabase-admin).
+  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
+  const session = await store.openTurn(opts.context.interviewId, opts.context.workspaceId)
 
   const staticPart = buildStaticPrompt()
   // F1: feed last assistant turns into context for drill-stop detection.
@@ -1045,7 +727,7 @@ export function createInterviewStream(opts: AgentStreamOptions) {
     system: systemPrompt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: messages as any,
-    tools: buildTools(opts.context.interviewId, opts.context.workspaceId, opts.userInput),
+    tools: buildTools(session, opts.userInput),
     experimental_telemetry: buildTraceMetadata('interview.talker', {
       interviewId: opts.context.interviewId,
       model: modelString,
@@ -1061,28 +743,33 @@ export function createInterviewStream(opts: AgentStreamOptions) {
       const hasText = steps.some((s) => s.text.trim().length > 0)
       return hasText || steps.length >= 8
     },
-    onFinish: opts.onFinish
-      ? async ({ text, usage, providerMetadata }) => {
-          const meta = providerMetadata as Record<string, unknown> | undefined
-          const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
-          const details = usage.inputTokenDetails as Record<string, unknown> | undefined
-          const usageData = {
-            model: modelString,
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            cacheReadTokens: (details?.cacheReadTokens as number | undefined) ?? null,
-            cacheCreationTokens: (details?.cacheWriteTokens as number | undefined) ?? (anthropicMeta?.cacheCreationInputTokens as number | undefined) ?? null,
-            googleCachedTokens: (details?.cacheReadTokens as number | undefined) ?? null,
-          }
-          console.log('[token-usage] turn', usageData)
-          if (process.env.NODE_ENV === 'development') {
-            try {
-              const fs = await import('fs')
-              fs.writeFileSync('.eval-last-usage.json', JSON.stringify(usageData))
-            } catch { /* non-blocking */ }
-          }
-          await opts.onFinish!(text)
-        }
-      : undefined,
+    // Always commit the staged tool writes at pass end (ADR-018 D5), then run the
+    // caller's onFinish. Commit runs even when the caller passes no onFinish.
+    onFinish: async ({ text, usage, providerMetadata }) => {
+      try {
+        await session.commit()
+      } catch (err) {
+        console.error('[createInterviewStream] session.commit failed:', err)
+      }
+      const meta = providerMetadata as Record<string, unknown> | undefined
+      const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
+      const details = usage.inputTokenDetails as Record<string, unknown> | undefined
+      const usageData = {
+        model: modelString,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cacheReadTokens: (details?.cacheReadTokens as number | undefined) ?? null,
+        cacheCreationTokens: (details?.cacheWriteTokens as number | undefined) ?? (anthropicMeta?.cacheCreationInputTokens as number | undefined) ?? null,
+        googleCachedTokens: (details?.cacheReadTokens as number | undefined) ?? null,
+      }
+      console.log('[token-usage] turn', usageData)
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const fs = await import('fs')
+          fs.writeFileSync('.eval-last-usage.json', JSON.stringify(usageData))
+        } catch { /* non-blocking */ }
+      }
+      if (opts.onFinish) await opts.onFinish(text)
+    },
   })
 }

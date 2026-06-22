@@ -1,16 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
-const { mockAdminFrom, mockAdminRpc } = vi.hoisted(() => ({
-  mockAdminFrom: vi.fn(),
-  mockAdminRpc: vi.fn().mockResolvedValue({ data: null, error: null }),
-}))
+// The default Supabase store path (createInterviewStream) is reachable in the
+// module graph via a dynamic import; stub the server-only admin client so the
+// jsdom test env doesn't trip `import 'server-only'`. These tests drive the
+// in-memory MemoryTurnStore, so the stub is never actually exercised.
+vi.mock('@/lib/supabase-admin', () => ({ getSupabaseAdmin: vi.fn() }))
 
-vi.mock('@/lib/supabase-admin', () => ({
-  getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom, rpc: mockAdminRpc }),
-}))
-
+// PROJ-34/ADR-018: tools no longer write to Supabase; they stage WriteIntents
+// through a TurnSession. Tests run against the in-memory MemoryTurnStore and
+// assert the tool's LLM-facing result + the resulting snapshot/committed state.
 import { buildTools } from './interviewAgent'
+import { createMemoryTurnStore } from './turnStore/memoryTurnStore'
 import type { StepEntry } from './interviewSemantic'
+import type { RawExtraction } from './extraction'
 
 function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
   return {
@@ -41,27 +43,22 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
   }
 }
 
+/** Open a session over a seeded MemoryTurnStore and build the tools against it. */
+async function setup(stepTracker: StepEntry[] = [], extractionsLog: RawExtraction[] = []) {
+  const { store, backend } = createMemoryTurnStore({ stepTracker, extractionsLog })
+  const session = await store.openTurn('iv-1', 'ws-1')
+  const tools = buildTools(session)
+  return { tools, session, backend }
+}
+
 // ─── Tool Handlers ────────────────────────────────────────────────────────────
 
 describe('Tool Handlers', () => {
-  beforeEach(() => vi.clearAllMocks())
-
   // ── register_step ───────────────────────────────────────────────────────────
 
   describe('register_step', () => {
     it('adds new step to empty step_tracker', async () => {
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang' })
 
@@ -70,21 +67,12 @@ describe('Tool Handlers', () => {
       expect(result.step_tracker[0].title).toBe('Rechnungseingang')
       expect(result.step_tracker[0].status).toBe('exploring')
       expect(result.step_tracker[0].potenzial.frequency_per_month).toBeNull()
+      // staged into the live snapshot
+      expect(session.snapshot().stepTracker).toHaveLength(1)
     })
 
     it('initializes walkthrough fields as empty arrays and null', async () => {
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang' })
 
@@ -96,33 +84,18 @@ describe('Tool Handlers', () => {
     })
 
     it('deduplicates case-insensitively and returns deduplicated flag', async () => {
-      const existing = [makeStep({ title: 'Rechnungseingang buchen' })]
-      mockAdminFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: existing }, error: null }),
-      })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup([makeStep({ title: 'Rechnungseingang buchen' })])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.register_step as any).execute({ title: 'RECHNUNGSEINGANG BUCHEN' })
 
       expect(result.success).toBe(true)
       expect(result.deduplicated).toBe(true)
+      // no new step staged
+      expect(session.snapshot().stepTracker).toHaveLength(1)
     })
 
     it('deduplicates via German process suffix normalization (Mahnwesen vs Mahnprozess)', async () => {
-      // "Mahnwesen" → strip "wesen" → "mahn"
-      // "Mahnprozess" → strip "prozess" → "mahn"
-      // Both normalize to same root → dedup fires
-      const existing = [makeStep({ title: 'Mahnwesen' })]
-      mockAdminFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: existing }, error: null }),
-      })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([makeStep({ title: 'Mahnwesen' })])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.register_step as any).execute({ title: 'Mahnprozess' })
 
@@ -131,28 +104,14 @@ describe('Tool Handlers', () => {
     })
 
     it('does NOT deduplicate when normalized roots differ (≥4 chars)', async () => {
-      // "Rechnungsprüfung" → strip nothing matching → stays "rechnungsprüfung"
-      // "Monatsabschluss" → strip "abschluss" → "monats" — different root
-      const existing = [makeStep({ title: 'Rechnungsprüfung' })]
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: existing }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup([makeStep({ title: 'Rechnungsprüfung' })])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.register_step as any).execute({ title: 'Monatsabschluss' })
 
       expect(result.success).toBe(true)
-      // Non-duplicate path does not set deduplicated — step is added to tracker
       expect(result.deduplicated).toBeUndefined()
       expect(result.step_tracker).toHaveLength(2)
+      expect(session.snapshot().stepTracker).toHaveLength(2)
     })
   })
 
@@ -160,16 +119,7 @@ describe('Tool Handlers', () => {
 
   describe('record_slot', () => {
     it('fills potenzial slot with value and evidence_quote', async () => {
-      const tracker = [makeStep({ title: 'Rechnungseingang' })]
-      mockAdminFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-      })
-      // record_slot uses rpc() for atomic writes (PROJ-27/BL-E1.5)
-      mockAdminRpc.mockResolvedValue({ data: null, error: null })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup([makeStep({ title: 'Rechnungseingang' })])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -181,16 +131,13 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(true)
       expect(result.slot).toBe('frequency_per_month')
       expect(result.value).toBe(20)
-      // verify atomic rpc write was called with correct path
-      // PROJ-38: p_value must be the slot OBJECT, not a JSON-stringified string
-      expect(mockAdminRpc).toHaveBeenCalledWith('patch_interview_step_field', expect.objectContaining({
-        p_sub_path: ['potenzial', 'frequency_per_month'],
-        p_value: expect.objectContaining({ value: 20 }),
-      }))
+      // PROJ-38: stored as a slot OBJECT (value lives at .value), not a stringified blob
+      const slot = session.snapshot().stepTracker[0].potenzial.frequency_per_month
+      expect(slot).toMatchObject({ value: 20 })
     })
 
     it('rejects short evidence_quote (Grounding Guard)', async () => {
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -204,7 +151,6 @@ describe('Tool Handlers', () => {
     })
 
     it('auto-sets status to done when all 10 mandatory slots are filled', async () => {
-      // Tracker: all potenzial filled (4/4), 5 tazite filled — missing only ausnahmen
       const tracker = [
         makeStep({
           title: 'Rechnungseingang',
@@ -224,15 +170,7 @@ describe('Tool Handlers', () => {
           },
         }),
       ]
-
-      mockAdminFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-      })
-      mockAdminRpc.mockResolvedValue({ data: null, error: null })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup(tracker)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -241,38 +179,11 @@ describe('Tool Handlers', () => {
         evidence_quote: 'Storno ist eine Ausnahme',
       })
 
-      // PROJ-27: 'done' status written via separate rpc call (may precede by 'walkthrough' call)
-      const doneStatusCall = mockAdminRpc.mock.calls.find(
-        (call: unknown[]) => {
-          const p = call[1] as Record<string, unknown>
-          // PROJ-38: status is written as a plain jsonb string, not a double-encoded JSON.stringify
-          return Array.isArray(p?.p_sub_path) && (p.p_sub_path as string[]).join('.') === 'status' && p.p_value === 'done'
-        }
-      )
-      expect(doneStatusCall).toBeDefined()
+      expect(session.snapshot().stepTracker[0].status).toBe('done')
     })
 
     it('does not set status to done when multiple tazite slots are still missing', async () => {
-      const tracker = [
-        makeStep({
-          title: 'Rechnungseingang',
-          potenzial: {
-            frequency_per_month: null,
-            duration_minutes: null,
-            error_rate_percent: null,
-            media_breaks: null,
-          },
-        }),
-      ]
-
-      mockAdminFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-      })
-      mockAdminRpc.mockResolvedValue({ data: null, error: null })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup([makeStep({ title: 'Rechnungseingang' })])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -281,19 +192,11 @@ describe('Tool Handlers', () => {
         evidence_quote: 'etwa 20 mal im Monat',
       })
 
-      // PROJ-27: no 'done' status rpc call should have been made
-      const doneCall = mockAdminRpc.mock.calls.find(
-        (call: unknown[]) => {
-          const p = call[1] as Record<string, unknown>
-          const sub = p?.p_sub_path
-          return Array.isArray(sub) && (sub as string[]).join('.') === 'status' && (p?.p_value as string)?.includes('done')
-        }
-      )
-      expect(doneCall).toBeUndefined()
+      expect(session.snapshot().stepTracker[0].status).not.toBe('done')
     })
 
     it('rejects non-string value for entscheidungslogik (must be string)', async () => {
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -306,7 +209,7 @@ describe('Tool Handlers', () => {
     })
 
     it('rejects string value for media_breaks (must be number)', async () => {
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -319,7 +222,7 @@ describe('Tool Handlers', () => {
     })
 
     it('rejects string value for frequency_per_month (must be number)', async () => {
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -332,7 +235,7 @@ describe('Tool Handlers', () => {
     })
 
     it('rejects non-array for hilfsmittel', async () => {
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
@@ -343,40 +246,16 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('Array')
     })
-
   })
-
-  // enter_coverage_check removed in Iteration 2 (PROJ-22) — Orchestrator handles phase transitions.
-  // Coverage check logic is tested in interviewOrchestrator.test.ts.
 
   // ── update_walkthrough_data ─────────────────────────────────────────────────
 
   describe('update_walkthrough_data', () => {
     it('replaces process_steps on a second call (no additive duplication)', async () => {
       const tracker = [
-        makeStep({
-          title: 'Rechnungseingang',
-          process_steps: ['Rechnung öffnen', 'Datum prüfen'],
-          friction_points: [],
-          friction_tools: [],
-        }),
+        makeStep({ title: 'Rechnungseingang', process_steps: ['Rechnung öffnen', 'Datum prüfen'] }),
       ]
-
-      let capturedUpdate: unknown
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockImplementation((data: unknown) => {
-            capturedUpdate = data
-            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-          }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup(tracker)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.update_walkthrough_data as any).execute({
         step_title: 'Rechnungseingang',
@@ -384,20 +263,11 @@ describe('Tool Handlers', () => {
       })
 
       expect(result.success).toBe(true)
-      const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
-      expect(updated[0].process_steps).toEqual([
-        'Betrag kontrollieren',
-      ])
+      expect(session.snapshot().stepTracker[0].process_steps).toEqual(['Betrag kontrollieren'])
     })
 
     it('returns success false when step is not found', async () => {
-      mockAdminFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
-      })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.update_walkthrough_data as any).execute({
         step_title: 'Nicht vorhanden',
@@ -408,31 +278,14 @@ describe('Tool Handlers', () => {
     })
 
     it("transitions status from 'exploring' to 'walkthrough' on first call", async () => {
-      const tracker = [makeStep({ title: 'Rechnungseingang', status: 'exploring' })]
-
-      let capturedUpdate: unknown
-      mockAdminFrom
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-        })
-        .mockReturnValueOnce({
-          update: vi.fn().mockImplementation((data: unknown) => {
-            capturedUpdate = data
-            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-          }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup([makeStep({ title: 'Rechnungseingang', status: 'exploring' })])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tools.update_walkthrough_data as any).execute({
         step_title: 'Rechnungseingang',
         friction_points: ['Langer Genehmigungsprozess'],
       })
 
-      const updated = (capturedUpdate as { step_tracker: StepEntry[] }).step_tracker
-      expect(updated[0].status).toBe('walkthrough')
+      expect(session.snapshot().stepTracker[0].status).toBe('walkthrough')
     })
   })
 
@@ -440,27 +293,7 @@ describe('Tool Handlers', () => {
 
   describe('link_bottleneck', () => {
     it('creates knowledge_object with step_ref in content and updates extractions_log', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ data: null, error: null })
-      let capturedLogUpdate: unknown
-
-      mockAdminFrom
-        // knowledge_objects insert
-        .mockReturnValueOnce({ insert: insertMock })
-        // interview_state select (extractions_log)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: { extractions_log: [] }, error: null }),
-        })
-        // interview_state update
-        .mockReturnValueOnce({
-          update: vi.fn().mockImplementation((data: unknown) => {
-            capturedLogUpdate = data
-            return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
-          }),
-        })
-
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session, backend } = await setup([], [])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.link_bottleneck as any).execute({
         step_title: 'Rechnungseingang',
@@ -471,18 +304,15 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(true)
       expect(result.step_title).toBe('Rechnungseingang')
 
-      // knowledge_object has step_ref in content-jsonb
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'pain_point',
-          content: expect.objectContaining({ step_ref: 'Rechnungseingang', severity: 'high' }),
-        })
-      )
-
-      // extractions_log updated with the new pain point
-      const logUpdate = capturedLogUpdate as { extractions_log: unknown[] }
-      expect(logUpdate.extractions_log).toHaveLength(1)
-      expect(logUpdate.extractions_log[0]).toMatchObject({
+      // commit persists the two targets (knowledge_objects insert + extractions_log append)
+      await session.commit()
+      expect(backend.state.knowledgeObjects).toHaveLength(1)
+      expect(backend.state.knowledgeObjects[0]).toMatchObject({
+        type: 'pain_point',
+        content: expect.objectContaining({ step_ref: 'Rechnungseingang', severity: 'high' }),
+      })
+      expect(backend.state.extractionsLog).toHaveLength(1)
+      expect(backend.state.extractionsLog[0]).toMatchObject({
         type: 'pain_point',
         content: expect.objectContaining({ step_ref: 'Rechnungseingang' }),
       })
@@ -499,18 +329,8 @@ describe('Tool Handlers', () => {
       ]
     }
 
-    function mockWithTracker(tracker: StepEntry[]) {
-      mockAdminFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: tracker }, error: null }),
-      })
-      mockAdminRpc.mockResolvedValue({ data: null, error: null })
-    }
-
     it('records depends_on edge between two known steps', async () => {
-      mockWithTracker(makeTrackerWithIds())
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools, session } = await setup(makeTrackerWithIds())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S001',
@@ -523,14 +343,11 @@ describe('Tool Handlers', () => {
       expect(result.abhaengigkeiten.depends_on).toHaveLength(1)
       expect(result.abhaengigkeiten.depends_on[0].schritt_id).toBe('S002')
       expect(result.abhaengigkeiten.depends_on[0].typ).toBe('voraussetzung')
-      expect(mockAdminRpc).toHaveBeenCalledWith('patch_interview_step_field', expect.objectContaining({
-        p_sub_path: ['abhaengigkeiten'],
-      }))
+      expect(session.snapshot().stepTracker[0].abhaengigkeiten?.depends_on).toHaveLength(1)
     })
 
     it('records influences edge between two known steps', async () => {
-      mockWithTracker(makeTrackerWithIds())
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup(makeTrackerWithIds())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S001',
@@ -545,8 +362,7 @@ describe('Tool Handlers', () => {
     })
 
     it('sets nicht_befund_typ in Nicht-Befund-Modus', async () => {
-      mockWithTracker(makeTrackerWithIds())
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup(makeTrackerWithIds())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S001',
@@ -558,7 +374,7 @@ describe('Tool Handlers', () => {
     })
 
     it('rejects self-reference (source_step_id === target_step_id)', async () => {
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup(makeTrackerWithIds())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S001',
@@ -572,8 +388,7 @@ describe('Tool Handlers', () => {
     })
 
     it('rejects phantom source (source_step_id not in step_tracker)', async () => {
-      mockWithTracker(makeTrackerWithIds())
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup(makeTrackerWithIds())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S099',
@@ -587,8 +402,7 @@ describe('Tool Handlers', () => {
     })
 
     it('rejects phantom target (target_step_id not in step_tracker)', async () => {
-      mockWithTracker(makeTrackerWithIds())
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup(makeTrackerWithIds())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S001',
@@ -602,7 +416,7 @@ describe('Tool Handlers', () => {
     })
 
     it('rejects type mismatch (influences-type passed to depends_on)', async () => {
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup(makeTrackerWithIds())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S001',
@@ -628,8 +442,7 @@ describe('Tool Handlers', () => {
         }),
         makeStep({ id: 'S002', title: 'Schritt B', reihenfolge: 2 }),
       ]
-      mockWithTracker(withExistingEdge)
-      const tools = buildTools('iv-1', 'ws-1')
+      const { tools } = await setup(withExistingEdge)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_dependency as any).execute({
         source_step_id: 'S001',

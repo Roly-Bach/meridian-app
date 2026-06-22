@@ -5,11 +5,17 @@
  *   load → orchestrate → wrap-up-inject | talker-stream + background analyst
  *
  * The Prod Route and the Eval Runner are thin adapters around this function.
- * Neither `import { after } from 'next/server'` nor TurnStore port (PROJ-34)
- * belong here — `after()` remains the Prod adapter's concern.
+ * Neither `import { after } from 'next/server'` belongs here — `after()` remains
+ * the Prod adapter's concern.
+ *
+ * PROJ-34 / ADR-018: persistence is injected via `ports`. `runInterviewTurn`
+ * never touches `getSupabaseAdmin()` directly — all loads, the turns-insert and
+ * the interview_state/interviews updates go through `ports.store`. The
+ * post-completion derivation (`onCompleted`) and per-turn `extractAndEmbed` are
+ * injected too: Prod = real, Eval = no-op. Default `ports` are the prod
+ * Supabase store + real pipeline (lazy-imported so the eval/tsx graph stays clean).
  */
 
-import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import {
   computeMissingMandatorySlots,
   normalizeStepEntry,
@@ -32,13 +38,52 @@ import {
   type AnalystRunResult,
 } from '@/services/interviewAnalyst'
 import { runQuickExtract } from '@/services/interviewQuickExtract'
-import { extractAndEmbed, deduplicateKnowledgeObjects, type RawExtraction } from '@/services/extraction'
-import { createProcessStepsFromTracker } from '@/services/processEnrichment'
-import { clusterProcessSteps } from '@/services/processClustering'
-import type { Database } from '@/lib/database.types'
+import { type RawExtraction } from '@/services/extraction'
+import type { InterviewStore } from '@/services/turnStore/port'
 
-type StateRow = Database['public']['Tables']['interview_state']['Row']
-type TurnRow = Database['public']['Tables']['turns']['Row']
+// ─── Ports ─────────────────────────────────────────────────────────────────────
+
+export interface ExtractAndEmbedArgs {
+  interviewId: string
+  workspaceId: string
+  turnId: string
+  transcript: Array<{ user_input: string; agent_response: string }>
+}
+
+export interface RunTurnPorts {
+  /** Persistence: loads + orchestration writes + per-pass session store. */
+  store: InterviewStore
+  /** Per-turn knowledge extraction + embedding. Prod = real; Eval = no-op (returns []). */
+  extractAndEmbed: (args: ExtractAndEmbedArgs) => Promise<RawExtraction[]>
+  /** Post-completion derivation pipeline. Prod = real; Eval = no-op. */
+  onCompleted: (args: { interviewId: string; workspaceId: string }) => Promise<void>
+}
+
+/**
+ * Default prod ports — lazy-imported so the eval (tsx) path never pulls the
+ * Supabase store or the embedding/clustering pipeline unless it is actually used.
+ */
+async function defaultProdPorts(): Promise<RunTurnPorts> {
+  const [{ createSupabaseInterviewStore }, extraction, enrichment, clustering] = await Promise.all([
+    import('@/services/turnStore/supabaseTurnStore'),
+    import('@/services/extraction'),
+    import('@/services/processEnrichment'),
+    import('@/services/processClustering'),
+  ])
+  return {
+    store: createSupabaseInterviewStore(),
+    extractAndEmbed: (args) => extraction.extractAndEmbed(args),
+    onCompleted: async ({ interviewId, workspaceId }) => {
+      await enrichment.createProcessStepsFromTracker({ interviewId, workspaceId })
+      clustering.clusterProcessSteps(workspaceId).catch((err) =>
+        console.error('[runInterviewTurn] clusterProcessSteps failed:', err),
+      )
+      extraction.deduplicateKnowledgeObjects(workspaceId).catch((err) =>
+        console.error('[runInterviewTurn] deduplicateKnowledgeObjects failed:', err),
+      )
+    },
+  }
+}
 
 // ─── Public interface ─────────────────────────────────────────────────────────
 
@@ -95,42 +140,23 @@ function makeWrapUpStream(text: string): TurnStream {
 
 // ─── Core function ────────────────────────────────────────────────────────────
 
-export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult> {
+export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts): Promise<TurnResult> {
   const { interviewId, userInput, timerMinutes, traceCtx } = input
-  const supabase = getSupabaseAdmin()
+  const p = ports ?? (await defaultProdPorts())
+  const { store } = p
 
   // ── Load interview row ──────────────────────────────────────────────────────
-  const { data: rawInterview } = await supabase
-    .from('interviews')
-    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, max_duration_minutes, analyst_status, next_briefing')
-    .eq('id', interviewId)
-    .single()
-
-  if (!rawInterview) {
+  const interview = await store.loadInterview(interviewId)
+  if (!interview) {
     throw new Error(`runInterviewTurn: interview ${interviewId} not found`)
   }
 
-  const interview = rawInterview as typeof rawInterview & {
-    analyst_status?: string | null
-    next_briefing?: AnalystBriefing | null
-  }
-
   // ── Load state + turns ──────────────────────────────────────────────────────
-  const [{ data: rawState }, { data: rawTurns }] = await Promise.all([
-    supabase
-      .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker, opener_text')
-      .eq('interview_id', interviewId)
-      .maybeSingle(),
-    supabase
-      .from('turns')
-      .select('turn_number, user_input, agent_response, created_at')
-      .eq('interview_id', interviewId)
-      .order('turn_number', { ascending: true }),
+  const [state, existingTurns] = await Promise.all([
+    store.loadState(interviewId),
+    store.loadTurns(interviewId),
   ])
 
-  const state = rawState as (Partial<StateRow> & { step_tracker?: unknown }) | null
-  const existingTurns = (rawTurns as TurnRow[]) ?? []
   const currentPhase = (state?.phase ?? 'intro') as Phase
   const stepTracker: StepEntry[] = ((state?.step_tracker as unknown[] | null) ?? [])
     .map((raw, i) => normalizeStepEntry(raw, i + 1))
@@ -172,10 +198,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
   // ── Lifecycle check ─────────────────────────────────────────────────────────
   const lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
   if (lifecycle.shouldComplete) {
-    await supabase
-      .from('interviews')
-      .update({ status: 'completed', extractions_pending: true })
-      .eq('id', interviewId)
+    await store.completeInterview(interviewId)
 
     console.log('[runInterviewTurn] lifecycle complete:', lifecycle.reason)
 
@@ -205,11 +228,11 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
       briefing: farewellBriefing,
       onFinish: async (agentText) => {
         if (!agentText) return
-        await supabase.from('turns').insert({
-          interview_id: interviewId,
-          turn_number: nextTurnNumber,
-          user_input: userInput,
-          agent_response: agentText,
+        await store.insertTurn({
+          interviewId,
+          turnNumber: nextTurnNumber,
+          userInput,
+          agentResponse: agentText,
         })
       },
     })
@@ -219,12 +242,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
         // B5: run the Analyst on the final wrap-up user turn. The completion path exits
         // before the normal Analyst run below, so this turn's slots would otherwise be
         // lost before process-step creation.
-        const { data: freshStateRow } = await supabase
-          .from('interview_state')
-          .select('step_tracker')
-          .eq('interview_id', interviewId)
-          .maybeSingle()
-        const freshTracker = ((freshStateRow?.step_tracker as unknown[] | null) ?? (stepTracker as unknown[]))
+        const freshTracker = (await store.loadStepTracker(interviewId) as unknown[])
           .map((raw, i) => normalizeStepEntry(raw, i + 1))
         await runAnalystOnline({
           context: {
@@ -245,17 +263,12 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
           history,
           currentUserInput: userInput,
           traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
+          store,
         })
       } catch (err) {
         console.error('[runInterviewTurn] post-complete analyst failed:', err)
       }
-      await createProcessStepsFromTracker({ interviewId, workspaceId: interview.workspace_id })
-      clusterProcessSteps(interview.workspace_id).catch((err) =>
-        console.error('[runInterviewTurn] post-complete clusterProcessSteps failed:', err),
-      )
-      deduplicateKnowledgeObjects(interview.workspace_id).catch((err) =>
-        console.error('[runInterviewTurn] post-complete deduplicateKnowledgeObjects failed:', err),
-      )
+      await p.onCompleted({ interviewId, workspaceId: interview.workspace_id })
       return null
     }
 
@@ -276,20 +289,17 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
   const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
 
   if (orchestratedPhase !== currentPhase) {
-    await supabase
-      .from('interview_state')
-      .update({ phase: orchestratedPhase, updated_at: new Date().toISOString() })
-      .eq('interview_id', interviewId)
+    await store.updatePhase(interviewId, orchestratedPhase)
   }
 
   // ── Wrap-up question injection ──────────────────────────────────────────────
   if (shouldInjectWrapUpQuestion(orchestratedPhase, history)) {
     const agentText = WRAP_UP_QUESTION_TEXT
-    await supabase.from('turns').insert({
-      interview_id: interviewId,
-      turn_number: nextTurnNumber,
-      user_input: userInput,
-      agent_response: agentText,
+    await store.insertTurn({
+      interviewId,
+      turnNumber: nextTurnNumber,
+      userInput,
+      agentResponse: agentText,
     })
 
     return {
@@ -315,6 +325,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
       stepTracker,
       currentTurnNumber: nextTurnNumber,
       activeStepTitle: activeStep?.title ?? null,
+      store,
     })
     if (qeTracker !== null) freshStepTracker = qeTracker.map((raw, i) => normalizeStepEntry(raw as unknown, i + 1))
   }
@@ -328,11 +339,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
   // ── Analyst status ──────────────────────────────────────────────────────────
   const needsCatchup = analystStatus === 'failed'
 
-  void supabase
-    .from('interviews')
-    .update({ analyst_status: 'processing' })
-    .eq('id', interviewId)
-    .then(() => {}, () => {})
+  void store.setAnalystStatus(interviewId, 'processing').then(() => {}, () => {})
 
   const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
 
@@ -361,42 +368,19 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
     onFinish: async (agentText) => {
       if (!agentText) return
 
-      const { data: newTurn, error: turnError } = await supabase
-        .from('turns')
-        .insert({
-          interview_id: interviewId,
-          turn_number: nextTurnNumber,
-          user_input: userInput,
-          agent_response: agentText,
-        })
-        .select('id')
-        .single()
-      if (turnError) console.error('[runInterviewTurn/onFinish] turns insert failed:', turnError.message)
+      const newTurn = await store.insertTurn({
+        interviewId,
+        turnNumber: nextTurnNumber,
+        userInput,
+        agentResponse: agentText,
+      })
 
-      const { error: stateError } = await supabase
-        .from('interview_state')
-        .update({
-          timer_minutes: timerMinutes,
-          updated_at: new Date().toISOString(),
-          extractions_log: currentLog as unknown as import('@/lib/database.types').Json,
-        })
-        .eq('interview_id', interviewId)
-      if (stateError) console.error('[runInterviewTurn/onFinish] state update failed:', stateError.message)
+      await store.updateStateAfterTurn(interviewId, { timerMinutes, extractionsLog: currentLog })
 
       const runPostCompletionTasks = async () => {
-        const { data: ci } = await supabase
-          .from('interviews')
-          .select('status')
-          .eq('id', interviewId)
-          .single()
+        const ci = await store.loadInterview(interviewId)
         if (ci?.status !== 'completed') return
-        await createProcessStepsFromTracker({ interviewId, workspaceId: interview.workspace_id })
-        clusterProcessSteps(interview.workspace_id).catch((err) =>
-          console.error('[runInterviewTurn] clusterProcessSteps failed:', err),
-        )
-        deduplicateKnowledgeObjects(interview.workspace_id).catch((err) =>
-          console.error('[runInterviewTurn] deduplicateKnowledgeObjects failed:', err),
-        )
+        await p.onCompleted({ interviewId, workspaceId: interview.workspace_id })
       }
 
       if (newTurn?.id) {
@@ -404,7 +388,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
           ...existingTurns.map((t) => ({ user_input: t.user_input, agent_response: t.agent_response })),
           { user_input: userInput, agent_response: agentText },
         ]
-        extractAndEmbed({
+        p.extractAndEmbed({
           interviewId,
           workspaceId: interview.workspace_id,
           turnId: newTurn.id,
@@ -413,14 +397,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
           .then(async (newExtractions) => {
             if (newExtractions.length > 0) {
               const updatedLog = [...currentLog, ...newExtractions]
-              const { error } = await supabase
-                .from('interview_state')
-                .update({
-                  extractions_log: updatedLog as unknown as import('@/lib/database.types').Json,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('interview_id', interviewId)
-              if (error) console.error('[runInterviewTurn] extractions_log update failed:', error.message)
+              await store.updateStateAfterTurn(interviewId, { extractionsLog: updatedLog })
             }
             await runPostCompletionTasks()
           })
@@ -436,13 +413,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
     try {
       const analystHistory = history
 
-      const adminDb = getSupabaseAdmin()
-      const { data: freshStateRow } = await adminDb
-        .from('interview_state')
-        .select('step_tracker')
-        .eq('interview_id', interviewId)
-        .maybeSingle()
-      const freshTrackerForAnalyst = ((freshStateRow?.step_tracker as unknown[] | null) ?? (stepTracker as unknown[]))
+      const freshTrackerForAnalyst = (await store.loadStepTracker(interviewId) as unknown[])
         .map((raw, i) => normalizeStepEntry(raw, i + 1))
 
       const sharedContext = {
@@ -471,6 +442,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
           previousUserInput: prevUserInput,
           currentUserInput: userInput,
           traceCtx: resolvedTraceCtx,
+          store,
         })
         return result
       }
@@ -480,17 +452,13 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
         history: analystHistory,
         currentUserInput: userInput,
         traceCtx: resolvedTraceCtx,
+        store,
       })
 
       const shouldRunCatchup =
         phaseJustEntered === 'coverage_check' || phaseJustEntered === 'wrap_up'
       if (shouldRunCatchup) {
-        const { data: postOnlineStateRow } = await adminDb
-          .from('interview_state')
-          .select('step_tracker')
-          .eq('interview_id', interviewId)
-          .maybeSingle()
-        const postOnlineTracker = ((postOnlineStateRow?.step_tracker as unknown[] | null) ?? (freshTrackerForAnalyst as unknown[]))
+        const postOnlineTracker = (await store.loadStepTracker(interviewId) as unknown[])
           .map((raw, i) => normalizeStepEntry(raw, i + 1))
 
         await runAnalystCatchup({
@@ -498,6 +466,7 @@ export async function runInterviewTurn(input: RunTurnInput): Promise<TurnResult>
           history: analystHistory,
           currentUserInput: userInput,
           traceCtx: resolvedTraceCtx,
+          store,
         })
       }
 
