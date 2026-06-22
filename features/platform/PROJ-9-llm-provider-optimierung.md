@@ -1,6 +1,6 @@
 # PROJ-9: LLM Provider Optimierung
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-05-20
 **Last Updated:** 2026-06-22
 **Type:** Feature
@@ -277,3 +277,62 @@ Hinweis: DeepSeek V4 Pro auf Nebius hat hohe E2E-Latenz (110s). Für async Extra
 - Fine-Tuning auf Meridian-Daten
 - Automatischer Modell-Fallback bei Fehler
 - Kostentracking pro Interview in der DB
+
+## Tech Design (Solution Architect)
+
+### Was gebaut wird
+
+Reines Backend-/Konfigurations-Feature — keine UI, keine neue Seite, kein neuer Nutzer-Flow. Alle 9 Stellen im Code, die aktuell ein LLM aufrufen (Interview-Agent, Extraktion, Anreicherung, PDF-Report, Use-Case-Insights, …), rufen bereits eine einzige zentrale Weiche auf (`resolveModel()`) und kennen den Provider dahinter nicht. Dieses Feature erweitert nur diese eine Weiche um zwei neue Ziele — alle 9 Aufrufer bleiben unverändert.
+
+```
+Service ruft auf:           resolveModel("nebius/kimi-k2.6-reasoning")
+                                      │
+                                      ▼
+                          ┌─ zentrale Weiche (llm-provider.ts) ─┐
+                          │  anthropic/...   → bestehend          │
+                          │  google/...      → bestehend          │
+                          │  nebius/...      → NEU                │
+                          │  fireworks/...   → NEU (manueller     │
+                          │                     Fallback-Pfad)    │
+                          └────────────────────────────────────────┘
+```
+
+### Komponenten-Struktur
+
+Kein UI-Komponentenbaum — dieses Feature hat keine sichtbare Oberfläche. Betroffen ist ausschließlich die Service-Schicht (`src/services/*` → `src/lib/llm-provider.ts`).
+
+### Datenmodell
+
+Keine neuen Datenbank-Tabellen, keine Schema-Änderung. Die drei bestehenden Konfigurationswerte (`INTERVIEW_MODEL`, `EXTRACTION_MODEL`, `ENRICHMENT_MODEL`) bekommen nur neue Inhalte — das Format `provider/modell-id` bleibt exakt wie es ist.
+
+### Modell-Zuweisung (aus der Recherche oben)
+
+| Konfigurationswert | Neuer Inhalt | Grund |
+|---|---|---|
+| `INTERVIEW_MODEL` | `nebius/kimi-k2.6-reasoning` | Bestes Profil für Echtzeit-Gespräch mit Tool Use, EU-Datenverarbeiter |
+| `EXTRACTION_MODEL` | `google/gemini-3.5-flash` | Bereits unterstützter Provider, nur neuer Modellname — kein Code-Risiko |
+| `ENRICHMENT_MODEL` | `google/gemini-3.5-flash` | Gleiche Begründung wie Extraktion |
+
+**Manueller Ausweichpfad (kein Auto-Failover, bewusst — siehe Out of Scope):** Falls Nebius im Betrieb zu langsam oder zu teuer wird, ändert der Betreiber `INTERVIEW_MODEL` von Hand auf `fireworks/kimi-k2.6`. Beide Werte existieren parallel als gültige Konfiguration, es gibt keine automatische Umschaltung.
+
+### Tech-Entscheidungen
+
+| Entscheidung | Begründung |
+|---|---|
+| Nebius/Fireworks über dieselbe Bibliothek anbinden, die schon für Embeddings im Projekt ist (kein neues Package) | Beide bieten eine zu OpenAI kompatible Schnittstelle an — die bestehende Bibliothek kann auf eine andere Adresse als die von OpenAI selbst zeigen. Das ist eine Verkabelungs-Frage, kein "OpenAI als Modell-Anbieter" im Sinne des Out-of-Scope-Punkts oben (dort ist OpenAIs eigene Modellfamilie gemeint, nicht die Transport-Technik) |
+| Zwei getrennte neue Ziele (`nebius/...`, `fireworks/...`) statt einem gemeinsamen | Beide haben unterschiedliche Adressen und unterschiedliche Zugangsschlüssel — getrennt zu halten macht den Ausweichpfad eindeutig nachvollziehbar |
+| Kein automatischer Fallback bei Fehler | Bewusste Spec-Entscheidung (Out of Scope) — bei einer Person als Betreiber ist eine stille Umschaltung schwerer zu durchschauen als ein expliziter, sichtbarer Eingriff |
+| Tool-Use-Verlässlichkeit vor Rollout manuell prüfen, nicht automatisiert | Es gibt noch keinen bestehenden automatisierten Test dafür; der vorhandene Eval-Lauf (`/eval-interview`) deckt das im selben Zug ab, sobald die Umstellung steht |
+
+### Abhängigkeiten (Pakete)
+
+Keine neuen Pakete. Die Bibliothek für die Anbindung ist bereits installiert (aktuell nur für Embeddings genutzt) und wird hier ein zweites Mal verwendet.
+
+### Neue Konfigurationswerte (Secrets)
+
+Zwei neue Zugangsschlüssel nötig, analog zu den bestehenden Provider-Schlüsseln: einer für Nebius, einer für Fireworks (auch wenn Fireworks nur als Ausweichpfad gedacht ist — der Schlüssel muss vorhanden sein, bevor er im Notfall gebraucht wird).
+
+### Risiken
+
+- Nebius ist ein neuer, bisher ungetesteter Anbieter für dieses Projekt — die Tool-Use-Zuverlässigkeit (Phase-Übergänge, `update_topics`) ist laut Recherche oben noch nicht real validiert, nur anhand von Benchmark-Zahlen eingeschätzt. Vor Produktiv-Umstellung: manueller Testlauf Pflicht.
+- Höhere Latenz als die bisherige Übergangslösung ist möglich (Benchmark zeigt 187 t/s bei Nebius vs. teilweise schnellere Werte bei Fireworks) — bei spürbarer Verschlechterung greift der manuelle Ausweichpfad.
