@@ -1,13 +1,13 @@
 # PROJ-22: Dual-Loop Interview Engine (ADR-011)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-2
 **Appetite:** L (1-2w)
-**Bugs:** 0:0:2
+**Bugs:** 0:2:5
 **Created:** 2026-05-29
-**Last Updated:** 2026-05-29
+**Last Updated:** 2026-06-22
 
 ## Dependencies
 - Requires: PROJ-2 (Interview Engine Backend) — bestehende Agent-Pipeline wird refactored
@@ -419,19 +419,50 @@ Getestete Features: PROJ-2 (Interview Backend), PROJ-3 (Chat UI), PROJ-13 (Langf
 **YES** — keine Critical/High Bugs. QA-22-L3 ist test-coverage-only, keine Implementierungslücke.
 
 ## Deployment
-_To be added by /deploy_
+
+> **Deploy-Datum:** 2026-06-22 (Bookkeeping-Reconciliation) | **Status:** Deployed | **Production URL:** https://meridian-app.vercel.app
+
+### Deploy-Charakter: Bookkeeping-Reconciliation
+
+PROJ-22 ist das Fundament der Dual-Loop-Architektur (`interviewTalker.ts`, `interviewAnalyst.ts`, `interviewOrchestrator.ts`). Der Code ist seit den Etappe-2/3-Merges live auf `main` und damit in Produktion (Vercel Auto-Deploy `main` → Produktion). Alle darauf aufbauenden Revisionen (PROJ-27/28/33/35/38, alle Deployed mit eigenen Tags bis `v1.31.0-PROJ-31`) sind ausgeliefert. PROJ-22 selbst blieb aber auf Status `Approved` stehen und hatte keinen eigenen Deploy-Tag — der Code shippte als Passagier späterer Deploys. Dieser `/deploy`-Lauf vollzieht ausschließlich die fehlende Buchführung nach; kein neuer Production-Push.
+
+### Bug-Count-Reconciliation
+
+| Quelle | Wert | Bewertung |
+|--------|------|-----------|
+| INDEX.md (vorher) | `0:3:5` | Falsch — kein QA-Abschnitt belegt 3 High-Bugs |
+| Header (vorher) | `0:0:2` | Veraltet — zählte nur die erste QA-Runde, ignorierte Charge 2/3 |
+| **Korrigiert** | **`0:2:5`** | 2 offene Medium (`QA-C2-M1` User-Correction-Block, `QA-C2-M2` Briefing-Overwrite), 5 offene Low (`QA-22-L1`, `QA-22-L3`, `QA-C2-L1`, `QA-C2-L2`, `QA-C3-L1`) |
+
+Das einzige je existierende High (`QA-C3-H1`, `computeStepBudget`-Divisor) wurde in der Re-QA 2026-06-04 gefixt. Beide Critical (`EVAL-22-B1`, `EVAL-22-B6`) ebenfalls gefixt. Keine offenen Critical/High → Deploy-Gate nicht verletzt.
+
+### Gate-Ergebnisse (2026-06-22)
+
+| Gate | Ergebnis | Notiz |
+|------|----------|-------|
+| G1 — Static | ✅ pass | `npm run build` grün, `tsc --noEmit` exit 0, Security-Header in `next.config.ts` vorhanden |
+| G2 — Tests | ✅ pass | Vitest 622 passed / 1 skipped (623). E2E übersprungen (bekannter Harness-Hang bei `playwright install`; Code bereits in Produktion) |
+| G3 — Sandbox | n/a | Kein Preview-Deploy — Code seit Wochen live auf `main`, keine neue Auslieferung |
+| G4 — Permissions | ✅ pass | LLM-Endpoint (`/api/interview/[token]/chat`) berührt: Token-Validierung, Rate Limiting, Zod-Input-Validation, `workspace_id` aus DB, kein Tool-Exfiltrations-Pfad via Talker (siehe Security Audit oben) |
+
+### Post-Deployment-Verifikation
+
+- [x] Production lädt (Code seit Etappe-2/3-Merges live, durch nachfolgende deployte Revisionen kontinuierlich verifiziert)
+- [x] Dual-Loop funktioniert in Produktion (durch grüne buchhalter-Eval-Läufe bestätigt, zuletzt 2026-06-21 `status PASS`)
+- [x] Keine offenen Critical/High Bugs
 
 ## Post-Mortem
-_To be added by /deploy_
+
+> Felder retrospektiv aus dem dokumentierten QA-/Eval-Verlauf abgeleitet (Feature über ~1 Woche und mehrere Sessions gebaut, 2026-05-29 → 2026-06-08). User-Korrektur willkommen.
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | Medium — Tech Design nach Implementierung korrigiert (2026-05-30); zwei Critical-Bugs (Farewell-Loop) erst in Eval-Läufen sichtbar, nicht in der Spec antizipiert |
+| Appetite vs. tatsächlich | geschätzt: L (1-2w) / tatsächlich: L+ — 3 Iterationen + 3 Robustness-Chargen + mehrere eval-getriebene Re-QAs |
+| Größte Überraschung | 351 grüne Unit-Tests verdeckten zwei Critical-Completion-Bugs, die erst der Eval-Lauf (`buchhalter`) aufdeckte — Closing-Loop/Farewell-Detection |
+| Vorgeschlagene Regeländerung | Eval-Gate (nicht nur Unit-Tests) muss vor Status=Approved laufen; bei mehrteiligen Features (Chargen) eigenen Deploy-Tag pro abgeschlossener Einheit setzen, sonst entsteht genau diese Bookkeeping-Lücke |
+| Build-Loop-Iterationen | tatsächlich: >5 (geplant: ≤5) — eval-getriebenes Whack-a-Mole bei Slot-Writes und Completion-Heuristik |
+| Häufigste Fehlerkategorie im Loop | Spec-Lücke (Completion-/Closing-Heuristik, Slot-Write-Race) gefolgt von Tool-Call |
 
 ## Follow-up: Charge 1 Robustness Refactor (2026-06-03)
 
