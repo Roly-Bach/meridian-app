@@ -167,3 +167,20 @@ Umgesetzt via `/build PROJ-33` (Sonnet, Worktree `refactor/deep-modules`).
 **Nachbesserung während Eval (defensiv):** `normalizeStepEntry` (`interviewSemantic.ts`) formt `abhaengigkeiten` robust (Arrays garantiert, `nicht_befund_typ` default null); `runInterviewTurn` schickt den Quick-Extract-Tracker vor Gebrauch durch `normalizeStepEntry`. Gates bleiben grün (Lint + 610 Tests).
 
 **Status → Approved** (kein Regress, Gates grün). `Bugs: 0:0:0` ist refactor-spezifisch; die absolute Interview-Qualität (hallucination_rate, coverage) ist ein bestehendes, separates Thema → PROJ-28/30/35, nicht diese Naht.
+
+## Deployment (2026-06-21, /deploy)
+
+- Production: https://meridian-app-roly-bach.vercel.app (Vercel, fra1) — `main` @ 601d9d9, deploy READY
+- Deployed: 2026-06-21 (Batch PROJ-33/35/38/39 via main fast-forward, Tag `v1.1.0-deep-modules`)
+- G1 (tsc/build/Header) pass · G2 (npm test 622 + API-E2E) pass · G2 (Browser-E2E) env-blockiert (Playwright-Install) · G4 (Permissions) pass · Eval: status PASS
+
+## Post-Mortem (2026-06-21, /deploy)
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | High |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: M |
+| Größte Überraschung | Beim Merge mit origin/main kollidierte der zur Adapter-Naht reduzierte `chat/route.ts` mit mains inline ergänztem B2 (opener-Injektion) + B5 (Wrap-up-Analyst); beides musste nachträglich in `runInterviewTurn.ts` re-homed werden. |
+| Vorgeschlagene Regeländerung | Approved Refactor-Batches zeitnah nach main mergen statt auf langlebigem Branch stapeln — Divergenz erzwingt einen semantischen Merge. |
+| Build-Loop-Iterationen | tatsächlich: ~1 + defensive Nachbesserung (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | — (Gates grün; einzige Reibung war die spätere Merge-Integration) |

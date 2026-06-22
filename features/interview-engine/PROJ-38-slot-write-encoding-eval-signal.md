@@ -132,17 +132,19 @@ Der Eval-Lauf trägt weiterhin `FAIL`, aber allein wegen KI-3 (`dialog_naturalne
 
 Beim Merge von `origin/main` (PROJ-27/29/31) zeigte sich, dass `main` denselben Write-Side-Encoding-Fix (`p_value` als jsonb-Objekt statt `JSON.stringify`) parallel hat — **konvergent**, im Merge einmal behalten. Zusätzlich bringt `main` eine **Read-Side-Compat** (`parseJsonIfString` in [interviewSemantic.ts](../../src/services/interviewSemantic.ts)), die string-kodierte Altdaten beim Lesen parst und damit **KI-1** ohne Backfill löst (war als PROJ-38-Folge-Issue offen). Lauf 2026-06-21: `slot_coverage 1.0`, `schema_conformance_rate 1`.
 
-## Deployment
-_To be added by /deploy_
+## Deployment (2026-06-21, /deploy)
 
-## Post-Mortem
-_To be added by /deploy_
+- Production: https://meridian-app-roly-bach.vercel.app (Vercel, fra1) — `main` @ 601d9d9, deploy READY
+- Deployed: 2026-06-21 (Batch PROJ-33/35/38/39 via main fast-forward, Tag `v1.1.0-deep-modules`)
+- G1 (tsc/build/Header) pass · G2 (npm test 622 + API-E2E) pass · G2 (Browser-E2E) env-blockiert (Playwright-Install) · G4 (Permissions) pass · Eval: status PASS
+
+## Post-Mortem (2026-06-21, /deploy)
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
+| Spec-Genauigkeit | High |
+| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: S |
+| Größte Überraschung | origin/main hatte denselben Write-Fix unabhängig — plus eine überlegene Read-Compat (`parseJsonIfString`), die zusätzlich KI-1 ohne Backfill löst. PROJ-38 im Write-Teil konvergent, im Read-Teil subsumiert. |
+| Vorgeschlagene Regeländerung | Vor dem Bau von Eval-Signal-Fixes origin/main auf parallele Arbeit prüfen (Convergent-Work vermeiden). |
+| Build-Loop-Iterationen | tatsächlich: ≤2 (geplant: ≤5) |
 | Häufigste Fehlerkategorie im Loop | — |

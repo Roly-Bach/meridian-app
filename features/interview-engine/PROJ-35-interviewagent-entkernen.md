@@ -230,17 +230,19 @@ N/A — die ACs sind strukturell (Modulgrenzen, Sichtbarkeit, Import-Pfade), kei
 ### Abgrenzung (kein PROJ-35-Bug)
 Der Eval-Lauf 2026-06-19 zeigte ein Slot-Serialisierungs-Artefakt (O-Slots als JSON-Strings statt Objekte in `step_tracker`). Das ist ein **vorbestehender, branchunabhängiger** Zustand (konsistent über alle Baseline-Läufe) und liegt im `buildTools`/`record_slot`-Schreibpfad — explizit Out of Scope (→ PROJ-34 bzw. Qualität PROJ-28/29/30). Wird in einem konsolidierten Härtungs-PROJ (geplant PROJ-38) erfasst, zählt nicht gegen PROJ-35.
 
-## Deployment
-_To be added by /deploy_
+## Deployment (2026-06-21, /deploy)
 
-## Post-Mortem
-_To be added by /deploy_
+- Production: https://meridian-app-roly-bach.vercel.app (Vercel, fra1) — `main` @ 601d9d9, deploy READY
+- Deployed: 2026-06-21 (Batch PROJ-33/35/38/39 via main fast-forward, Tag `v1.1.0-deep-modules`)
+- G1 (tsc/build/Header) pass · G2 (npm test 622 + API-E2E) pass · G2 (Browser-E2E) env-blockiert (Playwright-Install) · G4 (Permissions) pass · Eval: status PASS
+
+## Post-Mortem (2026-06-21, /deploy)
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | High |
+| Appetite vs. tatsächlich | geschätzt: M / tatsächlich: M |
+| Größte Überraschung | Die beim Grilling notierte Prompt-Drift (PROJ-37: STATIC_PROMPT vs. buildStaticPrompt) wurde beim Merge mit origin/main konkret — mains Talker/Agent-Prompt-Fixes mussten nach `talkerPrompt.ts` portiert werden, da `interviewAgent.ts` auf dem Branch entkernt war. |
+| Vorgeschlagene Regeländerung | Duplizierte Prompts zeitnah konsolidieren (PROJ-37), sonst laufen parallele Fixes in die tote Kopie. |
+| Build-Loop-Iterationen | tatsächlich: ≤2 (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | — (Reibung lag im späteren Merge, nicht im Build-Loop) |

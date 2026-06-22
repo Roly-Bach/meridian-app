@@ -144,17 +144,19 @@ Beim Merge von `origin/main` (PROJ-27/29/31, 2026-06-18) in den Deep-Modules-Bra
 
 Der PROJ-39-Parser-Code ist damit supersediert; der Doku-Fix und die Erkenntnis (Truncation-Root-Cause) bleiben gültig. Verifikation: [Lauf 2026-06-21](../../docs/evals/interview/2026-06-21/2026-06-21-18-51-07-google-gemini-3-5-flash-buchhalter.md), `status: PASS`.
 
-## Deployment
-_To be added by /deploy_
+## Deployment (2026-06-21, /deploy)
 
-## Post-Mortem
-_To be added by /deploy_
+- Production: https://meridian-app-roly-bach.vercel.app (Vercel, fra1) — `main` @ 601d9d9, deploy READY
+- Deployed: 2026-06-21 (Batch PROJ-33/35/38/39 via main fast-forward, Tag `v1.1.0-deep-modules`)
+- G1 (tsc/build/Header) pass · G2 (npm test 622 + API-E2E) pass · G2 (Browser-E2E) env-blockiert (Playwright-Install) · G4 (Permissions) pass · Eval: status PASS
+
+## Post-Mortem (2026-06-21, /deploy)
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
+| Spec-Genauigkeit | Medium |
+| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: S |
+| Größte Überraschung | main löste dieselbe Judge-Fragilität über einen JSON-Kontrakt + gesenktes Gate (0.65); PROJ-39s Text-Parser wurde beim Merge verworfen, nur der SKILL.md-Doku-Fix (KI-4) blieb unique. |
+| Vorgeschlagene Regeländerung | origin/main vor parallelen Eval-Fixes synchronisieren; bei Single-Cause-Eval-Gates (KI-5) die Gate-Schwelle gleich mitdenken statt separat. |
+| Build-Loop-Iterationen | tatsächlich: ≤2 (geplant: ≤5) |
 | Häufigste Fehlerkategorie im Loop | — |
