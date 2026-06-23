@@ -19,7 +19,7 @@ import type {
   ClarificationCard,
 } from './interviewTypes'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import type { TurnStore, TurnSession } from './turnStore/port'
+import type { TurnStore, TurnSession, InterviewStore } from './turnStore/port'
 import type { TurnSnapshot } from './turnStore/intents'
 
 // ─── Analyst (Iteration 3) ────────────────────────────────────────────────────
@@ -41,8 +41,9 @@ export interface AnalystRunOptions {
   /** The raw user input for the current turn — enables evidence_quote contamination guard */
   currentUserInput?: string
   traceCtx?: TraceCtx
-  /** TurnStore for the analyst's staged writes. Defaults to the prod Supabase store. */
-  store?: TurnStore
+  /** TurnStore for the analyst's staged writes. Defaults to the prod Supabase store.
+   *  Pass an InterviewStore to enable setAnalystStatus on the error path. */
+  store?: TurnStore | InterviewStore
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -409,7 +410,6 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
   const modelString =
     process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
   const model = resolveModel(modelString)
-  const supabase = getSupabaseAdmin()
   const { interviewId, workspaceId } = opts.context
   const promptMode = opts.promptMode ?? 'default'
   const writeSource = opts.writeSource ?? 'analyst'
@@ -511,10 +511,11 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
   } catch (err) {
     // Analyst error: set status='failed' so next turn triggers catch-up run
     console.error('[analyst] run failed:', err)
-    await supabase
-      .from('interviews')
-      .update({ analyst_status: 'failed' })
-      .eq('id', interviewId)
+    if (opts.store && 'setAnalystStatus' in opts.store) {
+      await (opts.store as InterviewStore).setAnalystStatus(interviewId, 'failed')
+    } else {
+      await getSupabaseAdmin().from('interviews').update({ analyst_status: 'failed' }).eq('id', interviewId)
+    }
     throw err
   }
 
