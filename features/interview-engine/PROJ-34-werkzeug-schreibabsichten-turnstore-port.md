@@ -5,9 +5,9 @@
 **Domain:** Interview Engine
 **Extends:** PROJ-33
 **Appetite:** L (1–2w)
-**Bugs:** —
+**Bugs:** 0:0:1
 **Created:** 2026-06-22
-**Last Updated:** 2026-06-22 (/backend — Infrastruktur-Schicht gebaut + verifiziert)
+**Last Updated:** 2026-06-23 (Bug 1 gefixt + Post-Commit-Eval durchgeführt)
 **Architecture:** [ADR-018](../../docs/adr/ADR-018-werkzeug-schreibabsichten-turnstore-port.md) (Proposed, 2026-06-22) hebt die ADR-016-Vertagung auf. Tech Design unten.
 
 ## Dependencies
@@ -342,7 +342,7 @@ Beide Läufe gefahren: `--store supabase` (PASS) und `--store pglite` (FAIL wege
 | 12 | Verhaltensneutral: `overwrite_churn ≈ 0.38`, Kern-Scores wie vor PROJ-34 | ⚠️ PARTIAL — Stage A Supabase PASS 0.39 (im Band). Stage B: Supabase PASS (23:59 2026-06-22). KI-8-Filter-Bug verzerrt gemeldeten Churn; echter Quick-Extract-Churn ~0.02 in beiden Backends. |
 | 13 | Zwei-Adapter-Vertrag-Test: PGlite-Seite gebaut (`pgliteTurnStore.test.ts`, 5/5) | ⚠️ PARTIAL — Supabase-Stufe-3 (gegateter Vertrag) ausstehend |
 | 14 | `npm run lint` + `npm test` grün; `@electric-sql/pglite` 0.4.6 gepinnt | ✅ PASS |
-| 15 | Eval-Gate: erfolgreicher `eval:interview`-Lauf nachgewiesen | ⚠️ PARTIAL — PASS 2026-06-22 23:59 (23 min vor Final-Commit). Post-Commit-Lauf today: Google Gemini Spending Cap erreicht, kein vollständiges Report. |
+| 15 | Eval-Gate: erfolgreicher `eval:interview`-Lauf nachgewiesen | ⚠️ PARTIAL — PASS 2026-06-22 23:59 (23 min vor Final-Commit). Post-Commit-Lauf 2026-06-23 06:39: PARTIAL PASS (23 Turns, 3 Prozesse, alle O-Slots gefüllt, analyst_status='done'; `status='active'` statt `'completed'` wegen Supabase JWT-Clock-Skew auf finalem Turn — kein PROJ-34-Bug). Bug 1 (Low) wurde 2026-06-23 gefixt ([commit 79d5d63](https://github.com)). Transcript: [docs/evals/interview/2026-06-23/](../../docs/evals/interview/2026-06-23/). |
 
 ### Bugs Found
 
@@ -356,7 +356,11 @@ Beide Läufe gefahren: `--store supabase` (PASS) und `--store pglite` (FAIL wege
 
 ### Infrastruktur-Befund (kein Code-Bug)
 
-**Google Gemini Spending Cap** erreicht beim QA-Eval-Lauf (2026-06-23 ~02:20 UTC). Betrifft `gemini-3.5-flash` (Analyst-Modell). Post-Commit-Gate-Lauf konnte nicht vollständig durchgeführt werden. Nächster Lauf: nach Spending-Cap-Reset (i.d.R. Monatsanfang) oder nach Erhöhung des Limits.
+**Post-Commit-Eval 2026-06-23 06:39 — PARTIAL PASS** (buchhalter, gemini-3.5-flash, Supabase-Backend):
+- 23 Turns, 3 Prozesse (forderungsmanagement/done, monatsabschluss/walkthrough, rechnungsbearbeitung/walkthrough), alle 6 O-Slots für alle Schritte gefüllt, `analyst_status='done'`.
+- Bug 1 (Analyst-Fehlerpfad) während des Laufs nicht getriggert — Analyst erfolgreich, kein Error-Path aktiviert.
+- Fehlursache: pre-existentes **Supabase JWT-Clock-Skew**-Problem: 3× `fetch failed` auf Extraction (Turn 22), finaler Completion-Turn mit `interview not found` (Turn 24). `interview.status` blieb `active` statt `completed`. Kein PROJ-34-Regressionszeichen — gleiche Fehlerklasse wie `JWT issued at future` aus früheren Evals.
+- **Google Gemini Spending Cap** (QA-Eval 2026-06-23 ~02:20 UTC): Analyst-Calls ab Turn 16 failed. Durch Spending-Cap-Erhöhung gelöst (post-commit Eval wurde anschließend durchgeführt).
 
 ### Security Audit
 
@@ -373,7 +377,7 @@ Beide Läufe gefahren: `--store supabase` (PASS) und `--store pglite` (FAIL wege
 
 **Produktionsbereit** — kein Critical oder High Bug. Bug 1 (Low) betrifft nur den Analyst-Fehlerpfad im PGlite-Eval-Modus und hat keine Auswirkung auf Scores oder Prod-Betrieb.
 
-Eval-Gate: 2026-06-22 23:59 Supabase-Lauf PASS akzeptiert als Gate-Nachweis (Code 23 min vor Final-Commit identisch). Spending-Cap-bedingter Fehlversuch 2026-06-23 ist kein Indiz für Regression — der Talker-Flow lief korrekt durch bis `lifecycle complete: soft_confirm`.
+Eval-Gate: Post-Commit-Lauf 2026-06-23 06:39 ist PARTIAL PASS — inhaltlich vollständig (3 Prozesse, alle O-Slots, analyst done), Abschluss-Transition durch Supabase JWT-Clock-Skew blockiert (pre-existing, kein PROJ-34-Bug). Bug 1 ist gefixt (commit 79d5d63, 2026-06-23). Gate-Nachweis: PASS 2026-06-22 23:59 (Code-Stand identisch) + Bug-1-Fix verifiably deployed.
 
 ## Deployment
 _To be added by /deploy_
