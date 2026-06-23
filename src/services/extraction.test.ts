@@ -404,6 +404,36 @@ describe('deduplicateKnowledgeObjects', () => {
     expect(mockDelete).toHaveBeenCalledWith('id', ['tool-b'])
   })
 
+  it('merges tool-name suffix variants via substring containment (KI-2 follow-up)', async () => {
+    dedupSelectResultsByType['tool'] = {
+      data: [
+        { id: 'tool-a', content: { name: 'SAP FI', purpose: 'Buchhaltungssystem' }, embedding: [1, 0, 0], existing_count: 1 },
+        { id: 'tool-b', content: { name: 'SAP FI-Modul', purpose: 'Buchhaltungssystem' }, embedding: [1, 0, 0], existing_count: 1 },
+      ],
+      error: null,
+    }
+    dedupSelectResultsByType['pain_point'] = { data: [], error: null }
+
+    await deduplicateKnowledgeObjects('ws-1')
+
+    expect(mockDelete).toHaveBeenCalledWith('id', ['tool-b'])
+  })
+
+  it('does not merge genuine synonyms with no shared substring (documented residual limitation)', async () => {
+    dedupSelectResultsByType['tool'] = {
+      data: [
+        { id: 'tool-a', content: { name: 'Finanzbuchhaltungssystem', purpose: 'Buchhaltung' }, embedding: [1, 0, 0], existing_count: 1 },
+        { id: 'tool-b', content: { name: 'SAP FI', purpose: 'Buchhaltung' }, embedding: [1, 0, 0], existing_count: 1 },
+      ],
+      error: null,
+    }
+    dedupSelectResultsByType['pain_point'] = { data: [], error: null }
+
+    await deduplicateKnowledgeObjects('ws-1')
+
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
   it('does not merge tool-type objects with different names even at high cosine similarity', async () => {
     dedupSelectResultsByType['tool'] = {
       data: [

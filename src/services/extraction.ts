@@ -170,6 +170,24 @@ function dedupText(type: KnowledgeObjectType, content: Record<string, unknown>):
   return (content?.[field] as string | undefined) ?? ''
 }
 
+// KI-2 follow-up: the old gate was an absolute `levenshtein > 8` cutoff, which missed
+// naming-drift variants on longer tool names (e.g. "SAP FI" vs. "SAP FI-Modul" — 6 chars
+// added, but "SAP FI-Modul" alone is already 12 chars, so an 8-char *ratio* gate would
+// have blocked it on borderline cases). Substring containment + a length-normalized
+// ratio catches prefix/suffix drift regardless of string length. It does NOT catch
+// genuine synonyms with no shared substring (e.g. "Finanzbuchhaltungssystem" vs.
+// "SAP FI") — that needs extraction-time canonicalization, not post-hoc text matching.
+const TEXT_MATCH_RATIO = 0.4
+
+function isTextMatch(textI: string, textJ: string): boolean {
+  const a = textI.toLowerCase().trim()
+  const b = textJ.toLowerCase().trim()
+  if (!a || !b) return false
+  if (a.includes(b) || b.includes(a)) return true
+  const maxLen = Math.max(a.length, b.length)
+  return levenshtein(a, b) / maxLen <= TEXT_MATCH_RATIO
+}
+
 async function deduplicateByType(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   workspaceId: string,
@@ -206,7 +224,7 @@ async function deduplicateByType(
 
       const textI = dedupText(type, rows[i].content)
       const textJ = dedupText(type, rows[j].content)
-      if (levenshtein(textI.toLowerCase(), textJ.toLowerCase()) > 8) continue
+      if (!isTextMatch(textI, textJ)) continue
 
       toDelete.add(rows[j].id)
       const merged = (countUpdates.get(rows[i].id) ?? rows[i].existing_count) + rows[j].existing_count

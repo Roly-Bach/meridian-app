@@ -29,6 +29,29 @@ import {
 } from './port'
 import type { KnowledgeObjectInsert, TurnSnapshot } from './intents'
 
+/**
+ * Retries a transient Supabase fetch failure (network blip, `TypeError: fetch failed`)
+ * before giving up. KI-11: `loadInterview` used to swallow the error and return null on
+ * any failure, indistinguishable from a genuinely missing row — that turned a one-off
+ * network blip into a hard "interview not found" crash mid-run (2026-06-23 eval).
+ */
+export async function withRetry<T>(
+  fn: () => Promise<{ data: T | null; error: { message: string } | null }>,
+  label: string,
+  retries = 2,
+  delayMs = 300,
+): Promise<T | null> {
+  let lastError: { message: string } | null = null
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const { data, error } = await fn()
+    if (!error) return data
+    lastError = error
+    if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
+  }
+  console.error(`[SupabaseTurnStore] ${label} failed after ${retries + 1} attempts:`, lastError?.message)
+  return null
+}
+
 class SupabaseBackend implements InterviewStoreBackend {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private get db(): any {
@@ -98,12 +121,15 @@ class SupabaseBackend implements InterviewStoreBackend {
   // ── Orchestration (runInterviewTurn) ────────────────────────────────────────
 
   async loadInterview(interviewId: string): Promise<InterviewRow | null> {
-    const { data } = await this.db
-      .from('interviews')
-      .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, max_duration_minutes, analyst_status, next_briefing')
-      .eq('id', interviewId)
-      .single()
-    return (data as InterviewRow | null) ?? null
+    const data = await withRetry<InterviewRow>(
+      () => this.db
+        .from('interviews')
+        .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, max_duration_minutes, analyst_status, next_briefing')
+        .eq('id', interviewId)
+        .single(),
+      `loadInterview(${interviewId})`,
+    )
+    return data ?? null
   }
 
   async loadState(interviewId: string): Promise<StateRow | null> {
@@ -125,21 +151,20 @@ class SupabaseBackend implements InterviewStoreBackend {
   }
 
   async insertTurn(row: InsertTurnInput): Promise<{ id: string } | null> {
-    const { data, error } = await this.db
-      .from('turns')
-      .insert({
-        interview_id: row.interviewId,
-        turn_number: row.turnNumber,
-        user_input: row.userInput,
-        agent_response: row.agentResponse,
-      })
-      .select('id')
-      .single()
-    if (error) {
-      console.error('[SupabaseTurnStore] insertTurn failed:', error.message)
-      return null
-    }
-    return data ? { id: (data as { id: string }).id } : null
+    const data = await withRetry<{ id: string }>(
+      () => this.db
+        .from('turns')
+        .insert({
+          interview_id: row.interviewId,
+          turn_number: row.turnNumber,
+          user_input: row.userInput,
+          agent_response: row.agentResponse,
+        })
+        .select('id')
+        .single(),
+      `insertTurn(${row.interviewId}, #${row.turnNumber})`,
+    )
+    return data ?? null
   }
 
   async updatePhase(interviewId: string, phase: string): Promise<void> {
@@ -150,10 +175,13 @@ class SupabaseBackend implements InterviewStoreBackend {
   }
 
   async completeInterview(interviewId: string): Promise<void> {
-    await this.db
-      .from('interviews')
-      .update({ status: 'completed', extractions_pending: true })
-      .eq('id', interviewId)
+    await withRetry(
+      () => this.db
+        .from('interviews')
+        .update({ status: 'completed', extractions_pending: true })
+        .eq('id', interviewId),
+      `completeInterview(${interviewId})`,
+    )
   }
 
   async setAnalystStatus(interviewId: string, status: string): Promise<void> {
