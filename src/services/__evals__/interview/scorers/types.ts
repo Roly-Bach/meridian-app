@@ -36,12 +36,16 @@ export interface ScoreSet {
   hallucinationRate: number
   /** PROJ-28/BL-E2.2: fraction of estimate/unknown slots that received a follow-up re-ask within 3 turns. Target > 0.80 */
   confidenceTriggerRate: number
+  /** KI-9: count of Talker turns asserting a false premise about prior persona statements. Target 0. */
+  talkerGroundingViolations: number
   depth_score: number | null
   depth_distribution: { p1: number; p2: number; p3: number } | null
   /** BL-E5.2: CoT rationale from the dialogNaturalness judge (optional) */
   dialogNaturalnessRationale?: string
   /** BL-E5.2: CoT rationale from the slotDepth judge (optional) */
   slotDepthRationale?: string
+  /** KI-9: CoT rationale from the talkerFactualGrounding judge (optional) */
+  talkerGroundingRationale?: string
 }
 
 export interface ScorerInput {

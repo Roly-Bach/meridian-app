@@ -64,6 +64,7 @@ function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['score
     confidenceTriggerRate: 1,
     depth_score: null,
     depth_distribution: null,
+    talkerGroundingViolations: 0, // live LLM required — set to 0 in offline baselines
   }
 }
 

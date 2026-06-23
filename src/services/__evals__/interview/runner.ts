@@ -366,6 +366,7 @@ function buildReport(opts: {
     `  schema_conformance_rate: ${scores.schemaConformanceRate}`,
     `  hallucination_rate: ${scores.hallucinationRate}`,
     `  confidence_trigger_rate: ${scores.confidenceTriggerRate}`,
+    `  talker_grounding_violations: ${scores.talkerGroundingViolations}`,
     `  depth_score: ${scores.depth_score ?? 'null'}`,
     `  depth_p1: ${scores.depth_distribution?.p1 ?? 'null'}`,
     `  depth_p2: ${scores.depth_distribution?.p2 ?? 'null'}`,
@@ -399,6 +400,7 @@ function buildReport(opts: {
     `| schema_conformance_rate | ${scores.schemaConformanceRate} | 1.0 |`,
     `| hallucination_rate | ${scores.hallucinationRate} | < 0.01 |`,
     `| confidence_trigger_rate | ${scores.confidenceTriggerRate} | > 0.80 |`,
+    `| talker_grounding_violations | ${scores.talkerGroundingViolations} | 0 |`,
     `| depth_score | ${scores.depth_score ?? 'n/a'} | maximize |`,
     `| depth_p1 | ${scores.depth_distribution?.p1 ?? 'n/a'} | — |`,
     `| depth_p2 | ${scores.depth_distribution?.p2 ?? 'n/a'} | — |`,
@@ -418,6 +420,16 @@ function buildReport(opts: {
       ].join('\n')
     : ''
 
+  const groundingRationale = scores.talkerGroundingRationale
+    ? [
+        '',
+        '## Talker-Faktentreue-Verletzungen (KI-9)',
+        '',
+        scores.talkerGroundingRationale,
+        '',
+      ].join('\n')
+    : ''
+
   const conversationLog = [
     '## Gesprächsverlauf',
     '',
@@ -430,7 +442,7 @@ function buildReport(opts: {
 
   const slotTable = buildSlotTable(finalStepTracker)
 
-  return [frontmatter, scoreTable, judgeRationale, conversationLog, slotTable].join('\n')
+  return [frontmatter, scoreTable, judgeRationale, groundingRationale, conversationLog, slotTable].join('\n')
 }
 
 function buildSlotTable(stepTracker: StepEntry[]): string {
@@ -551,6 +563,7 @@ async function writeLangfuseScores(
     { name: 'schema_conformance_rate', value: scores.schemaConformanceRate, dataType: 'NUMERIC' },
     { name: 'hallucination_rate', value: scores.hallucinationRate, dataType: 'NUMERIC' },
     { name: 'confidence_trigger_rate', value: scores.confidenceTriggerRate, dataType: 'NUMERIC' },
+    { name: 'talker_grounding_violations', value: scores.talkerGroundingViolations, dataType: 'NUMERIC' },
   ]
 
   for (const entry of scoreEntries) {
@@ -887,6 +900,7 @@ function writeAggregateReport(opts: {
     'phaseAdherence', 'phaseProgression', 'anchoringViolations',
     'toolCallPlausibility', 'dialogNaturalness', 'stepRegistrationCoverage',
     'schemaConformanceRate', 'hallucinationRate', 'confidenceTriggerRate',
+    'talkerGroundingViolations',
   ]
 
   const medians: Partial<Record<NumericScoreKey, number>> = {}

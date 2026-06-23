@@ -8,7 +8,7 @@ import type { TurnRecord } from './types'
  *   eval=Gemini → judge=claude-haiku-4-5
  *   eval=Anthropic → judge=google/gemini-3.1-flash-lite
  */
-function getJudgeModel(evalModel: string): string {
+export function getJudgeModel(evalModel: string): string {
   const isGemini =
     evalModel.toLowerCase().includes('gemini') || evalModel.toLowerCase().startsWith('google/')
   return isGemini ? 'anthropic/claude-haiku-4-5' : 'google/gemini-3.1-flash-lite'

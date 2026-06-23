@@ -12,6 +12,7 @@ import { scoreSchemaConformanceRate } from './schemaConformanceRate'
 import { scoreHallucinationRate } from './hallucinationRate'
 import { scoreConfidenceTrigger } from './confidenceTrigger'
 import { scoreSlotDepth } from './slotDepth'
+import { scoreTalkerFactualGrounding } from './talkerFactualGrounding'
 import type { ScorerInput, ScoreSet } from './types'
 
 export {
@@ -28,12 +29,14 @@ export {
   scoreHallucinationRate,
   scoreConfidenceTrigger,
   scoreSlotDepth,
+  scoreTalkerFactualGrounding,
 }
 
 export async function runAllScorers(input: ScorerInput, isolatedCriteria = false): Promise<ScoreSet> {
-  const [dialogNaturalnessResult, slotDepthResult] = await Promise.all([
+  const [dialogNaturalnessResult, slotDepthResult, groundingResult] = await Promise.all([
     scoreDialogNaturalness(input.turns, input.evalModel, isolatedCriteria),
     scoreSlotDepth(input.finalStepTracker, input.turns, input.evalModel),
+    scoreTalkerFactualGrounding(input.turns, input.evalModel),
   ])
 
   const completionCorrectness = scoreCompletionCorrectness(input.interviewStatus)
@@ -64,6 +67,8 @@ export async function runAllScorers(input: ScorerInput, isolatedCriteria = false
     depth_score: slotDepthResult.depth_score,
     depth_distribution: slotDepthResult.depth_distribution,
     slotDepthRationale: slotDepthResult.rationale || undefined,
+    talkerGroundingViolations: groundingResult.violations,
+    talkerGroundingRationale: groundingResult.rationale || undefined,
   }
 }
 

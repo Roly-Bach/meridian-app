@@ -179,6 +179,7 @@ async function main() {
           confidenceTriggerRate: scores.confidenceTriggerRate ?? 1,
           depth_score: null,
           depth_distribution: null,
+          talkerGroundingViolations: 0, // not computed in replay (live LLM required)
         },
         updatedAt: new Date().toISOString(),
       }
