@@ -1,13 +1,13 @@
 # PROJ-34: Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-33
 **Appetite:** L (1–2w)
 **Bugs:** 0:0:1
 **Created:** 2026-06-22
-**Last Updated:** 2026-06-23 (Bug 1 gefixt + Post-Commit-Eval durchgeführt)
+**Last Updated:** 2026-06-23 (Bug 1 gefixt + Post-Commit-Eval + Deployed)
 **Architecture:** [ADR-018](../../docs/adr/ADR-018-werkzeug-schreibabsichten-turnstore-port.md) (Proposed, 2026-06-22) hebt die ADR-016-Vertagung auf. Tech Design unten.
 
 ## Dependencies
@@ -380,16 +380,24 @@ Beide Läufe gefahren: `--store supabase` (PASS) und `--store pglite` (FAIL wege
 Eval-Gate: Post-Commit-Lauf 2026-06-23 06:39 ist PARTIAL PASS — inhaltlich vollständig (3 Prozesse, alle O-Slots, analyst done), Abschluss-Transition durch Supabase JWT-Clock-Skew blockiert (pre-existing, kein PROJ-34-Bug). Bug 1 ist gefixt (commit 79d5d63, 2026-06-23). Gate-Nachweis: PASS 2026-06-22 23:59 (Code-Stand identisch) + Bug-1-Fix verifiably deployed.
 
 ## Deployment
-_To be added by /deploy_
+
+- **Production URL:** https://meridian-app.vercel.app
+- **Deployed:** 2026-06-23
+- **Git Tag:** v1.2.0-PROJ-34
+- **G1 (build/lint/tsc):** pass
+- **G2 (unit + E2E):** pass — 662 Unit-Tests grün; E2E via API-Level-Tests (Playwright-Install in Harness blockiert, pre-existing KI)
+- **G3 (Preview):** skipped — Vercel CLI nicht installiert (Vercel auto-deploy via GitHub-Push)
+- **G4 (Security):** pass — kein Auth/RLS/API-Änderungen in PROJ-34; TurnStore-Port ist rein intern
+
+Vercel CLI nicht installiert (`npm i -g vercel` empfohlen für künftige Preview-Deploys und `vercel env pull`).
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | High — Architektur (ADR-018), Interface-Grenzen und Schreib-Intentionen stimmten mit Implementierung überein; PGlite-Vektor-Pin-Problem (0.4.6) war einzige unerwartete Constraint |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: L (2–3 Sessions über 2 Tage) |
+| Größte Überraschung | `@electric-sql/pglite` 0.5.x hat kein Vektor-Modul mehr — Pin auf 0.4.6 nötig, erst nach npm-Fehler entdeckt |
+| Vorgeschlagene Regeländerung | KI-10 (overwrite_churn-Filter-Bug) ist ein Einzeiler-Fix der vor dem nächsten Eval-Vergleich erledigt werden sollte |
+| Build-Loop-Iterationen | tatsächlich: ~6 (Stage A: 2, Stage B: 2, Runner-Migration: 1, Bug-1-Fix: 1) |
+| Häufigste Fehlerkategorie im Loop | TypeScript (Interface-Narrowing TurnStore vs. InterviewStore, duck-typing-Pattern) |
