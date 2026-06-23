@@ -1,12 +1,12 @@
 # PROJ-9: LLM Provider Optimierung
 
-## Status: Roadmap
+## Status: In Progress
 **Created:** 2026-05-20
-**Last Updated:** 2026-05-21
+**Last Updated:** 2026-06-22
 **Type:** Feature
 **Domain:** Platform
 **Extends:** —
-**Appetite:** —
+**Appetite:** M
 **Bugs:** —
 
 ## Dependencies
@@ -73,17 +73,17 @@ Das Interview ist der Kern-Use-Case. Qualität, Latenz und Kosten des LLM haben 
 
 ### Research-Phase (muss vor Modell-Empfehlung abgeschlossen sein)
 
-- [ ] Vergleich der Modelle anhand Interview-spezifischer Anforderungen:
+- [x] Vergleich der Modelle anhand Interview-spezifischer Anforderungen:
   - Zuverlässige Tool Use / Function Calling (Phase-Transitions, update_topics)
   - Gesprächsqualität (natürliche Folgefragen, Paraphrasierung)
   - Latenz (Zeit bis erster SSE-Token < 3s)
   - Kosten ($/1M Tokens Input + Output)
   - Rate-Limits auf kostenpflichtigen Plänen
-- [ ] Kandidaten Interview-Agent (Echtzeit, Tool Use): `kimi-k2.6` via Nebius, `gemini-3.5-flash`, `claude-sonnet-4-6`, `deepseek-v4-pro` via Nebius
-- [ ] Kandidaten Extraktion/Anreicherung (async, JSON-Output): `deepseek-v4-flash` via Nebius, `gemini-3.5-flash`, `kimi-k2.6` via Nebius
-- [ ] Getrennte Empfehlung für Interview-Agent vs. Extraction/Enrichment (unterschiedliche Anforderungen)
-- [ ] Nebius als neuer Provider in `llm-provider.ts` evaluieren (OpenAI-kompatibler Endpoint)
-- [ ] Empfehlung dokumentiert in diesem Spec
+- [x] Kandidaten Interview-Agent (Echtzeit, Tool Use): `kimi-k2.6` via Nebius, `gemini-3.5-flash`, `claude-sonnet-4-6`, `deepseek-v4-pro` via Nebius
+- [x] Kandidaten Extraktion/Anreicherung (async, JSON-Output): `deepseek-v4-flash` via Nebius, `gemini-3.5-flash`, `kimi-k2.6` via Nebius
+- [x] Getrennte Empfehlung für Interview-Agent vs. Extraction/Enrichment (unterschiedliche Anforderungen)
+- [x] Nebius als neuer Provider in `llm-provider.ts` evaluieren (OpenAI-kompatibler Endpoint) — Architektur-Entscheidung getroffen (siehe Tech Design unten), Implementierung selbst ist Backend-Scope
+- [x] Empfehlung dokumentiert in diesem Spec — final übernommen 2026-06-22, kein Re-Validierungsbedarf trotz 1 Monat Alter (User-Entscheidung)
 
 ### Implementierung (bereits abgeschlossen)
 
@@ -277,3 +277,80 @@ Hinweis: DeepSeek V4 Pro auf Nebius hat hohe E2E-Latenz (110s). Für async Extra
 - Fine-Tuning auf Meridian-Daten
 - Automatischer Modell-Fallback bei Fehler
 - Kostentracking pro Interview in der DB
+
+## Tech Design (Solution Architect)
+
+### Was gebaut wird
+
+Reines Backend-/Konfigurations-Feature — keine UI, keine neue Seite, kein neuer Nutzer-Flow. Alle 9 Stellen im Code, die aktuell ein LLM aufrufen (Interview-Agent, Extraktion, Anreicherung, PDF-Report, Use-Case-Insights, …), rufen bereits eine einzige zentrale Weiche auf (`resolveModel()`) und kennen den Provider dahinter nicht. Dieses Feature erweitert nur diese eine Weiche um zwei neue Ziele — alle 9 Aufrufer bleiben unverändert.
+
+```
+Service ruft auf:           resolveModel("nebius/kimi-k2.6-reasoning")
+                                      │
+                                      ▼
+                          ┌─ zentrale Weiche (llm-provider.ts) ─┐
+                          │  anthropic/...   → bestehend          │
+                          │  google/...      → bestehend          │
+                          │  nebius/...      → NEU                │
+                          │  fireworks/...   → NEU (manueller     │
+                          │                     Fallback-Pfad)    │
+                          └────────────────────────────────────────┘
+```
+
+### Komponenten-Struktur
+
+Kein UI-Komponentenbaum — dieses Feature hat keine sichtbare Oberfläche. Betroffen ist ausschließlich die Service-Schicht (`src/services/*` → `src/lib/llm-provider.ts`).
+
+### Datenmodell
+
+Keine neuen Datenbank-Tabellen, keine Schema-Änderung. Die drei bestehenden Konfigurationswerte (`INTERVIEW_MODEL`, `EXTRACTION_MODEL`, `ENRICHMENT_MODEL`) bekommen nur neue Inhalte — das Format `provider/modell-id` bleibt exakt wie es ist.
+
+### Modell-Zuweisung (aus der Recherche oben)
+
+| Konfigurationswert | Neuer Inhalt | Grund |
+|---|---|---|
+| `INTERVIEW_MODEL` | `nebius/kimi-k2.6-reasoning` | Bestes Profil für Echtzeit-Gespräch mit Tool Use, EU-Datenverarbeiter |
+| `EXTRACTION_MODEL` | `google/gemini-3.5-flash` | Bereits unterstützter Provider, nur neuer Modellname — kein Code-Risiko |
+| `ENRICHMENT_MODEL` | `google/gemini-3.5-flash` | Gleiche Begründung wie Extraktion |
+
+**Manueller Ausweichpfad (kein Auto-Failover, bewusst — siehe Out of Scope):** Falls Nebius im Betrieb zu langsam oder zu teuer wird, ändert der Betreiber `INTERVIEW_MODEL` von Hand auf `fireworks/kimi-k2.6`. Beide Werte existieren parallel als gültige Konfiguration, es gibt keine automatische Umschaltung.
+
+### Tech-Entscheidungen
+
+| Entscheidung | Begründung |
+|---|---|
+| Nebius/Fireworks über die Bibliothek anbinden, die schon als Abhängigkeit im Projekt eingetragen ist, aber noch nirgends aktiv verwendet wird (kein neues Package) | Beide bieten eine zu OpenAI kompatible Schnittstelle an — dieselbe Bibliothek kann auf eine andere Adresse als die von OpenAI selbst zeigen. Das ist eine Verkabelungs-Frage, kein "OpenAI als Modell-Anbieter" im Sinne des Out-of-Scope-Punkts oben. **Korrektur gegenüber erster Annahme:** Die Bibliothek wird *nicht* schon für Embeddings benutzt — dort wurde sie bewusst umgangen (eigener Direkt-`fetch`), weil Jinas Embedding-Antwortformat an der strikten Schema-Validierung der Bibliothek scheiterte. Für Chat-Antworten (was hier gebraucht wird) ist das Risiko geringer, aber nicht null — siehe Risiken unten |
+| Zwei getrennte neue Ziele (`nebius/...`, `fireworks/...`) statt einem gemeinsamen | Beide haben unterschiedliche Adressen und unterschiedliche Zugangsschlüssel — getrennt zu halten macht den Ausweichpfad eindeutig nachvollziehbar |
+| Kein automatischer Fallback bei Fehler | Bewusste Spec-Entscheidung (Out of Scope) — bei einer Person als Betreiber ist eine stille Umschaltung schwerer zu durchschauen als ein expliziter, sichtbarer Eingriff |
+| Tool-Use-Verlässlichkeit vor Rollout manuell prüfen, nicht automatisiert | Es gibt noch keinen bestehenden automatisierten Test dafür; der vorhandene Eval-Lauf (`/eval-interview`) deckt das im selben Zug ab, sobald die Umstellung steht |
+
+### Abhängigkeiten (Pakete)
+
+Keine neuen Pakete. Die Bibliothek für die Anbindung ist bereits als Abhängigkeit installiert, wurde bisher aber im Code nirgends aufgerufen — dieses Feature ist ihre erste tatsächliche Verwendung.
+
+### Neue Konfigurationswerte (Secrets)
+
+Zwei neue Zugangsschlüssel nötig, analog zu den bestehenden Provider-Schlüsseln: einer für Nebius, einer für Fireworks (auch wenn Fireworks nur als Ausweichpfad gedacht ist — der Schlüssel muss vorhanden sein, bevor er im Notfall gebraucht wird).
+
+### Risiken
+
+- Nebius ist ein neuer, bisher ungetesteter Anbieter für dieses Projekt — die Tool-Use-Zuverlässigkeit (Phase-Übergänge, `update_topics`) ist laut Recherche oben noch nicht real validiert, nur anhand von Benchmark-Zahlen eingeschätzt. Vor Produktiv-Umstellung: manueller Testlauf Pflicht.
+- Höhere Latenz als die bisherige Übergangslösung ist möglich (Benchmark zeigt 187 t/s bei Nebius vs. teilweise schnellere Werte bei Fireworks) — bei spürbarer Verschlechterung greift der manuelle Ausweichpfad.
+
+## Implementation Notes (2026-06-22, /backend)
+
+**Code-Änderung (abgeschlossen):**
+- `src/lib/llm-provider.ts`: zwei neue Branches `nebius` und `fireworks`, beide über `createOpenAI({ apiKey, baseURL }).chat(modelId)` — **wichtig:** der direkte Provider-Aufruf `provider(modelId)` (wie bei den 2 anderen Anbietern) würde stattdessen OpenAIs proprietäre Responses-API ansteuern, die Drittanbieter-Endpoints nicht implementieren. `.chat(modelId)` ist für OpenAI-kompatible Drittanbieter zwingend.
+- Base-URLs recherchiert (Web-Suche, nicht aus Trainingsdaten übernommen, da bekannt veraltungsanfällig): `https://api.tokenfactory.nebius.com/v1` (Nebius — Produkt seit Spec-Erstellung von "Nebius AI Studio" zu "Nebius Token Factory" umbenannt, gleiche Firma/EU-Datenschutz-Lage, andere URL als ursprünglich angenommen), `https://api.fireworks.ai/inference/v1` (Fireworks, unverändert).
+- 7 neue Unit-Tests in `src/lib/llm-provider.test.ts` (vorher keine dedizierte Testdatei für `resolveModel` — andere Tests mocken die Funktion statt sie zu testen). Deckt alle 4 Provider + Legacy-Fallback + Default + Error-Fall ab.
+- `.env.local.example`: `NEBIUS_API_KEY`, `FIREWORKS_API_KEY` dokumentiert.
+- `npm test`: 637/638 grün (7 neu), `npm run build` clean.
+
+**Korrektur der Tech-Design-Annahme:** Ursprünglich stand hier, die Bibliothek (`@ai-sdk/openai`) sei "schon für Embeddings genutzt" — falsch. Sie ist zwar als Dependency installiert, wird in `embeddings.ts` aber bewusst *nicht* verwendet (Kommentar dort: Jinas Embedding-Antwortformat scheiterte an der strikten Schema-Validierung der Bibliothek, Direkt-`fetch` als Workaround). Für Chat-Completions (dieser Use Case) ist das Risiko ähnlicher Schema-Inkompatibilitäten geringer, aber nicht ausgeschlossen — fließt in die Tool-Use-Validierung unten ein.
+
+**Bewusst NICHT gemacht (braucht echte Zugangsdaten + explizite Freigabe, kein Code-Blocker):**
+- `INTERVIEW_MODEL` weder lokal noch auf Vercel auf `nebius/...` umgestellt — kein echter `NEBIUS_API_KEY` vorhanden, Umstellung ohne reale Validierung wäre nur Theater.
+- Manuelle Tool-Use-Validierung (Phase-Transition Tool Calls gegen echte Nebius-API) nicht durchgeführt — braucht echten Schlüssel.
+- Vercel-Env-Vars nicht gesetzt (Approval-Gate: Env-Var-Änderung in Produktion).
+
+**Nächster Schritt vor Produktiv-Nutzung:** Echten `NEBIUS_API_KEY` beschaffen (https://tokenfactory.nebius.com) → lokal gegen reale API testen (insb. Tool Use) → `/eval-interview` mit `INTERVIEW_MODEL=nebius/<aktuelles-modell-id>` laufen lassen → erst danach Vercel-Env-Var-Änderung mit Freigabe.

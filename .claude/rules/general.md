@@ -176,7 +176,24 @@ Die folgenden Operationen erfordern zwingend User-Approval **vor** der Ausführu
 
 ### Vor jedem Deploy: Test-Status prüfen
 <!-- source: PROJ-17 (2026-05-26) — empfohlen aus Post-Mortem: bekannte Bugs sichtbar machen -->
-Falls E2E-Tests bekannte Failures haben: Diese explizit im Deploy-Commit oder Deploy-Kommentar nennen. Nicht still ignorieren. `/qa` vor `/deploy` ausführen wenn Tests in unbekanntem Zustand.
+<!-- source: PROJ-13 (/retro 2026-06-22) — verschärft: Dokumentieren reicht nicht mehr, Pre-existing-Failures sind Blocker -->
+100% der Tests müssen vor `/deploy` grün sein — auch pre-existing Failures. "Pre-existing, dokumentiert" ist kein Freifahrtschein mehr, um einen Failure ins nächste Feature mitzuschleppen. Wird ein Failure als pre-existing erkannt: sofort fixen oder als eigenes Known-Issue in `features/INDEX.md` loggen und blockend behandeln, nicht stillschweigend weiterziehen. `/qa` vor `/deploy` ausführen wenn Tests in unbekanntem Zustand.
+
+### Origin/main-Sync vor parallelen Fixes
+<!-- source: PROJ-30, PROJ-33, PROJ-35, PROJ-38, PROJ-39 (/retro 2026-06-22) — 5 von 5 Post-Mortems der letzten Batch-Deploys nennen Merge-Konflikte oder Convergent-Work mit origin/main als Hauptreibung, nicht der Build-Loop selbst -->
+Vor Start eines Fix/Refactors auf einem Feature-Branch: `git fetch && git log origin/main --oneline -10` prüfen, ob dieselbe Ursache dort bereits bearbeitet wird (Convergent-Work). Bei Branches mit Lebensdauer >2 Tage: täglich gegen `origin/main` syncen statt am Ende eines langen Branches einen großen Merge zu riskieren.
+
+### Appetite-Kalibrierung bei Agentic-Pipeline-Batches
+<!-- source: PROJ-25, PROJ-26, PROJ-27, PROJ-28, PROJ-29, PROJ-30 (/retro 2026-06-22) — 6 Features schätzten M/L, lieferten in <1 Tag. Alle waren reine Coder-Loop-Batches ohne manuelle Architektur-Arbeit -->
+Wenn ein Feature voraussichtlich primär als Agentic-Pipeline-Batch gebaut wird (Coder-Loop, kein nennenswertes manuelles Architektur-Design): Appetite beim `/write-spec` eine Stufe niedriger schätzen als bei vergleichbarem Scope mit manueller Implementierung.
+
+### Eval-Preflight: Judge-API-Key validieren
+<!-- source: PROJ-21 (/retro 2026-06-22) — ungültiger Anthropic-Key führte zu stillem 0.5-Fallback-Score, sah plausibel aus, war aber tot (QA-21-1) -->
+Vor jedem Eval-Lauf, der einen LLM-Judge nutzt: API-Key-Validität des Judge-Providers explizit prüfen (z.B. Mini-Request vor dem eigentlichen Lauf). Kein stiller Fallback-Score bei ungültigem Key — Lauf muss hart fehlschlagen, nicht plausibel aussehende Fake-Scores produzieren.
+
+### Deploy-Tag pro Charge bei mehrteiligen Features
+<!-- source: PROJ-22 (/retro 2026-06-22) — Feature über mehrere Chargen/Sessions gebaut, Bookkeeping-Lücke entstand weil nur am Ende getaggt wurde -->
+Wird ein Feature in mehreren Chargen/Batches gebaut und einzelne Chargen sind bereits abgeschlossen und deploybar: pro abgeschlossener Charge einen eigenen Deploy-Tag setzen, nicht erst am Gesamt-Ende.
 
 ## Interview-Engine-Features: Eval-Gate vor Approved
 <!-- source: PROJ-22 (2026-06-22) — 351 grüne Unit-Tests verdeckten zwei Critical-Completion-Bugs; erst der Eval-Lauf hat sie aufgedeckt -->

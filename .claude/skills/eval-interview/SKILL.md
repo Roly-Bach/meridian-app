@@ -175,24 +175,32 @@ Lies mit dem `Read`-Tool die `*.transcript.json` (maschinell, für `finalStepTra
 
 ### Schritt 4: PASS/FAIL bestimmen
 
-**Maßgeblich ist das automatische Gate** aus dem Runner: das Frontmatter-`status:`-Feld im `*.md`-Report (identisch in beiden Backends, berechnet in `runner.ts` aus `completion_correctness`, `dedup_slot_coverage ≥ 0.75`, `step_registration_coverage ≥ 0.8`, `dialog_naturalness ≥ 0.65`, `blocked_rate < 0.10`). Die folgenden manuellen Kriterien sind ein menschlicher Gegencheck. Weichen sie vom Runner-Gate ab, gewinnt das Runner-Gate; die Abweichung ist als Befund zu notieren (das ist die KI-6-Schuld — Gate und manuelle Kriterien sind noch nicht deckungsgleich).
+<!-- source: KI-6 (/retro 2026-06-22) — manuelle Kriterien divergierten vom Runner-Gate; entfernt. Runner-Gate ist jetzt maßgeblich. -->
 
-Ein Eval-Lauf gilt als **PASS** wenn:
-1. `interview.status = 'completed'`
-2. Mindestens 2 Prozessschritte in `step_tracker` mit `status != 'exploring'`
-3. Mindestens 1 Schritt mit gefüllten taziten O-Slots: mind. ein Wert in `entscheidungslogik` (O2), `tazite_cues` (O2) oder `ausnahmen` (O3) ist nicht null
-4. Kein Turn mit leerem `agent_response`
-5. Kein Dreiwiederholungsmuster bei Agent-Fragen (visuell aus stdout prüfen)
+**Der Runner bestimmt PASS/FAIL bereits automatisch** — `status:` im Transcript-Frontmatter (Schritt 5) kommt direkt aus `runner.ts`. Diesen Status übernehmen, nicht manuell neu bewerten. Stand `runner.ts` (Zeile ~440), aktueller Gate:
 
-Ein Eval-Lauf gilt als **FAIL** wenn:
-- `interview.status != 'completed'` nach dem Runner-Ende
-- Kein einziger `register_step`-Call (step_tracker leer)
+```
+passed =
+  scores.completionCorrectness === true &&
+  scores.dedupSlotCoverage >= 0.75 &&
+  scores.stepRegistrationCoverage >= 0.8 &&
+  scores.dialogNaturalness >= 0.65 &&
+  (trailMetrics.blockedRate ?? 0) < 0.1
+```
+
+Bei jedem `runner.ts`-Schwellenwert-Change (wie 2026-06-18: `dialogNaturalness` 0.70 → 0.65) diesen Block hier nachziehen — sonst driftet die Doku wieder vom tatsächlichen Gate weg.
+
+**Zusätzlich qualitativ prüfen** (nicht Teil des automatischen Gates, aber Red-Flag für PARTIAL/Nachprüfung):
+- Mindestens 1 Schritt mit gefüllten taziten O-Slots: mind. ein Wert in `entscheidungslogik` (O2), `tazite_cues` (O2) oder `ausnahmen` (O3) ist nicht null
+- Kein Turn mit leerem `agent_response`
+- Kein Dreiwiederholungsmuster bei Agent-Fragen (visuell aus stdout prüfen)
+
+Ein Eval-Lauf gilt als **FAIL** außerdem (unabhängig vom Score-Gate) wenn:
 - Runner beendet mit non-zero Exit-Code ohne `[eval] Done.`
 - Sicherheits-Maximum 25 Turns (Runner-intern) erreicht ohne Abschluss
 
 **Partial PASS** (dokumentieren, kein Abbruch-Fehler):
-- Interview abgeschlossen, aber < 2 Schritte registriert
-- Interview abgeschlossen, aber Pflicht-Slots unvollständig
+- Score-Gate FAIL, aber nur knapp an einer Schwelle (z.B. `dedupSlotCoverage` 0.70 statt 0.75) und qualitative Prüfung unauffällig
 - Lauf vollständig, aber Extraktion fehlgeschlagen (Langfuse zeigt Fehler-Span)
 
 ### Schritt 5: Transcript schreiben

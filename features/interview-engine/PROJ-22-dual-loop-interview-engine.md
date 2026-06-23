@@ -432,9 +432,10 @@ PROJ-22 ist das Fundament der Dual-Loop-Architektur (`interviewTalker.ts`, `inte
 |--------|------|-----------|
 | INDEX.md (vorher) | `0:3:5` | Falsch — kein QA-Abschnitt belegt 3 High-Bugs |
 | Header (vorher) | `0:0:2` | Veraltet — zählte nur die erste QA-Runde, ignorierte Charge 2/3 |
-| **Korrigiert** | **`0:2:5`** | 2 offene Medium (`QA-C2-M1` User-Correction-Block, `QA-C2-M2` Briefing-Overwrite), 5 offene Low (`QA-22-L1`, `QA-22-L3`, `QA-C2-L1`, `QA-C2-L2`, `QA-C3-L1`) |
+| **Korrigiert (06-22, vor Refine)** | `0:2:5` | 2 offene Medium (`QA-C2-M1` User-Correction-Block, `QA-C2-M2` Briefing-Overwrite), 5 offene Low (`QA-22-L1`, `QA-22-L3`, `QA-C2-L1`, `QA-C2-L2`, `QA-C3-L1`) |
+| **Refine-Korrektur (06-22)** | **`0:0:5`** | `QA-C2-M1` und `QA-C2-M2` waren bereits am 2026-06-05 im Code gefixt (`is_correction`-Flag, Catchup-Tool-Restriktion) — Spec-Bug-Tabelle wurde nie nachgezogen. Beide Medium-Einträge auf Fixed gesetzt, siehe Bugs-(Charge-2)-Tabelle oben. Nur noch 5 offene Low übrig. |
 
-Das einzige je existierende High (`QA-C3-H1`, `computeStepBudget`-Divisor) wurde in der Re-QA 2026-06-04 gefixt. Beide Critical (`EVAL-22-B1`, `EVAL-22-B6`) ebenfalls gefixt. Keine offenen Critical/High → Deploy-Gate nicht verletzt.
+Das einzige je existierende High (`QA-C3-H1`, `computeStepBudget`-Divisor) wurde in der Re-QA 2026-06-04 gefixt. Beide Critical (`EVAL-22-B1`, `EVAL-22-B6`) ebenfalls gefixt. Keine offenen Critical/High/Medium → Deploy-Gate nicht verletzt.
 
 ### Gate-Ergebnisse (2026-06-22)
 
@@ -536,14 +537,14 @@ Charge 2 Punkte 3, 4, 5 + Charge 1 (Langfuse-Singleton-Hotfix):
 
 | ID | Severity | Beschreibung |
 |----|----------|-------------|
-| QA-C2-M1 | Medium | **User-Correction nach Catchup blockiert**: Nach `analyst_catchup`-Schreib auf Slot (Prio 4) kann `analyst_online` (Prio 3) den Slot nicht mehr korrigieren, selbst wenn der User einen Fehler korrigiert ("eigentlich 15, nicht 10"). Der blocked-Trail erscheint, aber der neue Wert wird nicht gespeichert. Fix: `analyst_online` sollte bei expliziter User-Korrektur (Signal: user negiert vorherigen Wert) erlaubt sein zu überschreiben — erfordert Korrektur-Signal im `record_slot`-Schema oder Prio-Level-Erweiterung. |
-| QA-C2-M2 | Medium | **`runAnalystCatchup` überschreibt `next_briefing` von `runAnalystOnline`**: Catchup schreibt `analyst_status='done'` + neues `next_briefing` nach dem Online-Run. Wenn Catchup LLM kein `produce_briefing` aufruft (z.B. keine missed slots gefunden), bleibt das Online-Briefing erhalten (korrekt). Wenn Catchup `produce_briefing` aufruft, überschreibt es. Catchup hat mehr Kontext → vermutlich besseres Briefing, aber nicht garantiert. Low-risk für jetzt. |
+| QA-C2-M1 | ~~Medium~~ Fixed | **User-Correction nach Catchup blockiert**: Nach `analyst_catchup`-Schreib auf Slot (Prio 4) konnte `analyst_online` (Prio 3) den Slot nicht mehr korrigieren, selbst wenn der User einen Fehler korrigiert ("eigentlich 15, nicht 10"). **Fix (2026-06-05):** `is_correction`-Flag im `record_slot`-Schema (`interviewAgent.ts:385`) hebt den Prioritäts-Block explizit auf (`interviewAgent.ts:497,514`). Test: `stepRevisionIntegrity.test.ts:313` ("is_correction=true lifts priority block"). |
+| QA-C2-M2 | ~~Medium~~ Fixed | **`runAnalystCatchup` überschreibt `next_briefing` von `runAnalystOnline`**: Catchup konnte `produce_briefing` aufrufen und damit das Online-Briefing überschreiben. **Fix:** Catchup bekommt nur noch `record_slot` als erlaubtes Tool (`allowedTools: ['record_slot']`, `interviewAnalyst.ts:581`), `produce_briefing` ist nicht mehr verfügbar — Online-Briefing bleibt strukturell unangetastet. Siehe Code-Kommentar "M2 fix" (`interviewAnalyst.ts:576`). |
 | QA-C2-L1 | Low | **N parallele Jina API-Calls bei Lazy Hydration**: Bei N bestehenden Steps ohne Embedding werden N simultane `generateEmbedding`-Calls via `Promise.all` gemacht. Bei N > 5 und Jina-Rate-Limit könnte das zu langsamen Antworten führen (graceful degradation → Jaccard vorhanden). |
 | QA-C2-L2 | Low | **Keine Runtime-Validierung von `StepEntry.embedding` aus JSONB**: Wenn JSONB-Daten korrumiert sind (nicht number[]), wird `cosineSim` mit ungültigen Daten aufgerufen. `classifyStepSimilarity` prüft `step.embedding.length === 0` aber nicht ob Elemente tatsächlich Zahlen sind. |
 
 ### Production-Ready
 
-**YES** — keine Critical/High Bugs. QA-C2-M1 und QA-C2-M2 sind bekannte Designlimitierungen, kein Datenverlust. QA-C2-L1/L2 haben Graceful-Degradation.
+**YES** — keine Critical/High Bugs. QA-C2-M1/M2 nachträglich im Code gefixt (Bugfix-Daten waren früher als der QA-Befund-Eintrag, Spec war stale — siehe Refine 2026-06-22). QA-C2-L1/L2 haben Graceful-Degradation.
 
 ---
 

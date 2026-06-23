@@ -6,19 +6,10 @@ const nextConfig: NextConfig = {
       {
         source: '/:path*',
         headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' blob:",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https:",
-              "font-src 'self'",
-              "worker-src blob: 'self'",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://api.elevenlabs.io https://api.elevenlabs.io",
-              "frame-ancestors 'none'",
-            ].join('; '),
-          },
+          // Content-Security-Policy lives in proxy.ts (PROJ-15) — nonce is generated
+          // per-request there. next.config.ts headers() takes precedence over
+          // proxy-set headers for the same key, so a static CSP here would silently
+          // win and strip the nonce. Keep it out of this list.
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
