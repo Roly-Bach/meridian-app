@@ -195,6 +195,10 @@ Vor jedem Eval-Lauf, der einen LLM-Judge nutzt: API-Key-Validität des Judge-Pro
 <!-- source: PROJ-22 (/retro 2026-06-22) — Feature über mehrere Chargen/Sessions gebaut, Bookkeeping-Lücke entstand weil nur am Ende getaggt wurde -->
 Wird ein Feature in mehreren Chargen/Batches gebaut und einzelne Chargen sind bereits abgeschlossen und deploybar: pro abgeschlossener Charge einen eigenen Deploy-Tag setzen, nicht erst am Gesamt-Ende.
 
+### Dependency-Pin-Recherche vor Implementierung
+<!-- source: PROJ-34 (/retro 2026-06-23) — @electric-sql/pglite 0.5.x verlor das Vektor-Modul, Pin auf 0.4.6 nötig, erst durch npm-Fehler während Implementierung entdeckt (n=1, kein bestätigtes Muster — Vorschlag trotzdem konkret genug zur Aufnahme) -->
+Bei Einführung einer neuen npm-Dependency mit funktionalem Versions-Constraint (z.B. "braucht Feature/Modul X"): Changelog bzw. Breaking-Changes der Zielversion vor Implementierungsstart prüfen, nicht erst beim Fehler im Build/Test-Lauf entdecken.
+
 ## Interview-Engine-Features: Eval-Gate vor Approved
 <!-- source: PROJ-22 (2026-06-22) — 351 grüne Unit-Tests verdeckten zwei Critical-Completion-Bugs; erst der Eval-Lauf hat sie aufgedeckt -->
 Bei Features der Domain "Interview Engine" muss vor dem Übergang zu Status=Approved mindestens ein erfolgreicher `eval:interview`-Lauf nachgewiesen sein. Unit-Tests allein sind kein ausreichendes Gate. Ohne Eval-Nachweis darf `/qa` keinen Approved-Status setzen.
