@@ -59,8 +59,12 @@ export async function scoreTalkerFactualGrounding(
   // Turn 1 has no prior history to violate — nothing to check.
   if (turns.length < 2) return { violations: 0, rationale: '' }
 
+  // Causal order within a turn is Mitarbeiter (the input) then Agent (the reply reacting
+  // to it, posing the next question) — matching runner.ts's conversationLog convention.
+  // Swapped (Agent-first) here previously made same-turn references look like forward
+  // fabrications to the judge: it saw a claim before the statement it was responding to.
   const transcript = turns
-    .map((t) => `[Turn ${t.turnNumber}] Agent: "${t.agentText}"\n[Turn ${t.turnNumber}] Mitarbeiter: "${t.userInput}"`)
+    .map((t) => `[Turn ${t.turnNumber}] Mitarbeiter: "${t.userInput}"\n[Turn ${t.turnNumber}] Agent: "${t.agentText}"`)
     .join('\n\n')
 
   try {
