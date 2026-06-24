@@ -291,6 +291,22 @@ Im PGlite-Backend entfallen diese Schritte: keine persistente DB, keine Pipeline
 
 ---
 
+## Verifikations-Workflow: "Hat Fix/Prompt-Änderung X geholfen?" (KI-12-Lehre, 2026-06-23)
+
+**Nie aus einem einzelnen Lauf schließen, ob ein Fix etwas gebracht hat.** Single-Run-Verifikation (`runs=1`, Default) erzeugt Anekdoten — der Seed ist pro Lauf zufällig (kein `--seed` gesetzt = kein fixer Vergleichspunkt), die historische Buchhalter-Reihe (10 Läufe 2026-06-22/23) streut zwischen PASS und FAIL ohne dass sich am Code etwas geändert hätte. Ein FAIL nach einem Fix beweist keine Regression, ein PASS beweist keine Verbesserung.
+
+**Stattdessen:**
+
+```bash
+npm run eval:interview -- --personas <persona> --runs 3 --seed <fix>
+```
+
+`--runs` akzeptiert 1–10 und erzeugt am Ende einen Aggregat-Report (`*-aggregate.md`) mit Median/Min/Max über alle Kern-Metriken (`slotCoverage`, `dedupSlotCoverage`, `dialogNaturalness`, `stepRegistrationCoverage`, `hallucinationRate`, `talkerGroundingViolations`, ...). Vergleiche den **Median** vor/nach Fix, nicht Einzelläufe. `--seed` fixieren, damit Vorher/Nachher dieselbe Perturbation nutzt (sonst vermischt sich Fix-Effekt mit Seed-Rauschen).
+
+Für Scorer-Logik-Änderungen (kein Prompt-/Modell-Change, reine Code-Änderung am Scorer selbst): `npm run eval:replay` gegen die eingefrorenen Fixtures in `src/services/__evals__/interview/__fixtures__/` nutzen statt live zu evaluieren — deterministisch, kein LLM-Call, kein Seed-Rauschen. `npm run eval:replay:update` nur nach bewusster Prüfung, dass die neuen Werte tatsächlich korrekt sind (nicht blind aktualisieren).
+
+---
+
 ## Modell-Vergleich (primärer Use Case von PROJ-13)
 
 Um zwei Modelle direkt zu vergleichen, setze `INTERVIEW_MODEL` in `.env.local` und führe den Skill zweimal aus:
