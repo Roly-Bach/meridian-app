@@ -141,6 +141,15 @@ function makeProcessingWriteMock() {
   return { update: vi.fn().mockReturnValue({ eq: processingWriteEq }) }
 }
 
+// store.loadStepTracker() chain mock — used by the KI-12 soft_confirm recheck
+function makeStepTrackerLoadMock(stepTracker: unknown[] = []) {
+  return {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: stepTracker }, error: null }),
+  }
+}
+
 /**
  * Set up supabase mocks.
  * @param includePhaseUpdate When true (default false), adds a phase-update mock between
@@ -280,22 +289,34 @@ describe('runInterviewTurn', () => {
 
   // T4: Lifecycle complete → meta.completed=true, farewell stream, no talkerStream
   it('T4: lifecycle complete returns meta.completed=true and farewell stream', async () => {
+    // soft_confirm triggers the KI-12 pre-completion recheck: checkLifecycle is called
+    // a second time after the synchronous analyst pass. No new step found here, so it
+    // returns the same decision both times — completion proceeds as before.
     vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'soft_confirm' })
 
-    // Extra mock for the status update
     const updateMock = {
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({ data: null, error: null }),
     }
-    const turnInsert = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'turn-1' }, error: null }),
-    }
 
-    setupSupabaseMocks({
-      extraCalls: [updateMock, turnInsert],
-    })
+    mockAdminFrom.mockReset()
+    const interviewFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
+    }
+    const stateFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow(), error: null }),
+    }
+    const turnsFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    ;[interviewFetch, stateFetch, turnsFetch, makeStepTrackerLoadMock([]), updateMock]
+      .forEach((m) => mockAdminFrom.mockReturnValueOnce(m))
 
     const result = await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -305,10 +326,61 @@ describe('runInterviewTurn', () => {
 
     expect(result.meta.completed).toBe(true)
     expect(result.meta.reason).toBe('soft_confirm')
+    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({ phase: 'wrap_up' }),
         briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
+      })
+    )
+  })
+
+  // T11 (KI-12): soft_confirm fires on stale state, but the synchronous recheck finds a
+  // brand-new step the user just mentioned — completion must be vetoed, normal turn continues.
+  it('T11 (KI-12): soft_confirm is vetoed when the recheck finds a freshly-registered step', async () => {
+    vi.mocked(checkLifecycle)
+      .mockReturnValueOnce({ shouldComplete: true, reason: 'soft_confirm' })
+      .mockReturnValueOnce({ shouldComplete: false, reason: null })
+    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'clarification' as never, phaseJustEntered: 'clarification' as never })
+
+    const newlyRegisteredStep = makeStepEntry('Mahnwesen', 'exploring')
+
+    mockAdminFrom.mockReset()
+    const interviewFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
+    }
+    const stateFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('wrap_up', []), error: null }),
+    }
+    const turnsFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    const phaseUpdate = makePhaseUpdateMock()
+    const processingWrite = makeProcessingWriteMock()
+    ;[interviewFetch, stateFetch, turnsFetch, makeStepTrackerLoadMock([newlyRegisteredStep]), phaseUpdate, processingWrite]
+      .forEach((m) => mockAdminFrom.mockReturnValueOnce(m))
+
+    const result = await runInterviewTurn({
+      interviewId: INTERVIEW_ID,
+      userInput: 'Ach, der monatliche Mahnlauf — den hatten wir noch nicht erwähnt.',
+      timerMinutes: 15,
+    })
+
+    expect(result.meta.completed).toBe(false)
+    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
+    expect(createTalkerStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          stepTracker: expect.arrayContaining([
+            expect.objectContaining({ title: 'Mahnwesen' }),
+          ]),
+        }),
       })
     )
   })

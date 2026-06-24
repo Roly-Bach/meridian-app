@@ -158,7 +158,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   ])
 
   const currentPhase = (state?.phase ?? 'intro') as Phase
-  const stepTracker: StepEntry[] = ((state?.step_tracker as unknown[] | null) ?? [])
+  let stepTracker: StepEntry[] = ((state?.step_tracker as unknown[] | null) ?? [])
     .map((raw, i) => normalizeStepEntry(raw, i + 1))
   const nextTurnNumber = existingTurns.length + 1
 
@@ -176,7 +176,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
   // ── Analyst briefing from previous turn ────────────────────────────────────
   const analystStatus = interview.analyst_status ?? 'idle'
-  const analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
+  let analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
 
   const persistedFillers = analystBriefing?.usedFillerPhrases ?? []
   const usedFillerPhrases: string[] = persistedFillers.length === 0
@@ -196,7 +196,53 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   }
 
   // ── Lifecycle check ─────────────────────────────────────────────────────────
-  const lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
+  let lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
+
+  // KI-12: stepTracker/analystBriefing above reflect state as of the END of the
+  // PREVIOUS turn — this turn's userInput has not been seen by any analyst pass
+  // yet (that normally happens in background, after this turn streams). Deciding
+  // soft_confirm on stale state can complete the interview the instant a brand-new
+  // topic is mentioned in the very input that triggered it (e.g. answering the
+  // wrap-up "anything we missed?" question by naming a process never seen before)
+  // — the topic then never gets explored, just whatever this one pass can grab.
+  // Run the online analyst synchronously once before trusting soft_confirm, so a
+  // freshly-registered step can veto premature completion.
+  let preCompletionAnalystResult: AnalystRunResult | null = null
+
+  if (lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') {
+    try {
+      preCompletionAnalystResult = await runAnalystOnline({
+        context: {
+          interviewId,
+          workspaceId: interview.workspace_id,
+          employeeName: interview.employee_name,
+          employeeRole: interview.employee_role,
+          department: interview.department,
+          focusTopics: interview.focus_topics,
+          phase: 'wrap_up' as Phase,
+          timerMinutes,
+          topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+          topicsOpen: (state?.topics_open as string[] | null) ?? [],
+          extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
+          maxDurationMinutes: interview.max_duration_minutes ?? 30,
+          stepTracker,
+        },
+        history,
+        currentUserInput: userInput,
+        traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
+        store,
+      })
+
+      stepTracker = (await store.loadStepTracker(interviewId) as unknown[])
+        .map((raw, i) => normalizeStepEntry(raw, i + 1))
+      orchestratorCtx.stepTracker = stepTracker
+      analystBriefing = preCompletionAnalystResult.briefing
+      lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
+    } catch (err) {
+      console.error('[runInterviewTurn] pre-completion analyst recheck failed, trusting original lifecycle decision:', err)
+    }
+  }
+
   if (lifecycle.shouldComplete) {
     await store.completeInterview(interviewId)
 
@@ -238,10 +284,17 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     })
 
     const background = async (): Promise<AnalystRunResult | null> => {
+      if (preCompletionAnalystResult) {
+        // Already ran synchronously above during the soft_confirm recheck —
+        // running again would double-process this turn's input (duplicate
+        // slot writes / knowledge objects).
+        await p.onCompleted({ interviewId, workspaceId: interview.workspace_id })
+        return preCompletionAnalystResult
+      }
       try {
-        // B5: run the Analyst on the final wrap-up user turn. The completion path exits
-        // before the normal Analyst run below, so this turn's slots would otherwise be
-        // lost before process-step creation.
+        // B5: hard_stop path — Analyst never ran for this final turn (no soft_confirm
+        // recheck happened), run it now so this turn's slots aren't lost before
+        // process-step creation.
         const freshTracker = (await store.loadStepTracker(interviewId) as unknown[])
           .map((raw, i) => normalizeStepEntry(raw, i + 1))
         await runAnalystOnline({
@@ -410,6 +463,11 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
   // ── Background analyst closure ──────────────────────────────────────────────
   const background = async (): Promise<AnalystRunResult | null> => {
+    if (preCompletionAnalystResult) {
+      // Already ran synchronously during the soft_confirm recheck above (which
+      // then decided NOT to complete) — don't process this turn's input twice.
+      return preCompletionAnalystResult
+    }
     try {
       const analystHistory = history
 
