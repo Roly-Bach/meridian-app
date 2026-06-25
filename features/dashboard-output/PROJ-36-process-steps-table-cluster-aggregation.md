@@ -1,6 +1,6 @@
 # PROJ-36: ProcessStepsTable — Cluster-Aggregation als reines Modul
 
-## Status: Architected
+## Status: In Progress
 **Type:** Revision
 **Domain:** Dashboard & Output
 **Extends:** PROJ-20
@@ -113,6 +113,18 @@ Die Trennung folgt demselben Muster, das bereits bei zwei anderen internen Aufr�
 ### Out of Scope (bestätigt aus Spec)
 - Keine visuelle Änderung der Tabelle/des Detail-Sheets
 - Keine Änderung an der serverseitigen Cluster-Bildung (das ist ein anderer, bereits bestehender Prozess)
+
+## Implementation Notes (2026-06-25, /frontend)
+
+`src/lib/processStepsAggregation.ts` (128 LOC, kein React, kein server-only) angelegt: `groupStepsByDeptAndCluster`, `computeInterviewStepCounts`, `computeClusterAggregates`, `computeSummaryStats` + Typen `ProcessStep`, `ProcessCluster`, `SubStep`, `ClusterAggregates`, `SummaryStats`. `avg` privat.
+
+`ProcessStepsTable.tsx` 746 → 685 LOC: importiert die vier Funktionen, kein `.reduce`/`avg`/Gruppierungs-Code mehr im Komponenten-Body oder in `DeptClusterCard`. Lokale Interfaces durch Re-Export aus dem neuen Modul ersetzt.
+
+`processStepsAggregation.test.ts` (11 Tests): Solo-Cluster-Key bei `cluster_id = null`, Department-Fallback "Unbekannt", Mittelwert mit gemischten/ausschließlich `null`-Werten, `isRuleBased`-Tie-Break bei exakter Hälfte, `flowStepCount`-Fallback `?? 1`, Dedup von Datenquellen/Teilnehmernamen, leeres `steps`-Array (kein `NaN`).
+
+Gates: `tsc --noEmit` ✓ · `npm test` 54 Files, 715 passed / 1 skipped ✓ · `npm run build` ✓ Compiled successfully. Dev-Server-Smoke-Test `/dashboard/process-steps` → 307 (Login-Redirect, kein Crash) — vollständiger Browser-Test nicht möglich ohne Auth-Session, abgedeckt durch Build+Unit-Suite.
+
+Keine Abweichung vom Spec.
 
 ## QA Test Results
 _To be added by /qa_
