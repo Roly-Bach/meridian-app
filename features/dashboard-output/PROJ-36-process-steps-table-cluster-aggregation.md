@@ -1,11 +1,11 @@
 # PROJ-36: ProcessStepsTable — Cluster-Aggregation als reines Modul
 
-## Status: In Progress
+## Status: Approved
 **Type:** Revision
 **Domain:** Dashboard & Output
 **Extends:** PROJ-20
 **Appetite:** S (Stunden–½ Tag)
-**Bugs:** —
+**Bugs:** 0:0:0
 **Created:** 2026-06-25
 **Last Updated:** 2026-06-25
 
@@ -128,6 +128,77 @@ Keine Abweichung vom Spec.
 
 ## QA Test Results
 _To be added by /qa_
+
+---
+
+## QA Test Results
+
+**Tested:** 2026-06-25
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### AC-1: `src/lib/processStepsAggregation.ts` mit den 4 Funktionen + Typen, `avg` nicht exportiert
+- [x] `grep -n "^export"` zeigt genau `groupStepsByDeptAndCluster`, `computeInterviewStepCounts`, `computeClusterAggregates`, `computeSummaryStats` + Typen `ProcessStep`, `ProcessCluster`, `SubStep`, `ClusterAggregates`, `SummaryStats`. `avg` ist `function avg(...)` ohne `export`.
+
+#### AC-2: Komponente importiert statt inline zu berechnen
+- [x] `ProcessStepsTable.tsx` enthält kein `.reduce`/`avg`/Gruppierungs-Code mehr im Komponenten-Body oder in `DeptClusterCard` (verifiziert per Diff: 746 → 685 LOC, Berechnungen durch Funktionsaufrufe ersetzt).
+
+#### AC-3: Modul ist rein
+- [x] `grep -n "^import" processStepsAggregation.ts` zeigt keine Imports — kein React, kein `server-only`, kein Supabase-Client.
+
+#### AC-4: Test-Coverage der Edge-Cases
+- [x] `processStepsAggregation.test.ts` (11 Tests) deckt: Solo-Cluster-Key bei `cluster_id = null`, gemischte/ausschließlich `null`-Mittelwerte, `isRuleBased`-Tie-Break, `flowStepCount`-Fallback, leeres `steps`-Array.
+
+#### AC-5: Verhaltensneutral
+- [x] Diff zeigt nur Verschiebung + Funktionsaufrufe, keine Logik-Änderung (Formeln, Schwellenwerte, Fallback-Werte 1:1 aus der Vorlage übernommen).
+
+#### AC-6: Gate
+- [x] `npm run lint` (`tsc --noEmit`) ✓ keine Fehler
+- [x] `npm test` ✓ 54 Files, 715 passed / 1 skipped
+
+### Edge Cases Status
+
+#### EC-1: `cluster_id = null` → Solo-Key
+- [x] Per Unit-Test verifiziert (`solo-s1`/`solo-s2` getrennt).
+
+#### EC-2: Alle numerischen Werte `null`
+- [x] `avg()` liefert `null`, nicht `NaN` oder `0` — Unit-Test bestätigt.
+
+#### EC-3: `isRuleBased`-Tie bei exakter Hälfte
+- [x] `>= length / 2` ergibt bei 1:1-Split `true` — unverändertes Verhalten, per Test fixiert.
+
+#### EC-4: `interviewStepCounts` ohne Eintrag
+- [x] Fallback `?? 1` greift — Unit-Test bestätigt.
+
+#### EC-5: Leeres `steps`-Array
+- [x] `computeSummaryStats([])` → `{ totalSteps: 0, ruleBasedPct: 0, ... }`, kein `NaN`.
+
+### Security Audit Results
+- [x] Object-Ownership: keine neue `[id]`-Route, kein neuer Datenzugriffspfad — Workspace-Scoping bleibt unverändert in `page.tsx` (Server Component, `workspace_id`-Filter unverändert).
+- [x] Keine neuen Env-Vars, keine neue API-Route, kein Auth-/RLS-Change.
+- [x] Reines Frontend-Modul ohne Netzwerk-/DB-Zugriff — keine neue Angriffsfläche.
+- N/A Rate-Limiting/Input-Validation: kein neuer Eingabepfad eingeführt.
+
+### Regression
+- `npm test`: 54 Files, 715 passed / 1 skipped (keine Regression).
+- `npm run build`: ✓ Compiled successfully, alle 30 Routes generiert.
+- E2E-Regression `tests/PROJ-20-cluster-synthese.spec.ts` (deckt `/dashboard/process-steps`-Auth-Guard ab): 3/3 passed (chromium).
+- Dev-Server-Smoke-Test `/dashboard/process-steps` → HTTP 307 (Login-Redirect), kein 500/Crash.
+
+### E2E
+N/A für neue Tests — die ACs sind strukturell (Modulgrenzen, Reinheit, Sichtbarkeit), kein neues nutzersichtbares Verhalten (gleiche Begründung wie PROJ-35). Bestehender E2E-Test für die Seite (Auth-Guard) bleibt grün. Kein Eval-Gate nötig — Domain ist Dashboard & Output, keine Interview-Conversation-Logic betroffen.
+
+### Bugs Found
+Keine.
+
+### Summary
+- **Acceptance Criteria:** 6/6 passed
+- **Bugs Found:** 0 (0 critical, 0 high, 0 medium, 0 low)
+- **Security:** Pass — keine neue Angriffsfläche, Object-Ownership unverändert
+- **Production Ready:** YES
+- **Recommendation:** Deploy
 
 ## Deployment
 _To be added by /deploy_
