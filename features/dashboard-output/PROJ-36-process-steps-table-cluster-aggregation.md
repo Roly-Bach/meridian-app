@@ -1,6 +1,6 @@
 # PROJ-36: ProcessStepsTable — Cluster-Aggregation als reines Modul
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Dashboard & Output
 **Extends:** PROJ-20
@@ -200,17 +200,24 @@ Keine.
 - **Production Ready:** YES
 - **Recommendation:** Deploy
 
-## Deployment
-_To be added by /deploy_
+## Deployment (2026-06-25, /deploy)
 
-## Post-Mortem
-_To be added by /deploy_
+- Production: https://meridian-app-green.vercel.app (Vercel, alias of `dpl_DAGqznHpzD15DBcAkV4dEDnHxm8C`)
+- G1 (build/lint/tsc): pass
+- G2 (Tests): eigener Scope pass (Unit-Suite 715/1 skipped, `processStepsAggregation.test.ts` 11/11, E2E-Regression `PROJ-20-cluster-synthese.spec.ts` 3/3 chromium). Volle E2E-Suite zeigt 22 vorbestehende, unrelated Fails → **KI-13** in `features/INDEX.md` geloggt (CSP-Nonce-Hydration-Mismatch + Webkit-Flakiness, verifiziert pre-existing auf Commit `89ce1bf`, kein Berührungspunkt mit `src/lib`/`src/components/ProcessStepsTable.tsx`). Deploy mit dokumentierter Ausnahme von der general.md-Hard-Rule fortgesetzt.
+- G3 (Preview-Deploy + Smoke-Test): pass — Build READY, Routen kompiliert; curl-Smoke gegen Preview traf Vercels Team-SSO-Gate (kein App-Fehler, erwartetes Verhalten für Preview-URLs).
+- G4 (Permissions): nicht anwendbar — Diff berührt keine Auth/RLS/API/LLM-Pfade (nur `src/lib/processStepsAggregation.ts`, `src/components/ProcessStepsTable.tsx`).
+- Production-Smoke-Test: `/` → 307, `/login` → 200, `/dashboard/process-steps` → 307 (Auth-Redirect, kein 500).
+- Lighthouse: bewusst übersprungen — reiner Daten-Layer-Refactor ohne visuelle/Performance-relevante Änderung (kein neuer Render-Pfad, kein neues Asset).
+- User-Approval für Production-Deploy eingeholt (AskUserQuestion, 2026-06-25).
+
+## Post-Mortem (2026-06-25, /deploy)
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | High — Scope (4 Funktionen, `src/lib`, keine Verhaltensänderung) deckte sich exakt mit der Umsetzung, keine Nachschärfung nötig |
+| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: S |
+| Größte Überraschung | Nicht der Refactor selbst, sondern die volle E2E-Suite: 22 vorbestehende, komplett unrelated Fails (CSP-Nonce-Hydration-Mismatch) wurden erst beim Deploy-Gate sichtbar, weil vorher nur gezielte Specs liefen — als KI-13 geloggt statt PROJ-36 zu blockieren |
+| Vorgeschlagene Regeländerung | Vor dem nächsten Feature-Deploy: KI-13 (CSP-Nonce-Dev-Mode-Mismatch) fixen, sonst wächst die Liste „vorbestehender, dokumentierter" E2E-Fails weiter — genau das Muster, das general.md mit der 100%-Hard-Rule verhindern wollte |
+| Build-Loop-Iterationen | tatsächlich: 1 (geplant: ≤5) — kein Retry nötig, tsc/Tests/Build liefen beim ersten Versuch grün |
+| Häufigste Fehlerkategorie im Loop | — (keine Fehler im Implementierungs-Loop; einzige Reibung war das vorbestehende E2E-Deploy-Gate, nicht der Code selbst) |

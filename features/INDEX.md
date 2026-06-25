@@ -52,7 +52,7 @@
 | PROJ-33 | Turn-Loop-Konsolidierung (runInterviewTurn) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-33-turn-loop-konsolidierung.md) | P1 | M | 0:0:0 |
 | PROJ-34 | Werkzeug-Schreibabsichten + TurnStore-Port (DB-freie Evals) | Revision | Interview Engine | PROJ-33 | Deployed | [spec](interview-engine/PROJ-34-werkzeug-schreibabsichten-turnstore-port.md) | P2 | L | 0:0:1 |
 | PROJ-35 | interviewAgent.ts entkernen (Conversation-Signals + server-only-Naht) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-35-interviewagent-entkernen.md) | P2 | M | 0:0:0 |
-| PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Approved | [spec](dashboard-output/PROJ-36-process-steps-table-cluster-aggregation.md) | P2 | S | 0:0:0 |
+| PROJ-36 | ProcessStepsTable — Cluster-Aggregation als reines Modul | Revision | Dashboard & Output | PROJ-20 | Deployed | [spec](dashboard-output/PROJ-36-process-steps-table-cluster-aggregation.md) | P2 | S | 0:0:0 |
 | PROJ-37 | Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P2 | — | — |
 | PROJ-38 | Slot-Write-Encoding-Fix (Eval-Signal wiederherstellen) | Revision | Interview Engine | PROJ-27 | Deployed | [spec](interview-engine/PROJ-38-slot-write-encoding-eval-signal.md) | P1 | S | 0:0:0 |
 | PROJ-39 | Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth) | Revision | Interview Engine | PROJ-31 | Deployed | [spec](interview-engine/PROJ-39-eval-judge-parsing-haertung.md) | P1 | S | 0:0:1 |
