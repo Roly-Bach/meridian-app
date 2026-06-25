@@ -5,7 +5,10 @@ try {
     const eqIdx = line.indexOf('=')
     if (eqIdx > 0 && !line.trimStart().startsWith('#')) {
       const key = line.slice(0, eqIdx).trim()
-      const val = line.slice(eqIdx + 1).trim()
+      let val = line.slice(eqIdx + 1).trim()
+      if (val.length >= 2 && ((val[0] === '"' && val.at(-1) === '"') || (val[0] === "'" && val.at(-1) === "'"))) {
+        val = val.slice(1, -1)
+      }
       if (key && val && !process.env[key]) process.env[key] = val
     }
   })
