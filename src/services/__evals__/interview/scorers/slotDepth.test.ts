@@ -10,6 +10,7 @@ import { generateText } from 'ai'
 import { scoreSlotDepth } from './slotDepth'
 import { scoreSlotCoverage } from './slotCoverage'
 import type { StepEntry } from '@/services/interviewSemantic'
+import type { TurnRecord } from './types'
 import shallowFixture from '../__fixtures__/depth-falsification/shallow.json'
 import adequateFixture from '../__fixtures__/depth-falsification/adequate.json'
 import deepFixture from '../__fixtures__/depth-falsification/deep.json'
@@ -254,5 +255,74 @@ describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
     expect(result2.depth_score).not.toBeNull()
     // Parser-Invarianz: gleicher Mock-Output → gleicher Score
     expect(result1.depth_score).toBe(result2.depth_score)
+  })
+})
+
+// ─── Prompt-Content-Test: getStepTurns-Grenzen (2026-06-24 audit) ───────────────
+//
+// getStepTurns() filtert Turns anhand von toolCalls[].args.step_title. Bisherige
+// Tests prüfen nie, OB der pro-Schritt-Prompt tatsächlich nur die zugehörigen
+// Turns enthält — ein Bug hier (z.B. alle Turns statt nur die des Schritts) würde
+// von keinem reinen Output-Mock-Test gefangen, nur am tatsächlich gesendeten Prompt.
+
+describe('scoreSlotDepth — Prompt-Inhalt: getStepTurns-Grenzen', () => {
+  it('Gesprächsauszüge im Prompt enthalten nur Turns des jeweiligen Schritts, nicht andere Schritte', async () => {
+    const stepA: StepEntry = {
+      title: 'Rechnungsprüfung',
+      reihenfolge: 1,
+      governance: null,
+      abhaengigkeiten: null,
+      status: 'done',
+      potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+      slots: {
+        entscheidungslogik: { value: 'Freigabe ab 5000 EUR', quote: 'Freigabe ab 5000 EUR', confidence: 'confirmed', nicht_befund_typ: null },
+        tazite_cues: null,
+        ausnahmen: null,
+        inputs: null,
+        outputs: null,
+        hilfsmittel: null,
+      },
+    }
+    const stepB: StepEntry = {
+      ...stepA,
+      title: 'Monatsabschluss',
+      slots: {
+        ...stepA.slots,
+        entscheidungslogik: { value: 'Stichtag 5. Werktag', quote: 'Stichtag 5. Werktag', confidence: 'confirmed', nicht_befund_typ: null },
+      },
+    }
+
+    const turns: TurnRecord[] = [
+      {
+        turnNumber: 1,
+        userInput: 'USERINPUT_SCHRITT_A',
+        agentText: 'AGENTTEXT_SCHRITT_A',
+        phase: 'walkthrough_step',
+        toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Rechnungsprüfung', slot: 'entscheidungslogik' } }],
+      },
+      {
+        turnNumber: 2,
+        userInput: 'USERINPUT_SCHRITT_B',
+        agentText: 'AGENTTEXT_SCHRITT_B',
+        phase: 'walkthrough_step',
+        toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Monatsabschluss', slot: 'entscheidungslogik' } }],
+      },
+    ]
+
+    const judgeResponse = JSON.stringify([{ slot: 'entscheidungslogik', begruendung: 'ok', stufe: 2 }])
+    mockGenerateText.mockReset()
+    mockGenerateText.mockResolvedValue({ text: judgeResponse } as Awaited<ReturnType<typeof generateText>>)
+
+    await scoreSlotDepth([stepA, stepB], turns, EVAL_MODEL)
+
+    // Erster Call (Step A): nur dessen eigener Turn-Inhalt, NICHT der von Step B.
+    const promptA = (mockGenerateText.mock.calls[0][0] as { prompt: string }).prompt
+    expect(promptA).toContain('USERINPUT_SCHRITT_A')
+    expect(promptA).not.toContain('USERINPUT_SCHRITT_B')
+
+    // Zweiter Call (Step B): nur dessen eigener Turn-Inhalt, NICHT der von Step A.
+    const promptB = (mockGenerateText.mock.calls[1][0] as { prompt: string }).prompt
+    expect(promptB).toContain('USERINPUT_SCHRITT_B')
+    expect(promptB).not.toContain('USERINPUT_SCHRITT_A')
   })
 })

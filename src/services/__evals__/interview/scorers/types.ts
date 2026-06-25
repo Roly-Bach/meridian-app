@@ -1,5 +1,17 @@
 import type { Phase, StepEntry } from '@/services/interviewSemantic'
 
+/**
+ * Convention (2026-06-24 eval-system audit, KI-9 follow-up): every LLM-judge-based
+ * scorer (dialogNaturalness, slotDepth, talkerFactualGrounding, ...) must have a
+ * unit test that asserts on the *constructed prompt content* sent to the judge,
+ * not just on the parsed return value of a mocked response. Mocking generateText's
+ * return value alone proves the parser works — it cannot catch a bug in how the
+ * prompt itself is built (e.g. KI-9's transcript-ordering bug, which 8 mock-only
+ * tests missed entirely and only a live run caught). Capture the mock's call args
+ * (`vi.mocked(generateText).mock.calls[0][0].prompt`) and assert structural
+ * invariants on it.
+ */
+
 export interface ToolCallRecord {
   toolName: string
   args: Record<string, unknown>
@@ -26,6 +38,9 @@ export interface ScoreSet {
   phaseAdherence: number
   phaseProgression: number
   anchoringViolations: number
+  /** 2026-06-24 audit: anchoringViolations normalized by turn count — the raw count
+   * alone isn't comparable across interviews of different lengths. */
+  anchoringViolationRate: number
   toolCallPlausibility: number
   dialogNaturalness: number
   completionCorrectness: boolean
@@ -34,8 +49,10 @@ export interface ScoreSet {
   schemaConformanceRate: number
   /** PROJ-28/BL-E2.1: fraction of filled slots whose evidence quote cannot be found in transcript. Target < 0.01 */
   hallucinationRate: number
-  /** PROJ-28/BL-E2.2: fraction of estimate/unknown slots that received a follow-up re-ask within 3 turns. Target > 0.80 */
-  confidenceTriggerRate: number
+  /** PROJ-28/BL-E2.2: fraction of estimate/unknown slots that received a follow-up re-ask within 3 turns.
+   * Target > 0.80. null = no estimate/unknown slots this interview (no signal, NOT a perfect score —
+   * 2026-06-24 audit: treating "no unknowns" as 1.0 caused 0↔1 swings that looked like instability). */
+  confidenceTriggerRate: number | null
   /** KI-9: count of Talker turns asserting a false premise about prior persona statements. Target 0. */
   talkerGroundingViolations: number
   depth_score: number | null

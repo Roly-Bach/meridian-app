@@ -10,10 +10,14 @@ import type { TurnRecord } from './types'
  * in a subsequent record_slot call within turns N+1..N+3 — indicating the
  * agent re-asked and received an answer (or attempted to confirm).
  *
- * Target > 0.8. Returns 1.0 when there are no estimate/unknown records
- * (trivially passing — no follow-ups needed).
+ * Target > 0.8. Returns null when there are no estimate/unknown records —
+ * this is "no signal", not a perfect score. Treating it as 1.0 made the
+ * metric swing 0↔1 between runs of the same seed/persona/model whenever an
+ * interview happened to produce zero unknowns (measurement artifact, not
+ * genuine behavioral instability — caught during the 2026-06-24 eval-system
+ * audit).
  */
-export function scoreConfidenceTrigger(turns: TurnRecord[]): number {
+export function scoreConfidenceTrigger(turns: TurnRecord[]): number | null {
   interface EstimateRecord {
     turnNumber: number
     step_title: string
@@ -36,7 +40,7 @@ export function scoreConfidenceTrigger(turns: TurnRecord[]): number {
     }
   }
 
-  if (estimateRecords.length === 0) return 1
+  if (estimateRecords.length === 0) return null
 
   let triggered = 0
   for (const record of estimateRecords) {

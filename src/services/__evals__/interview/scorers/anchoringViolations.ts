@@ -24,3 +24,15 @@ export function scoreAnchoringViolations(turns: TurnRecord[]): number {
   }
   return violations
 }
+
+/**
+ * Same count, normalized by turn count. The raw count alone is inconsistent
+ * with every other scorer in this system (all 0–1 rates) — a 35-turn
+ * interview with 3 violations isn't as "dirty" as a 15-turn one with 3
+ * (2026-06-24 eval-system audit). Kept alongside the raw count rather than
+ * replacing it — anchoringViolations isn't gate-relevant, so this is additive.
+ */
+export function scoreAnchoringViolationRate(turns: TurnRecord[]): number {
+  if (turns.length === 0) return 0
+  return scoreAnchoringViolations(turns) / turns.length
+}

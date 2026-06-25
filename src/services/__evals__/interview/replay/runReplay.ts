@@ -25,6 +25,7 @@ import {
   scorePhaseAdherence,
   scorePhaseProgression,
   scoreAnchoringViolations,
+  scoreAnchoringViolationRate,
   scoreToolCallPlausibility,
   scoreCompletionCorrectness,
   scoreStepRegistrationCoverage,
@@ -58,6 +59,7 @@ function runOfflineScorers(
     phaseAdherence: round2(scorePhaseAdherence(turns)),
     phaseProgression: round2(scorePhaseProgression(turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(turns),
+    anchoringViolationRate: round2(scoreAnchoringViolationRate(turns)),
     toolCallPlausibility: round2(scoreToolCallPlausibility(turns)),
     completionCorrectness,
     stepRegistrationCoverage: round2(scoreStepRegistrationCoverage(finalStepTracker, expectedProcessCount)),
@@ -170,6 +172,7 @@ async function main() {
           phaseAdherence: scores.phaseAdherence ?? 0,
           phaseProgression: scores.phaseProgression ?? 0,
           anchoringViolations: scores.anchoringViolations ?? 0,
+          anchoringViolationRate: scores.anchoringViolationRate ?? 0,
           toolCallPlausibility: scores.toolCallPlausibility ?? 0,
           dialogNaturalness: 0, // not computed in replay
           completionCorrectness: scores.completionCorrectness ?? false,

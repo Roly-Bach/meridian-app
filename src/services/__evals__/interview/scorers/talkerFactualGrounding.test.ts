@@ -88,3 +88,35 @@ describe('scoreTalkerFactualGrounding', () => {
     expect(result.violations).toBe(0)
   })
 })
+
+// ─── Prompt-Content-Test (2026-06-24 audit) ─────────────────────────────────────
+//
+// KI-9's real bug was in the transcript-ORDER built into the prompt (Agent-then-
+// Mitarbeiter instead of the true causal Mitarbeiter-then-Agent), not in the parser.
+// 8 mock-only tests above never caught it because they only assert on the judge's
+// (mocked) RETURN value, never on what was actually SENT. This test would have
+// caught it without a single live LLM call.
+
+describe('scoreTalkerFactualGrounding — Prompt-Inhalt (würde den KI-9-Bug fangen)', () => {
+  it('baut das Transkript in Mitarbeiter→Agent-Reihenfolge je Turn (Kausalreihenfolge)', async () => {
+    const mockGenerateText = vi.mocked(generateText)
+    mockGenerateText.mockResolvedValueOnce({ text: '{"violations": []}' } as Awaited<ReturnType<typeof generateText>>)
+
+    const turns: TurnRecord[] = [
+      { turnNumber: 1, userInput: 'USERINPUT_EINS', agentText: 'AGENTTEXT_EINS', phase: 'intro', toolCalls: [] },
+      { turnNumber: 2, userInput: 'USERINPUT_ZWEI', agentText: 'AGENTTEXT_ZWEI', phase: 'intro', toolCalls: [] },
+    ]
+    await scoreTalkerFactualGrounding(turns, 'google/gemini-3.5-flash')
+
+    const lastCall = mockGenerateText.mock.calls.at(-1)![0] as { prompt: string }
+    const prompt = lastCall.prompt
+
+    // Innerhalb jedes Turns muss Mitarbeiter VOR Agent erscheinen — Agent (Turn N)
+    // reagiert auf Mitarbeiter (Turn N), nicht umgekehrt. Verdreht sähe eine
+    // legitime Same-Turn-Referenz für den Judge wie eine vorausschauende Erfindung aus.
+    expect(prompt.indexOf('USERINPUT_EINS')).toBeLessThan(prompt.indexOf('AGENTTEXT_EINS'))
+    expect(prompt.indexOf('USERINPUT_ZWEI')).toBeLessThan(prompt.indexOf('AGENTTEXT_ZWEI'))
+    // Turn-Reihenfolge muss chronologisch bleiben (Turn 1 komplett vor Turn 2).
+    expect(prompt.indexOf('AGENTTEXT_EINS')).toBeLessThan(prompt.indexOf('USERINPUT_ZWEI'))
+  })
+})

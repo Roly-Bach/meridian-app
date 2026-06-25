@@ -28,6 +28,7 @@ import {
   scorePhaseAdherence,
   scorePhaseProgression,
   scoreAnchoringViolations,
+  scoreAnchoringViolationRate,
   scoreToolCallPlausibility,
   scoreCompletionCorrectness,
   scoreStepRegistrationCoverage,
@@ -55,6 +56,7 @@ function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['score
     phaseAdherence: round2(scorePhaseAdherence(fixture.turns)),
     phaseProgression: round2(scorePhaseProgression(fixture.turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(fixture.turns),
+    anchoringViolationRate: round2(scoreAnchoringViolationRate(fixture.turns)),
     toolCallPlausibility: round2(scoreToolCallPlausibility(fixture.turns)),
     dialogNaturalness: 0, // live LLM required — set to 0 in replay baselines
     completionCorrectness,

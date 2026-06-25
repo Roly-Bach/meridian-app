@@ -1,0 +1,53 @@
+name: Eval Live Gate
+
+# Live-agent smoke gate (2026-06-24 eval-system audit). eval-replay.yml only
+# replays frozen transcripts against scorer code — it can't catch a regression
+# in the actual agent (Talker/Analyst/Orchestrator prompts or turn logic),
+# which is exactly how KI-9/KI-12 sat undetected for an unknown amount of time.
+#
+# Runs ONE real interview against the cheapest model, --store pglite (PROJ-34/
+# ADR-018 — DB-free, no Supabase secrets needed). Not on every push: only when a
+# PR touches the orchestration-critical files. For a fuller multi-run check
+# before a bigger refactor, trigger manually via workflow_dispatch and run
+# `npm run eval:interview -- --runs 3` locally or in an ad-hoc job.
+
+on:
+  pull_request:
+    paths:
+      - 'src/services/interviewOrchestrator.ts'
+      - 'src/services/interviewAnalyst.ts'
+      - 'src/services/interviewTalker.ts'
+      - 'src/services/talkerPrompt.ts'
+      - 'src/services/runInterviewTurn.ts'
+      - 'src/services/__evals__/interview/scorers/**'
+  workflow_dispatch:
+
+jobs:
+  live-smoke:
+    name: Live Interview Smoke Test (PGlite, flash-lite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run live eval (PGlite, single deterministic-seed run)
+        env:
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+        run: |
+          npm run eval:interview -- \
+            --personas buchhalter \
+            --store pglite \
+            --models google/gemini-3.1-flash-lite \
+            --seed 1
+        # runner.ts sets process.exitCode=1 on any non-PASS report (2026-06-24 fix) —
+        # this step fails the job, it doesn't just log a report nobody reads.

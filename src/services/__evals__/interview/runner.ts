@@ -283,6 +283,27 @@ function modelSlug(model: string): string {
   return model.replace(/[/\.]/g, '-')
 }
 
+// 2026-06-08 retune — phase_progression dropped from gate, replaced by dedup_slot_coverage.
+// Phase progression penalized short efficient interviews (buchhalter 17 turns, perfect data → FAIL).
+// The real PASS signal is data quality: completion + all steps registered + slots filled +
+// dialog still natural + no race-condition data loss.
+// 2026-06-18: threshold lowered 0.70 → 0.65.
+// Judge produces discrete 0.33/0.67/1.0 (Stufe 1-3). Stufe 2 (0.67) = "angemessen" — acceptable.
+// Requiring ≥ 0.70 meant only Stufe 3 could pass, which was too strict for the holistic judge.
+//
+// Single source of truth for PASS/FAIL — used by buildReport (report status) AND by main()
+// (process exit code, 2026-06-24 audit: this gate previously had no CI-visible consequence,
+// a non-PASS report could sit unnoticed since nothing read its status programmatically).
+function evaluateGate(scores: ScoreSet, trailMetrics: TrailMetrics | null | undefined): boolean {
+  return (
+    scores.completionCorrectness === true &&
+    scores.dedupSlotCoverage >= 0.75 &&
+    scores.stepRegistrationCoverage >= 0.8 &&
+    scores.dialogNaturalness >= 0.65 &&
+    (trailMetrics?.blockedRate ?? 0) < 0.1
+  )
+}
+
 function buildReport(opts: {
   model: string
   personaName: string
@@ -313,18 +334,7 @@ function buildReport(opts: {
     ? `${process.env.LANGFUSE_PROJECT_URL}/sessions/${interviewId}`
     : null
   // 2026-06-08 retune — phase_progression dropped from gate, replaced by dedup_slot_coverage.
-  // Phase progression penalized short efficient interviews (buchhalter 17 turns, perfect data → FAIL).
-  // The real PASS signal is data quality: completion + all steps registered + slots filled +
-  // dialog still natural + no race-condition data loss.
-  // 2026-06-18: threshold lowered 0.70 → 0.65.
-  // Judge produces discrete 0.33/0.67/1.0 (Stufe 1-3). Stufe 2 (0.67) = "angemessen" — acceptable.
-  // Requiring ≥ 0.70 meant only Stufe 3 could pass, which was too strict for the holistic judge.
-  const passed =
-    scores.completionCorrectness === true &&
-    scores.dedupSlotCoverage >= 0.75 &&
-    scores.stepRegistrationCoverage >= 0.8 &&
-    scores.dialogNaturalness >= 0.65 &&
-    (trailMetrics?.blockedRate ?? 0) < 0.1
+  const passed = evaluateGate(scores, trailMetrics)
   const status = passed ? 'PASS' : 'FAIL'
 
   const frontmatter = [
@@ -359,13 +369,14 @@ function buildReport(opts: {
     `  phase_progression: ${scores.phaseProgression}`,
     `  phase_adherence: ${scores.phaseAdherence}`,
     `  anchoring_violations: ${scores.anchoringViolations}`,
+    `  anchoring_violation_rate: ${scores.anchoringViolationRate}`,
     `  tool_call_plausibility: ${scores.toolCallPlausibility}`,
     `  dialog_naturalness: ${scores.dialogNaturalness}`,
     `  completion_correctness: ${scores.completionCorrectness}`,
     `  step_registration_coverage: ${scores.stepRegistrationCoverage}`,
     `  schema_conformance_rate: ${scores.schemaConformanceRate}`,
     `  hallucination_rate: ${scores.hallucinationRate}`,
-    `  confidence_trigger_rate: ${scores.confidenceTriggerRate}`,
+    `  confidence_trigger_rate: ${scores.confidenceTriggerRate ?? 'n/a (keine unknown-Slots)'}`,
     `  talker_grounding_violations: ${scores.talkerGroundingViolations}`,
     `  depth_score: ${scores.depth_score ?? 'null'}`,
     `  depth_p1: ${scores.depth_distribution?.p1 ?? 'null'}`,
@@ -393,13 +404,16 @@ function buildReport(opts: {
     `| phase_progression | ${scores.phaseProgression} | maximize |`,
     `| phase_adherence | ${scores.phaseAdherence} | maximize |`,
     `| anchoring_violations | ${scores.anchoringViolations} | 0 |`,
-    `| tool_call_plausibility | ${scores.toolCallPlausibility} | ≥ 0.80 |`,
+    `| anchoring_violation_rate | ${scores.anchoringViolationRate} | maximize (niedriger besser) |`,
+    // 2026-06-24 audit: 0.85 war nie erreichbar (6 Live-Läufe: Min 0.72, Max 0.87) — auf
+    // Basis echter Daten auf 0.70 kalibriert statt eines aspirational geschätzten Werts.
+    `| tool_call_plausibility | ${scores.toolCallPlausibility} | ≥ 0.70 |`,
     `| dialog_naturalness | ${scores.dialogNaturalness} | maximize |`,
     `| completion_correctness | ${scores.completionCorrectness} | true |`,
     `| step_registration_coverage | ${scores.stepRegistrationCoverage} | 1.0 |`,
     `| schema_conformance_rate | ${scores.schemaConformanceRate} | 1.0 |`,
     `| hallucination_rate | ${scores.hallucinationRate} | < 0.01 |`,
-    `| confidence_trigger_rate | ${scores.confidenceTriggerRate} | > 0.80 |`,
+    `| confidence_trigger_rate | ${scores.confidenceTriggerRate ?? 'n/a (keine unknown-Slots)'} | > 0.80 |`,
     `| talker_grounding_violations | ${scores.talkerGroundingViolations} | 0 |`,
     `| depth_score | ${scores.depth_score ?? 'n/a'} | maximize |`,
     `| depth_p1 | ${scores.depth_distribution?.p1 ?? 'n/a'} | — |`,
@@ -480,7 +494,7 @@ function writeReport(opts: {
   runSeed?: number
   totalRuns?: number
   isolatedCriteria?: boolean
-}): string {
+}): { filepath: string; passed: boolean } {
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10)
   const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-')
@@ -519,7 +533,7 @@ function writeReport(opts: {
   const transcriptFilename = `${dateStr}-${timeStr}-${modelSlug(opts.model)}-${opts.personaName}${runSuffix}.transcript.json`
   fs.writeFileSync(path.join(dir, transcriptFilename), JSON.stringify(transcriptData, null, 2), 'utf8')
 
-  return filepath
+  return { filepath, passed: evaluateGate(opts.scores, trailMetrics) }
 }
 
 // ─── Langfuse score writer ────────────────────────────────────────────────────
@@ -556,15 +570,21 @@ async function writeLangfuseScores(
     { name: 'slot_coverage', value: scores.slotCoverage, dataType: 'NUMERIC' },
     { name: 'phase_adherence', value: scores.phaseAdherence, dataType: 'NUMERIC' },
     { name: 'anchoring_violations', value: scores.anchoringViolations, dataType: 'NUMERIC' },
+    { name: 'anchoring_violation_rate', value: scores.anchoringViolationRate, dataType: 'NUMERIC' },
     { name: 'tool_call_plausibility', value: scores.toolCallPlausibility, dataType: 'NUMERIC' },
     { name: 'dialog_naturalness', value: scores.dialogNaturalness, dataType: 'NUMERIC' },
     { name: 'completion_correctness', value: scores.completionCorrectness ? 1 : 0, dataType: 'BOOLEAN' },
     { name: 'step_registration_coverage', value: scores.stepRegistrationCoverage, dataType: 'NUMERIC' },
     { name: 'schema_conformance_rate', value: scores.schemaConformanceRate, dataType: 'NUMERIC' },
     { name: 'hallucination_rate', value: scores.hallucinationRate, dataType: 'NUMERIC' },
-    { name: 'confidence_trigger_rate', value: scores.confidenceTriggerRate, dataType: 'NUMERIC' },
     { name: 'talker_grounding_violations', value: scores.talkerGroundingViolations, dataType: 'NUMERIC' },
   ]
+
+  // confidenceTriggerRate is null when the interview had zero estimate/unknown
+  // slots — "no signal", not a score. Only push a Langfuse score when it's real.
+  if (scores.confidenceTriggerRate !== null) {
+    scoreEntries.push({ name: 'confidence_trigger_rate', value: scores.confidenceTriggerRate, dataType: 'NUMERIC' })
+  }
 
   for (const entry of scoreEntries) {
     lf.score({ traceId: trace.id, name: entry.name, value: entry.value, dataType: entry.dataType })
@@ -804,6 +824,8 @@ interface RunSummary {
   persona: string
   scores: ScoreSet | null
   reportPath: string | null
+  /** Gate result (evaluateGate) for this run. null when the run errored before scoring. */
+  passed?: boolean
   error?: string
 }
 
@@ -897,9 +919,9 @@ function writeAggregateReport(opts: {
   const NUMERIC_KEYS: NumericScoreKey[] = [
     'slotCoverage', 'dedupSlotCoverage', 'slotCoveragePreClarification',
     'dedupSlotCoveragePreClarification', 'clarificationCoverageDelta',
-    'phaseAdherence', 'phaseProgression', 'anchoringViolations',
+    'phaseAdherence', 'phaseProgression', 'anchoringViolations', 'anchoringViolationRate',
     'toolCallPlausibility', 'dialogNaturalness', 'stepRegistrationCoverage',
-    'schemaConformanceRate', 'hallucinationRate', 'confidenceTriggerRate',
+    'schemaConformanceRate', 'hallucinationRate',
     'talkerGroundingViolations',
   ]
 
@@ -922,6 +944,14 @@ function writeAggregateReport(opts: {
   const depthMin = depthScores.length > 0 ? Math.min(...depthScores) : null
   const depthMax = depthScores.length > 0 ? Math.max(...depthScores) : null
 
+  // confidenceTriggerRate is null on runs with zero estimate/unknown slots — "no
+  // signal", excluded the same way depth_score's nulls are (not coerced into the
+  // median/min/max of the runs that DO have a real value).
+  const confidenceScores = allScores.map(s => s.confidenceTriggerRate).filter((v): v is number => v != null)
+  const confidenceMedian = confidenceScores.length > 0 ? computeMedian(confidenceScores) : null
+  const confidenceMin = confidenceScores.length > 0 ? Math.min(...confidenceScores) : null
+  const confidenceMax = confidenceScores.length > 0 ? Math.max(...confidenceScores) : null
+
   const frontmatter = [
     '---',
     `interview_model: ${model}`,
@@ -934,12 +964,15 @@ function writeAggregateReport(opts: {
     ...NUMERIC_KEYS.filter(k => medians[k] != null).map(k => `  ${k}: ${medians[k]}`),
     `  completion_correctness: ${completionMedian}`,
     depthMedian != null ? `  depth_score: ${depthMedian}` : null,
+    confidenceMedian != null ? `  confidenceTriggerRate: ${confidenceMedian}` : null,
     'scores_min:',
     ...NUMERIC_KEYS.filter(k => mins[k] != null).map(k => `  ${k}: ${mins[k]}`),
     depthMin != null ? `  depth_score: ${depthMin}` : null,
+    confidenceMin != null ? `  confidenceTriggerRate: ${confidenceMin}` : null,
     'scores_max:',
     ...NUMERIC_KEYS.filter(k => maxes[k] != null).map(k => `  ${k}: ${maxes[k]}`),
     depthMax != null ? `  depth_score: ${depthMax}` : null,
+    confidenceMax != null ? `  confidenceTriggerRate: ${confidenceMax}` : null,
     '---',
   ].filter(l => l !== null).join('\n')
 
@@ -950,6 +983,9 @@ function writeAggregateReport(opts: {
   tableRows.push(`| completion_correctness | ${completionMedian} | — | — |`)
   if (depthMedian != null) {
     tableRows.push(`| depth_score | ${depthMedian} | ${depthMin} | ${depthMax} |`)
+  }
+  if (confidenceMedian != null) {
+    tableRows.push(`| confidenceTriggerRate | ${confidenceMedian} | ${confidenceMin} | ${confidenceMax} |`)
   }
 
   const body = [
@@ -1025,7 +1061,7 @@ async function main() {
             expectedProcessCount: persona.expectedProcessCount,
           }, isolatedCriteria)
 
-          const reportPath = writeReport({
+          const { filepath: reportPath, passed } = writeReport({
             model,
             personaName,
             interviewId: result.interviewId,
@@ -1054,7 +1090,7 @@ async function main() {
           ).catch(err => console.error('[runner] langfuse score write failed:', err))
 
           multiRunScores.push(scores)
-          results.push({ model, persona: personaName, scores, reportPath })
+          results.push({ model, persona: personaName, scores, reportPath, passed })
 
           console.log(`\n[eval] Done: interview_id=${result.interviewId} eval_run_id=${result.evalRunId}`)
           const projectUrl = process.env.LANGFUSE_PROJECT_URL
@@ -1101,6 +1137,13 @@ async function main() {
   // Final Langfuse flush
   await flushLangfuse().catch(() => {})
   await new Promise(r => setTimeout(r, 3000))
+
+  // 2026-06-24 audit: a non-PASS report previously had no consequence beyond its own
+  // file — nothing read `status` programmatically, so a regression could sit in
+  // docs/evals/ unnoticed indefinitely. Exit non-zero on any FAIL/error so CI (or a
+  // human running this locally) actually sees it.
+  const anyFailed = results.some(r => r.error !== undefined || r.passed === false)
+  if (anyFailed) process.exitCode = 1
 }
 
 main().catch(err => {

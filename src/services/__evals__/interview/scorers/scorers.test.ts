@@ -6,7 +6,8 @@ vi.mock('@/lib/supabase-admin', () => ({
 }))
 import { scoreSlotCoverage } from './slotCoverage'
 import { scorePhaseAdherence } from './phaseAdherence'
-import { scoreAnchoringViolations } from './anchoringViolations'
+import { scoreAnchoringViolations, scoreAnchoringViolationRate } from './anchoringViolations'
+import { scoreConfidenceTrigger } from './confidenceTrigger'
 import { scoreToolCallPlausibility } from './toolCallPlausibility'
 import { scoreCompletionCorrectness } from './completionCorrectness'
 import type { TurnRecord } from './types'
@@ -184,6 +185,75 @@ describe('scoreAnchoringViolations', () => {
       makeTurn({ agentText: 'Also dann wären es ca. 90 Fälle.' }),
     ]
     expect(scoreAnchoringViolations(turns)).toBe(2)
+  })
+})
+
+// ─── anchoringViolationRate (2026-06-24 audit) ─────────────────────────────────
+// Raw count alone isn't comparable across interviews of different length — this
+// normalizes it. Had zero test coverage before the audit, same as confidenceTrigger.
+
+describe('scoreAnchoringViolationRate', () => {
+  it('returns 0 for empty turns (no division by zero)', () => {
+    expect(scoreAnchoringViolationRate([])).toBe(0)
+  })
+
+  it('returns 0 for clean agent text', () => {
+    const turns = [makeTurn({ agentText: 'Wie sieht der typische Ablauf aus?' })]
+    expect(scoreAnchoringViolationRate(turns)).toBe(0)
+  })
+
+  it('normalizes by turn count: 1 violation in 4 turns → 0.25', () => {
+    const turns = [
+      makeTurn({ agentText: 'Dann rechne ich mit 30 Minuten pro Rechnung.' }),
+      makeTurn({ agentText: 'Wie sieht der typische Ablauf aus?' }),
+      makeTurn({ agentText: 'Welche Herausforderungen begegnen dir dabei?' }),
+      makeTurn({ agentText: 'Gibt es Ausnahmen?' }),
+    ]
+    expect(scoreAnchoringViolationRate(turns)).toBe(0.25)
+  })
+
+  it('same violation count, longer interview → lower rate (the bug this fixes)', () => {
+    const violation = makeTurn({ agentText: 'Dann rechne ich mit 30 Minuten pro Rechnung.' })
+    const clean = makeTurn({ agentText: 'Wie sieht der typische Ablauf aus?' })
+    const shortInterview = [violation, violation, violation, clean]
+    const longInterview = [violation, violation, violation, ...Array(20).fill(clean)]
+    expect(scoreAnchoringViolations(shortInterview)).toBe(scoreAnchoringViolations(longInterview))
+    expect(scoreAnchoringViolationRate(longInterview)).toBeLessThan(scoreAnchoringViolationRate(shortInterview))
+  })
+})
+
+// ─── confidenceTrigger (2026-06-24 audit) ──────────────────────────────────────
+// Had zero test coverage before the audit. The null-vs-1.0 distinction is the
+// actual fix: zero unknown-confidence slots is "no signal", not a perfect score.
+
+describe('scoreConfidenceTrigger', () => {
+  it('returns null (not 1.0) when there are zero unknown-confidence record_slot calls', () => {
+    const turns = [makeTurn({ toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Rechnungsprüfung', slot: 'entscheidungslogik', confidence: 'confirmed' } }] })]
+    expect(scoreConfidenceTrigger(turns)).toBeNull()
+  })
+
+  it('returns null for turns with no record_slot calls at all', () => {
+    expect(scoreConfidenceTrigger([makeTurn()])).toBeNull()
+  })
+
+  it('1.0 when an unknown-confidence slot gets a follow-up re-ask within 3 turns', () => {
+    const turns = [
+      makeTurn({ turnNumber: 1, toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Rechnungsprüfung', slot: 'entscheidungslogik', confidence: 'unknown' } }] }),
+      makeTurn({ turnNumber: 2, toolCalls: [] }),
+      makeTurn({ turnNumber: 3, toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Rechnungsprüfung', slot: 'entscheidungslogik', confidence: 'confirmed' } }] }),
+    ]
+    expect(scoreConfidenceTrigger(turns)).toBe(1)
+  })
+
+  it('0 when an unknown-confidence slot never gets a follow-up within 3 turns', () => {
+    const turns = [
+      makeTurn({ turnNumber: 1, toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Rechnungsprüfung', slot: 'entscheidungslogik', confidence: 'unknown' } }] }),
+      makeTurn({ turnNumber: 2, toolCalls: [] }),
+      makeTurn({ turnNumber: 3, toolCalls: [] }),
+      makeTurn({ turnNumber: 4, toolCalls: [] }),
+      makeTurn({ turnNumber: 5, toolCalls: [] }),
+    ]
+    expect(scoreConfidenceTrigger(turns)).toBe(0)
   })
 })
 

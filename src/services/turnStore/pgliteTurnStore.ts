@@ -45,6 +45,16 @@ const INERT_BOOTSTRAP = `
 -- pgvector so vector(N) columns + ivfflat/hnsw indexes load as DDL.
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Supabase pre-provisions this schema (+ the search_path below) on every real
+-- project; PROJ-16's "move vector extension to extensions schema" migration
+-- (ALTER EXTENSION vector SET SCHEMA extensions) assumes both already exist —
+-- its own comment says so ("DB search_path already includes extensions").
+-- PGlite starts from a bare Postgres with neither, so the migration fails
+-- without this (schema missing, then "type vector does not exist" once the
+-- ALTER FUNCTION lines in the same migration try to resolve it unqualified).
+CREATE SCHEMA IF NOT EXISTS extensions;
+SET search_path TO "$user", public, extensions;
+
 -- Supabase roles referenced by GRANT ... TO <role> lines.
 DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE anon;          EXCEPTION WHEN duplicate_object THEN NULL; END $$;

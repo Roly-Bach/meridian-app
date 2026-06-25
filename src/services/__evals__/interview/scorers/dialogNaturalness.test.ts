@@ -188,3 +188,62 @@ describe('scoreDialogNaturalness — Positions-Swap Integration (key-gated)', ()
     },
   )
 })
+
+// ─── Prompt-Content-Tests: Sample-Auswahl (2026-06-24 audit) ────────────────────
+//
+// Bisherige Tests prüfen nur den geparsten RÜCKGABEWERT des (gemockten) Judges,
+// nie WAS tatsächlich an ihn geschickt wird. Das hätte einen KI-9-artigen Bug in
+// der Sample-Auswahl (off-by-one, Duplikat, Out-of-Bounds bei wenigen Turns) nie
+// gefangen. Diese Tests prüfen den Prompt-Inhalt direkt.
+
+function makeTurns(n: number): TurnRecord[] {
+  return Array.from({ length: n }, (_, i) => ({
+    turnNumber: i + 1,
+    userInput: `USERINPUT_${i + 1}`,
+    agentText: `AGENTTEXT_${i + 1}`,
+    phase: 'intro' as const,
+    toolCalls: [],
+  }))
+}
+
+async function capturePrompt(turns: TurnRecord[]): Promise<string> {
+  const mockGenerateText = vi.mocked(generateText)
+  mockGenerateText.mockResolvedValueOnce({ text: '{"stufe": 2, "begruendung": "ok"}' } as Awaited<ReturnType<typeof generateText>>)
+  await scoreDialogNaturalness(turns, 'google/gemini-3.5-flash', false)
+  const lastCall = mockGenerateText.mock.calls.at(-1)![0] as { prompt: string }
+  return lastCall.prompt
+}
+
+describe('scoreDialogNaturalness — Sample-Auswahl-Prompt-Inhalt', () => {
+  it('wenige Turns (3, unter MAX_SAMPLE_TURNS=8): alle landen unverändert im Prompt, keine Duplikate', async () => {
+    const prompt = await capturePrompt(makeTurns(3))
+    for (let i = 1; i <= 3; i++) {
+      expect(prompt).toContain(`AGENTTEXT_${i}`)
+    }
+    // Kein Turn darf doppelt vorkommen, wenn turns.length <= MAX_SAMPLE_TURNS.
+    expect(prompt.split('AGENTTEXT_1').length - 1).toBe(1)
+  })
+
+  it('viele Turns (12, über MAX_SAMPLE_TURNS=8): erster, zweiter, mittlerer + letzte 5 sind enthalten', async () => {
+    const prompt = await capturePrompt(makeTurns(12))
+    // erste, zweite (Indizes 0,1 -> Turn 1,2)
+    expect(prompt).toContain('AGENTTEXT_1')
+    expect(prompt).toContain('AGENTTEXT_2')
+    // mittlerer (Math.floor(12/2)=6 -> Index 6 -> Turn 7)
+    expect(prompt).toContain('AGENTTEXT_7')
+    // letzte 5 (Turns 8-12)
+    for (let i = 8; i <= 12; i++) {
+      expect(prompt).toContain(`AGENTTEXT_${i}`)
+    }
+    // Turns dazwischen, die nicht im Sample sind, dürfen NICHT auftauchen.
+    expect(prompt).not.toContain('AGENTTEXT_3')
+    expect(prompt).not.toContain('AGENTTEXT_4')
+  })
+
+  it('Grenzfall genau MAX_SAMPLE_TURNS=8: keine Kürzung, alle 8 enthalten', async () => {
+    const prompt = await capturePrompt(makeTurns(8))
+    for (let i = 1; i <= 8; i++) {
+      expect(prompt).toContain(`AGENTTEXT_${i}`)
+    }
+  })
+})
