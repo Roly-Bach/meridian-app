@@ -1,6 +1,6 @@
 # PROJ-37: Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect)
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
@@ -73,7 +73,46 @@ Keine Änderung an `talkerPrompt.ts` selbst. Keine Änderung an der Dynamic-Cont
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur (kein UI — reine Backend-Logik)
+
+```
+Interview-Start / Reconnect (Server-Route)
++-- createInterviewStream (interviewAgent.ts)
+    +-- Verhaltens-Prompt          ← NEU: kommt von einer einzigen Quelle (talkerPrompt.ts)
+    +-- Tool-Anweisungen           ← bleibt agent-eigen (nur hier, nicht beim Talker)
+    +-- Dynamischer Kontext        ← unverändert, schon gemeinsam genutzt
+
+Laufender Interview-Turn (Server-Route)
++-- createTalkerStream (interviewTalker.ts)
+    +-- Verhaltens-Prompt          ← dieselbe Quelle wie oben
+    +-- Dynamischer Kontext        ← unverändert
+```
+
+Vorher gab es zwei separate, von Hand gepflegte Verhaltens-Prompts (einen für den allerersten Turn/Reconnect, einen für alle weiteren Turns). Nachher gibt es nur noch einen — der zweite Pfad bekommt seine Tool-Anweisungen einfach dazu-gehängt.
+
+### Daten-Modell
+
+Keine Datenbank-Änderung, kein neues Feld. Es ändert sich nur, **woher** der Anweisungstext für die KI kommt — nicht was gespeichert wird oder wie Mitarbeiterdaten verarbeitet werden.
+
+### Tech-Entscheidung: Warum eine einzige Quelle statt zwei synchron gehaltene?
+
+Die zwei Prompts sind aus einem gemeinsamen Ursprung entstanden und sollten identisches Gesprächsverhalten erzeugen — nur einer von beiden bekommt seither Verhaltens-Korrekturen (z.B. "nicht zweimal nach demselben Wert fragen"), der andere nicht. Das hat in der Vergangenheit schon dazu geführt, dass ein Korrektur-Merge von einem Mitentwickler an der falschen Stelle ankam, weil zwei Kopien existierten.
+
+**Mit einer Quelle:** jede zukünftige Verhaltens-Korrektur wirkt automatisch auf beide Einstiegspunkte (erster Turn, Reconnect, laufender Turn). Kein "wo muss ich das auch noch ändern"-Risiko mehr.
+
+**Nutzer-Effekt:** Mitarbeiter erleben auf dem allerersten Turn und nach einem Verbindungsabbruch dieselben Gesprächsregeln wie auf jedem weiteren Turn — z.B. wird nicht erneut nach einem Wert gefragt, den sie schon genannt haben, und es werden keine irrelevanten technischen Detailfragen (SAP-Codes, Excel-Formeln) gestellt.
+
+### Risiko & Absicherung
+
+Die Verhaltens-Regeln für Start/Reconnect werden dadurch **strenger** (mehr Regeln gelten), nicht lockerer — geringes Risiko für neues Fehlverhalten. Trotzdem Pflicht: ein Eval-Lauf nach der Umstellung (Interview-Engine-Domain-Regel), der prüft, dass sich die Gesprächsqualität nicht verschlechtert.
+
+### Dependencies
+- Keine neuen Packages.
+
+### Out of Scope (bestätigt aus Spec)
+- Inhaltliche Überarbeitung der Regeln selbst — nur Zusammenführung der Quelle.
+- Tool-Beschreibungen und dynamischer Kontext — unverändert.
 
 ## QA Test Results
 _To be added by /qa_
