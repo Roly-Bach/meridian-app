@@ -1,6 +1,6 @@
 # PROJ-36: ProcessStepsTable — Cluster-Aggregation als reines Modul
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Dashboard & Output
 **Extends:** PROJ-20
@@ -72,7 +72,47 @@ Die Typen `ProcessStep`, `ProcessCluster`, `SubStep` wandern als Typ-Exporte mit
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure (unverändert — nur Datenzulieferung ändert sich)
+
+```
+ProcessStepsPage (Server Component)
++-- ProcessStepsTable (Client Component)
+    +-- StatCard x4 (Summary-Zahlen oben)
+    +-- Abteilungs-Liste (aufklappbar)
+    |   +-- DeptClusterCard (eine Karte pro Prozess-Cluster)
+    +-- ClusterDetailSheet (Detail-Ansicht beim Klick)
+```
+
+Vorher: Jede Karte berechnet ihre Zahlen (Durchschnitt Dauer, Häufigkeit, Fehlerrate, …) selbst beim Rendern.
+Nachher: Eine neue, von der Oberfläche getrennte Rechen-Schicht (`processStepsAggregation`) liefert die fertigen Zahlen; die Komponenten zeigen sie nur noch an.
+
+### Daten-Modell (unverändert)
+
+Keine neuen Felder, keine Datenbank-Änderung. Es ändert sich nur **wo** die Durchschnittsbildung und Gruppierung passiert — nicht **was** angezeigt wird.
+
+Die Rechen-Schicht bekommt die bereits geladenen Prozessschritte und liefert vier fertige Ergebnisse:
+1. **Gruppierung** — welche Schritte gehören zu welcher Abteilung und welchem Cluster
+2. **Cluster-Kennzahlen** — Durchschnittswerte (Dauer, Häufigkeit, Fehlerrate), zusammengefasste Datenquellen, Mehrheitsentscheid "regelbasiert"
+3. **Zusammenfassungs-Kennzahlen** — Gesamtzahlen oben auf der Seite (Schritte, Abteilungen, Interviews, Automatisierbar-%)
+4. **Schritte pro Interview** — Hilfswert für die Anzeige der Ablauflänge
+
+### Tech-Entscheidung: Warum eine separate Rechen-Schicht?
+
+Aktuell lebt die Rechenlogik mitten in der Anzeige-Komponente. Das hat zwei Nachteile:
+- Sie lässt sich nicht isoliert testen (man müsste die ganze Tabelle rendern, um z.B. zu prüfen "was passiert bei fehlenden Werten?")
+- Anzeige-Änderungen (Farben, Layout) und Rechen-Änderungen (z.B. wie Mittelwerte gebildet werden) sind im selben Code vermischt — Risiko, beim Anpassen des einen das andere versehentlich zu brechen
+
+Die Trennung folgt demselben Muster, das bereits bei zwei anderen internen Aufräum-Projekten (PROJ-33, PROJ-35) verwendet wurde: reine Rechenlogik raus aus der Anzeige, in ein eigenes, unabhängig testbares Modul.
+
+**Kein Verhaltens-Unterschied für Nutzer** — die Tabelle zeigt exakt dieselben Zahlen wie vorher.
+
+### Dependencies
+- Keine neuen Packages. Reine Umstrukturierung bestehenden Codes.
+
+### Out of Scope (bestätigt aus Spec)
+- Keine visuelle Änderung der Tabelle/des Detail-Sheets
+- Keine Änderung an der serverseitigen Cluster-Bildung (das ist ein anderer, bereits bestehender Prozess)
 
 ## QA Test Results
 _To be added by /qa_
