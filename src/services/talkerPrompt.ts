@@ -25,8 +25,9 @@ import type { InterviewContext, AnalystBriefing } from './interviewTypes'
 import type { RawExtraction } from './extraction'
 
 // ─── Talker Static Prompt ─────────────────────────────────────────────────────
-// Iteration 1 (ADR-011 D7). Separate from interviewAgent.buildStaticPrompt()
-// (Greeting/Reconnect) — drift consolidation is PROJ-37, not this seam.
+// Iteration 1 (ADR-011 D7). Single source of truth for conversation-behavior
+// rules — interviewAgent.buildStaticPrompt() (Greeting/Reconnect) imports this
+// and appends its own <tools> block (PROJ-37).
 export const STATIC_PROMPT = `Du bist KI-Interviewer. Erhebe implizites Prozesswissen von Mitarbeitern strukturiert.
 Führe das Gespräch auf Deutsch — sachlich, direkt, präzise.
 Sprich den Mitarbeiter mit Du an.

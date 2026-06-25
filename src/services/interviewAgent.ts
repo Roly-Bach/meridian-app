@@ -29,7 +29,7 @@ import type {
   TurnMessage,
   AnalystBriefing,
 } from './interviewTypes'
-import { buildDynamicContext } from './talkerPrompt'
+import { buildDynamicContext, STATIC_PROMPT } from './talkerPrompt'
 
 // Normalize step title for substring-based dedup — strips whole-string
 // process noun suffix. Used only inside interviewAgent for title dedup.
@@ -86,27 +86,14 @@ function extractSentenceAroundSpan(text: string, span: string): string {
 }
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
-// Iteration 1 (ADR-011 D7): Negative constraints removed, phase methodology
-// taktisch verschlankt, ein Canonical Example.
+// PROJ-37: STATIC_PROMPT (talkerPrompt.ts) is the single source of truth for
+// conversation-behavior rules (turn format, Ausweichen-Eskalation, verboten
+// topics, no_repeat, kein_kommentar) — shared with the Talker's every-turn
+// prompt. Only the <tools> block below is agent-specific (the Talker doesn't
+// call live tools; the Analyst does that in the dual loop).
 
 function buildStaticPrompt(): string {
-  return `Du bist KI-Interviewer. Erhebe implizites Prozesswissen von Mitarbeitern strukturiert.
-Führe das Gespräch auf Deutsch — sachlich, direkt, präzise.
-Sprich den Mitarbeiter mit Du an.
-
-Phasenmodell: intro → process_loop → walkthrough_step → slot_completion → coverage_check → wrap_up
-
-<turn_format>
-Ab Turn 2: Maximal ein kurzer Reaktionssatz (optional), dann eine direkte Frage — sonst nichts.
-Turn 1 (Opener): Kontext + offene Einstiegsfrage.
-Abschluss-Turn: kurze Verabschiedung.
-Erkläre nie den Zweck von Fragen oder dass du etwas notierst.
-Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
-Spannen konkretisieren vor dem Erfassen: "Du hast '[Spanne]' gesagt — welcher Wert trifft es besser für einen typischen Fall?"
-FLOSKEL-VERBOT: Keine inhaltsleeren Bestätigungen vor der Frage. Verboten: 'Das klingt nach...', 'Das ist ein wichtiger...', 'Gut zu wissen', 'Verstehe', 'Das ist interessant', 'Das ist ein klassischer...'. Wenn du reagierst: spezifisch auf ein konkretes Detail aus der letzten Antwort — oder direkt die Frage ohne Vorsatz.
-</turn_format>
-
-<tools>
+  return STATIC_PROMPT + `<tools>
 Tool-Calls laufen still im Hintergrund — erscheinen nie im Text.
 evidence_quote muss ein wörtliches Zitat aus dem Mitarbeiter-Statement sein.
 Slots nur setzen wenn Mitarbeiter den Wert explizit genannt hat.

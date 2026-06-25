@@ -1,6 +1,6 @@
 # PROJ-37: Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect)
 
-## Status: Architected
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
@@ -113,6 +113,20 @@ Die Verhaltens-Regeln für Start/Reconnect werden dadurch **strenger** (mehr Reg
 ### Out of Scope (bestätigt aus Spec)
 - Inhaltliche Überarbeitung der Regeln selbst — nur Zusammenführung der Quelle.
 - Tool-Beschreibungen und dynamischer Kontext — unverändert.
+
+## Implementation Notes (2026-06-25, /backend)
+
+`src/services/interviewAgent.ts`: Import erweitert um `STATIC_PROMPT` aus `talkerPrompt.ts`. `buildStaticPrompt()` jetzt `STATIC_PROMPT + <tools>-Block` statt eigener, abweichender Kopie des Konversationsregel-Texts. Der widersprüchliche Satz „Spannen konkretisieren vor dem Erfassen" ist damit aus dem Code verschwunden (per `grep` verifiziert) — die einzige geltende Regel ist jetzt die Talker-Variante (Akzeptanz nach erstem Ausweichen, keine erneute Konkretisierung bei bereits erfasstem Wert).
+
+`src/services/talkerPrompt.ts`: Kommentar bei `STATIC_PROMPT` aktualisiert (verwies vorher auf PROJ-37 als offenen Drift, jetzt als gelöste Single-Source-of-Truth-Referenz).
+
+`<tools>`-Block (Tool-Call-Anweisungen) unverändert, nur die Anhänge-Position relativ zu `STATIC_PROMPT` ist neu (kommt danach, wie in der Architektur vorgesehen).
+
+Keine Test-Datei geändert — `buildStaticPrompt()` ist private (kein Export), Korrektheit folgt strukturell aus dem Import (gleiche Quelle wie `talkerPrompt.test.ts`, das `STATIC_PROMPT`-Inhalt bereits indirekt über den Talker-Pfad abdeckt). AC-Verifikation per `grep` statt neuem Unit-Test, wie im Spec vorgesehen.
+
+Gates: `tsc --noEmit` ✓ · `npm test` 54 Files, 715 passed / 1 skipped (keine Regression, kein neuer Test nötig).
+
+Keine Abweichung vom Spec.
 
 ## QA Test Results
 _To be added by /qa_
