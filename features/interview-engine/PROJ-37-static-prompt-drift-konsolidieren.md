@@ -1,6 +1,6 @@
 # PROJ-37: Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
@@ -189,17 +189,23 @@ Keine (0 durch PROJ-37 verursacht). Die 3 Eval-FAILs sind vorbestehende, bereits
 - **Production Ready:** YES
 - **Recommendation:** Deploy
 
-## Deployment
-_To be added by /deploy_
+## Deployment (2026-06-26, /deploy)
 
-## Post-Mortem
-_To be added by /deploy_
+- Production: https://meridian-app-green.vercel.app (Vercel, `dpl_54adKTa3s9kiPZVgkGvmLdGkGskf`)
+- G1 (build/lint/tsc): pass
+- G2 (Tests): pass — `npm test` 715/1 skipped, kein UI-Diff → E2E nicht Pflicht; Eval-Gate separat in QA erbracht (Interview-Engine-Domain-Pflicht)
+- G3 (Preview-Deploy): pass — Build READY
+- G4 (Permissions): pass — Diff berührt LLM-Prompt-Inhalt, aber keine Auth/RLS/API-Routen/Env-Vars; kein Befund
+- Production-Smoke-Test: `/` → 307, `/login` → 200, kein 500
+- User-Approval für Production-Deploy eingeholt (AskUserQuestion, 2026-06-26)
+
+## Post-Mortem (2026-06-26, /deploy)
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: — / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | High — Single-Source-Import + Tools-Addendum-Ansatz war 1:1 umsetzbar, keine Nacharbeit nötig |
+| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: S (Code-Änderung selbst ~5 Min; Großteil der Zeit ging in Eval-Gate-Verifikation, nicht in Implementierung) |
+| Größte Überraschung | Single-Run-Eval war FAIL (`dedup_slot_coverage 0.70`) — hätte ohne den 3er-Seed-Batch fälschlich als PROJ-37-Regress gewirkt. Erst der Batch-Vergleich (Median 0.92, FAIL-Gründe einzeln auf KI-12-Restvarianz zurückgeführt) zeigte: kein Zusammenhang mit dem Diff. Bestätigt die Skill-eigene Warnung „Nie aus einem einzelnen Lauf schließen" sehr konkret. |
+| Vorgeschlagene Regeländerung | Eval-Gate-Pflicht (general.md) sollte explizit „mindestens 1 erfolgreicher Lauf, dokumentiert mit Multi-Run-Kontext falls Single-Run FAIL" verlangen — sonst riskiert ein einzelner Anekdoten-Lauf einen falschen Block oder ein falsches Go. |
+| Build-Loop-Iterationen | tatsächlich: 1 (geplant: ≤5) — Code-Änderung lief beim ersten Versuch grün, keine Korrektur nötig |
+| Häufigste Fehlerkategorie im Loop | — (keine Code-Fehler; einzige Reibung war Eval-Interpretation, nicht Implementierung) |
