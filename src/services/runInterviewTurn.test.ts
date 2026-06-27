@@ -385,6 +385,49 @@ describe('runInterviewTurn', () => {
     )
   })
 
+  // T12: farewell-loop escape valve fired with no analystBriefing yet (eval 2026-06-25 run1 —
+  // without this, the turn fell through and ran normally with nothing left to ask, and the
+  // Talker degenerated into echoing the user's goodbye verbatim). The synchronous analyst pass
+  // must run, and once it has, the recheck finds no pending clarification_cards → completes.
+  it('T12: farewell_pending_analyst forces a synchronous analyst pass, then completes', async () => {
+    vi.mocked(checkLifecycle)
+      .mockReturnValueOnce({ shouldComplete: false, reason: 'farewell_pending_analyst' })
+      .mockReturnValueOnce({ shouldComplete: true, reason: 'soft_confirm' })
+
+    mockAdminFrom.mockReset()
+    const interviewFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
+    }
+    const stateFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow(), error: null }),
+    }
+    const turnsFetch = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    const updateMock = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    ;[interviewFetch, stateFetch, turnsFetch, makeStepTrackerLoadMock([]), updateMock]
+      .forEach((m) => mockAdminFrom.mockReturnValueOnce(m))
+
+    const result = await runInterviewTurn({
+      interviewId: INTERVIEW_ID,
+      userInput: 'Dir auch, bis bald.',
+      timerMinutes: 20,
+    })
+
+    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
+    expect(result.meta.completed).toBe(true)
+    expect(result.meta.reason).toBe('soft_confirm')
+  })
+
   // T5: Wrap-up injection → stream has WRAP_UP_QUESTION_TEXT, no createTalkerStream for normal turn
   it('T5: wrap-up injection — stream returns WRAP_UP_QUESTION_TEXT text', async () => {
     vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'wrap_up' as never, phaseJustEntered: 'wrap_up' as never })

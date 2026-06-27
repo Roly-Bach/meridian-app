@@ -207,9 +207,18 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   // — the topic then never gets explored, just whatever this one pass can grab.
   // Run the online analyst synchronously once before trusting soft_confirm, so a
   // freshly-registered step can veto premature completion.
+  //
+  // 'farewell_pending_analyst' (eval 2026-06-25 run1 follow-up): the farewell-loop escape
+  // valve in checkLifecycle detected two consecutive goodbyes but had no analystBriefing to
+  // check for pending clarification_cards, so it couldn't decide and would otherwise leave the
+  // turn to run normally — letting the farewell loop continue instead of completing. Same fix
+  // applies: force the analyst pass, then re-decide with real data.
   let preCompletionAnalystResult: AnalystRunResult | null = null
 
-  if (lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') {
+  if (
+    (lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') ||
+    lifecycle.reason === 'farewell_pending_analyst'
+  ) {
     try {
       preCompletionAnalystResult = await runAnalystOnline({
         context: {
@@ -331,7 +340,8 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       meta: {
         phase: 'wrap_up' as Phase,
         completed: true,
-        reason: lifecycle.reason,
+        // 'farewell_pending_analyst' never reaches this branch: it always carries shouldComplete=false.
+        reason: lifecycle.reason as 'hard_stop' | 'soft_confirm',
         stepTracker,
       },
     }

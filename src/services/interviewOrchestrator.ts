@@ -19,7 +19,7 @@ export interface OrchestratorContext {
 
 export interface LifecycleDecision {
   shouldComplete: boolean
-  reason: 'hard_stop' | 'soft_confirm' | null
+  reason: 'hard_stop' | 'soft_confirm' | 'farewell_pending_analyst' | null
 }
 
 /**
@@ -352,12 +352,20 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
       lastTwo.every((t) => FAREWELL_MARKERS.some((m) => t.content.toLowerCase().includes(m)))
     ) {
       // PROJ-23: Don't complete when Analyst has clarification_cards pending — route to clarification instead.
-      // Also don't complete when analyst hasn't run yet (analystSuggestion=null means next_briefing is not
-      // set, i.e. we never reached wrap_up). An agent saying farewell at coverage_check/slot_completion is
-      // premature — let decideNextPhase advance to wrap_up so the analyst runs and can produce cards.
       const cards = analystSuggestion?.clarification_cards
-      if (analystSuggestion !== null && (!cards || cards.length === 0)) {
-        return { shouldComplete: true, reason: 'soft_confirm' }
+      if (analystSuggestion !== null) {
+        if (!cards || cards.length === 0) {
+          return { shouldComplete: true, reason: 'soft_confirm' }
+        }
+      } else {
+        // analystSuggestion=null means the analyst hasn't produced a briefing yet — relying on
+        // decideNextPhase to advance to wrap_up so the analyst runs assumes phase progression is
+        // still happening. During a farewell loop it isn't (that's the whole problem this valve
+        // exists for), so without this branch the turn falls through and runs normally — the
+        // Talker then has nothing real to ask and can degenerate (observed: verbatim echo of the
+        // user's goodbye, eval 2026-06-25 run1, turn 29). Signal the caller to force a synchronous
+        // analyst pass instead of silently continuing the loop.
+        return { shouldComplete: false, reason: 'farewell_pending_analyst' }
       }
     }
   }

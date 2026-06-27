@@ -349,9 +349,12 @@ describe('closingQuestionWasAsked — farewell loop fallback removed', () => {
     expect(result.reason).toBe('soft_confirm')
   })
 
-  it('checkLifecycle does NOT escape when analyst has NOT run yet (null briefing = pre-wrap_up)', () => {
+  it('checkLifecycle does NOT escape when analyst has NOT run yet (null briefing = pre-wrap_up), signals pending-analyst instead', () => {
     // B2 fix: agent said farewell at coverage_check phase before analyst ran.
-    // Escape valve must not fire — let orchestrator advance to wrap_up so analyst runs.
+    // Escape valve must not complete outright — but it must also not silently fall through to a
+    // normal turn (eval 2026-06-25 run1: caused a farewell loop that ran until the Talker
+    // degenerated into echoing the user's goodbye verbatim). Signal the caller to force a
+    // synchronous analyst pass via the 'farewell_pending_analyst' reason instead.
     const history = [
       { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
       { role: 'user' as const, content: 'Tschüss.' },
@@ -360,6 +363,7 @@ describe('closingQuestionWasAsked — farewell loop fallback removed', () => {
     ]
     const result = checkLifecycle(baseCtx({ phase: 'coverage_check', history, historyLength: 4 }), null)
     expect(result.shouldComplete).toBe(false)
+    expect(result.reason).toBe('farewell_pending_analyst')
   })
 
   it('does NOT trigger farewell loop when messages contain farewell but are not consecutive', () => {
