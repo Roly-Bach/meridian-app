@@ -262,7 +262,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       suggested_question: 'Verabschiede dich kurz und herzlich.',
     }
 
-    const farewellStream = createTalkerStream({
+    const farewellStream = await createTalkerStream({
       context: {
         interviewId,
         workspaceId: interview.workspace_id,
@@ -407,7 +407,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
 
   // ── Talker stream ───────────────────────────────────────────────────────────
-  const stream = createTalkerStream({
+  const stream = await createTalkerStream({
     context: {
       interviewId,
       workspaceId: interview.workspace_id,

@@ -670,7 +670,7 @@ async function runInterview(
   let preClarificationSnapshot: StepEntry[] | null = null
 
   // ── Start turn (greeting) ──────────────────────────────────────────────────
-  const startStream = createTalkerStream({
+  const startStream = await createTalkerStream({
     context: {
       interviewId,
       workspaceId,

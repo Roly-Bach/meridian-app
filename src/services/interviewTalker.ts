@@ -1,13 +1,22 @@
 import { resolveModel } from '@/lib/llm-provider'
-import { streamText } from 'ai'
+import { generateText } from 'ai'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import { buildDynamicContext, STATIC_PROMPT } from './talkerPrompt'
 import { extractNumericTokens } from './conversationSignals'
+import { checkGroundingViolation } from './talkerGroundingGuard'
 import type { InterviewContext, TurnMessage, AnalystBriefing } from './interviewTypes'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
-// ─── Talker Stream (Iteration 3) ──────────────────────────────────────────────
-// Text-only streaming response. No tools — pure conversation.
+// ─── Talker Turn (Iteration 4 / KI-18) ────────────────────────────────────────
+// Buffer-then-stream: the model call is fully awaited (generateText, not
+// streamText) so the KI-18 grounding guard below can classify the candidate
+// response and trigger a regeneration BEFORE anything reaches the client. A
+// live token stream can't be un-shown once delivered, so the no-streaming
+// trade-off (full generation latency instead of immediate first token) is the
+// price of being able to repair a fabricated callback at all. The return
+// shape still satisfies the streaming-era TurnStream interface (`text` +
+// `toTextStreamResponse()`) so callers (runInterviewTurn, eval runner) don't
+// need to change — `toTextStreamResponse()` just wraps the final string.
 // Analyst runs in parallel via after() in chat/route.ts.
 
 // thinkingBudget: 512 (not 0) — Flash 3.5 produces empty responses on complex
@@ -114,7 +123,10 @@ export function detectFillerPhrases(text: string): string[] {
   return matched
 }
 
-export function createTalkerStream(opts: TalkerStreamOptions) {
+export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
+  text: Promise<string>
+  toTextStreamResponse: () => Response
+}> {
   // INTERVIEW_TALKER_MODEL overrides the shared INTERVIEW_MODEL for the Talker component
   const modelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(modelString)
@@ -173,83 +185,112 @@ export function createTalkerStream(opts: TalkerStreamOptions) {
   // execution phases caused dialog_naturalness regression (eval 2026-06-03):
   // Flash 3.5 lost coherence on already-known facts and re-asked questions.
   // See ADR-014 review (Naturalness 0.78 → 0.42).
-  return streamText({
-    model,
-    temperature: 0.5,
-    system: STATIC_PROMPT,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    messages: messages as any,
-    // NO TOOLS — Talker is text-only (ADR-011 D3)
-    ...(isGoogleModel && {
-      providerOptions: {
-        google: { thinkingConfig: { thinkingBudget: TALKER_THINKING_BUDGET } },
-      },
-    }),
-    experimental_telemetry: buildTraceMetadata('interview.talker', {
-      interviewId: opts.context.interviewId,
+  async function generate(systemAddendum?: string) {
+    return generateText({
+      model,
+      temperature: 0.5,
+      system: systemAddendum ? `${STATIC_PROMPT}\n\n${systemAddendum}` : STATIC_PROMPT,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      messages: messages as any,
+      // NO TOOLS — Talker is text-only (ADR-011 D3)
+      ...(isGoogleModel && {
+        providerOptions: {
+          google: { thinkingConfig: { thinkingBudget: TALKER_THINKING_BUDGET } },
+        },
+      }),
+      experimental_telemetry: buildTraceMetadata('interview.talker', {
+        interviewId: opts.context.interviewId,
+        model: modelString,
+        environment: 'prod',
+        component: 'talker',
+        ...opts.traceCtx,
+      }),
+    })
+  }
+
+  const first = await generate()
+  let finalText = first.text
+
+  {
+    const meta = first.providerMetadata as Record<string, unknown> | undefined
+    const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
+    const details = first.usage.inputTokenDetails as Record<string, unknown> | undefined
+    console.log('[token-usage] talker', {
       model: modelString,
-      environment: 'prod',
-      component: 'talker',
-      ...opts.traceCtx,
-    }),
-    onFinish: opts.onFinish
-      ? async ({ text, usage, providerMetadata }) => {
-          const meta = providerMetadata as Record<string, unknown> | undefined
-          const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
-          const details = usage.inputTokenDetails as Record<string, unknown> | undefined
-          const usageData = {
-            model: modelString,
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            cacheReadTokens: (details?.cacheReadTokens as number | undefined) ?? null,
-            cacheCreationTokens:
-              (details?.cacheWriteTokens as number | undefined) ??
-              (anthropicMeta?.cacheCreationInputTokens as number | undefined) ??
-              null,
-          }
-          console.log('[token-usage] talker', usageData)
+      inputTokens: first.usage.inputTokens,
+      outputTokens: first.usage.outputTokens,
+      cacheReadTokens: (details?.cacheReadTokens as number | undefined) ?? null,
+      cacheCreationTokens:
+        (details?.cacheWriteTokens as number | undefined) ??
+        (anthropicMeta?.cacheCreationInputTokens as number | undefined) ??
+        null,
+    })
+  }
 
-          // Pt7: Anchoring detection — log violations for eval analysis.
-          // No re-prompt (streaming architecture); prevention is via prompt injection in buildDynamicContext.
-          const suggestedQ = opts.briefing?.suggested_question ?? ''
-          if (suggestedQ) {
-            const anchored = detectNumberAnchoring(text, suggestedQ)
-            if (anchored.length > 0) {
-              console.warn('[talker:anchoring] number re-quote detected', {
-                numbers: anchored,
-                interviewId: opts.context.interviewId,
-              })
-            }
-          }
+  // Pt7: Anchoring detection — log violations for eval analysis.
+  const suggestedQ = opts.briefing?.suggested_question ?? ''
+  if (suggestedQ) {
+    const anchored = detectNumberAnchoring(finalText, suggestedQ)
+    if (anchored.length > 0) {
+      console.warn('[talker:anchoring] number re-quote detected', {
+        numbers: anchored,
+        interviewId: opts.context.interviewId,
+      })
+    }
+  }
 
-          // Pt13: Filler phrase tracking — persist detected opening phrases into
-          // interviews.next_briefing.usedFillerPhrases (existing JSONB, no schema change).
-          const fillers = detectFillerPhrases(text)
-          if (fillers.length > 0) {
-            try {
-              const supabase = getSupabaseAdmin()
-              const { data: interview } = await supabase
-                .from('interviews')
-                .select('next_briefing')
-                .eq('id', opts.context.interviewId)
-                .maybeSingle()
-              const currentBriefing = (interview?.next_briefing as Record<string, unknown> | null) ?? {}
-              const existing = (currentBriefing['usedFillerPhrases'] as string[] | undefined) ?? []
-              // Cap at 20 total; dedup; newest last
-              const merged = [...new Set([...existing, ...fillers])].slice(-20)
-              await supabase
-                .from('interviews')
-                .update({
-                  next_briefing: { ...currentBriefing, usedFillerPhrases: merged } as unknown as import('@/lib/database.types').Json,
-                })
-                .eq('id', opts.context.interviewId)
-            } catch (err) {
-              console.error('[talker:filler-tracking] failed (non-fatal):', err)
-            }
-          }
+  // KI-18: live grounding guard. Buffer-then-stream (see module header) makes
+  // this possible — the candidate text never reaches the client until after
+  // this check, so a flagged response can be regenerated instead of just
+  // logged (which is all the eval-time scorer can do after the fact).
+  // Two prompt-only fix attempts already failed (regressed dialog_naturalness
+  // on it-support without reducing violations) — this checks the actual
+  // candidate against history with a judge instead of relying on instruction
+  // compliance from a lite model. Capped at one repair attempt to bound cost/latency.
+  const guard = await checkGroundingViolation(finalText, opts.history, modelString)
+  if (guard.violation) {
+    console.warn('[talker:grounding] violation detected, regenerating once', {
+      claim: guard.claim,
+      reason: guard.reason,
+      interviewId: opts.context.interviewId,
+    })
+    const repaired = await generate(
+      `KORREKTUR (intern, nicht erwähnen): Deine vorherige Antwort enthielt eine falsche Zuschreibung an den Mitarbeiter: "${guard.claim}". Das hat der Mitarbeiter so nicht gesagt. Schreibe die Antwort neu — beziehe dich nur auf tatsächlich Gesagtes, oder stelle eine neue Frage ohne Rückbezug.`,
+    )
+    finalText = repaired.text
+  }
 
-          await opts.onFinish!(text)
-        }
-      : undefined,
-  })
+  // Pt13: Filler phrase tracking — persist detected opening phrases into
+  // interviews.next_briefing.usedFillerPhrases (existing JSONB, no schema change).
+  const fillers = detectFillerPhrases(finalText)
+  if (fillers.length > 0) {
+    try {
+      const supabase = getSupabaseAdmin()
+      const { data: interview } = await supabase
+        .from('interviews')
+        .select('next_briefing')
+        .eq('id', opts.context.interviewId)
+        .maybeSingle()
+      const currentBriefing = (interview?.next_briefing as Record<string, unknown> | null) ?? {}
+      const existing = (currentBriefing['usedFillerPhrases'] as string[] | undefined) ?? []
+      // Cap at 20 total; dedup; newest last
+      const merged = [...new Set([...existing, ...fillers])].slice(-20)
+      await supabase
+        .from('interviews')
+        .update({
+          next_briefing: { ...currentBriefing, usedFillerPhrases: merged } as unknown as import('@/lib/database.types').Json,
+        })
+        .eq('id', opts.context.interviewId)
+    } catch (err) {
+      console.error('[talker:filler-tracking] failed (non-fatal):', err)
+    }
+  }
+
+  if (opts.onFinish) await opts.onFinish(finalText)
+
+  return {
+    text: Promise.resolve(finalText),
+    toTextStreamResponse: () =>
+      new Response(finalText, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }),
+  }
 }
