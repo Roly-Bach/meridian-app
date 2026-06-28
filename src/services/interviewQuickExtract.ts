@@ -18,7 +18,8 @@
 import { resolveModel } from '@/lib/llm-provider'
 import { generateText, stepCountIs } from 'ai'
 import { buildTools } from './interviewAgent'
-import type { StepEntry } from './interviewSemantic'
+import { POTENZIAL_SLOT_NAMES, type PotenzialSlotName, type StepEntry } from './interviewSemantic'
+import { findStepById, findStepFuzzy } from './turnStore/applyIntent'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import type { TurnStore } from './turnStore/port'
 
@@ -65,6 +66,33 @@ NICHT TUN
 - Keine Aktion wenn Statement keine konkreten Werte enthält.`
 
 /**
+ * True when a record_slot call targets a potenzial slot that already has a value
+ * and is not flagged as an explicit correction. quick-extract's own SLOT-GUARD
+ * instruction tells the model to never attempt this, but the lite model doesn't
+ * reliably comply when the persona restates a number/range across turns — each
+ * attempt then hits slotConflictResolver's priority gate and inflates blockedRate
+ * with noise that never had a chance of writing (KI-17). Caught here so the
+ * call short-circuits before reaching the conflict resolver at all.
+ */
+export function isAlreadyFilledPotenzialSlot(
+  stepTracker: StepEntry[],
+  args: { step_id?: string; step_title: string; slot: string; is_correction?: boolean },
+): boolean {
+  if (args.is_correction) return false
+  if (!(POTENZIAL_SLOT_NAMES as readonly string[]).includes(args.slot)) return false
+  const stepIndex =
+    args.step_id !== undefined
+      ? (() => {
+          const byId = findStepById(stepTracker, args.step_id!)
+          return byId !== -1 ? byId : findStepFuzzy(stepTracker, args.step_title)
+        })()
+      : findStepFuzzy(stepTracker, args.step_title)
+  if (stepIndex === -1) return false
+  const prev = stepTracker[stepIndex].potenzial[args.slot as PotenzialSlotName]
+  return prev !== null && prev !== undefined
+}
+
+/**
  * Returns the fresh step_tracker after extraction, or null if no tool calls were made.
  * Callers should use the returned tracker directly to avoid an extra DB round-trip.
  */
@@ -88,7 +116,23 @@ export async function runQuickExtract(opts: QuickExtractOptions): Promise<StepEn
   const knowledgeTools = buildTools(session, opts.userInput, { source: 'quick' })
   // Restrict toolset: only filling tools, no register_step.
   const tools = {
-    record_slot: knowledgeTools.record_slot,
+    record_slot: {
+      ...knowledgeTools.record_slot,
+      execute: async (
+        args: { step_id?: string; step_title: string; slot: string; is_correction?: boolean } & Record<string, unknown>,
+        execOpts: Parameters<NonNullable<typeof knowledgeTools.record_slot.execute>>[1],
+      ) => {
+        if (isAlreadyFilledPotenzialSlot(opts.stepTracker, args)) {
+          return {
+            success: true,
+            skipped: true,
+            message: `Slot "${args.slot}" für "${args.step_title}" ist bereits gefüllt — quick-extract überschreibt potenzial-Slots nie. Nutze is_correction=true nur bei expliziter Korrektur durch den Mitarbeiter. Fahre mit dem nächsten fehlenden Slot fort.`,
+          }
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return knowledgeTools.record_slot.execute!(args as any, execOpts)
+      },
+    },
     update_walkthrough_data: knowledgeTools.update_walkthrough_data,
   }
 
