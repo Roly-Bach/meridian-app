@@ -39,9 +39,18 @@ export function scoreHallucinationRate(turns: TurnRecord[], finalStepTracker: St
   return total === 0 ? 0 : suspicious / total
 }
 
+// Matches a single leading/trailing quote character of any common style (straight, curly,
+// German „…", guillemets). The Analyst's evidence_quote is meant to be a bare verbatim span,
+// but the prompt's own illustrative examples are quote-wrapped ("100", "5 Minuten") and a weak
+// model sometimes copies that style into the actual value — leaving literal quote chars baked
+// into the stored string. Those break the prefix match below even though the content is
+// correct, producing a false hallucination_rate signal (KI-15, eval 2026-06-26 run3: 240-char
+// evidence with leading `"` scored as a violation despite matching the transcript verbatim).
+const SURROUNDING_QUOTE_CHARS = /^["'„""‚''«»]+|["'„""‚''«»]+$/g
+
 function quoteFoundInTranscript(quote: string | null | undefined, transcript: string): boolean {
   if (!quote || quote.trim().length === 0) return true // empty quote — assume ok
-  const trimmed = quote.trim()
+  const trimmed = quote.trim().replace(SURROUNDING_QUOTE_CHARS, '')
   if (trimmed.startsWith('[')) return true // backfill marker (e.g. [auto-backfill...]) — not a hallucination
   if (trimmed.length < 5) return true // too short to verify — assume ok
   const normalizedQuote = trimmed.toLowerCase().replace(/\s+/g, ' ')

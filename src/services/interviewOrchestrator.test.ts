@@ -452,6 +452,75 @@ describe('checkLifecycle — farewell-loop escape valve (B6 regression)', () => 
   })
 })
 
+// ─── KI-15: unstarted-step guard (dedupSlotCoverage regression, eval 2026-06-26) ──
+//
+// Root cause: the wrap-up "anything we missed?" probe surfaces a brand-new process, the
+// synchronous analyst rerun (KI-12/KI-14 pattern) register_steps it as 'exploring' with zero
+// filled slots, and — because the Analyst found no clarification_cards for it yet this same
+// turn — the farewell escape valve completed right over it. The empty step then inflated the
+// dedup-coverage denominator with 9 unfilled fields, dropping dedupSlotCoverage 0.92 → 0.72.
+describe('checkLifecycle — KI-15 unstarted-step guard', () => {
+  it('does NOT complete when a just-registered exploring step has zero filled slots', () => {
+    const tracker = [
+      makeStep('Rechnungsprüfung', 'done', fullSlots, { potenzial: fullPotenzial }),
+      makeStep('Mahnwesen', 'exploring'), // emptySlots + emptyPotenzial defaults — unstarted
+    ]
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank für die Ergänzung! Auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Auf Wiedersehen!' },
+      { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+    ]
+    const result = checkLifecycle(
+      baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, history, historyLength: 4 }),
+      {},
+    )
+    expect(result.shouldComplete).toBe(false)
+    expect(result.reason).toBe(null)
+  })
+
+  it('still completes (B6 unaffected) when the late step already has any extracted content', () => {
+    // Distinguishes the narrow KI-15 guard from Trigger B's broad guard: a step that has
+    // started (even just one filled potenzial field) is "in progress", not "unstarted" —
+    // B6's intent (let the user leave once Analyst found nothing to clarify) still applies.
+    const tracker = [
+      makeStep('Mahnwesen', 'exploring', emptySlots, {
+        potenzial: { frequency_per_month: { value: 4, quote: 'einmal pro Woche', confidence: 'estimate' as const }, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+      }),
+    ]
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Auf Wiedersehen.' },
+      { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+    ]
+    const result = checkLifecycle(
+      baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, history, historyLength: 4 }),
+      {},
+    )
+    expect(result.shouldComplete).toBe(true)
+    expect(result.reason).toBe('soft_confirm')
+  })
+
+  it('completes despite an unstarted exploring step once the turn budget is exhausted (bound)', () => {
+    // computeTurnBudget(30, 2).coverageCheckEscapeHL = 40 HL — at/above that, the guard must
+    // not re-open the interview indefinitely just because a late mention keeps surfacing.
+    const tracker = [makeStep('Mahnwesen', 'exploring')]
+    const history = [
+      { role: 'assistant' as const, content: 'Vielen Dank! Auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Auf Wiedersehen.' },
+      { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
+      { role: 'user' as const, content: 'Tschüss.' },
+    ]
+    const result = checkLifecycle(
+      baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, history, historyLength: 40, maxDurationMinutes: 30 }),
+      {},
+    )
+    expect(result.shouldComplete).toBe(true)
+    expect(result.reason).toBe('soft_confirm')
+  })
+})
+
 // ─── Fix 1 (ADR-015): deterministic wrap-up question semantics ───────────────
 
 describe('Fix 1 — deterministic wrap-up question (replaces regex heuristic)', () => {

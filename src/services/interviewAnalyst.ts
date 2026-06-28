@@ -161,7 +161,7 @@ Für jeden explizit genannten Wert:
 - duration_minutes: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände); Spannen sofort als estimate erfassen.
 - rule_based: Aussagen zur Regelbasierung ("immer gleich", "variiert", "nach Schema")
 - data_sources: Genannte Systeme, Tools, Datenbanken — NUR via record_slot setzen. NIEMALS via update_walkthrough_data. friction_tools ist ein separates Feld und befüllt data_sources NICHT.
-- evidence_span (PFLICHT bei Online-Extraction aus aktuellem Turn): kurzer WÖRTLICHER Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Statement, z.B. "100", "5 Minuten", "SAP FI". KEIN Paraphrasieren — exakter Substring. Das System verifiziert die wörtliche Übereinstimmung und erweitert zum vollständigen Satz.
+- evidence_span (PFLICHT bei Online-Extraction aus aktuellem Turn): kurzer WÖRTLICHER Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Statement, z.B. 100 · 5 Minuten · SAP FI. KEIN Paraphrasieren — exakter Substring, OHNE umschließende Anführungszeichen. Das System verifiziert die wörtliche Übereinstimmung und erweitert zum vollständigen Satz.
 - evidence_quote (NUR Fallback bei Catch-up aus historischem Turn): vollständiges Zitat + source_turn PFLICHT.
 - source_turn PFLICHT: Bei jedem record_slot-Call IMMER source_turn setzen (1-indexed Turn-Nummer).
   - Online-Extraction (aktueller Turn): source_turn = Anzahl bisheriger User-Turns + 1

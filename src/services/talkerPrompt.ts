@@ -429,6 +429,12 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     ? `\n\n## ⛔ DRILL-STOP (PFLICHT)\n${s.drillWarnings.map(w => `- ${w}`).join('\n')}`
     : ''
 
+  // KI-15: same question-stem fired twice in a row reads as a form, not a conversation
+  // (dialog_naturalness judge feedback, eval 2026-06-24/25/26: "repetitive Frage-Struktur").
+  const questionStemSection = s.repeatedQuestionStem
+    ? `\nVARIANZ-GEBOT: Frage-Einstieg "${s.repeatedQuestionStem}" wurde in den letzten 2 Turns bereits genutzt — diesen Turn anders einsteigen (z.B. konkretes Beispiel erfragen, Aussage aufgreifen, oder andere Frageform wählen statt erneut "${s.repeatedQuestionStem}...").`
+    : ''
+
   // E3.1 — Ambiguity: conflicting factual statements (additive to drill-stop/missing-slot)
   const ambiguitySection = s.ambiguity
     ? `\n\n## ⚠️ AMBIGUITÄT-KLÄRUNG (PFLICHT — dieser Turn)\nWidersprüchliche Aussagen erkannt:\n- Früher: "${s.ambiguity.phraseA}"\n- Jetzt: "${s.ambiguity.phraseB}"\nSpreche beide Aussagen explizit an: "Du hast vorhin [A] erwähnt — jetzt sagst du [B]. Was ist der Unterschied?" Keine Lücken-Nachfrage in diesem Turn — Ambiguität hat Vorrang.`
@@ -459,5 +465,5 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}${profileFraming}
 
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${questionStemSection}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
 }

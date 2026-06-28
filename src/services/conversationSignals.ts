@@ -32,6 +32,8 @@ export interface Signals {
   ladderingStreak: number
   /** Current user turn is a blockade (D1: direct single-turn signal). */
   blockade: boolean
+  /** Question-stem opener repeated in the last 2 assistant turns (KI-15), e.g. "Wie oft". */
+  repeatedQuestionStem: string | null
 }
 
 // ─── Private: Drill-Stop (F1 / F1b) ──────────────────────────────────────────
@@ -273,6 +275,31 @@ function detectBlockade(lastUserTurn: string | undefined): boolean {
   return BLOCKADE_PATTERNS.some(p => p.test(lastUserTurn))
 }
 
+// ─── Private: Question-Stem Repetition (KI-15) ───────────────────────────────
+//
+// dialog_naturalness judges (eval 2026-06-24/25/26, buchhalter) consistently dinged "repetitive
+// Frage-Struktur ('Wie oft...', 'Wie viel Zeit...')" as a Stufe-1 (oberflächlich) signal. Unlike
+// filler phrases (opening pleasantries), this is about the QUESTION ITSELF — the same
+// interrogative stem fired twice in a row reads as a form, not a conversation. Mirrors the
+// detectDrillStops pattern (regex over recent assistant turns) but flags stem reuse rather than
+// unanswered slots.
+const QUESTION_STEM_PATTERNS: { label: string; pattern: RegExp }[] = [
+  { label: 'Wie oft', pattern: /\bwie oft\b/i },
+  { label: 'Wie lange', pattern: /\bwie lange\b/i },
+  { label: 'Wie viel(e) Zeit', pattern: /\bwie viel(?:e)? zeit\b/i },
+  { label: 'Wie häufig', pattern: /\bwie häufig\b/i },
+  { label: 'Wie viele', pattern: /\bwie viele\b/i },
+]
+
+function detectQuestionStemRepetition(recentAssistantTurns: string[] | undefined): string | null {
+  if (!recentAssistantTurns || recentAssistantTurns.length < 2) return null
+  const lastTwo = recentAssistantTurns.slice(-2)
+  for (const { label, pattern } of QUESTION_STEM_PATTERNS) {
+    if (lastTwo.every((t) => pattern.test(t))) return label
+  }
+  return null
+}
+
 function computeLadderingStreak(recentUserTurns: string[] | undefined): number {
   if (!recentUserTurns || recentUserTurns.length === 0) return 0
   let streak = 0
@@ -310,6 +337,7 @@ export function extractNumericTokens(text: string): string[] {
  * - recentlyRecontextualized ← wasRecentlyRecontextualized(ctx.recentAssistantTurns)
  * - ladderingStreak ← computeLadderingStreak(ctx.recentUserTurns)
  * - blockade      ← detectBlockade(ctx.lastUserTurn)  [D1: current turn only]
+ * - repeatedQuestionStem ← detectQuestionStemRepetition(ctx.recentAssistantTurns)  [KI-15]
  */
 export function analyzeConversationSignals(
   ctx: InterviewContext,
@@ -324,5 +352,6 @@ export function analyzeConversationSignals(
     recentlyRecontextualized: wasRecentlyRecontextualized(ctx.recentAssistantTurns),
     ladderingStreak: computeLadderingStreak(ctx.recentUserTurns),
     blockade: detectBlockade(ctx.lastUserTurn),
+    repeatedQuestionStem: detectQuestionStemRepetition(ctx.recentAssistantTurns),
   }
 }

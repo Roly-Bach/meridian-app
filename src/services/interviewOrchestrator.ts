@@ -133,6 +133,21 @@ function allMandatorySlotsFilled(tracker: StepEntry[]): boolean {
   return tracker.length > 0 && computeMissingMandatorySlots(tracker).length === 0
 }
 
+// KI-15: a step is "unstarted" when it carries zero extracted content — neither potenzial
+// nor tazite slots, nor any walkthrough data. Distinguishes a genuinely new process (just
+// register_step'd this turn, e.g. surfaced by the wrap-up "anything we missed?" probe) from
+// a step that's merely incomplete after real walkthrough progress (Pt8's clarification path).
+function isUnstartedStep(step: StepEntry): boolean {
+  const potenzialEmpty = Object.values(step.potenzial).every((v) => v === null)
+  const slotsEmpty = Object.values(step.slots).every((v) => v === null)
+  const noWalkthroughData = (step.process_steps?.length ?? 0) === 0 && (step.friction_points?.length ?? 0) === 0
+  return potenzialEmpty && slotsEmpty && noWalkthroughData
+}
+
+function hasUnstartedExploringStep(tracker: StepEntry[]): boolean {
+  return tracker.some((s) => s.status === 'exploring' && isUnstartedStep(s))
+}
+
 /**
  * Deterministic wrap-up closing question. Injected verbatim by the orchestrator
  * when the interview transitions into wrap_up — replaces LLM-generated wording.
@@ -277,6 +292,11 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       if (!escapeAlreadyFired && !semanticAllStepsDone(ctx.stepTracker)) {
         // Late-discovered topics (exploring at wrap_up) go to clarification, not full
         // walkthrough reentry — avoids disruptive phase regression mid-farewell (Pt8).
+        // Holds even for a brand-new, zero-content step: the Analyst generates a SlotCard
+        // per empty mandatory slot regardless of whether any other content was extracted
+        // yet (interviewAnalyst.ts "Prüfschema pro Schritt"), so clarification can fill it
+        // in across turns — the bug was checkLifecycle completing before that had a chance
+        // to happen (KI-15), not this routing choice.
         if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'clarification'
         if (hasStepInStatus(ctx.stepTracker, 'walkthrough')) return 'slot_completion'
       }
@@ -354,6 +374,21 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
       // PROJ-23: Don't complete when Analyst has clarification_cards pending — route to clarification instead.
       const cards = analystSuggestion?.clarification_cards
       if (analystSuggestion !== null) {
+        // KI-15: narrow guard — only blocks on a genuinely UNSTARTED exploring step (just
+        // register_step'd this turn, zero filled slots), e.g. surfaced by the wrap-up
+        // "anything we missed?" probe. Deliberately narrower than Trigger B's guard: B6
+        // (test 'completes even when Mahnprozess is walkthrough') already established that
+        // an incomplete-but-started walkthrough step must NOT block this escape valve — the
+        // user is clearly trying to leave and the Analyst found no clarification need. An
+        // unstarted step is different: it has had zero chance to be explored at all and would
+        // otherwise just inflate the dedup-coverage denominator with empty fields. Bounded by
+        // the same turn budget as the wrap_up escape valve so a late mention can't stretch the
+        // interview indefinitely once the budget is exhausted.
+        const budget = computeTurnBudget(ctx.maxDurationMinutes, ctx.stepTracker.length)
+        const budgetExhausted = ctx.historyLength >= budget.coverageCheckEscapeHL
+        if (!budgetExhausted && hasUnstartedExploringStep(ctx.stepTracker)) {
+          return { shouldComplete: false, reason: null }
+        }
         if (!cards || cards.length === 0) {
           return { shouldComplete: true, reason: 'soft_confirm' }
         }
