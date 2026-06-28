@@ -13,7 +13,6 @@
 import { analyzeConversationSignals } from './conversationSignals'
 import { computeWalkthroughSlotTarget } from './interviewSemantic'
 import type {
-  MissingSlot,
   Phase,
   SlotValue,
   StepEntry,
@@ -75,7 +74,6 @@ Frage stattdessen: Was passiert in diesem Schritt? Wie lange dauert es? Wie oft?
 HARTE REGEL: Werte unter "Bereits erfasst" oder mit ✓ im Schritt-Tracker / READ_ONLY_STATE dürfen NICHT erneut erfragt werden.
 Wenn du auf einen bekannten Wert eingehen willst, beziehe dich darauf statt nachzufragen ("Du hast vorhin ~100 Rechnungen/Monat genannt — ...").
 Vor jeder Frage prüfen: Steht der Wert schon im Tracker? Wenn ja → andere Frage stellen oder Phase abschließen.
-Ausnahme: Werte mit dem Status "✓ gerade erfasst (diese Nachricht)" stammen aus der Nachricht, auf die du JETZT antwortest — das ist nicht "vorhin". Für diese KEINE Rückverweis-Formulierung ("Du hast vorhin X genannt") verwenden und keine eigene Zahl dazu nennen — direkt weiterfragen.
 </no_repeat>
 
 <kein_kommentar>
@@ -110,55 +108,35 @@ function sanitizeForPrompt(s: string): string {
     .slice(0, 300)
 }
 
-// KI-18: key format shared by formatStepTracker / walkthrough READ_ONLY_STATE /
-// formatFilledSlotsSnapshot to look up whether a (step, slot) pair was just
-// filled by quick-extract from THIS turn's input (see diffNewlyFilledSlots).
-function justFilledKey(stepTitle: string, slot: string): string {
-  return `${stepTitle}::${slot}`
-}
-
-function buildJustFilledSet(justFilledSlots?: MissingSlot[]): Set<string> {
-  return new Set((justFilledSlots ?? []).map((m) => justFilledKey(m.step_title, m.slot)))
-}
-
-function formatStepTracker(steps: StepEntry[], justFilledSlots?: MissingSlot[]): string {
+function formatStepTracker(steps: StepEntry[]): string {
   if (steps.length === 0) return '- Noch kein Prozessschritt identifiziert.'
-  const justFilled = buildJustFilledSet(justFilledSlots)
 
   return steps.map((step) => {
     const title = sanitizeForPrompt(step.title)
 
     // Fix 4 (ADR-015): mask raw slot values — show status only to prevent anchoring.
-    // KI-18: slots filled THIS turn get a distinct label so the Talker doesn't
-    // mistake "just said" for "said earlier" (see <no_repeat> / justFilledSection).
-    function fmtPotenzial(sv: SlotValue | null, label: string, slotKey: string): string {
-      if (sv == null) return `  ${label}: fehlt`
-      return justFilled.has(justFilledKey(step.title, slotKey))
-        ? `  ${label}: ✓ gerade erfasst (diese Nachricht)`
-        : `  ${label}: ✓ erfasst`
+    function fmtPotenzial(sv: SlotValue | null, label: string): string {
+      return `  ${label}: ${sv != null ? '✓ erfasst' : 'fehlt'}`
     }
-    function fmtTazite(sv: TaziteSlot | TaziteSlotArray | null, label: string, slotKey: string): string {
+    function fmtTazite(sv: TaziteSlot | TaziteSlotArray | null, label: string): string {
       if (sv == null) return `  ${label}: fehlt`
       const filled = sv.value != null || sv.nicht_befund_typ != null
-      if (!filled) return `  ${label}: fehlt`
-      return justFilled.has(justFilledKey(step.title, slotKey))
-        ? `  ${label}: ✓ gerade erfasst (diese Nachricht)`
-        : `  ${label}: ✓ erfasst`
+      return `  ${label}: ${filled ? '✓ erfasst' : 'fehlt'}`
     }
 
     const potenzialLines = [
-      fmtPotenzial(step.potenzial.frequency_per_month, 'frequency_per_month', 'frequency_per_month'),
-      fmtPotenzial(step.potenzial.duration_minutes,    'duration_minutes   ', 'duration_minutes'),
-      fmtPotenzial(step.potenzial.error_rate_percent,  'error_rate_percent ', 'error_rate_percent'),
-      fmtPotenzial(step.potenzial.media_breaks,        'media_breaks       ', 'media_breaks'),
+      fmtPotenzial(step.potenzial.frequency_per_month, 'frequency_per_month'),
+      fmtPotenzial(step.potenzial.duration_minutes,    'duration_minutes   '),
+      fmtPotenzial(step.potenzial.error_rate_percent,  'error_rate_percent '),
+      fmtPotenzial(step.potenzial.media_breaks,        'media_breaks       '),
     ]
     const taziteLines = [
-      fmtTazite(step.slots.entscheidungslogik, 'entscheidungslogik ', 'entscheidungslogik'),
-      fmtTazite(step.slots.tazite_cues,        'tazite_cues        ', 'tazite_cues'),
-      fmtTazite(step.slots.ausnahmen,          'ausnahmen          ', 'ausnahmen'),
-      fmtTazite(step.slots.inputs,             'inputs             ', 'inputs'),
-      fmtTazite(step.slots.outputs,            'outputs            ', 'outputs'),
-      fmtTazite(step.slots.hilfsmittel,        'hilfsmittel        ', 'hilfsmittel'),
+      fmtTazite(step.slots.entscheidungslogik, 'entscheidungslogik '),
+      fmtTazite(step.slots.tazite_cues,        'tazite_cues        '),
+      fmtTazite(step.slots.ausnahmen,          'ausnahmen          '),
+      fmtTazite(step.slots.inputs,             'inputs             '),
+      fmtTazite(step.slots.outputs,            'outputs            '),
+      fmtTazite(step.slots.hilfsmittel,        'hilfsmittel        '),
     ]
 
     const govLine = step.governance != null
@@ -313,24 +291,17 @@ const WALKTHROUGH_EXAMPLES = `
 //   1. Anchoring ("halten wir 100 Rechnungen pro Monat fest")
 //   2. Self-calculation ("100 × 5min = 7.5 min average")
 // Raw values stay in the Analyst context where they are needed for extraction.
-function formatFilledSlotsSnapshot(steps: StepEntry[], justFilledSlots?: MissingSlot[]): string {
-  const justFilled = buildJustFilledSet(justFilledSlots)
+function formatFilledSlotsSnapshot(steps: StepEntry[]): string {
   const lines: string[] = []
   for (const step of steps) {
-    // KI-18: slots quick-extract just wrote from THIS turn stay out of the
-    // "already known from before" snapshot — they're not "vorhin", they're now.
     const filledLabels: string[] = []
     // Potenzial
     for (const [slot, sv] of Object.entries(step.potenzial) as [string, SlotValue | null][]) {
-      if (sv !== null && sv.value !== null && sv.value !== undefined && !justFilled.has(justFilledKey(step.title, slot))) {
-        filledLabels.push(slot)
-      }
+      if (sv !== null && sv.value !== null && sv.value !== undefined) filledLabels.push(slot)
     }
     // Tazite
     for (const [slot, sv] of Object.entries(step.slots) as [string, TaziteSlot | TaziteSlotArray | null][]) {
-      if (sv != null && (sv.value != null || sv.nicht_befund_typ != null) && !justFilled.has(justFilledKey(step.title, slot))) {
-        filledLabels.push(slot)
-      }
+      if (sv != null && (sv.value != null || sv.nicht_befund_typ != null)) filledLabels.push(slot)
     }
     if (filledLabels.length > 0) {
       lines.push(`- "${sanitizeForPrompt(step.title)}": ${filledLabels.map(s => `${s} ✓`).join(', ')}`)
@@ -371,18 +342,14 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   // Observable-Goal pull on empty fields. In all other phases show the full tracker.
   let stepTrackerSection: string
   if (ctx.phase === 'walkthrough_step') {
-    const justFilled = buildJustFilledSet(ctx.justFilledSlots)
     const filledLines = ctx.stepTracker.flatMap((step) => {
       // Fix 4 (ADR-015): mask raw slot values — only show that the slot is filled.
-      // KI-18: distinct label for slots quick-extract just wrote from this turn.
-      const labelFor = (name: string) =>
-        justFilled.has(justFilledKey(step.title, name)) ? `  ${name}: ✓ gerade erfasst (diese Nachricht)` : `  ${name}: ✓ erfasst`
       const filledPotenzial = (Object.entries(step.potenzial) as [string, SlotValue | null][])
         .filter(([, sv]) => sv !== null && sv.value !== null)
-        .map(([name]) => labelFor(name))
+        .map(([name]) => `  ${name}: ✓ erfasst`)
       const filledTazite = (Object.entries(step.slots) as [string, TaziteSlot | TaziteSlotArray | null][])
         .filter(([, sv]) => sv != null && (sv.value != null || sv.nicht_befund_typ != null))
-        .map(([name]) => labelFor(name))
+        .map(([name]) => `  ${name}: ✓ erfasst`)
       const filledSlots = [...filledPotenzial, ...filledTazite]
       if (filledSlots.length === 0 && !step.process_steps?.length && !step.friction_points?.length) return []
       const govNote = step.governance?.rolle ? ` (${sanitizeForPrompt(step.governance.rolle)})` : ''
@@ -411,7 +378,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
       stepTrackerSection += `\n\n## Slot-Target (PFLICHT — diesen Turn adressieren)\nAktiver Schritt: "${sanitizeForPrompt(target.step_title)}"\n${targetLabel}\nStelle in diesem Turn eine offene Frage die genau diesen Slot erfasst. Keine Zahlen-Vorgabe, kein Anker.`
     }
   } else {
-    stepTrackerSection = `\n## Schritt-Tracker (aktueller Slot-Filling-Stand)\n${formatStepTracker(ctx.stepTracker, ctx.justFilledSlots)}`
+    stepTrackerSection = `\n## Schritt-Tracker (aktueller Slot-Filling-Stand)\n${formatStepTracker(ctx.stepTracker)}`
   }
 
   // Few-shot examples only in walkthrough_step
@@ -430,21 +397,11 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   // (dort gibt es bereits den READ_ONLY_STATE Block).
   let alreadyKnownSection = ''
   if (ctx.phase !== 'walkthrough_step') {
-    const snapshot = formatFilledSlotsSnapshot(ctx.stepTracker, ctx.justFilledSlots)
+    const snapshot = formatFilledSlotsSnapshot(ctx.stepTracker)
     if (snapshot.length > 0) {
       alreadyKnownSection = `\n## Bereits erfasste Werte (NICHT erneut fragen)\n${snapshot}`
     }
   }
-
-  // KI-18: explicit per-turn reminder for slots quick-extract just derived from
-  // THIS turn's input — these are not "vorhin" (earlier-turn) facts. Without this,
-  // the Talker's <no_repeat> instruction treats every "✓ erfasst" the same way and
-  // fabricates a "Du hast vorhin X genannt" callback for data that is the CURRENT
-  // message, not an earlier one (KI-18 repro: "Du hast vorhin 350 Tickets pro Monat
-  // erwähnt" derived live from "75 bis 100 Tickets pro Woche" in the same turn).
-  const justFilledSection = ctx.justFilledSlots && ctx.justFilledSlots.length > 0
-    ? `\n\n## Gerade erst erfasst (diese Nachricht — NICHT "vorhin")\n${ctx.justFilledSlots.map(m => `- "${sanitizeForPrompt(m.step_title)}" → ${m.slot}`).join('\n')}\nDiese Werte stammen aus der Nachricht, auf die du JETZT antwortest — nicht aus einem früheren Turn. Verwende dafür KEINE Rückverweis-Formulierung ("Du hast vorhin X genannt/erwähnt") und nenne keine eigene Zahl dazu. Gehe direkt zur nächsten Frage über.`
-    : ''
 
   // Conversation signals — single entry point (PROJ-35 / ADR-017).
   const s = analyzeConversationSignals(ctx, briefing)
@@ -508,5 +465,5 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}${profileFraming}
 
 ## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${justFilledSection}${fewShotSection}${briefingSection}${fillerAvoidance}${questionStemSection}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
+${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${questionStemSection}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
 }

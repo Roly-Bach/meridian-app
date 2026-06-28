@@ -35,8 +35,6 @@ export interface InterviewContext {
   lastUserTurn?: string
   /** Last 4 user messages — used for laddering streak detection (E3.4). */
   recentUserTurns?: string[]
-  /** KI-18: slots filled by quick-extract from THIS turn's input, before the Talker ran. */
-  justFilledSlots?: MissingSlot[]
 }
 
 export interface TurnMessage {
