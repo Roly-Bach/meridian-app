@@ -581,6 +581,37 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
   return missing
 }
 
+// KI-18 — Same-turn fill detector. quick-extract (runInterviewTurn.ts "Pre-Talker
+// Quick-Extract") writes slots derived from the CURRENT turn's input before the
+// Talker builds its prompt for that same turn. The masked tracker then shows
+// "✓ erfasst" for a slot that was filled an instant ago, indistinguishable from
+// one filled turns ago — and the Talker's no_repeat instruction treats every ✓
+// as grounds for a "Du hast vorhin X genannt" callback, fabricating X because it
+// never sees raw values (ADR-015). This diff lets buildDynamicContext flag
+// same-turn fills so the Talker doesn't apply that callback to them.
+export function diffNewlyFilledSlots(before: StepEntry[], after: StepEntry[]): MissingSlot[] {
+  const newlyFilled: MissingSlot[] = []
+  for (const afterStep of after) {
+    const beforeStep = afterStep.id
+      ? before.find((s) => s.id === afterStep.id)
+      : before.find((s) => s.title === afterStep.title)
+
+    for (const slot of POTENZIAL_SLOT_NAMES) {
+      const wasFilled = beforeStep != null && beforeStep.potenzial[slot]?.value != null
+      const isFilled = afterStep.potenzial[slot]?.value != null
+      if (!wasFilled && isFilled) newlyFilled.push({ step_title: afterStep.title, slot })
+    }
+    for (const slot of TAZITE_SLOT_NAMES) {
+      const wasBefore = beforeStep?.slots[slot] ?? null
+      const wasFilled = wasBefore != null && (wasBefore.value != null || wasBefore.nicht_befund_typ != null)
+      const isAfter = afterStep.slots[slot]
+      const isFilled = isAfter != null && (isAfter.value != null || isAfter.nicht_befund_typ != null)
+      if (!wasFilled && isFilled) newlyFilled.push({ step_title: afterStep.title, slot })
+    }
+  }
+  return newlyFilled
+}
+
 // L1 — Slot-Targeting für walkthrough_step Phase.
 // Wählt deterministisch genau EINEN missing slot für den aktuell aktiven
 // Step (walkthrough > exploring). Zwei-Pass-Priorität (PROJ-28/BL-E2.2):

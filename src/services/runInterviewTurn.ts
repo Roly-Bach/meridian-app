@@ -18,6 +18,7 @@
 
 import {
   computeMissingMandatorySlots,
+  diffNewlyFilledSlots,
   normalizeStepEntry,
   type Phase,
   type StepEntry,
@@ -393,6 +394,10 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     if (qeTracker !== null) freshStepTracker = qeTracker.map((raw, i) => normalizeStepEntry(raw as unknown, i + 1))
   }
 
+  // KI-18: slots quick-extract just filled from this turn's input — Talker must not
+  // treat these as "vorhin" (earlier-turn) facts eligible for a callback sentence.
+  const justFilledSlots = diffNewlyFilledSlots(stepTracker, freshStepTracker)
+
   // ── Missing slots ───────────────────────────────────────────────────────────
   const missingSlotsForCoverageCheck =
     orchestratedPhase === 'coverage_check' || orchestratedPhase === 'slot_completion'
@@ -424,6 +429,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       stepTracker: freshStepTracker,
       missingSlotsForCoverageCheck,
       usedFillerPhrases,
+      justFilledSlots,
     },
     history,
     briefing: analystBriefing,

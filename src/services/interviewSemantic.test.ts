@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import {
   computeMissingMandatorySlots,
   computeWalkthroughSlotTarget,
+  diffNewlyFilledSlots,
   POTENZIAL_SLOT_NAMES,
   TAZITE_SLOT_NAMES,
   type StepEntry,
@@ -268,5 +269,88 @@ describe('computeMissingMandatorySlots — PROJ-28/BL-E2.1', () => {
     const missing = computeMissingMandatorySlots(steps)
     expect(missing.map((m) => m.slot)).toContain('frequency_per_month')
     expect(missing.find((m) => m.slot === 'frequency_per_month')?.reason).toBe('missing')
+  })
+})
+
+// ─── diffNewlyFilledSlots — KI-18 ─────────────────────────────────────────────
+// quick-extract writes slots from the CURRENT turn's input before the Talker
+// builds its prompt for that same turn (runInterviewTurn.ts "Pre-Talker
+// Quick-Extract"). This diff flags those same-turn fills so the Talker doesn't
+// treat them as "vorhin" (earlier-turn) facts — see talkerPrompt.ts justFilledSection.
+
+describe('diffNewlyFilledSlots — KI-18', () => {
+  it('flags a potenzial slot that went from null to filled', () => {
+    const before = [makeStep()]
+    const after = [
+      makeStep({
+        potenzial: {
+          frequency_per_month: { value: 350, quote: '75 bis 100 pro Woche' },
+          duration_minutes: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      }),
+    ]
+    const diff = diffNewlyFilledSlots(before, after)
+    expect(diff).toEqual([{ step_title: 'Rechnungseingang buchen', slot: 'frequency_per_month' }])
+  })
+
+  it('flags a tazite slot that went from null to filled', () => {
+    const before = [makeStep()]
+    const after = [
+      makeStep({
+        slots: {
+          entscheidungslogik: { value: 'Kommt drauf an', quote: 'Kommt drauf an', nicht_befund_typ: null },
+          tazite_cues: null,
+          ausnahmen: null,
+          inputs: null,
+          outputs: null,
+          hilfsmittel: null,
+        },
+      }),
+    ]
+    expect(diffNewlyFilledSlots(before, after)).toEqual([
+      { step_title: 'Rechnungseingang buchen', slot: 'entscheidungslogik' },
+    ])
+  })
+
+  it('does not flag a slot that was already filled before this turn', () => {
+    const before = [makeFilledStep()]
+    const after = [makeFilledStep()]
+    expect(diffNewlyFilledSlots(before, after)).toEqual([])
+  })
+
+  it('does not flag a slot that stays null', () => {
+    const before = [makeStep()]
+    const after = [makeStep()]
+    expect(diffNewlyFilledSlots(before, after)).toEqual([])
+  })
+
+  it('returns nothing for a step with no "before" counterpart (newly registered this turn)', () => {
+    // A step registered for the first time this turn has nothing to diff against —
+    // all its filled slots are "new" in a trivial sense, but there's no earlier-turn
+    // claim being made about them since the step itself is brand new.
+    const before: StepEntry[] = []
+    const after = [makeFilledStep()]
+    const diff = diffNewlyFilledSlots(before, after)
+    expect(diff.length).toBeGreaterThan(0)
+    expect(diff.map((d) => d.slot)).toContain('frequency_per_month')
+  })
+
+  it('matches steps by id when present, even if title text drifted', () => {
+    const before = [makeStep({ id: 'S001', title: 'Altes Titel' })]
+    const after = [
+      makeStep({
+        id: 'S001',
+        title: 'Neuer Titel',
+        potenzial: {
+          frequency_per_month: { value: 10, quote: '10' },
+          duration_minutes: null,
+          error_rate_percent: null,
+          media_breaks: null,
+        },
+      }),
+    ]
+    expect(diffNewlyFilledSlots(before, after)).toEqual([{ step_title: 'Neuer Titel', slot: 'frequency_per_month' }])
   })
 })
