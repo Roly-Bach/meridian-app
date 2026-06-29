@@ -76,5 +76,7 @@ export interface ScorerInput {
   expectedProcessCount?: number
   /** Passed through to judge-model calls as Langfuse trace context. */
   evalRunId?: string
+  /** Interview session ID — groups scorer OTel spans in the same Langfuse session as the interview. */
+  interviewId?: string
   persona?: string
 }

@@ -35,21 +35,39 @@ export interface TalkerFactualGroundingResult {
   rationale: string
 }
 
+// Extracts the first balanced JSON object from text, skipping any trailing content
+// that would cause the greedy /\{[\s\S]*\}/ regex to grab too much (e.g. when the
+// judge adds an explanation after the JSON object that itself contains braces).
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+  let depth = 0
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++
+    else if (text[i] === '}') {
+      depth--
+      if (depth === 0) return text.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
 export function parseGroundingResponse(text: string): TalkerFactualGroundingResult {
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as { violations?: Array<{ turn?: number; claim?: string; reason?: string }> }
+  const jsonStr = extractFirstJsonObject(text)
+  if (jsonStr) {
+    try {
+      const parsed = JSON.parse(jsonStr) as { violations?: Array<{ turn?: number; claim?: string; reason?: string }> }
       const violations = Array.isArray(parsed.violations) ? parsed.violations : []
       const rationale = violations
         .map((v) => `Turn ${v.turn ?? '?'}: "${v.claim ?? ''}" — ${v.reason ?? ''}`)
         .join('\n')
       return { violations: violations.length, rationale }
+    } catch {
+      // fall through
     }
-  } catch {
-    // fall through
   }
   console.warn('[talkerFactualGrounding] unexpected judge format, fallback 0')
+  console.debug('[talkerFactualGrounding] judge response was:', text.slice(0, 300))
   return { violations: 0, rationale: '' }
 }
 

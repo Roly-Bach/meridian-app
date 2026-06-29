@@ -36,6 +36,7 @@ export {
 
 export async function runAllScorers(input: ScorerInput, isolatedCriteria = false): Promise<ScoreSet> {
   const traceCtx: TraceCtx = {
+    interviewId: input.interviewId,
     evalRunId: input.evalRunId,
     persona: input.persona,
     model: input.evalModel,

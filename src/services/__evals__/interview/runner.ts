@@ -1070,8 +1070,14 @@ async function main() {
             evalModel: model,
             expectedProcessCount: persona.expectedProcessCount,
             evalRunId: result.evalRunId,
+            interviewId: result.interviewId,
             persona: personaName,
           }, isolatedCriteria)
+
+          // Flush scorer OTel spans immediately so they appear in the same Langfuse session
+          // as the interview (session.id = interviewId). Without this, spans buffered in the
+          // OTel SDK risk being lost between forceFlush and the final shutdown at end of run.
+          await forceFlushLangfuse().catch(() => {})
 
           const { filepath: reportPath, passed } = writeReport({
             model,
