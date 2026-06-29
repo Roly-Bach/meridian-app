@@ -1,7 +1,14 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
-import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import type { TurnMessage } from './interviewTypes'
+
+type OnTokenUsage = (r: {
+  component: string
+  model: string
+  inputTokens: number
+  cacheReadTokens?: number
+  outputTokens: number
+}) => void
 
 /**
  * KI-18 — live per-turn grounding guard for the Talker's natural-language callbacks.
@@ -56,7 +63,8 @@ export async function checkGroundingViolation(
   candidateText: string,
   priorTurns: TurnMessage[],
   talkerModelString: string,
-  traceCtx?: TraceCtx,
+  _traceCtx?: unknown,
+  onTokenUsage?: OnTokenUsage,
 ): Promise<GroundingGuardResult> {
   if (priorTurns.length === 0) return { violation: false }
 
@@ -65,20 +73,23 @@ export async function checkGroundingViolation(
     .join('\n')
 
   try {
-    const model = resolveModel(crossVendorJudgeModel(talkerModelString))
-    const { text } = await generateText({
+    const judgeModel = crossVendorJudgeModel(talkerModelString)
+    const model = resolveModel(judgeModel)
+    const result = await generateText({
       model,
       system: GUARD_SYSTEM,
       prompt: `Bisheriger Verlauf:\n${transcript}\n\nZU PRÜFENDE Agent-Antwort:\n"${candidateText}"`,
       maxOutputTokens: 300,
       temperature: 0,
-      experimental_telemetry: buildTraceMetadata('talker.grounding_guard', {
-        ...traceCtx,
-        component: 'grounding_guard',
-        environment: traceCtx?.environment ?? 'prod',
-      }),
     })
-    return parseGuardResponse(text)
+    onTokenUsage?.({
+      component: 'grounding_guard',
+      model: judgeModel,
+      inputTokens: result.usage?.inputTokens ?? 0,
+      cacheReadTokens: (result.usage?.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+      outputTokens: result.usage?.outputTokens ?? 0,
+    })
+    return parseGuardResponse(result.text)
   } catch (err) {
     console.warn('[talkerGroundingGuard] judge call failed, treating as no violation:', err)
     return { violation: false }

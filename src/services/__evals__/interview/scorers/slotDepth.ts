@@ -1,8 +1,7 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
-import { buildTraceMetadata, type TraceCtx } from '@/services/_telemetry'
 import type { StepEntry } from '@/services/interviewSemantic'
-import type { TurnRecord } from './types'
+import type { TurnRecord, TokenUsageRecord } from './types'
 
 export interface SlotDepthResult {
   depth_score: number | null
@@ -85,7 +84,7 @@ async function callJudge(
   filledSlots: FilledSlot[],
   stepTurns: TurnRecord[],
   judgeModelString: string,
-  traceCtx?: TraceCtx,
+  onTokenUsage?: (r: TokenUsageRecord) => void,
 ): Promise<SlotJudgment[] | null> {
   const turnsText =
     stepTurns.length > 0
@@ -118,15 +117,15 @@ Antworte ausschließlich als JSON-Array:
 
   try {
     const model = resolveModel(judgeModelString)
-    const { text } = await generateText({
-      model,
-      prompt,
-      temperature: 0,
-      maxOutputTokens: 2048,
-      ...(traceCtx && {
-        experimental_telemetry: buildTraceMetadata('eval.slotDepth.judge', traceCtx),
-      }),
+    const result = await generateText({ model, prompt, temperature: 0, maxOutputTokens: 2048 })
+    onTokenUsage?.({
+      component: 'judge_slot_depth',
+      model: judgeModelString,
+      inputTokens: result.usage.inputTokens ?? 0,
+      cacheReadTokens: (result.usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+      outputTokens: result.usage.outputTokens ?? 0,
     })
+    const text = result.text
     // First attempt: strip Markdown fences and parse directly
     const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
     let parsed: unknown
@@ -156,41 +155,40 @@ Antworte ausschließlich als JSON-Array:
   }
 }
 
+const TIMEOUT_MS = 60_000
+
 export async function scoreSlotDepth(
   finalStepTracker: StepEntry[],
   turns: TurnRecord[],
   evalModel: string,
-  traceCtx?: TraceCtx,
+  onTokenUsage?: (r: TokenUsageRecord) => void,
 ): Promise<SlotDepthResult> {
   if (finalStepTracker.length === 0) return { depth_score: null, depth_distribution: null }
 
   const judgeModelString = getJudgeModel(evalModel)
-
-  const stepResults = await Promise.all(
-    finalStepTracker.map(async (step) => {
-      const filledSlots = getFilledSlots(step)
-      if (filledSlots.length === 0) return []
-      const stepTurns = getStepTurns(step.title, turns)
-      let judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString, traceCtx)
-      if (judgments === null) {
-        judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString, traceCtx)
-      }
-      if (judgments === null) return []
-      return judgments
-        .filter(j => [1, 2, 3].includes(j.stufe))
-        .map(j => ({
-          stufe: j.stufe,
-          line: `[${step.title}/${j.slot}] Stufe ${j.stufe}: ${j.begruendung}`,
-        }))
-    })
-  )
-
+  const startTime = Date.now()
   const allStufen: number[] = []
   const rationaleLines: string[] = []
-  for (const results of stepResults) {
-    for (const r of results) {
-      allStufen.push(r.stufe)
-      rationaleLines.push(r.line)
+
+  for (const step of finalStepTracker) {
+    if (Date.now() - startTime > TIMEOUT_MS) break
+
+    const filledSlots = getFilledSlots(step)
+    if (filledSlots.length === 0) continue
+
+    const stepTurns = getStepTurns(step.title, turns)
+
+    let judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString, onTokenUsage)
+    if (judgments === null) {
+      judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString, onTokenUsage)
+    }
+    if (judgments === null) continue
+
+    for (const j of judgments) {
+      if ([1, 2, 3].includes(j.stufe)) {
+        allStufen.push(j.stufe)
+        rationaleLines.push(`[${step.title}/${j.slot}] Stufe ${j.stufe}: ${j.begruendung}`)
+      }
     }
   }
 

@@ -23,6 +23,14 @@ import { findStepById, findStepFuzzy } from './turnStore/applyIntent'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import type { TurnStore } from './turnStore/port'
 
+type OnTokenUsage = (r: {
+  component: string
+  model: string
+  inputTokens: number
+  cacheReadTokens?: number
+  outputTokens: number
+}) => void
+
 export interface QuickExtractOptions {
   interviewId: string
   workspaceId: string
@@ -34,6 +42,7 @@ export interface QuickExtractOptions {
   traceCtx?: TraceCtx
   /** TurnStore for the staged slot writes. Defaults to the prod Supabase store. */
   store?: TurnStore
+  onTokenUsage?: OnTokenUsage
 }
 
 const QUICK_EXTRACT_SYSTEM_PROMPT = `Du bist ein schneller Slot-Extraktor für ein laufendes Interview.
@@ -181,6 +190,16 @@ export async function runQuickExtract(opts: QuickExtractOptions): Promise<StepEn
       }),
     })
     madeToolCalls = result.steps.some(s => (s.toolCalls?.length ?? 0) > 0)
+    if (result.usage) {
+      const details = result.usage.inputTokenDetails as Record<string, unknown> | undefined
+      opts.onTokenUsage?.({
+        component: 'quick_extract',
+        model: modelString,
+        inputTokens: result.usage.inputTokens ?? 0,
+        cacheReadTokens: (details?.cacheReadTokens as number | undefined),
+        outputTokens: result.usage.outputTokens ?? 0,
+      })
+    }
   } catch (err) {
     // Quick-extract failures are non-fatal — full Analyst will catch up.
     console.error('[quick_extract] run failed (non-fatal):', err)

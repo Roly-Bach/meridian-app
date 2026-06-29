@@ -98,6 +98,14 @@ export interface TurnStream {
   text: PromiseLike<string>
 }
 
+type OnTokenUsage = (r: {
+  component: string
+  model: string
+  inputTokens: number
+  cacheReadTokens?: number
+  outputTokens: number
+}) => void
+
 export interface RunTurnInput {
   interviewId: string
   userInput: string
@@ -105,6 +113,7 @@ export interface RunTurnInput {
   timerMinutes: number
   /** Optional Langfuse trace context — merged into every LLM-call telemetry. */
   traceCtx?: Record<string, unknown>
+  onTokenUsage?: OnTokenUsage
 }
 
 export interface TurnMeta {
@@ -240,6 +249,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         currentUserInput: userInput,
         traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
         store,
+        onTokenUsage: input.onTokenUsage,
       })
 
       stepTracker = (await store.loadStepTracker(interviewId) as unknown[])
@@ -290,6 +300,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
           agentResponse: agentText,
         })
       },
+      onTokenUsage: input.onTokenUsage,
     })
 
     const background = async (): Promise<AnalystRunResult | null> => {
@@ -326,6 +337,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
           currentUserInput: userInput,
           traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
           store,
+          onTokenUsage: input.onTokenUsage,
         })
       } catch (err) {
         console.error('[runInterviewTurn] post-complete analyst failed:', err)
@@ -389,6 +401,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       currentTurnNumber: nextTurnNumber,
       activeStepTitle: activeStep?.title ?? null,
       store,
+      onTokenUsage: input.onTokenUsage,
     })
     if (qeTracker !== null) freshStepTracker = qeTracker.map((raw, i) => normalizeStepEntry(raw as unknown, i + 1))
   }
@@ -428,6 +441,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     history,
     briefing: analystBriefing,
     userInput,
+    onTokenUsage: input.onTokenUsage,
     onFinish: async (agentText) => {
       if (!agentText) return
 
@@ -511,6 +525,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
           currentUserInput: userInput,
           traceCtx: resolvedTraceCtx,
           store,
+          onTokenUsage: input.onTokenUsage,
         })
         return result
       }
@@ -521,6 +536,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         currentUserInput: userInput,
         traceCtx: resolvedTraceCtx,
         store,
+        onTokenUsage: input.onTokenUsage,
       })
 
       const shouldRunCatchup =
@@ -535,6 +551,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
           currentUserInput: userInput,
           traceCtx: resolvedTraceCtx,
           store,
+          onTokenUsage: input.onTokenUsage,
         })
       }
 

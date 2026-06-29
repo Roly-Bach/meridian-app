@@ -1,7 +1,6 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
-import { buildTraceMetadata, type TraceCtx } from '@/services/_telemetry'
-import type { TurnRecord } from './types'
+import type { TurnRecord, TokenUsageRecord } from './types'
 
 /**
  * LLM-as-Judge scorer for dialog naturalness.
@@ -87,7 +86,7 @@ export async function scoreDialogNaturalness(
   turns: TurnRecord[],
   evalModel: string,
   isolatedCriteria = false,
-  traceCtx?: TraceCtx,
+  onTokenUsage?: (r: TokenUsageRecord) => void,
 ): Promise<DialogNaturalnessResult> {
   const agentTexts = turns.map(t => t.agentText).filter(t => t.trim().length > 0)
   if (agentTexts.length === 0) return { score: 0.5, rationale: '' }
@@ -106,25 +105,27 @@ export async function scoreDialogNaturalness(
   const judgeModelString = getJudgeModel(evalModel)
 
   if (isolatedCriteria) {
-    return scoreWithIsolatedCriteria(sample, judgeModelString, traceCtx)
+    return scoreWithIsolatedCriteria(sample, judgeModelString, onTokenUsage)
   }
 
   try {
     const model = resolveModel(judgeModelString)
-    const { text } = await generateText({
+    const result = await generateText({
       model,
       system: JUDGE_SYSTEM,
       prompt: `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`,
       maxOutputTokens: 600,
       temperature: 0,
-      experimental_telemetry: buildTraceMetadata('scorer.dialog_naturalness', {
-        ...traceCtx,
-        component: 'judge_dialog_naturalness',
-        environment: traceCtx?.environment ?? 'eval',
-      }),
+    })
+    onTokenUsage?.({
+      component: 'judge_dialog_naturalness',
+      model: judgeModelString,
+      inputTokens: result.usage.inputTokens ?? 0,
+      cacheReadTokens: (result.usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+      outputTokens: result.usage.outputTokens ?? 0,
     })
 
-    return parseJudgeResponse(text)
+    return parseJudgeResponse(result.text)
   } catch (err) {
     console.warn('[scorer:dialog_naturalness] judge call failed, returning 0.5:', err)
     return { score: 0.5, rationale: '' }
@@ -171,7 +172,7 @@ const ISOLATED_CRITERIA: Array<{ criterion: string; weight: number; prompt: stri
 async function scoreWithIsolatedCriteria(
   sample: string[],
   judgeModelString: string,
-  traceCtx?: TraceCtx,
+  onTokenUsage?: (r: TokenUsageRecord) => void,
 ): Promise<DialogNaturalnessResult> {
   const promptBase = `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`
   const results: CriterionResult[] = []
@@ -179,19 +180,21 @@ async function scoreWithIsolatedCriteria(
   for (const crit of ISOLATED_CRITERIA) {
     try {
       const model = resolveModel(judgeModelString)
-      const { text } = await generateText({
+      const result = await generateText({
         model,
         system: crit.prompt,
         prompt: promptBase,
         maxOutputTokens: 600,
         temperature: 0,
-        experimental_telemetry: buildTraceMetadata(`scorer.dialog_naturalness.${crit.criterion}`, {
-          ...traceCtx,
-          component: 'judge_dialog_naturalness',
-          environment: traceCtx?.environment ?? 'eval',
-        }),
       })
-      const parsed = parseJudgeResponse(text)
+      onTokenUsage?.({
+        component: 'judge_dialog_naturalness',
+        model: judgeModelString,
+        inputTokens: result.usage.inputTokens ?? 0,
+        cacheReadTokens: (result.usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+        outputTokens: result.usage.outputTokens ?? 0,
+      })
+      const parsed = parseJudgeResponse(result.text)
       results.push({ criterion: crit.criterion, weight: crit.weight, score: parsed.score, rationale: parsed.rationale })
     } catch {
       results.push({ criterion: crit.criterion, weight: crit.weight, score: 0.5, rationale: '' })

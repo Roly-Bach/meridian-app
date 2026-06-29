@@ -1,4 +1,4 @@
-export type { ScoreSet, TurnRecord, ToolCallRecord, ScorerInput } from './types'
+export type { ScoreSet, TurnRecord, ToolCallRecord, ScorerInput, TokenUsageRecord, CostSummary, ComponentCostSummary } from './types'
 export type { SlotDepthResult } from './slotDepth'
 
 import { scoreSlotCoverage, scoreDedupCoverage } from './slotCoverage'
@@ -13,7 +13,6 @@ import { scoreHallucinationRate } from './hallucinationRate'
 import { scoreConfidenceTrigger } from './confidenceTrigger'
 import { scoreSlotDepth } from './slotDepth'
 import { scoreTalkerFactualGrounding } from './talkerFactualGrounding'
-import type { TraceCtx } from '@/services/_telemetry'
 import type { ScorerInput, ScoreSet } from './types'
 
 export {
@@ -35,18 +34,10 @@ export {
 }
 
 export async function runAllScorers(input: ScorerInput, isolatedCriteria = false): Promise<ScoreSet> {
-  const traceCtx: TraceCtx = {
-    interviewId: input.interviewId,
-    evalRunId: input.evalRunId,
-    persona: input.persona,
-    model: input.evalModel,
-    environment: 'eval',
-  }
-
   const [dialogNaturalnessResult, slotDepthResult, groundingResult] = await Promise.all([
-    scoreDialogNaturalness(input.turns, input.evalModel, isolatedCriteria, traceCtx),
-    scoreSlotDepth(input.finalStepTracker, input.turns, input.evalModel, traceCtx),
-    scoreTalkerFactualGrounding(input.turns, input.evalModel, traceCtx),
+    scoreDialogNaturalness(input.turns, input.evalModel, isolatedCriteria, input.onTokenUsage),
+    scoreSlotDepth(input.finalStepTracker, input.turns, input.evalModel, input.onTokenUsage),
+    scoreTalkerFactualGrounding(input.turns, input.evalModel, input.onTokenUsage),
   ])
 
   const completionCorrectness = scoreCompletionCorrectness(input.interviewStatus)

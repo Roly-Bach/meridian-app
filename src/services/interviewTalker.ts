@@ -21,9 +21,15 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 // thinkingBudget: 512 (not 0) — Flash 3.5 produces empty responses on complex
 // multi-topic inputs when fully suppressed (B-QA-1, 2026-06-01).
-// TODO: eval-test default values and tune if needed
-const _talkerBudgetParsed = Number(process.env.EVAL_TALKER_THINKING_BUDGET)
-export const TALKER_THINKING_BUDGET = Math.max(256, Number.isFinite(_talkerBudgetParsed) ? _talkerBudgetParsed : 512)
+export const TALKER_THINKING_BUDGET = 512
+
+type OnTokenUsage = (r: {
+  component: string
+  model: string
+  inputTokens: number
+  cacheReadTokens?: number
+  outputTokens: number
+}) => void
 
 export interface TalkerStreamOptions {
   context: InterviewContext
@@ -34,6 +40,7 @@ export interface TalkerStreamOptions {
   userInput?: string
   onFinish?: (text: string) => Promise<void>
   traceCtx?: TraceCtx
+  onTokenUsage?: OnTokenUsage
 }
 
 // ─── Output Guards (PROJ-35 / ADR-017) ────────────────────────────────────────
@@ -227,6 +234,13 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
         (anthropicMeta?.cacheCreationInputTokens as number | undefined) ??
         null,
     })
+    opts.onTokenUsage?.({
+      component: 'talker',
+      model: modelString,
+      inputTokens: first.usage.inputTokens ?? 0,
+      cacheReadTokens: (details?.cacheReadTokens as number | undefined),
+      outputTokens: first.usage.outputTokens ?? 0,
+    })
   }
 
   // Pt7: Anchoring detection — log violations for eval analysis.
@@ -249,7 +263,7 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
   // on it-support without reducing violations) — this checks the actual
   // candidate against history with a judge instead of relying on instruction
   // compliance from a lite model. Capped at one repair attempt to bound cost/latency.
-  const guard = await checkGroundingViolation(finalText, opts.history, modelString, opts.traceCtx)
+  const guard = await checkGroundingViolation(finalText, opts.history, modelString, opts.traceCtx, opts.onTokenUsage)
   if (guard.violation) {
     console.warn('[talker:grounding] violation detected, regenerating once', {
       claim: guard.claim,
@@ -260,6 +274,16 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
       `KORREKTUR (intern, nicht erwähnen): Deine vorherige Antwort enthielt eine falsche Zuschreibung an den Mitarbeiter: "${guard.claim}". Das hat der Mitarbeiter so nicht gesagt. Schreibe die Antwort neu — beziehe dich nur auf tatsächlich Gesagtes, oder stelle eine neue Frage ohne Rückbezug.`,
     )
     finalText = repaired.text
+    {
+      const details = repaired.usage.inputTokenDetails as Record<string, unknown> | undefined
+      opts.onTokenUsage?.({
+        component: 'talker',
+        model: modelString,
+        inputTokens: repaired.usage.inputTokens ?? 0,
+        cacheReadTokens: (details?.cacheReadTokens as number | undefined),
+        outputTokens: repaired.usage.outputTokens ?? 0,
+      })
+    }
   }
 
   // Pt13: Filler phrase tracking — persist detected opening phrases into

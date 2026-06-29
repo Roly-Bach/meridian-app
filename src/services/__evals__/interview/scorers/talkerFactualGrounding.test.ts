@@ -40,22 +40,19 @@ describe('parseGroundingResponse', () => {
     expect(result.violations).toBe(0)
   })
 
-  it('trailing text with braces does not break extraction', () => {
-    // Greedy regex /\{[\s\S]*\}/ would grab from the JSON's first { all the way to
-    // the last } in the trailing explanation, producing invalid JSON. The balanced-
-    // bracket extractor stops at the first complete object instead.
-    const result = parseGroundingResponse(
-      '{"violations": []} Note: interview_guide {section 3} had no issues.',
-    )
-    expect(result.violations).toBe(0)
-  })
-
   it('unbekanntes Format → 0 + console.warn', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const result = parseGroundingResponse('keine JSON-Antwort')
     expect(result.violations).toBe(0)
     expect(warnSpy).toHaveBeenCalledWith('[talkerFactualGrounding] unexpected judge format, fallback 0')
     warnSpy.mockRestore()
+  })
+
+  it('trailing text with braces does not break extraction', () => {
+    const result = parseGroundingResponse(
+      '{"violations": []} Note: interview_guide {section 3} had no issues.',
+    )
+    expect(result.violations).toBe(0)
   })
 })
 

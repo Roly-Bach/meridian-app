@@ -65,6 +65,31 @@ export interface ScoreSet {
   talkerGroundingRationale?: string
 }
 
+export interface TokenUsageRecord {
+  component: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'talker' | 'quick_extract' | 'grounding_guard' | 'judge_dialog_naturalness' | 'judge_slot_depth' | 'judge_talker_grounding'
+  model: string
+  inputTokens: number
+  cacheReadTokens?: number
+  outputTokens: number
+}
+
+export interface ComponentCostSummary {
+  calls: number
+  inputTokens: number
+  cacheReadTokens: number
+  outputTokens: number
+  estimatedCostUsd: number
+}
+
+export interface CostSummary {
+  interviewEngine: Record<string, ComponentCostSummary>
+  evalEngine: Record<string, ComponentCostSummary>
+  totalInputTokens: number
+  totalCacheReadTokens: number
+  totalOutputTokens: number
+  totalEstimatedCostUsd: number
+}
+
 export interface ScorerInput {
   turns: TurnRecord[]
   finalStepTracker: StepEntry[]
@@ -74,9 +99,5 @@ export interface ScorerInput {
   interviewStatus: string
   evalModel: string
   expectedProcessCount?: number
-  /** Passed through to judge-model calls as Langfuse trace context. */
-  evalRunId?: string
-  /** Interview session ID — groups scorer OTel spans in the same Langfuse session as the interview. */
-  interviewId?: string
-  persona?: string
+  onTokenUsage?: (r: TokenUsageRecord) => void
 }
