@@ -21,7 +21,9 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 // thinkingBudget: 512 (not 0) — Flash 3.5 produces empty responses on complex
 // multi-topic inputs when fully suppressed (B-QA-1, 2026-06-01).
-export const TALKER_THINKING_BUDGET = 512
+// TODO: eval-test default values and tune if needed
+const _talkerBudgetParsed = Number(process.env.EVAL_TALKER_THINKING_BUDGET)
+export const TALKER_THINKING_BUDGET = Math.max(256, Number.isFinite(_talkerBudgetParsed) ? _talkerBudgetParsed : 512)
 
 export interface TalkerStreamOptions {
   context: InterviewContext

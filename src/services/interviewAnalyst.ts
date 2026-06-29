@@ -32,7 +32,9 @@ import type { TurnSnapshot } from './turnStore/intents'
 // impulsive register_step calls. The real fragmentation fix is tokenJaccard dedup
 // in register_step + anti-fragmentation rules in the system prompt below.
 // (At budget=0 fragmentation was worse: 12 steps registered for 2 real processes.)
-export const ANALYST_THINKING_BUDGET = 2048
+// TODO: eval-test default values and tune if needed
+const _analystBudgetParsed = Number(process.env.EVAL_ANALYST_THINKING_BUDGET)
+export const ANALYST_THINKING_BUDGET = Math.max(512, Number.isFinite(_analystBudgetParsed) ? _analystBudgetParsed : 2048)
 
 export interface AnalystRunOptions {
   context: InterviewContext
@@ -501,6 +503,10 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
       }),
     })
 
+    if (genResult.steps.length >= 15) {
+      console.warn('[analyst] step cap reached — some tool calls may have been dropped')
+    }
+
     capturedToolCalls = genResult.steps.flatMap(step =>
       (step.toolCalls ?? []).map(tc => ({
         toolName: tc.toolName,
@@ -600,6 +606,10 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
         ...opts.traceCtx,
       }),
     })
+
+    if (genResult.steps.length >= 10) {
+      console.warn('[analyst:catchup] step cap reached — some tool calls may have been dropped')
+    }
 
     capturedToolCalls = genResult.steps.flatMap(step =>
       (step.toolCalls ?? []).map(tc => ({
