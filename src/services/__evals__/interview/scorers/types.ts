@@ -74,4 +74,7 @@ export interface ScorerInput {
   interviewStatus: string
   evalModel: string
   expectedProcessCount?: number
+  /** Passed through to judge-model calls as Langfuse trace context. */
+  evalRunId?: string
+  persona?: string
 }

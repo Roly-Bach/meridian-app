@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
+import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import type { TurnMessage } from './interviewTypes'
 
 /**
@@ -55,6 +56,7 @@ export async function checkGroundingViolation(
   candidateText: string,
   priorTurns: TurnMessage[],
   talkerModelString: string,
+  traceCtx?: TraceCtx,
 ): Promise<GroundingGuardResult> {
   if (priorTurns.length === 0) return { violation: false }
 
@@ -70,6 +72,11 @@ export async function checkGroundingViolation(
       prompt: `Bisheriger Verlauf:\n${transcript}\n\nZU PRÜFENDE Agent-Antwort:\n"${candidateText}"`,
       maxOutputTokens: 300,
       temperature: 0,
+      experimental_telemetry: buildTraceMetadata('talker.grounding_guard', {
+        ...traceCtx,
+        component: 'grounding_guard',
+        environment: traceCtx?.environment ?? 'prod',
+      }),
     })
     return parseGuardResponse(text)
   } catch (err) {

@@ -6,7 +6,7 @@ export interface TraceCtx {
   persona?: string
   model?: string
   environment?: 'prod' | 'eval'
-  component?: 'talker' | 'analyst' | 'analyst_online' | 'analyst_catchup' | 'orchestrator' | 'quick_extract'
+  component?: 'talker' | 'analyst' | 'analyst_online' | 'analyst_catchup' | 'orchestrator' | 'quick_extract' | 'judge_dialog_naturalness' | 'judge_talker_grounding' | 'judge_slot_depth' | 'grounding_guard' | 'tester_persona'
 }
 
 /**

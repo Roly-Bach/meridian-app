@@ -13,6 +13,7 @@ import { scoreHallucinationRate } from './hallucinationRate'
 import { scoreConfidenceTrigger } from './confidenceTrigger'
 import { scoreSlotDepth } from './slotDepth'
 import { scoreTalkerFactualGrounding } from './talkerFactualGrounding'
+import type { TraceCtx } from '@/services/_telemetry'
 import type { ScorerInput, ScoreSet } from './types'
 
 export {
@@ -34,10 +35,17 @@ export {
 }
 
 export async function runAllScorers(input: ScorerInput, isolatedCriteria = false): Promise<ScoreSet> {
+  const traceCtx: TraceCtx = {
+    evalRunId: input.evalRunId,
+    persona: input.persona,
+    model: input.evalModel,
+    environment: 'eval',
+  }
+
   const [dialogNaturalnessResult, slotDepthResult, groundingResult] = await Promise.all([
-    scoreDialogNaturalness(input.turns, input.evalModel, isolatedCriteria),
-    scoreSlotDepth(input.finalStepTracker, input.turns, input.evalModel),
-    scoreTalkerFactualGrounding(input.turns, input.evalModel),
+    scoreDialogNaturalness(input.turns, input.evalModel, isolatedCriteria, traceCtx),
+    scoreSlotDepth(input.finalStepTracker, input.turns, input.evalModel, traceCtx),
+    scoreTalkerFactualGrounding(input.turns, input.evalModel, traceCtx),
   ])
 
   const completionCorrectness = scoreCompletionCorrectness(input.interviewStatus)

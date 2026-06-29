@@ -32,7 +32,7 @@ import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
-import { initLangfuse, flushLangfuse } from '@/lib/langfuse'
+import { initLangfuse, flushLangfuse, forceFlushLangfuse } from '@/lib/langfuse'
 import type { Phase, StepEntry } from '@/services/interviewSemantic'
 import type { TurnMessage, ClarificationCard } from '@/services/interviewTypes'
 import { createTalkerStream, TALKER_THINKING_BUDGET } from '@/services/interviewTalker'
@@ -42,7 +42,7 @@ import {
 } from '@/services/interviewOrchestrator'
 import { ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/interviewAnalyst'
 import { runInterviewTurn } from '@/services/runInterviewTurn'
-import { type TraceCtx } from '@/services/_telemetry'
+import { buildTraceMetadata, type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
 import { perturbPersona } from './perturbation'
 import { createEvalStore, type EvalStore, type EvalStoreKind, type ClarificationAnswer } from './evalStore'
@@ -198,6 +198,7 @@ async function generatePersonaResponse(
   persona: Persona,
   agentText: string,
   history: { role: 'user' | 'assistant'; content: string }[],
+  traceCtx?: TraceCtx,
 ): Promise<string> {
   const testerModelString = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(testerModelString)
@@ -227,6 +228,11 @@ async function generatePersonaResponse(
       ? `Bisheriges Gespräch:\n${historyText}\n\nInterviewer sagt gerade: ${agentText}\n\nDeine Antwort als ${persona.identity.name}:`
       : `Interviewer sagt: ${agentText}\n\nDeine Antwort als ${persona.identity.name}:`,
     maxOutputTokens: 300,
+    experimental_telemetry: buildTraceMetadata('tester.persona', {
+      ...traceCtx,
+      component: 'tester_persona',
+      environment: 'eval',
+    }),
   })
 
   return text.trim()
@@ -704,7 +710,11 @@ async function runInterview(
   let lastAgentText = greeting
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const personaResponse = await generatePersonaResponse(persona, lastAgentText, conversationHistory)
+    const personaResponse = await generatePersonaResponse(persona, lastAgentText, conversationHistory, {
+      evalRunId,
+      persona: personaName,
+      model,
+    })
     console.log(`\n[${persona.identity.name}]: ${personaResponse}`)
     conversationHistory.push({ role: 'user', content: personaResponse })
 
@@ -1049,8 +1059,8 @@ async function main() {
         try {
           const result = await runInterview(model, persona, personaName, baselineLabel, evalStore, runIndex, runs)
 
-          // Flush OTel spans before scoring (ensures traces are in Langfuse)
-          await flushLangfuse().catch(() => {})
+          // forceFlush (not shutdown) so the SDK stays alive for scorer spans
+          await forceFlushLangfuse().catch(() => {})
 
           const scores = await runAllScorers({
             turns: result.turnRecords,
@@ -1059,6 +1069,8 @@ async function main() {
             interviewStatus: result.finalInterviewStatus,
             evalModel: model,
             expectedProcessCount: persona.expectedProcessCount,
+            evalRunId: result.evalRunId,
+            persona: personaName,
           }, isolatedCriteria)
 
           const { filepath: reportPath, passed } = writeReport({

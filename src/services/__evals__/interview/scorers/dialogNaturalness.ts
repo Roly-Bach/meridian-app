@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
+import { buildTraceMetadata, type TraceCtx } from '@/services/_telemetry'
 import type { TurnRecord } from './types'
 
 /**
@@ -86,6 +87,7 @@ export async function scoreDialogNaturalness(
   turns: TurnRecord[],
   evalModel: string,
   isolatedCriteria = false,
+  traceCtx?: TraceCtx,
 ): Promise<DialogNaturalnessResult> {
   const agentTexts = turns.map(t => t.agentText).filter(t => t.trim().length > 0)
   if (agentTexts.length === 0) return { score: 0.5, rationale: '' }
@@ -104,7 +106,7 @@ export async function scoreDialogNaturalness(
   const judgeModelString = getJudgeModel(evalModel)
 
   if (isolatedCriteria) {
-    return scoreWithIsolatedCriteria(sample, judgeModelString)
+    return scoreWithIsolatedCriteria(sample, judgeModelString, traceCtx)
   }
 
   try {
@@ -115,6 +117,11 @@ export async function scoreDialogNaturalness(
       prompt: `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`,
       maxOutputTokens: 600,
       temperature: 0,
+      experimental_telemetry: buildTraceMetadata('scorer.dialog_naturalness', {
+        ...traceCtx,
+        component: 'judge_dialog_naturalness',
+        environment: traceCtx?.environment ?? 'eval',
+      }),
     })
 
     return parseJudgeResponse(text)
@@ -164,6 +171,7 @@ const ISOLATED_CRITERIA: Array<{ criterion: string; weight: number; prompt: stri
 async function scoreWithIsolatedCriteria(
   sample: string[],
   judgeModelString: string,
+  traceCtx?: TraceCtx,
 ): Promise<DialogNaturalnessResult> {
   const promptBase = `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`
   const results: CriterionResult[] = []
@@ -177,6 +185,11 @@ async function scoreWithIsolatedCriteria(
         prompt: promptBase,
         maxOutputTokens: 600,
         temperature: 0,
+        experimental_telemetry: buildTraceMetadata(`scorer.dialog_naturalness.${crit.criterion}`, {
+          ...traceCtx,
+          component: 'judge_dialog_naturalness',
+          environment: traceCtx?.environment ?? 'eval',
+        }),
       })
       const parsed = parseJudgeResponse(text)
       results.push({ criterion: crit.criterion, weight: crit.weight, score: parsed.score, rationale: parsed.rationale })

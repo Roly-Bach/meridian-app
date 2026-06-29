@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
+import { buildTraceMetadata, type TraceCtx } from '@/services/_telemetry'
 import type { StepEntry } from '@/services/interviewSemantic'
 import type { TurnRecord } from './types'
 
@@ -84,6 +85,7 @@ async function callJudge(
   filledSlots: FilledSlot[],
   stepTurns: TurnRecord[],
   judgeModelString: string,
+  traceCtx?: TraceCtx,
 ): Promise<SlotJudgment[] | null> {
   const turnsText =
     stepTurns.length > 0
@@ -116,7 +118,17 @@ Antworte ausschließlich als JSON-Array:
 
   try {
     const model = resolveModel(judgeModelString)
-    const { text } = await generateText({ model, prompt, temperature: 0, maxOutputTokens: 2048 })
+    const { text } = await generateText({
+      model,
+      prompt,
+      temperature: 0,
+      maxOutputTokens: 2048,
+      experimental_telemetry: buildTraceMetadata('scorer.slot_depth', {
+        ...traceCtx,
+        component: 'judge_slot_depth',
+        environment: traceCtx?.environment ?? 'eval',
+      }),
+    })
     // First attempt: strip Markdown fences and parse directly
     const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
     let parsed: unknown
@@ -152,6 +164,7 @@ export async function scoreSlotDepth(
   finalStepTracker: StepEntry[],
   turns: TurnRecord[],
   evalModel: string,
+  traceCtx?: TraceCtx,
 ): Promise<SlotDepthResult> {
   if (finalStepTracker.length === 0) return { depth_score: null, depth_distribution: null }
 
@@ -168,9 +181,9 @@ export async function scoreSlotDepth(
 
     const stepTurns = getStepTurns(step.title, turns)
 
-    let judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString)
+    let judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString, traceCtx)
     if (judgments === null) {
-      judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString)
+      judgments = await callJudge(step, filledSlots, stepTurns, judgeModelString, traceCtx)
     }
     if (judgments === null) continue
 

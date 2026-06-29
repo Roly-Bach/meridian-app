@@ -247,7 +247,7 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
   // on it-support without reducing violations) — this checks the actual
   // candidate against history with a judge instead of relying on instruction
   // compliance from a lite model. Capped at one repair attempt to bound cost/latency.
-  const guard = await checkGroundingViolation(finalText, opts.history, modelString)
+  const guard = await checkGroundingViolation(finalText, opts.history, modelString, opts.traceCtx)
   if (guard.violation) {
     console.warn('[talker:grounding] violation detected, regenerating once', {
       claim: guard.claim,

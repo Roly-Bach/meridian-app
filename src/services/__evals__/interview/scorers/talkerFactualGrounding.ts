@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
+import { buildTraceMetadata, type TraceCtx } from '@/services/_telemetry'
 import { getJudgeModel } from './dialogNaturalness'
 import type { TurnRecord } from './types'
 
@@ -55,6 +56,7 @@ export function parseGroundingResponse(text: string): TalkerFactualGroundingResu
 export async function scoreTalkerFactualGrounding(
   turns: TurnRecord[],
   evalModel: string,
+  traceCtx?: TraceCtx,
 ): Promise<TalkerFactualGroundingResult> {
   // Turn 1 has no prior history to violate — nothing to check.
   if (turns.length < 2) return { violations: 0, rationale: '' }
@@ -75,6 +77,11 @@ export async function scoreTalkerFactualGrounding(
       prompt: `Transkript:\n\n${transcript}`,
       maxOutputTokens: 800,
       temperature: 0,
+      experimental_telemetry: buildTraceMetadata('scorer.talker_factual_grounding', {
+        ...traceCtx,
+        component: 'judge_talker_grounding',
+        environment: traceCtx?.environment ?? 'eval',
+      }),
     })
     return parseGroundingResponse(text)
   } catch (err) {
