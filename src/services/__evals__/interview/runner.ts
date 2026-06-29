@@ -759,6 +759,7 @@ async function runInterview(
   evalStore: EvalStore,
   runIndex?: number,
   totalRuns?: number,
+  onTokenUsage?: (r: { component: string; model: string; inputTokens: number; cacheReadTokens?: number; outputTokens: number }) => void,
 ): Promise<InterviewResult> {
   // Override INTERVIEW_MODEL for this run
   process.env.INTERVIEW_MODEL = model
@@ -893,6 +894,7 @@ async function runInterview(
       userInput: personaResponse,
       timerMinutes: simulatedTimerMinutes,
       traceCtx: traceCtx as Record<string, unknown>,
+      onTokenUsage,
     }, evalStore.turnPorts)
 
     const agentText = await turnResult.stream.text
@@ -1181,7 +1183,14 @@ async function main() {
 
         const evalStore = await createEvalStore(store)
         try {
-          const result = await runInterview(model, persona, personaName, baselineLabel, evalStore, runIndex, runs)
+          const tokenUsageRecords: TokenUsageRecord[] = []
+          // Broad parameter type satisfies RunTurnInput.OnTokenUsage (component: string);
+          // cast to TokenUsageRecord is safe because every caller passes valid union values.
+          const onTokenUsage = (r: { component: string; model: string; inputTokens: number; cacheReadTokens?: number; outputTokens: number }) => {
+            tokenUsageRecords.push(r as TokenUsageRecord)
+          }
+
+          const result = await runInterview(model, persona, personaName, baselineLabel, evalStore, runIndex, runs, onTokenUsage)
 
           // Flush OTel spans before scoring (ensures traces are in Langfuse)
           await flushLangfuse().catch(() => {})
@@ -1193,7 +1202,10 @@ async function main() {
             interviewStatus: result.finalInterviewStatus,
             evalModel: model,
             expectedProcessCount: persona.expectedProcessCount,
+            onTokenUsage,
           }, isolatedCriteria)
+
+          const cost = computeCostSummary(tokenUsageRecords)
 
           const { filepath: reportPath, passed } = writeReport({
             model,
@@ -1209,6 +1221,7 @@ async function main() {
             runSeed: runs > 1 ? seed + runIndex - 1 : undefined,
             totalRuns: runs,
             isolatedCriteria,
+            cost,
           })
 
           console.log(`\n[eval] Report written: ${reportPath}`)
