@@ -1,0 +1,183 @@
+# PROJ-40: Eval-Instrument-Validierung + Versuchsplan
+
+## Status: Architected
+**Type:** Revision
+**Domain:** Interview Engine
+**Extends:** PROJ-31
+**Appetite:** L
+**Bugs:** —
+**Created:** 2026-06-30
+**Last Updated:** 2026-06-30
+
+## Dependencies
+- Requires: PROJ-31 (Eval-Schärfung) — die bestehenden Scorer + Gate-Logik, die hier auditiert und revidiert werden
+- Requires: PROJ-21 (Eval-Foundation) — Runner, Personas, Trail-Metriken
+- Requires: PROJ-34 (TurnStore-Port) — `--store pglite` für DB-freie, reproduzierbare Validierungsläufe
+- Entschieden durch: [ADR-020](../../docs/adr/ADR-020-eval-methodik-modell-benchmarking.md) (Eval-Methodik für Modell-Benchmarking)
+- Blockt: PROJ-41 (Interview-Modell-Auswahl) — das Go/No-Go-Verdikt, der korrigierte Gate-Satz und der Versuchsplan sind harte Voraussetzung für PROJ-41
+
+## Kontext
+
+Bevor Modelle verglichen werden (PROJ-41), muss das Messinstrument stimmen. Im Eval wirken drei
+Rollen: Interview (Prüfling), Test (Persona-Simulator) und Eval (Judges). Test und Eval sind das
+Messwerkzeug. PROJ-40 validiert dieses Werkzeug in zwei Schichten und schreibt einen Versuchsplan
+fest. ADR-020 ist die Methodik-Klammer; diese Spec realisiert sie, entscheidet die Architektur nicht neu.
+
+Zwei Befunde aus dem Grilling treiben die Spec:
+1. `evaluateGate()` prüft real fünf Bedingungen; `hallucination_rate`, `overwrite_churn`,
+   `talker_grounding_violations` stehen mit Zielwert nur im Report, gaten aber nicht.
+2. Der Tester wird kostenseitig gar nicht erfasst (kein `onTokenUsage` am Simulator-Call).
+
+## User Stories
+- Als Benchmarker will ich, dass jede Gate-Metrik einen dokumentierten, robusten Zweck hat, damit ich Modellvergleichen vertrauen kann.
+- Als Benchmarker will ich, dass das Eval auch Qualitätsdimensionen erfasst, die heute von keiner Metrik gemessen werden, damit ein echter Modellunterschied nicht unsichtbar bleibt.
+- Als Benchmarker will ich wissen, ob Test- und Eval-Modelle stark genug sind, bevor ich ein großes Benchmarking starte, damit ich nicht mit einem kaputten Messwerkzeug messe.
+- Als Benchmarker will ich die Kosten je Rolle (Interview/Test/Eval) getrennt sehen, damit die Ersparnis eines günstigen Interview-Modells nicht im fixen Test-/Eval-Overhead untergeht.
+- Als Entwickler will ich, dass das korrigierte Gate die bisher nur berichteten Faktentreue-Schwellen tatsächlich durchsetzt, damit ein Lauf nicht trotz Grounding-Verletzung PASS sein kann.
+- Als Benchmarker will ich einen festgeschriebenen Versuchsplan, damit PROJ-41-Läufe reproduzierbar und vergleichbar sind.
+
+## Acceptance Criteria
+
+### A — Metrik-Audit + Gate-Revision + Erweiterung (Design-Validität der Metriken)
+- [ ] Jeder Scorer im Inventar ist im Audit-Dokument auf sechs Achsen bewertet: Validität, Schwellen-Herkunft, Sensitivität, Redundanz, Gate-Zugehörigkeit, Benchmark-Eignung. Inventar: completionCorrectness, slotCoverage, dedupSlotCoverage, stepRegistrationCoverage, dialogNaturalness, slotDepth, talkerFactualGrounding, hallucinationRate, blockedRate, overwriteChurn, confidenceTrigger, anchoringViolations, phaseAdherence, schemaConformanceRate, toolCallPlausibility.
+- [ ] Die Redundanz-Kandidaten slotCoverage vs. dedupSlotCoverage und hallucinationRate vs. talkerFactualGrounding sind als „behalten / zusammenführen / entfernen" entschieden und begründet.
+- [ ] **Coverage-Lücken-Analyse:** geprüft, welche Dimensionen der Interview- und Extraktions-Qualität von KEINER bestehenden Metrik erfasst werden (Kandidaten z.B. Latenz/TTFT, Frage-Redundanz/-Effizienz, Themen-/Schritt-Abdeckungsbreite, Tiefe-vs-Breite, Gesprächs-Fortschritt pro Turn). Wo eine Lücke einen Modellunterschied verstecken würde, ist eine neue Metrik vorgeschlagen und, falls begründet, implementiert + getestet. Latenz/TTFT (unten) ist eine konkrete Instanz dieser Analyse.
+- [ ] `evaluateGate` ist überarbeitet: jede Gate-Bedingung hat eine dokumentierte Schwellen-Begründung, und die Promotion von hallucination_rate / talker_grounding_violations / overwrite_churn ins Gate ist entschieden und umgesetzt.
+- [ ] Latenz/TTFT ist als Antwortvariable erfasst, oder dokumentiert begründet, warum sie im pglite-Eval nicht messbar ist und wo sie stattdessen erhoben wird.
+- [ ] Bestehende Scorer-Unit-Tests sind grün; geänderte Metriken und das geänderte Gate haben aktualisierte Tests.
+
+### B — Kosten-Dreiteilung Interview/Test/Eval
+- [ ] Das `component`-Enum enthält `tester`; der Persona-Simulator-Call erfasst Token via `onTokenUsage`.
+- [ ] `computeCostSummary` weist drei Buckets aus: `tester` im Test-Bucket, `grounding_guard` im Interview-Bucket, Judges im Eval-Bucket.
+- [ ] `MODEL_PRICING` ist pro vollem `provider/model`-String geführt; ein Lauf mit einem Modell ohne Preis-Eintrag warnt sichtbar oder schlägt fehl, statt still auf Gemini-Lite-Preise zu fallen.
+- [ ] Ein Eval-Report zeigt Kosten in drei getrennten Töpfen.
+
+### C — Instrument-Validierung Stufe 1: Design-Validität von Persona + Tester-Prompt
+- [ ] Eine dokumentierte Design-Checkliste für Persona und Tester-System-Prompt existiert (Items im Versuchsplan): Persona realistisch/vollständig/nicht-trivial-kooperativ; Tester-Prompt bleibt in Rolle, legt nicht alles in Turn 1 offen, über-kooperiert nicht.
+- [ ] Jede der drei Personas (buchhalter, vertriebler, it-support) und der Tester-System-Prompt sind gegen die Checkliste reviewt, Befunde dokumentiert.
+- [ ] Gezielte Transkript-Fehlersuche auf definierte Fehlermodi (Rollenbruch, Voraus-Komplett-Offenlegung, Über-Kooperation) ist durchgeführt und dokumentiert.
+
+### D — Instrument-Validierung Stufe 2: Modell-Eignung + Verdikt
+- [ ] Judge-Kalibrierung durchgeführt: Übereinstimmung Produktions-Judge vs. stärkerer Referenz-Judge auf einer Stichprobe gemessen und gegen die Versuchsplan-Schwelle bewertet, mit dokumentiertem ja/nein je eval-zeitlichem Judge.
+- [ ] Tester-Stabilität durchgeführt: Reihenfolge der Interview-Modelle über schwachen vs. stärkeren Tester verglichen und gegen das Versuchsplan-Stabilitätsband bewertet, mit dokumentiertem ja/nein.
+- [ ] Go/No-Go-Verdikt dokumentiert: „Sind die aktuellen Test- und Eval-Modelle ausreichend?" je Rolle, mit Begründung. Bei „nein": welche Mindeststärke nötig ist (die Auswahl des stärkeren Modells selbst ist PROJ-41).
+
+### E — Versuchsplan
+- [ ] `docs/evals/versuchsplan-modell-benchmarking.md` existiert mit: Faktoren, Stufen, Zielgrößen (validierte Metriken + Latenz + Kosten je Bucket), Kontrollen (konstant gehaltene Größen), Replikation (runs × seeds), Analyse + Entscheidungsregel, sowie den konkreten Schwellen aus Stufe 1 und 2.
+
+### F — Gating (hartes Gate auf PROJ-41)
+- [ ] Dokumentiert ist: PROJ-41-Screening darf erst starten, wenn Stufe 1 und Stufe 2 mit dokumentiertem Verdikt bestanden sind.
+
+## Edge Cases
+- Eine Metrik wird im Audit als fundamental ungültig erkannt (nicht nur Schwelle daneben): entfernen oder aufspalten, im Audit-Dokument begründet, Tests und Gate entsprechend angepasst.
+- Der Referenz-Judge ist selbst inkonsistent (zwei Läufe, andere Note): seine Stabilität vorab prüfen (mehrfach laufen lassen), sonst ist die Kalibrierung wertlos.
+- Judge-Kalibrierung sagt „nicht ausreichend", aber kein sinnvoll stärkerer Judge ist verfügbar: Verdikt bleibt „nein", Beschaffung/Auswahl ist PROJ-41; PROJ-40 blockt sauber statt zu beschönigen.
+- Tester-Stabilität ist nicht eindeutig (Ranking teils stabil, teils nicht): konservativ als „nein/unklar" werten; die Entscheidungsregel im Versuchsplan definiert die Grenze.
+- Latenz ist im pglite-Eval nicht real messbar (synthetischer Tester, keine Netz-Latenz): dokumentieren, Latenz erst in PROJ-41 Stage-2 gegen die echte Provider-API erheben.
+- Die Gate-Revision kippt bestehende Referenz-/Baseline-Läufe von PASS auf FAIL: bewusst akzeptiert; im Audit-Dokument festhalten, welche historischen Läufe betroffen wären.
+
+## Technical Requirements
+- Validierungsläufe DB-frei via `--store pglite` (PROJ-34), reproduzierbar mit festem Seed.
+- Kein Eingriff in den Prod-Turn-Pfad in PROJ-40: die EU-Judge-Generalisierung des Prod-`grounding_guard` (ADR-020 D2) gehört zu PROJ-41. `evaluateGate` ist eval-runner-intern, kein Prod-Code.
+- Test- und Eval-Modelle sind eval-intern, keine EU-Pflicht (ADR-020 D1) — Referenz-Judge und stärkerer Tester dürfen Frontier-Modelle sein.
+
+---
+<!-- Sections below are added by subsequent skills -->
+
+## Tech Design (Solution Architect)
+
+### Was gebaut wird (Überblick)
+
+Internes Eval-Werkzeug. Keine UI, kein Nutzer-Flow, kein DB-Schema, kein externer Service. Drei
+Bausteine: (1) Code-Anpassungen im Eval-Baum, (2) zwei Validierungs-Harnesses, (3) Dokument-Artefakte
+im Repo. Der Prod-Turn-Pfad wird nicht angefasst.
+
+### A) Modul- und Artefakt-Struktur
+
+```
+PROJ-40 Fundament
+├── Code im Eval-Baum (src/services/__evals__/interview/)
+│   ├── Kosten-Dreiteilung   → runner.ts: component 'tester', dritter Bucket, MODEL_PRICING-Refactor
+│   ├── Gate-Revision        → runner.ts: evaluateGate überarbeitet
+│   └── Metrik-Erweiterung   → scorers/: neue Scorer nach bestehendem Muster, je ein ScoreSet-Feld
+├── Validierungs-Harnesses (neu, eigene CLI-Einstiege, nutzen Runner-Bausteine)
+│   ├── Judge-Kalibrierung   → offline auf bestehenden *.transcript.json
+│   └── Tester-Stabilität    → frische Läufe, TESTER_MODEL gesweept
+└── Dokument-Artefakte (docs/evals/)
+    ├── versuchsplan-modell-benchmarking.md
+    └── instrument-validierung/  (Audit-Report, Kalibrierungs-Ergebnis, Stabilitäts-Ergebnis, Go/No-Go-Verdikt)
+```
+
+### B) Was entsteht und gespeichert wird
+
+- **Audit-Report:** je Metrik die 6-Achsen-Bewertung + Entscheidung (behalten/ändern/zusammenführen/entfernen/neu).
+- **Kalibrierungs-Ergebnis:** pro eval-zeitlichem Judge eine Übereinstimmungszahl (Prod-Judge vs. Referenz-Judge) auf einer stratifizierten Stichprobe der vorhandenen Transkripte (aktuell 96 Stück, 3 Modelle × 3 Personas).
+- **Stabilitäts-Ergebnis:** Ranking-Vergleich der Interview-Modelle über Tester-Stärke (schwach vs. stark).
+- **Go/No-Go-Verdikt:** ja/nein je Rolle, bei „nein" die nötige Mindeststärke.
+- **Versuchsplan:** Faktoren, Stufen, Zielgrößen, Kontrollen, Replikation, Entscheidungsregel + die konkreten Schwellen.
+- **Speicherort:** Dateien im Repo unter `docs/evals/`. Keine DB, kein externer Dienst.
+
+### C) Tech-Entscheidungen (begründet)
+
+| Entscheidung | Begründung |
+|---|---|
+| Judge-Kalibrierung offline auf den bestehenden 96 Transkripten, nicht über frische Läufe | Billiger, und isoliert den Judge von Interview-Modell-Varianz: dieselben fixierten Transkripte werden von zwei Judges bewertet. Frische Läufe nur, falls ein Stratum (Persona × Modell) fehlt. |
+| Zwei getrennte Harness-Skripte statt Flags am Hauptrunner | Distinkte Experimente mit anderer Ausgabeform. Der Hauptrunner bleibt auf Eval-Reports fokussiert. Beide Harnesses importieren Runner-Bausteine (Persona-Laden, `resolveModel`, Scorer), kein Code-Duplikat. |
+| Referenz-Judge und stärkerer Tester über bestehende Provider (Anthropic/Google), eval-intern | ADR-020 D1: Test/Eval sind EU-frei. Kein OpenRouter (das ist PROJ-41). Referenz-Judge aus anderem Vendor als der Prod-Judge, um Cross-Vendor-Integrität zu wahren. |
+| Neue Metriken folgen dem bestehenden Scorer-Muster: ScoreSet-Feld + Scorer-Funktion + `runAllScorers`-Verdrahtung | Report und Gate lesen einheitlich aus `ScoreSet`; eine neue Metrik wird automatisch mitgeführt. |
+| `MODEL_PRICING`-Miss laut statt still | Ein unbekanntes Modell darf nicht heimlich mit Gemini-Lite-Preisen gerechnet werden, das verfälscht den Kostenvergleich (Akzeptanzkriterium B). |
+| Kein Eingriff in den Prod-Turn-Pfad | `evaluateGate` ist eval-runner-intern. Die Prod-Guard-EU-Judge-Generalisierung ist PROJ-41 (ADR-020 D2). |
+
+### D) Dependencies (Pakete)
+
+Keine neuen Pakete. Die Übereinstimmungs-Statistik (z.B. Level-Match-Quote oder Kappa) wird lokal
+berechnet, kein Stats-Paket nötig.
+
+### Abgrenzung und Risiken
+
+- Der Transkript-Korpus ist buchhalter-lastig. Die Kalibrierungs-Stichprobe muss über Persona und
+  Modell stratifiziert werden, sonst kalibriert man primär auf einer Persona.
+- Tester-Stabilität braucht echte Läufe (Token-Kosten). Klein halten: ein Interview-Modell, zwei
+  Tester-Stärken, fester Seed, alle drei Personas.
+- Latenz im DB-freien pglite-Eval ist evtl. nicht aussagekräftig (synthetischer Tester). Im
+  Versuchsplan klären, ggf. erst in PROJ-41 Stage-2 gegen die echte Provider-API messen.
+
+### Build-Zuschnitt (autonom vs. Checkpoint)
+
+PROJ-40 wird nicht in einem autonomen Durchlauf gebaut. Code geht über `/build`, die Urteils- und
+Lauf-Teile sind Checkpoints. Sequenz:
+
+**Batch 1 — autonom, vorab (Code + Prep, keine LLM-Kosten):**
+- Kosten-Dreiteilung (Kriterium B): `tester`-Component, Token-Erfassung, dritter Bucket, `MODEL_PRICING`-Refactor + Tests.
+- **Stichproben-Auswahl für die Judge-Kalibrierung:** die 96 Transkripte stratifiziert nach Persona × Modell (× Qualitätsstufe, inkl. bewusst schwacher Läufe, wo Judges am ehesten divergieren), eine definierte Sample-Liste (~20–30) erzeugen. Reine Datei-Analyse, kein LLM-Call.
+- Harness-Skripte (Judge-Kalibrierung offline, Tester-Stabilität) als Code, inkl. lokaler Übereinstimmungs-Statistik.
+
+**Checkpoint — Nutzer:**
+- Audit-Entscheidungen (A): Metrik-Validität, Redundanz-Auflösung, Gate-Promotion, neue Metriken.
+- Persona/Tester-Design-Review (C) + Versuchsplan-Schwellen (E).
+- Ausführung der Validierungsläufe (LLM-Kosten/Keys, Judge-Key-Preflight) und das Go/No-Go-Verdikt (D).
+
+**Batch 2 — autonom, nach den Entscheidungen:**
+- Gate-Revision in `evaluateGate` gemäß Promotion-Entscheidung + Tests.
+- Die beschlossenen neuen Metriken als Scorer (ScoreSet-Feld + Funktion + `runAllScorers`) + Tests.
+
+Begründung: Batch 1 hängt von keiner Entscheidung ab und kostet kein LLM-Budget. Gate-Revision und
+neue Metriken (Batch 2) brauchen die Audit-Entscheidungen aus dem Checkpoint als Input.
+
+## QA Test Results
+_To be added by /qa_
+
+## Deployment
+_To be added by /deploy_
+
+## Post-Mortem
+_To be added by /deploy_
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | — |
+| Appetite vs. tatsächlich | geschätzt: L / tatsächlich: — |
+| Größte Überraschung | — |
+| Vorgeschlagene Regeländerung | — |
+| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
+| Häufigste Fehlerkategorie im Loop | — |
