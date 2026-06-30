@@ -148,3 +148,29 @@ Schwellen aus D3.
   keine echte Netz-Latenz), Klärung im Versuchsplan.
 - KI-18 (Prod-Guard, zurückgestellt) ist mit D2 verknüpft: die EU-Judge-Anforderung wird zur
   Randbedingung, sobald der Guard wieder aktiv verifiziert wird.
+
+## Nachtrag (2026-06-30): Produkt-Refokus auf KI-Potenzial
+
+> Amendment, nicht Änderung. D1–D6 bleiben unverändert gültig. Dieser Nachtrag hält eine
+> Produktentscheidung fest, die das Optimierungsziel der Eval verschiebt und im PROJ-40-Metrik-Audit
+> aufkam.
+
+Der Prototyp fokussiert auf den KI-Potenzial-Aspekt (relevante Stellen + Abhängigkeiten +
+quantitative Potenzial-Facetten als ROI-Eingang); der Wissensverlust-/Wissensmanagement-Aspekt
+(vollständige + tiefe Gesamterfassung) ist zurückgestellt (siehe PRD „Prototyp-Fokus").
+
+**Konsequenz für die Eval-Metriken** (Details + 6-Achsen-Audit in
+`docs/evals/instrument-validierung/metrik-audit.md`):
+
+- Befund: das heutige Gate zentriert auf `dedupSlotCoverage`, das die 9 taziten/strukturellen Felder
+  zählt und die **Potenzial-Facetten** (`frequency_per_month`, `duration_minutes`, `error_rate_percent`,
+  `media_breaks`) explizit ausschließt — also die eigentlichen ROI-/Automatisierbarkeits-Signale.
+- Beschluss (Batch 2): neue Metrik `potenzialCoverage` (ROI-Facetten-Erfassung) ergänzen, erst
+  berichten, Gate-Schwelle nach erstem Benchmark datengestützt setzen; eigene
+  Abhängigkeits-Erfassungs-Metrik; `conversationalEfficiency` (Turns/Slots) als Versuchsplan-Zielgröße.
+- `dedupSlotCoverage` bleibt im Gate (Erkundungs-Breite, überwiegend automatisierbarkeits-relevante
+  Felder), `slotDepth` bleibt relevant, aber auf automatisierbarkeits-entscheidende Felder fokussiert
+  (Gate-Kandidat erst nach Persona-Anreicherung mit KI-Kandidaten-Ground-Truth, Checkpoint C).
+- `hallucination_rate`: nicht ins Gate; der grobe 10-Zeichen-Prefix-Prüfer wird auf semantische bzw.
+  Span-Vertrauens-Prüfung umgebaut (string-genaues Zitat-Matching ist im LLM-Kontext der falsche Test).
+- `schemaConformanceRate`: Diagnose (capture-then-normalize), kein harter Gate-Floor.

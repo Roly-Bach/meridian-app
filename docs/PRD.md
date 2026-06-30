@@ -3,6 +3,9 @@
 ## Vision
 Meridian erhebt implizites Prozesswissen von Mitarbeitern durch KI-geführte Interviews, speichert es strukturiert mit Vektorsemantik in Supabase pgvector und leitet daraus automatisch priorisierte KI Use Cases mit ROI-Berechnung ab. Unternehmen verlieren kritisches Wissen wenn Mitarbeiter gehen; KI Use Cases entstehen aus Bauchgefühl statt Daten. Meridian macht beides systematisch und messbar.
 
+### Prototyp-Fokus (Stand 2026-06-30)
+Die Vision adressiert zwei Aspekte: (i) Wissensverlust-Sicherung und (ii) Identifikation KI-prädestinierter Prozessstellen. Der Prototyp fokussiert bewusst auf **Aspekt (ii) KI-Potenzial-Analyse**; Aspekt (i) Wissensmanagement ist vorerst zurückgestellt. Konsequenz: Vollständigkeit und Tiefe auf Gesamt-Prozessebene sind nachrangig — entscheidend ist das Erfassen der relevanten Stellen, ihrer quantitativen Potenzial-Facetten (Frequenz, Dauer, Fehlerquote, Medienbrüche → ROI) und ihrer Abhängigkeiten. Diese Priorisierung steuert die Eval-Metrik-Wahl (siehe [ADR-020 Nachtrag](adr/ADR-020-eval-methodik-modell-benchmarking.md) und `docs/evals/instrument-validierung/metrik-audit.md`).
+
 ## Target Users
 - **KI-Berater / Strategieberater** — begleiten Unternehmen bei KI-Adoption, brauchen Datengrundlage statt Schätzungen
 - **Heads of Operations / Process Owner** — wollen Prozesswissen sichern bevor Mitarbeiter gehen
