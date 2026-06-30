@@ -29,6 +29,7 @@ import {
   scoreTalkerFactualGrounding,
   type TurnRecord,
 } from '../scorers'
+import { normalizeStepEntry } from '@/services/interviewSemantic'
 import type { StepEntry } from '@/services/interviewSemantic'
 
 // ─── Pure agreement statistics (LLM-free, unit-tested) ──────────────────────────
@@ -107,7 +108,14 @@ function loadTranscript(item: CalibrationSampleItem): FrozenTranscript {
   // calibration-sample.json stores absolute paths; fall back to cwd-relative if the
   // file was moved/checked out on another machine.
   const p = fs.existsSync(item.path) ? item.path : path.resolve(process.cwd(), item.path)
-  return JSON.parse(fs.readFileSync(p, 'utf8')) as FrozenTranscript
+  const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as FrozenTranscript
+  // Frozen transcripts can predate PROJ-25 (step.potenzial absent) — normalize to the current
+  // schema exactly like the production load path, sonst crasht slotDepth/potenzial-Zugriff auf
+  // Altdaten. (Bug aus dem ersten Stufe-1-Lauf 2026-07-01.)
+  return {
+    turns: raw.turns,
+    finalStepTracker: (raw.finalStepTracker ?? []).map((s, i) => normalizeStepEntry(s, i + 1)),
+  }
 }
 
 // Versuchsplan Stufe 1: Bestehensgrenze für Prod-vs-Referenz-Judge-Übereinstimmung
