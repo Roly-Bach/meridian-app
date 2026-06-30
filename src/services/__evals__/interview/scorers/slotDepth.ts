@@ -162,10 +162,12 @@ export async function scoreSlotDepth(
   turns: TurnRecord[],
   evalModel: string,
   onTokenUsage?: (r: TokenUsageRecord) => void,
+  judgeModelOverride?: string,
 ): Promise<SlotDepthResult> {
   if (finalStepTracker.length === 0) return { depth_score: null, depth_distribution: null }
 
-  const judgeModelString = getJudgeModel(evalModel)
+  // PROJ-40 D: Judge-Override für die Kalibrierung (s. dialogNaturalness).
+  const judgeModelString = judgeModelOverride ?? getJudgeModel(evalModel)
   const startTime = Date.now()
   const allStufen: number[] = []
   const rationaleLines: string[] = []

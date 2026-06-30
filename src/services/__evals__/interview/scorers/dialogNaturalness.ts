@@ -87,6 +87,7 @@ export async function scoreDialogNaturalness(
   evalModel: string,
   isolatedCriteria = false,
   onTokenUsage?: (r: TokenUsageRecord) => void,
+  judgeModelOverride?: string,
 ): Promise<DialogNaturalnessResult> {
   const agentTexts = turns.map(t => t.agentText).filter(t => t.trim().length > 0)
   if (agentTexts.length === 0) return { score: 0.5, rationale: '' }
@@ -102,7 +103,9 @@ export async function scoreDialogNaturalness(
         ]
       : agentTexts
 
-  const judgeModelString = getJudgeModel(evalModel)
+  // PROJ-40 D (Judge-Kalibrierung): erlaubt, den Judge gegen einen Referenz-Judge zu tauschen,
+  // ohne das eval-Modell zu ändern (Prod- vs. Referenz-Judge auf demselben fixierten Transkript).
+  const judgeModelString = judgeModelOverride ?? getJudgeModel(evalModel)
 
   if (isolatedCriteria) {
     return scoreWithIsolatedCriteria(sample, judgeModelString, onTokenUsage)

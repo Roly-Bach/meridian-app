@@ -56,6 +56,7 @@ export async function scoreTalkerFactualGrounding(
   turns: TurnRecord[],
   evalModel: string,
   onTokenUsage?: (r: TokenUsageRecord) => void,
+  judgeModelOverride?: string,
 ): Promise<TalkerFactualGroundingResult> {
   // Turn 1 has no prior history to violate — nothing to check.
   if (turns.length < 2) return { violations: 0, rationale: '' }
@@ -69,7 +70,8 @@ export async function scoreTalkerFactualGrounding(
     .join('\n\n')
 
   try {
-    const judgeModelString = getJudgeModel(evalModel)
+    // PROJ-40 D: Judge-Override für die Kalibrierung (s. dialogNaturalness).
+    const judgeModelString = judgeModelOverride ?? getJudgeModel(evalModel)
     const model = resolveModel(judgeModelString)
     const result = await generateText({
       model,

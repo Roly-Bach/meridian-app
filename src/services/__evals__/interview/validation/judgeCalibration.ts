@@ -110,51 +110,71 @@ function loadTranscript(item: CalibrationSampleItem): FrozenTranscript {
   return JSON.parse(fs.readFileSync(p, 'utf8')) as FrozenTranscript
 }
 
-// ─── CLI scaffold (Checkpoint execution only — guarded against import) ───────────
+// Versuchsplan Stufe 1: Bestehensgrenze für Prod-vs-Referenz-Judge-Übereinstimmung
+// (Landis-Koch "substantial"). Level-Match-Quote als Begleitwert (Kappa-Paradox-Check).
+const KAPPA_THRESHOLD = 0.61
+
+type Dim = 'dialog' | 'depth' | 'grounding'
+interface Paired { prod: number; ref: number }
+
+// ─── CLI runner (Checkpoint execution; guarded against import) ───────────────────
 
 async function main(): Promise<void> {
-  const prodJudgeModel = process.env.EVAL_JUDGE_MODEL ?? 'google/gemini-3.5-flash'
   const referenceJudgeModel = process.env.EVAL_REFERENCE_JUDGE_MODEL ?? 'anthropic/claude-sonnet-4-5'
 
-  // Resolve both up-front so an unconfigured/invalid model string fails the preflight,
-  // not midway through the (expensive) calibration pass.
-  resolveModel(prodJudgeModel)
+  // Preflight (Regel „Judge-API-Key validieren"): Referenz-Judge muss auflösen; der Prod-Judge
+  // wird je Transkript aus getJudgeModel(model) abgeleitet (für Gemini-Interviews = Haiku, also
+  // Anthropic). Mini-Resolve up-front, damit ein ungültiges Modell hart scheitert, nicht erst
+  // mitten im teuren Lauf.
   resolveModel(referenceJudgeModel)
 
   const sample = loadSample()
-  console.log(`[judgeCalibration] ${sample.length} transcripts, prod=${prodJudgeModel} ref=${referenceJudgeModel}`)
+  console.log(`[judgeCalibration] ${sample.length} Transkripte, prod=getJudgeModel(model) ref=${referenceJudgeModel}`)
 
-  const prodLevels: Record<'dialog' | 'depth' | 'grounding', number[]> = { dialog: [], depth: [], grounding: [] }
-  const refLevels: Record<'dialog' | 'depth' | 'grounding', number[]> = { dialog: [], depth: [], grounding: [] }
+  const paired: Record<Dim, Paired[]> = { dialog: [], depth: [], grounding: [] }
 
   for (const item of sample) {
     const t = loadTranscript(item)
-
-    // Production judge: the scorers derive their judge from the eval-model string (getJudgeModel),
-    // so the prod pass passes the sample's own model. The reference pass needs a judge-model
-    // OVERRIDE the scorers don't yet expose — wiring that override is the Checkpoint/Batch-2 step;
-    // here both passes are structured identically so only the model source differs.
-    const [dialog, depth, grounding] = await Promise.all([
+    // Prod-Pass: kein Override → Judge = getJudgeModel(item.model) (was die Produktion nutzt).
+    // Referenz-Pass: Override = referenceJudgeModel. Gleiche fixierte Transkripte, nur Judge variiert.
+    const [pDialog, pDepth, pGrounding, rDialog, rDepth, rGrounding] = await Promise.all([
       scoreDialogNaturalness(t.turns, item.model),
       scoreSlotDepth(t.finalStepTracker, t.turns, item.model),
       scoreTalkerFactualGrounding(t.turns, item.model),
+      scoreDialogNaturalness(t.turns, item.model, false, undefined, referenceJudgeModel),
+      scoreSlotDepth(t.finalStepTracker, t.turns, item.model, undefined, referenceJudgeModel),
+      scoreTalkerFactualGrounding(t.turns, item.model, undefined, referenceJudgeModel),
     ])
-    prodLevels.dialog.push(dialog.score)
-    prodLevels.depth.push(depth.depth_score ?? -1)
-    prodLevels.grounding.push(grounding.violations)
 
-    // TODO(Checkpoint): re-run the same three scorers through `referenceJudgeModel` once the
-    // scorers accept a judge-model override, and push into refLevels for the comparison below.
-  }
-
-  for (const dim of ['dialog', 'depth', 'grounding'] as const) {
-    if (refLevels[dim].length === 0) {
-      console.log(`[judgeCalibration] ${dim}: reference pass not wired (Checkpoint step) — prod levels collected: ${prodLevels[dim].length}`)
-      continue
+    // Diskretisierung je Dimension für die Übereinstimmungs-Statistik:
+    paired.dialog.push({ prod: pDialog.score, ref: rDialog.score }) // 0.33/0.67/1.0
+    if (pDepth.depth_score != null && rDepth.depth_score != null) {
+      paired.depth.push({ prod: Math.round(pDepth.depth_score), ref: Math.round(rDepth.depth_score) }) // Stufe 1/2/3
     }
-    const agreement = computeAgreement(prodLevels[dim], refLevels[dim])
-    console.log(`[judgeCalibration] ${dim}: n=${agreement.n} match=${agreement.matchRate} kappa=${agreement.kappa}`)
+    paired.grounding.push({ prod: pGrounding.violations > 0 ? 1 : 0, ref: rGrounding.violations > 0 ? 1 : 0 }) // binär
+    console.log(`[judgeCalibration] ${item.persona}/${item.model}: dialog ${pDialog.score}/${rDialog.score}`)
   }
+
+  const out: string[] = [
+    '# Judge-Kalibrierung — Ergebnis (PROJ-40 Stufe 1)',
+    '',
+    `prod=getJudgeModel(model) · ref=${referenceJudgeModel} · n=${sample.length} · Schwelle κ≥${KAPPA_THRESHOLD}`,
+    '',
+    '| Dimension | n | Level-Match | Cohen-κ | Verdikt |',
+    '|---|---|---|---|---|',
+  ]
+  for (const dim of ['dialog', 'depth', 'grounding'] as const) {
+    const a = computeAgreement(paired[dim].map(p => p.prod), paired[dim].map(p => p.ref))
+    const verdict = a.kappa >= KAPPA_THRESHOLD ? 'PASS' : 'FAIL'
+    out.push(`| ${dim} | ${a.n} | ${a.matchRate} | ${a.kappa} | ${verdict} |`)
+    console.log(`[judgeCalibration] ${dim}: n=${a.n} match=${a.matchRate} κ=${a.kappa} → ${verdict}`)
+  }
+
+  const outDir = path.resolve(process.cwd(), 'docs', 'evals', 'instrument-validierung')
+  fs.mkdirSync(outDir, { recursive: true })
+  const outFile = path.join(outDir, `judge-kalibrierung-${new Date().toISOString().slice(0, 10)}.md`)
+  fs.writeFileSync(outFile, out.join('\n') + '\n', 'utf8')
+  console.log(`[judgeCalibration] Ergebnis → ${outFile}`)
 }
 
 // Only run when executed directly (not when imported by tests) — otherwise importing

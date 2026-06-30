@@ -1,6 +1,7 @@
 import { POTENZIAL_SLOT_NAMES, TAZITE_SLOT_NAMES } from '@/services/interviewSemantic'
 import type { StepEntry } from '@/services/interviewSemantic'
 import type { TurnRecord } from './types'
+import { tokenContainment } from './textOverlap'
 
 /**
  * PROJ-28/BL-E2.1 — Hallucination Rate
@@ -8,11 +9,18 @@ import type { TurnRecord } from './types'
  * Fraction of filled slot values whose evidence quote cannot be found in any
  * user turn transcript. Lower is better; target < 0.01 (1%).
  *
- * A slot is "suspicious" when its stored quote has no 10-char prefix match in
- * the concatenated user turns. This is a conservative proxy — the grounding
- * guard (ADR-015) already rejects span-mismatches at write time, so a
- * non-zero rate indicates either guard bypass or legacy entries.
+ * PROJ-40 (Audit): der frühere 10-Zeichen-Prefix-Match war im LLM-Kontext der falsche Test
+ * (LLMs paraphrasieren, ein verbatim-Prefix scheitert an jeder Umformulierung). Ersetzt durch
+ * Token-Containment (textOverlap.ts): ein Zitat gilt als gedeckt, wenn ein hinreichender Anteil
+ * seiner Inhaltswörter im Transkript vorkommt. Robust gegen Paraphrase, weiterhin deterministisch.
+ * Konservativer Proxy — der Grounding-Guard (ADR-015) lehnt Span-Mismatches schon zur Schreibzeit
+ * ab, eine non-null-Rate deutet auf Guard-Umgehung oder Altdaten.
  */
+
+// Mindest-Containment, ab dem ein Zitat als im Transkript gedeckt gilt. 0.5 lässt Paraphrase Raum,
+// ohne klare Fabrikation (kaum gemeinsame Inhaltswörter) durchzulassen. Nicht gate-relevant
+// (PROJ-40: hallucination_rate bleibt berichtet), daher unkritisch kalibriert.
+const GROUNDING_CONTAINMENT_THRESHOLD = 0.5
 export function scoreHallucinationRate(turns: TurnRecord[], finalStepTracker: StepEntry[]): number {
   const allUserText = turns.map((t) => t.userInput).join(' ')
 
@@ -53,8 +61,6 @@ function quoteFoundInTranscript(quote: string | null | undefined, transcript: st
   const trimmed = quote.trim().replace(SURROUNDING_QUOTE_CHARS, '')
   if (trimmed.startsWith('[')) return true // backfill marker (e.g. [auto-backfill...]) — not a hallucination
   if (trimmed.length < 5) return true // too short to verify — assume ok
-  const normalizedQuote = trimmed.toLowerCase().replace(/\s+/g, ' ')
-  const normalizedTranscript = transcript.toLowerCase().replace(/\s+/g, ' ')
-  const prefix = normalizedQuote.substring(0, 10)
-  return normalizedTranscript.includes(prefix)
+  // Token-Containment statt 10-Zeichen-Prefix (PROJ-40 Audit): robust gegen Paraphrase.
+  return tokenContainment(trimmed, transcript) >= GROUNDING_CONTAINMENT_THRESHOLD
 }
