@@ -32,6 +32,10 @@ import {
   scoreToolCallPlausibility,
   scoreCompletionCorrectness,
   scoreStepRegistrationCoverage,
+  scorePotenzialCoverage,
+  scoreDedupPotenzialCoverage,
+  scoreDependencyCapture,
+  scoreConversationalEfficiency,
 } from '../src/services/__evals__/interview/scorers'
 import type { BaselineFile, TranscriptFixture } from '../src/services/__evals__/interview/replay/types'
 
@@ -53,6 +57,12 @@ function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['score
     slotCoveragePreClarification: slotCoverage,
     dedupSlotCoveragePreClarification: dedupSlotCoverage,
     clarificationCoverageDelta: 0,
+    // PROJ-40 KI-Potenzial-Metriken sind deterministisch → offline berechenbar (kein LLM).
+    potenzialCoverage: round2(scorePotenzialCoverage(fixture.finalStepTracker)),
+    dedupPotenzialCoverage: round2(scoreDedupPotenzialCoverage(fixture.finalStepTracker)),
+    dependencyCapture: round2(scoreDependencyCapture(fixture.finalStepTracker)),
+    slotsPerTurn: scoreConversationalEfficiency(fixture.turns, fixture.finalStepTracker).slotsPerTurn,
+    turnsToCompletion: scoreConversationalEfficiency(fixture.turns, fixture.finalStepTracker).turnsToCompletion,
     phaseAdherence: round2(scorePhaseAdherence(fixture.turns)),
     phaseProgression: round2(scorePhaseProgression(fixture.turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(fixture.turns),

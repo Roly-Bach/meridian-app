@@ -35,6 +35,19 @@ export interface ScoreSet {
   dedupSlotCoveragePreClarification: number
   /** L9: delta = final − pre. Positive = clarification lifted coverage. 0 = no clarification ran. */
   clarificationCoverageDelta: number
+  // PROJ-40 Refokus KI-Potenzial: die ROI-/Automatisierbarkeits-Signale, die slotCoverage bewusst
+  // ausschließt. potenzialCoverage = quantitative Facetten (Frequenz/Dauer/Fehlerquote/Medienbrüche),
+  // dependencyCapture = O6-Abhängigkeiten, slotsPerTurn = Effizienz.
+  /** Raw Potenzial-Facetten-Coverage. */
+  potenzialCoverage: number
+  /** De-fragmentierte Potenzial-Coverage (gate-relevante Form). */
+  dedupPotenzialCoverage: number
+  /** Fraction deduplizierter Schritte mit erfasster Abhängigkeit. */
+  dependencyCapture: number
+  /** Gefüllte Slots pro Turn (Effizienz, maximize). */
+  slotsPerTurn: number
+  /** Turns bis Abschluss (Diagnose). */
+  turnsToCompletion: number
   phaseAdherence: number
   phaseProgression: number
   anchoringViolations: number

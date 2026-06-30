@@ -13,6 +13,9 @@ import { scoreHallucinationRate } from './hallucinationRate'
 import { scoreConfidenceTrigger } from './confidenceTrigger'
 import { scoreSlotDepth } from './slotDepth'
 import { scoreTalkerFactualGrounding } from './talkerFactualGrounding'
+import { scorePotenzialCoverage, scoreDedupPotenzialCoverage } from './potenzialCoverage'
+import { scoreDependencyCapture } from './dependencyCapture'
+import { scoreConversationalEfficiency } from './conversationalEfficiency'
 import { estimateTokenCost, computeCostSummary, MODEL_PRICING } from './costSummary'
 import type { ScorerInput, ScoreSet } from './types'
 
@@ -32,6 +35,10 @@ export {
   scoreConfidenceTrigger,
   scoreSlotDepth,
   scoreTalkerFactualGrounding,
+  scorePotenzialCoverage,
+  scoreDedupPotenzialCoverage,
+  scoreDependencyCapture,
+  scoreConversationalEfficiency,
   estimateTokenCost,
   computeCostSummary,
   MODEL_PRICING,
@@ -52,12 +59,19 @@ export async function runAllScorers(input: ScorerInput, isolatedCriteria = false
   const slotCoveragePreClarification = round2(scoreSlotCoverage(preTracker))
   const dedupSlotCoveragePreClarification = round2(scoreDedupCoverage(preTracker))
 
+  const efficiency = scoreConversationalEfficiency(input.turns, input.finalStepTracker)
+
   return {
     slotCoverage,
     dedupSlotCoverage,
     slotCoveragePreClarification,
     dedupSlotCoveragePreClarification,
     clarificationCoverageDelta: round2(dedupSlotCoverage - dedupSlotCoveragePreClarification),
+    potenzialCoverage: round2(scorePotenzialCoverage(input.finalStepTracker)),
+    dedupPotenzialCoverage: round2(scoreDedupPotenzialCoverage(input.finalStepTracker)),
+    dependencyCapture: round2(scoreDependencyCapture(input.finalStepTracker)),
+    slotsPerTurn: efficiency.slotsPerTurn,
+    turnsToCompletion: efficiency.turnsToCompletion,
     phaseAdherence: round2(scorePhaseAdherence(input.turns)),
     phaseProgression: round2(scorePhaseProgression(input.turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(input.turns),
