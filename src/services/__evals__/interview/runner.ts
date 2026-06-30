@@ -43,8 +43,9 @@ import {
 import { ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/interviewAnalyst'
 import { runInterviewTurn } from '@/services/runInterviewTurn'
 import { type TraceCtx } from '@/services/_telemetry'
-import type { Persona } from './personas/types'
+import type { Persona, DisclosureMode } from './personas/types'
 import { PERSONA_MAP } from './personas/loadPersona'
+import { disclosureRules } from './personas/disclosure'
 import { perturbPersona } from './perturbation'
 import { createEvalStore, type EvalStore, type EvalStoreKind, type ClarificationAnswer } from './evalStore'
 import { runAllScorers, computeCostSummary, type TurnRecord, type ScoreSet, type TokenUsageRecord, type CostSummary, type ComponentCostSummary } from './scorers'
@@ -67,6 +68,7 @@ interface RunArgs {
   noPerturbation: boolean
   isolatedCriteria: boolean
   store: EvalStoreKind
+  disclosureMode: DisclosureMode
 }
 
 function printUsage(): void {
@@ -83,6 +85,7 @@ function printUsage(): void {
   console.error('  --no-perturbation  Skip persona perturbation (default: false)')
   console.error('  --isolated-criteria  Use isolated criteria mode for dialogNaturalness (default: false)')
   console.error('  --store           Persistence backend: supabase | pglite (default: supabase, env: EVAL_STORE)')
+  console.error('  --disclosure-mode Tester disclosure: withhold_numbers_only | withhold_tools_and_numbers (default: withhold_numbers_only, env: TESTER_DISCLOSURE_MODE)')
   console.error('  --baseline-label  Label for this run (stored in report frontmatter)')
 }
 
@@ -96,6 +99,7 @@ function parseArgs(): RunArgs {
   let noPerturbation = false
   let isolatedCriteria = false
   let store: string | null = null
+  let disclosureMode: string | null = null
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--models' && args[i + 1]) {
@@ -126,6 +130,8 @@ function parseArgs(): RunArgs {
       isolatedCriteria = true
     } else if (args[i] === '--store' && args[i + 1]) {
       store = args[++i].trim()
+    } else if (args[i] === '--disclosure-mode' && args[i + 1]) {
+      disclosureMode = args[++i].trim()
     } else if (!args[i].startsWith('--') && !personas) {
       // Backward-compatible: positional persona arg
       personas = [args[i]]
@@ -147,6 +153,14 @@ function parseArgs(): RunArgs {
     process.exit(1)
   }
 
+  // Tester-Offenlegungs-Modus (PROJ-40 C): flag > TESTER_DISCLOSURE_MODE env > withhold_numbers_only.
+  const disclosureRaw = (disclosureMode ?? process.env.TESTER_DISCLOSURE_MODE ?? 'withhold_numbers_only').trim()
+  if (disclosureRaw !== 'withhold_numbers_only' && disclosureRaw !== 'withhold_tools_and_numbers') {
+    console.error(`[runner] --disclosure-mode must be 'withhold_numbers_only' or 'withhold_tools_and_numbers', got: ${disclosureRaw}`)
+    printUsage()
+    process.exit(1)
+  }
+
   // Normalize bare model IDs (no provider prefix) → google/ default
   const normalizeModel = (m: string) => (m.includes('/') ? m : `google/${m}`)
 
@@ -159,6 +173,7 @@ function parseArgs(): RunArgs {
     noPerturbation,
     isolatedCriteria,
     store: storeRaw,
+    disclosureMode: disclosureRaw,
   }
 }
 
@@ -199,6 +214,7 @@ async function generatePersonaResponse(
   agentText: string,
   history: { role: 'user' | 'assistant'; content: string }[],
   onTokenUsage?: (r: { component: string; model: string; inputTokens: number; cacheReadTokens?: number; outputTokens: number }) => void,
+  disclosureMode: DisclosureMode = 'withhold_numbers_only',
 ): Promise<string> {
   const testerModelString = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(testerModelString)
@@ -219,7 +235,7 @@ async function generatePersonaResponse(
       `Besonderheiten: ${persona.style.tendencies.join('; ')}`,
       '',
       'WICHTIG: Antworte AUSSCHLIESSLICH auf Basis deines Prozesswissens. Erfinde keine Fakten.',
-      'Teile konkrete Zahlen (Mengen, Zeitangaben, Prozentwerte) und Tool-Namen nur auf direkte Nachfrage mit.',
+      ...disclosureRules(disclosureMode),
       'Antworte in der Ich-Perspektive, auf Deutsch. Maximal 3–4 Sätze.',
       'WICHTIG: Verwende NIEMALS dieselbe Einleitungsphrase wie in einer vorherigen Antwort dieses Gesprächs. Wenn du "Ich fange damit an, die Rechnung zu prüfen" oder eine ähnliche Formulierung bereits gesagt hast, ist sie VERBOTEN — wähle einen anderen Einstieg.',
       'KONTEXTREGEL: Beantworte immer den gerade erfragten Prozess. Wenn der Interviewer nach Monatsabschluss, Mahnprozess oder einem anderen Thema fragt, beginne NICHT mit Rechnungsprüfungs-Phrasen.',
@@ -696,6 +712,7 @@ async function runInterview(
   runIndex?: number,
   totalRuns?: number,
   onTokenUsage?: (r: { component: string; model: string; inputTokens: number; cacheReadTokens?: number; outputTokens: number }) => void,
+  disclosureMode: DisclosureMode = 'withhold_numbers_only',
 ): Promise<InterviewResult> {
   // Override INTERVIEW_MODEL for this run
   process.env.INTERVIEW_MODEL = model
@@ -775,7 +792,7 @@ async function runInterview(
   let lastAgentText = greeting
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const personaResponse = await generatePersonaResponse(persona, lastAgentText, conversationHistory, onTokenUsage)
+    const personaResponse = await generatePersonaResponse(persona, lastAgentText, conversationHistory, onTokenUsage, disclosureMode)
     console.log(`\n[${persona.identity.name}]: ${personaResponse}`)
     conversationHistory.push({ role: 'user', content: personaResponse })
 
@@ -1079,7 +1096,7 @@ function writeAggregateReport(opts: {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { models, personas, baselineLabel, runs, seed, noPerturbation, isolatedCriteria, store } = parseArgs()
+  const { models, personas, baselineLabel, runs, seed, noPerturbation, isolatedCriteria, store, disclosureMode } = parseArgs()
 
   if (personas.length === 0) {
     printUsage()
@@ -1094,7 +1111,7 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`[runner] seed=${seed} runs=${runs} noPerturbation=${noPerturbation} isolatedCriteria=${isolatedCriteria} store=${store}`)
+  console.log(`[runner] seed=${seed} runs=${runs} noPerturbation=${noPerturbation} isolatedCriteria=${isolatedCriteria} store=${store} disclosureMode=${disclosureMode}`)
 
   // Enable Langfuse tracing for all eval runs
   process.env.LANGFUSE_ENABLED = 'true'
@@ -1126,7 +1143,7 @@ async function main() {
             tokenUsageRecords.push(r as TokenUsageRecord)
           }
 
-          const result = await runInterview(model, persona, personaName, baselineLabel, evalStore, runIndex, runs, onTokenUsage)
+          const result = await runInterview(model, persona, personaName, baselineLabel, evalStore, runIndex, runs, onTokenUsage, disclosureMode)
 
           // Flush OTel spans before scoring (ensures traces are in Langfuse)
           await flushLangfuse().catch(() => {})

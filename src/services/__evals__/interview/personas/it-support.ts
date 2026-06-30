@@ -7,14 +7,14 @@ export const itSupport: Persona = {
     department: 'IT',
     yearsExperience: 5,
   },
+  // Persönlichkeit (wortkarg); Offenlegungs-Disziplin ist entkoppelt → disclosureMode (PROJ-40 C).
   description:
-    'Wortkarg, kurze Antworten. Gibt erst bei direkter Nachfrage konkrete Details — Laddering ist notwendig.',
+    'Wortkarg, kurze Antworten. Laddering ist notwendig.',
   style: {
     verbosity: 'concise',
     tone: 'informal',
     tendencies: [
       'antwortet in Halbsätzen oder Ein-Wort-Antworten, kein Fließtext',
-      'gibt konkrete Zahlen nur wenn direkt nach Beispielen oder Häufigkeiten gefragt',
       'weicht aus mit "Kommt drauf an" wenn unsicher, ohne weitere Erklärung',
     ],
   },
@@ -50,4 +50,19 @@ export const itSupport: Persona = {
     additionalContext:
       'Wechselt beim Bearbeiten eines Tickets im Schnitt ca. 3× zwischen Jira, Remote Desktop und Wiki.',
   },
+  // Scorer-only, NIE an den Tester serialisiert. Kanonische Soll-Werte aus der Narration abgeleitet.
+  groundTruth: [
+    {
+      process: 'Ticket-Bearbeitung',
+      aiCandidate: true, // sehr hohe Frequenz, Wiki-Lookup teils regelbasiert, 3× Tool-Wechsel = Medienbrüche
+      potenzial: { frequency_per_month: 350, media_breaks: 3 }, // 15–20/Tag × ~20 Arbeitstage
+      dependsOn: [],
+    },
+    {
+      process: 'Hardware-Tausch',
+      aiCandidate: false, // niedrigere Frequenz, physisch
+      potenzial: { frequency_per_month: 16 }, // 3–5/Woche × 4
+      dependsOn: [],
+    },
+  ],
 }
