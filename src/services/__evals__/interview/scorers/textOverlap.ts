@@ -6,6 +6,14 @@
  * Token-Containment gemessen: welcher Anteil der Inhaltswörter des Zitats taucht im Transkript
  * auf. Robust gegen Paraphrase und umschließende Zeichen, weiterhin deterministisch (kein LLM).
  */
+/** Kleinschreibung + Diakritika entfernen (ä→a, ü→u, …). ß bleibt erhalten. */
+function normalize(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
+// Stoppwörter im normalisierten Form halten — sonst scheitert der Vergleich bei Umlaut-Wörtern:
+// 'für' wird beim Tokenisieren zu 'fur' normalisiert und matchte nie gegen ein unnormalisiertes
+// 'für' im Set (Reviewer-Befund PROJ-40 Chunk 3).
 const STOPWORDS = new Set([
   'und', 'oder', 'aber', 'wenn', 'dann', 'wie', 'was', 'wer', 'wo',
   'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'einem',
@@ -14,15 +22,12 @@ const STOPWORDS = new Set([
   'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'mich', 'dich',
   'sich', 'mein', 'dein', 'unser', 'auch', 'nicht', 'noch', 'nur',
   'schon', 'also', 'dass', 'weil', 'damit', 'denn', 'bis', 'im', 'in',
-])
+].map(normalize))
 
-/** Inhaltswort-Tokens: ≥3 Zeichen, ohne deutsche Stoppwörter, diakritik-normalisiert. */
+/** Inhaltswort-Tokens: ≥3 Zeichen, ohne deutsche Stoppwörter. Umlaute werden zu ASCII normalisiert
+ * (ä→a, ü→u); da Quote und Transcript identisch transformiert werden, bleibt der Recall korrekt. */
 export function tokenizeContent(s: string): Set<string> {
-  const cleaned = s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9äöüß\s]/gi, ' ')
+  const cleaned = normalize(s).replace(/[^a-z0-9äöüß\s]/gi, ' ')
   return new Set(cleaned.split(/\s+/).filter(t => t.length >= 3 && !STOPWORDS.has(t)))
 }
 

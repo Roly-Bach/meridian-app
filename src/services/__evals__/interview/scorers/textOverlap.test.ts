@@ -12,6 +12,15 @@ describe('tokenizeContent', () => {
     expect(t.has('im')).toBe(false) // stopword
     expect(t.has('80')).toBe(false) // <3 chars
   })
+
+  it('filters the umlaut stopword "für" after diacritic normalization (Reviewer fix)', () => {
+    // 'für' → 'fur' beim Tokenisieren; das Set wird gleich normalisiert, also muss es gefiltert sein.
+    const t = tokenizeContent('Beleg für die Abrechnung')
+    expect(t.has('fur')).toBe(false)
+    expect(t.has('für')).toBe(false)
+    expect(t.has('beleg')).toBe(true)
+    expect(t.has('abrechnung')).toBe(true)
+  })
 })
 
 describe('tokenContainment', () => {

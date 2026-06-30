@@ -50,6 +50,7 @@ function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['score
   const completionCorrectness = scoreCompletionCorrectness(fixture.status)
   const slotCoverage = round2(scoreSlotCoverage(fixture.finalStepTracker))
   const dedupSlotCoverage = round2(scoreDedupCoverage(fixture.finalStepTracker))
+  const efficiency = scoreConversationalEfficiency(fixture.turns, fixture.finalStepTracker)
   return {
     slotCoverage,
     dedupSlotCoverage,
@@ -61,8 +62,8 @@ function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['score
     potenzialCoverage: round2(scorePotenzialCoverage(fixture.finalStepTracker)),
     dedupPotenzialCoverage: round2(scoreDedupPotenzialCoverage(fixture.finalStepTracker)),
     dependencyCapture: round2(scoreDependencyCapture(fixture.finalStepTracker)),
-    slotsPerTurn: scoreConversationalEfficiency(fixture.turns, fixture.finalStepTracker).slotsPerTurn,
-    turnsToCompletion: scoreConversationalEfficiency(fixture.turns, fixture.finalStepTracker).turnsToCompletion,
+    slotsPerTurn: efficiency.slotsPerTurn,
+    turnsToCompletion: efficiency.turnsToCompletion,
     phaseAdherence: round2(scorePhaseAdherence(fixture.turns)),
     phaseProgression: round2(scorePhaseProgression(fixture.turns, completionCorrectness)),
     anchoringViolations: scoreAnchoringViolations(fixture.turns),
