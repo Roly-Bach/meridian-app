@@ -1,0 +1,362 @@
+{
+  "meta": {
+    "totalTranscriptsFound": 96,
+    "totalEligible": 96,
+    "sampleSize": 29,
+    "targetSampleSize": "~20-30",
+    "stratificationRule": "Group by persona x model. Cell size <=4 -> take all. Cell size >4 -> downsample to ~6, spreading >=1 weak/FAIL entry per dense cell when available, deterministic by path sort order.",
+    "cellCounts": {
+      "buchhalter__anthropic/claude-haiku-4-5": {
+        "available": 1,
+        "selected": 1
+      },
+      "buchhalter__google/gemini-3.1-flash-lite": {
+        "available": 33,
+        "selected": 6
+      },
+      "buchhalter__google/gemini-3.5-flash": {
+        "available": 32,
+        "selected": 6
+      },
+      "it-support__google/gemini-3.1-flash-lite": {
+        "available": 17,
+        "selected": 6
+      },
+      "it-support__google/gemini-3.5-flash": {
+        "available": 2,
+        "selected": 2
+      },
+      "vertriebler__google/gemini-3.1-flash-lite": {
+        "available": 9,
+        "selected": 6
+      },
+      "vertriebler__google/gemini-3.5-flash": {
+        "available": 2,
+        "selected": 2
+      }
+    },
+    "generatedAt": "2026-06-30T13:19:12.747Z",
+    "gateNote": "qualityTier derived from 4 of 5 evaluateGate() conditions available in scores (completionCorrectness===true, dedupSlotCoverage>=0.75, stepRegistrationCoverage>=0.8, dialogNaturalness>=0.65). blockedRate (5th condition) is not persisted in transcript.json scores, excluded."
+  },
+  "sample": [
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-04/2026-06-04-22-36-00-anthropic-claude-haiku-4-5-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "anthropic/claude-haiku-4-5",
+      "status": "active",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.5,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-05/2026-06-05-08-58-34-google-gemini-3-5-flash-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": false,
+      "dialogNaturalness": 0.78,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-05/2026-06-05-11-01-53-google-gemini-3-5-flash-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": false,
+      "dialogNaturalness": 0.72,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-05/2026-06-05-14-14-38-google-gemini-3-5-flash-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.28,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-05/2026-06-05-14-31-19-google-gemini-3-5-flash-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.62,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-05/2026-06-05-15-09-21-google-gemini-3-5-flash-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.62,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-05/2026-06-05-15-19-18-google-gemini-3-5-flash-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.62,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-08/2026-06-08-14-41-37-google-gemini-3-5-flash-vertriebler.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": false,
+      "dialogNaturalness": 0.72,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-08/2026-06-08-14-44-21-google-gemini-3-5-flash-it-support.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": false,
+      "dialogNaturalness": 0.72,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-08/2026-06-08-16-40-34-google-gemini-3-5-flash-vertriebler.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": false,
+      "dialogNaturalness": 0.72,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-08/2026-06-08-16-43-54-google-gemini-3-5-flash-it-support.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.5-flash",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": false,
+      "dialogNaturalness": 0.72,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-18/2026-06-18-09-18-17-google-gemini-3-1-flash-lite-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.5,
+      "talkerGroundingViolations": null,
+      "depth_score": 2
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-18/2026-06-18-10-14-09-google-gemini-3-1-flash-lite-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.5,
+      "talkerGroundingViolations": null,
+      "depth_score": null
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-18/2026-06-18-12-57-00-google-gemini-3-1-flash-lite-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.5,
+      "talkerGroundingViolations": null,
+      "depth_score": 1
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-19/2026-06-19-08-23-10-google-gemini-3-1-flash-lite-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.5,
+      "talkerGroundingViolations": null,
+      "depth_score": 2
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-19/2026-06-19-10-58-07-google-gemini-3-1-flash-lite-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.5,
+      "talkerGroundingViolations": null,
+      "depth_score": 1
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-22/2026-06-22-08-58-08-google-gemini-3-1-flash-lite-buchhalter.transcript.json",
+      "persona": "buchhalter",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": false,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": null,
+      "depth_score": 1.92
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-11-22-google-gemini-3-1-flash-lite-vertriebler-run1.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 1,
+      "talkerGroundingViolations": 2,
+      "depth_score": 1.6
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-18-04-google-gemini-3-1-flash-lite-vertriebler-run2.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 1,
+      "depth_score": 1.86
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-19-00-google-gemini-3-1-flash-lite-it-support-run1.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 2,
+      "depth_score": 1.67
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-21-22-google-gemini-3-1-flash-lite-it-support-run2.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 1,
+      "depth_score": 1.63
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-23-55-google-gemini-3-1-flash-lite-vertriebler-run3.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 1,
+      "depth_score": 1.83
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-26-12-google-gemini-3-1-flash-lite-it-support-run3.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 1,
+      "depth_score": 1.88
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-39-11-google-gemini-3-1-flash-lite-it-support.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "active",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 1,
+      "depth_score": 1.58
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-27/2026-06-27-21-49-39-google-gemini-3-1-flash-lite-it-support.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": false,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 0,
+      "depth_score": 1.5
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-28/2026-06-28-11-10-00-google-gemini-3-1-flash-lite-it-support-run1.transcript.json",
+      "persona": "it-support",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "FAIL",
+      "weak": true,
+      "dialogNaturalness": 0.33,
+      "talkerGroundingViolations": 1,
+      "depth_score": 1.67
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-28/2026-06-28-11-24-20-google-gemini-3-1-flash-lite-vertriebler-run1.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 2,
+      "depth_score": 1.6
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-28/2026-06-28-11-36-33-google-gemini-3-1-flash-lite-vertriebler-run2.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 1,
+      "talkerGroundingViolations": 1,
+      "depth_score": 2.2
+    },
+    {
+      "path": "/Users/lias/Projects/meridian-app/docs/evals/interview/2026-06-28/2026-06-28-11-50-21-google-gemini-3-1-flash-lite-vertriebler-run3.transcript.json",
+      "persona": "vertriebler",
+      "model": "google/gemini-3.1-flash-lite",
+      "status": "completed",
+      "qualityTier": "PASS",
+      "weak": true,
+      "dialogNaturalness": 0.67,
+      "talkerGroundingViolations": 1,
+      "depth_score": 1.89
+    }
+  ]
+}

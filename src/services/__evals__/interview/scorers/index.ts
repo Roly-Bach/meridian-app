@@ -13,6 +13,7 @@ import { scoreHallucinationRate } from './hallucinationRate'
 import { scoreConfidenceTrigger } from './confidenceTrigger'
 import { scoreSlotDepth } from './slotDepth'
 import { scoreTalkerFactualGrounding } from './talkerFactualGrounding'
+import { estimateTokenCost, computeCostSummary, MODEL_PRICING } from './costSummary'
 import type { ScorerInput, ScoreSet } from './types'
 
 export {
@@ -31,6 +32,9 @@ export {
   scoreConfidenceTrigger,
   scoreSlotDepth,
   scoreTalkerFactualGrounding,
+  estimateTokenCost,
+  computeCostSummary,
+  MODEL_PRICING,
 }
 
 export async function runAllScorers(input: ScorerInput, isolatedCriteria = false): Promise<ScoreSet> {

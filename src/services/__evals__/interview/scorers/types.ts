@@ -66,7 +66,7 @@ export interface ScoreSet {
 }
 
 export interface TokenUsageRecord {
-  component: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'talker' | 'quick_extract' | 'grounding_guard' | 'judge_dialog_naturalness' | 'judge_slot_depth' | 'judge_talker_grounding'
+  component: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'talker' | 'quick_extract' | 'grounding_guard' | 'tester' | 'judge_dialog_naturalness' | 'judge_slot_depth' | 'judge_talker_grounding'
   model: string
   inputTokens: number
   cacheReadTokens?: number
@@ -83,6 +83,9 @@ export interface ComponentCostSummary {
 
 export interface CostSummary {
   interviewEngine: Record<string, ComponentCostSummary>
+  /** PROJ-40 B: the persona simulator (`tester` component) gets its own bucket — a
+   * cheap interview model's savings shouldn't be hidden inside a fixed test/eval overhead. */
+  testEngine: Record<string, ComponentCostSummary>
   evalEngine: Record<string, ComponentCostSummary>
   totalInputTokens: number
   totalCacheReadTokens: number

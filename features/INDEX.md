@@ -56,7 +56,7 @@
 | PROJ-37 | Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-37-static-prompt-drift-konsolidieren.md) | P2 | S | 0:0:0 |
 | PROJ-38 | Slot-Write-Encoding-Fix (Eval-Signal wiederherstellen) | Revision | Interview Engine | PROJ-27 | Deployed | [spec](interview-engine/PROJ-38-slot-write-encoding-eval-signal.md) | P1 | S | 0:0:0 |
 | PROJ-39 | Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth) | Revision | Interview Engine | PROJ-31 | Deployed | [spec](interview-engine/PROJ-39-eval-judge-parsing-haertung.md) | P1 | S | 0:0:1 |
-| PROJ-40 | Eval-Instrument-Validierung + Versuchsplan | Revision | Interview Engine | PROJ-31 | Architected | [spec](interview-engine/PROJ-40-eval-instrument-validierung-versuchsplan.md) | P1 | L | — |
+| PROJ-40 | Eval-Instrument-Validierung + Versuchsplan | Revision | Interview Engine | PROJ-31 | In Progress | [spec](interview-engine/PROJ-40-eval-instrument-validierung-versuchsplan.md) | P1 | L | — |
 | PROJ-41 | Interview-Modell-Auswahl (OSS-Screening + EU-Prod-Route) | Revision | Platform | PROJ-9 | Roadmap | — | P1 | L | — |
 
 <!-- Add features above this line -->

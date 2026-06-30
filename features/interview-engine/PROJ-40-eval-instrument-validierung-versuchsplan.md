@@ -1,13 +1,13 @@
 # PROJ-40: Eval-Instrument-Validierung + Versuchsplan
 
-## Status: Architected
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-31
 **Appetite:** L
 **Bugs:** —
 **Created:** 2026-06-30
-**Last Updated:** 2026-06-30
+**Last Updated:** 2026-06-30 (Batch 1 gebaut)
 
 ## Dependencies
 - Requires: PROJ-31 (Eval-Schärfung) — die bestehenden Scorer + Gate-Logik, die hier auditiert und revidiert werden
@@ -163,6 +163,32 @@ Lauf-Teile sind Checkpoints. Sequenz:
 
 Begründung: Batch 1 hängt von keiner Entscheidung ab und kostet kein LLM-Budget. Gate-Revision und
 neue Metriken (Batch 2) brauchen die Audit-Entscheidungen aus dem Checkpoint als Input.
+
+## Implementation Notes
+
+### Batch 1 — autonom, gebaut 2026-06-30 (Branch `proj-40-batch-1`, /build-Pipeline)
+
+Code + Prep ohne LLM-Kosten. Gate-Revision und neue Scorer (Batch 2) sowie alle Validierungsläufe (Checkpoint) sind bewusst NICHT enthalten.
+
+**Kriterium B — Kosten-Dreiteilung:**
+- `TokenUsageRecord.component` um `'tester'` erweitert; `CostSummary` um dritten Bucket `testEngine` ([scorers/types.ts](../../src/services/__evals__/interview/scorers/types.ts)).
+- Kosten-Logik aus `runner.ts` in testbares Modul [scorers/costSummary.ts](../../src/services/__evals__/interview/scorers/costSummary.ts) extrahiert (`MODEL_PRICING`, Component-Sets, `estimateTokenCost`, `computeCostSummary`). Drei Buckets: `tester`→testEngine, `grounding_guard`→interviewEngine, `judge_*`→evalEngine.
+- `generatePersonaResponse` (Persona-Simulator) erfasst jetzt Token via `onTokenUsage` mit component `'tester'` ([runner.ts](../../src/services/__evals__/interview/runner.ts)); `buildCostTable` rendert drei getrennte Abschnitte.
+- MODEL_PRICING-Miss: stiller Gemini-Lite-Fallback entfernt → `console.warn` (once-per-model) + Kostenbeitrag 0, kein throw (entschieden: Kostenberechnung läuft am Ende eines sonst gültigen Laufs).
+- Vokabular-Angleichung: der ungenutzte Component-Wert `tester_persona` in [_telemetry.ts](../../src/services/_telemetry.ts) auf `tester` umbenannt (null Call-Sites), damit Kosten- und Telemetrie-Union dasselbe Component-Vokabular teilen; der Persona-Simulator war der einzige Component mit zwei Namen.
+- `PERSONA_MAP` nach side-effect-freies Modul [personas/loadPersona.ts](../../src/services/__evals__/interview/personas/loadPersona.ts) ausgelagert, damit Harnesses den Loader importieren ohne `runner.ts` (das `main()` beim Import triggern würde).
+
+**Stichproben-Auswahl Judge-Kalibrierung:**
+- [validation/selectCalibrationSample.ts](../../src/services/__evals__/interview/validation/selectCalibrationSample.ts) — reines Datei-Analyse-Skript (kein LLM). Stratifiziert die 96 Transkripte nach Persona × Modell (Regel: Zelle ≤4 → alle, >4 → ~6, deterministisch nach Pfad). Artefakt: [docs/evals/instrument-validierung/calibration-sample.json](../../docs/evals/instrument-validierung/calibration-sample.json) (29 Samples, `meta` mit Zell-Zählern + `gateNote`). Korpus ist buchhalter-lastig (65/96) — im `meta` dokumentiert, flash/haiku-Zellen bleiben dünn (Befund für Checkpoint).
+
+**Harness-Gerüste (Code, NICHT ausgeführt — Ausführung = Checkpoint):**
+- [validation/judgeCalibration.ts](../../src/services/__evals__/interview/validation/judgeCalibration.ts) — CLI-Gerüst + pure `computeAgreement` (Cohen-Kappa + Level-Match-Quote, hand-implementiert). Referenz-Judge-Pass ist als Checkpoint-TODO markiert (Scorer brauchen Judge-Model-Override).
+- [validation/testerStability.ts](../../src/services/__evals__/interview/validation/testerStability.ts) — CLI-Gerüst + pure `compareRankings` (Kendall-Stil-Konkordanz) + `aggregateQuality`.
+- Beide CLIs gegen Import-Side-Effects geschützt (`import.meta.url`-Guard wie selectCalibrationSample).
+
+**Verifikation:** `tsc --noEmit` grün; `npm test` 767 passed / 1 skipped / 0 failed (59 Dateien), davon 27 neue Tests (costSummary, judgeCalibration, testerStability). Reviewer (Sonnet-Fallback, Cross-Vendor-Aider/Gemini nicht verfügbar): keine Critical/High, 2 Low/Medium-Politur-Befunde behoben.
+
+**Offen (nicht Batch 1):** Audit-Entscheidungen (A), Gate-Revision (Batch 2), neue Scorer/Latenz-Metrik (Batch 2), Persona/Tester-Design-Review (C), Validierungsläufe + Go/No-Go (D, Checkpoint), Versuchsplan (E). PROJ-41 bleibt hart gegated bis Stufe 1+2 bestanden.
 
 ## QA Test Results
 _To be added by /qa_

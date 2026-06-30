@@ -44,88 +44,17 @@ import { ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/
 import { runInterviewTurn } from '@/services/runInterviewTurn'
 import { type TraceCtx } from '@/services/_telemetry'
 import type { Persona } from './personas/types'
+import { PERSONA_MAP } from './personas/loadPersona'
 import { perturbPersona } from './perturbation'
 import { createEvalStore, type EvalStore, type EvalStoreKind, type ClarificationAnswer } from './evalStore'
-import { runAllScorers, type TurnRecord, type ScoreSet, type TokenUsageRecord, type CostSummary, type ComponentCostSummary } from './scorers'
+import { runAllScorers, computeCostSummary, type TurnRecord, type ScoreSet, type TokenUsageRecord, type CostSummary, type ComponentCostSummary } from './scorers'
 
-// ─── Persona loader ───────────────────────────────────────────────────────────
+// PERSONA_MAP moved to ./personas/loadPersona (PROJ-40 Batch 1) so validation
+// harnesses can reuse the loader without importing runner.ts (which runs main() on load).
 
-const PERSONA_MAP: Record<string, () => Promise<Persona>> = {
-  buchhalter: async () => (await import('./personas/buchhalter')).buchhalter,
-  vertriebler: async () => (await import('./personas/vertriebler')).vertriebler,
-  'it-support': async () => (await import('./personas/it-support')).itSupport,
-}
-
-// ─── Token cost tracking ──────────────────────────────────────────────────────
-
-const INTERVIEW_ENGINE_COMPONENTS = new Set([
-  'analyst', 'analyst_online', 'analyst_catchup', 'talker', 'quick_extract', 'grounding_guard',
-])
-
-const MODEL_PRICING: Record<string, { inputPer1M: number; cachePer1M: number; outputPer1M: number }> = {
-  'google/gemini-3.1-flash-lite': { inputPer1M: 0.25,  cachePer1M: 0.025, outputPer1M: 1.50 },
-  'google/gemini-3.5-flash':      { inputPer1M: 1.50,  cachePer1M: 0.150, outputPer1M: 9.00 },
-  'anthropic/claude-haiku-4-5':   { inputPer1M: 1.00,  cachePer1M: 0.10,  outputPer1M: 5.00 },
-  'anthropic/claude-sonnet-4-5':  { inputPer1M: 3.00,  cachePer1M: 0.30,  outputPer1M: 15.00 },
-}
-
-function estimateTokenCost(usage: { inputTokens: number; cacheReadTokens?: number; outputTokens: number }, model: string): number {
-  const p = MODEL_PRICING[model] ?? MODEL_PRICING['google/gemini-3.1-flash-lite']
-  const cached = usage.cacheReadTokens ?? 0
-  const nonCached = Math.max(0, usage.inputTokens - cached)
-  return (
-    nonCached * p.inputPer1M / 1_000_000 +
-    cached * p.cachePer1M / 1_000_000 +
-    usage.outputTokens * p.outputPer1M / 1_000_000
-  )
-}
-
-function computeCostSummary(records: TokenUsageRecord[]): CostSummary {
-  const byComp: Record<string, ComponentCostSummary> = {}
-
-  for (const r of records) {
-    const key = r.component
-    if (!byComp[key]) {
-      byComp[key] = { calls: 0, inputTokens: 0, cacheReadTokens: 0, outputTokens: 0, estimatedCostUsd: 0 }
-    }
-    const c = byComp[key]
-    c.calls++
-    c.inputTokens += r.inputTokens
-    c.cacheReadTokens += r.cacheReadTokens ?? 0
-    c.outputTokens += r.outputTokens
-    c.estimatedCostUsd += estimateTokenCost(r, r.model)
-  }
-
-  // Round costs to 4 decimal places
-  for (const c of Object.values(byComp)) {
-    c.estimatedCostUsd = Math.round(c.estimatedCostUsd * 10000) / 10000
-  }
-
-  const interviewEngine: Record<string, ComponentCostSummary> = {}
-  const evalEngine: Record<string, ComponentCostSummary> = {}
-
-  for (const [key, val] of Object.entries(byComp)) {
-    if (INTERVIEW_ENGINE_COMPONENTS.has(key)) interviewEngine[key] = val
-    else evalEngine[key] = val
-  }
-
-  let totalInputTokens = 0, totalCacheReadTokens = 0, totalOutputTokens = 0, totalEstimatedCostUsd = 0
-  for (const c of Object.values(byComp)) {
-    totalInputTokens += c.inputTokens
-    totalCacheReadTokens += c.cacheReadTokens
-    totalOutputTokens += c.outputTokens
-    totalEstimatedCostUsd += c.estimatedCostUsd
-  }
-
-  return {
-    interviewEngine,
-    evalEngine,
-    totalInputTokens,
-    totalCacheReadTokens,
-    totalOutputTokens,
-    totalEstimatedCostUsd: Math.round(totalEstimatedCostUsd * 10000) / 10000,
-  }
-}
+// Token cost tracking (MODEL_PRICING, estimateTokenCost, computeCostSummary) moved
+// to scorers/costSummary.ts (PROJ-40 Kriterium C) for unit-testability without the
+// full eval runner.
 
 // ─── CLI arg parser ───────────────────────────────────────────────────────────
 
@@ -269,6 +198,7 @@ async function generatePersonaResponse(
   persona: Persona,
   agentText: string,
   history: { role: 'user' | 'assistant'; content: string }[],
+  onTokenUsage?: (r: { component: string; model: string; inputTokens: number; cacheReadTokens?: number; outputTokens: number }) => void,
 ): Promise<string> {
   const testerModelString = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(testerModelString)
@@ -277,7 +207,7 @@ async function generatePersonaResponse(
     .map(m => `${m.role === 'assistant' ? 'Interviewer' : persona.identity.name}: ${m.content}`)
     .join('\n')
 
-  const { text } = await generateText({
+  const result = await generateText({
     model,
     system: [
       `Du bist ${persona.identity.name}, ${persona.identity.role} in der Abteilung ${persona.identity.department} mit ${persona.identity.yearsExperience} Jahren Erfahrung.`,
@@ -300,7 +230,15 @@ async function generatePersonaResponse(
     maxOutputTokens: 300,
   })
 
-  return text.trim()
+  onTokenUsage?.({
+    component: 'tester',
+    model: testerModelString,
+    inputTokens: result.usage?.inputTokens ?? 0,
+    cacheReadTokens: (result.usage?.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+    outputTokens: result.usage?.outputTokens ?? 0,
+  })
+
+  return result.text.trim()
 }
 
 // ─── Trail metrics ────────────────────────────────────────────────────────────
@@ -387,46 +325,44 @@ function buildCostTable(cost?: CostSummary): string {
       `| ${name} | ${c.calls} | ${fmt(c.inputTokens)} | ${fmt(c.cacheReadTokens)} | ${fmtPct(c.cacheReadTokens, c.inputTokens)} | ${fmt(c.outputTokens)} | ${fmtCost(c.estimatedCostUsd)} |`
     )
 
+  const total = (entries: Record<string, ComponentCostSummary>) =>
+    Object.values(entries).reduce((s, c) => ({
+      calls: s.calls + c.calls,
+      inputTokens: s.inputTokens + c.inputTokens,
+      cacheReadTokens: s.cacheReadTokens + c.cacheReadTokens,
+      outputTokens: s.outputTokens + c.outputTokens,
+      estimatedCostUsd: s.estimatedCostUsd + c.estimatedCostUsd,
+    }), { calls: 0, inputTokens: 0, cacheReadTokens: 0, outputTokens: 0, estimatedCostUsd: 0 })
+
   const ieRows = rows(cost.interviewEngine)
+  const teRows = rows(cost.testEngine)
   const eeRows = rows(cost.evalEngine)
 
-  const ieTotal = Object.values(cost.interviewEngine).reduce((s, c) => ({
-    calls: s.calls + c.calls,
-    inputTokens: s.inputTokens + c.inputTokens,
-    cacheReadTokens: s.cacheReadTokens + c.cacheReadTokens,
-    outputTokens: s.outputTokens + c.outputTokens,
-    estimatedCostUsd: s.estimatedCostUsd + c.estimatedCostUsd,
-  }), { calls: 0, inputTokens: 0, cacheReadTokens: 0, outputTokens: 0, estimatedCostUsd: 0 })
-
-  const eeTotal = Object.values(cost.evalEngine).reduce((s, c) => ({
-    calls: s.calls + c.calls,
-    inputTokens: s.inputTokens + c.inputTokens,
-    cacheReadTokens: s.cacheReadTokens + c.cacheReadTokens,
-    outputTokens: s.outputTokens + c.outputTokens,
-    estimatedCostUsd: s.estimatedCostUsd + c.estimatedCostUsd,
-  }), { calls: 0, inputTokens: 0, cacheReadTokens: 0, outputTokens: 0, estimatedCostUsd: 0 })
+  const ieTotal = total(cost.interviewEngine)
+  const teTotal = total(cost.testEngine)
+  const eeTotal = total(cost.evalEngine)
 
   const header = '| Komponente | Calls | Input | Cache Read | Cache-% | Output | Kosten |\n|---|---|---|---|---|---|---|'
 
+  const section = (title: string, sectionRows: string[], sectionTotal: ReturnType<typeof total>) =>
+    sectionRows.length > 0 ? [
+      '',
+      `### ${title}`,
+      header,
+      ...sectionRows,
+      `| **Zwischensumme** | **${sectionTotal.calls}** | **${fmt(sectionTotal.inputTokens)}** | **${fmt(sectionTotal.cacheReadTokens)}** | **${fmtPct(sectionTotal.cacheReadTokens, sectionTotal.inputTokens)}** | **${fmt(sectionTotal.outputTokens)}** | **${fmtCost(sectionTotal.estimatedCostUsd)}** |`,
+    ] : []
+
   const ieSection = [
     '## Token-Kosten',
-    '',
-    '### Interview-Engine',
-    header,
-    ...ieRows,
-    `| **Zwischensumme** | **${ieTotal.calls}** | **${fmt(ieTotal.inputTokens)}** | **${fmt(ieTotal.cacheReadTokens)}** | **${fmtPct(ieTotal.cacheReadTokens, ieTotal.inputTokens)}** | **${fmt(ieTotal.outputTokens)}** | **${fmtCost(ieTotal.estimatedCostUsd)}** |`,
+    ...section('Interview-Engine', ieRows, ieTotal),
   ]
-
-  const eeSection = eeRows.length > 0 ? [
-    '',
-    '### Eval-Engine',
-    header,
-    ...eeRows,
-    `| **Zwischensumme** | **${eeTotal.calls}** | **${fmt(eeTotal.inputTokens)}** | **${fmt(eeTotal.cacheReadTokens)}** | **${fmtPct(eeTotal.cacheReadTokens, eeTotal.inputTokens)}** | **${fmt(eeTotal.outputTokens)}** | **${fmtCost(eeTotal.estimatedCostUsd)}** |`,
-  ] : []
+  const teSection = section('Test-Engine', teRows, teTotal)
+  const eeSection = section('Eval-Engine', eeRows, eeTotal)
 
   return [
     ...ieSection,
+    ...teSection,
     ...eeSection,
     '',
     `### Gesamt: ${fmtCost(cost.totalEstimatedCostUsd)} / Run`,
@@ -839,7 +775,7 @@ async function runInterview(
   let lastAgentText = greeting
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const personaResponse = await generatePersonaResponse(persona, lastAgentText, conversationHistory)
+    const personaResponse = await generatePersonaResponse(persona, lastAgentText, conversationHistory, onTokenUsage)
     console.log(`\n[${persona.identity.name}]: ${personaResponse}`)
     conversationHistory.push({ role: 'user', content: personaResponse })
 
