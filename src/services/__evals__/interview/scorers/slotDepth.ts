@@ -126,7 +126,9 @@ ${slotsText}`
 
   try {
     const model = resolveModel(judgeModelString)
-    const { object, usage } = await generateObject({ model, schema: SlotDepthSchema, prompt, temperature: 0, maxOutputTokens: 2048 })
+    // Großzügiges Limit: geschwätzige Modelle (gemini-3.5-flash) + Multi-Slot-Batches laufen sonst
+    // ins Limit → abgeschnittenes JSON → NoObjectGeneratedError (PROJ-40 D Lauf 2).
+    const { object, usage } = await generateObject({ model, schema: SlotDepthSchema, prompt, temperature: 0, maxOutputTokens: 4000 })
     onTokenUsage?.({
       component: 'judge_slot_depth',
       model: judgeModelString,

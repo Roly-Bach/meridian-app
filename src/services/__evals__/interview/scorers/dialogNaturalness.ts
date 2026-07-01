@@ -123,7 +123,9 @@ export async function scoreDialogNaturalness(
       schema: DialogSchema,
       system: JUDGE_SYSTEM,
       prompt: `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`,
-      maxOutputTokens: 1000,
+      // Großzügig: geschwätzige Modelle (gemini-3.5-flash) laufen sonst ins Limit → abgeschnittenes
+      // JSON → NoObjectGeneratedError (PROJ-40 D Lauf 2).
+      maxOutputTokens: 3000,
       temperature: 0,
     })
     onTokenUsage?.({

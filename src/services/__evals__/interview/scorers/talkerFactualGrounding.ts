@@ -95,7 +95,8 @@ export async function scoreTalkerFactualGrounding(
       schema: GroundingSchema,
       system: JUDGE_SYSTEM,
       prompt: `Transkript:\n\n${transcript}`,
-      maxOutputTokens: 1200,
+      // Großzügig gegen Truncation bei geschwätzigen Modellen (PROJ-40 D Lauf 2).
+      maxOutputTokens: 2500,
       temperature: 0,
     })
     onTokenUsage?.({
