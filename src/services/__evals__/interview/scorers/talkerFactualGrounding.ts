@@ -1,4 +1,5 @@
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
+import { z } from 'zod'
 import { resolveModel } from '@/lib/llm-provider'
 import { getJudgeModel } from './dialogNaturalness'
 import type { TurnRecord, TokenUsageRecord } from './types'
@@ -23,11 +24,19 @@ const JUDGE_SYSTEM = `Du prüfst ein Interview-Transkript (Agent fragt, Mitarbei
 
 Suche im Agent-Text nach Referenzen auf frühere Mitarbeiter-Aussagen, z.B. "Du hast vorhin X erwähnt", "Du sagtest X", "Wie du beschrieben hast, X", "Du hast von X gesprochen". Prüfe für jede solche Referenz, ob X (wörtlich oder sinngemäß, auch Umrechnungen wie Tage→Minuten zählen als ungedeckt wenn sie einem ANDEREN Sachverhalt zugeordnet werden) tatsächlich in einem VORHERIGEN Mitarbeiter-Turn steht.
 
-Eine Verletzung liegt vor, wenn der Agent dem Mitarbeiter eine Aussage zuschreibt, die er so nicht gemacht hat — auch wenn der referenzierte Wert an anderer Stelle im Transkript zu einem anderen Sachverhalt vorkommt.
+Eine Verletzung liegt vor, wenn der Agent dem Mitarbeiter eine Aussage zuschreibt, die er so nicht gemacht hat — auch wenn der referenzierte Wert an anderer Stelle im Transkript zu einem anderen Sachverhalt vorkommt. Findest du keine Verletzung, gib eine leere Liste zurück.`
 
-WICHTIG: Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, kein Markdown, kein Fließtext.
-Format: {"violations": [{"turn": <Turn-Nummer des Agent-Texts>, "claim": "<die falsche Zuschreibung>", "reason": "<kurz, warum ungedeckt>"}]}
-Keine Verletzungen gefunden: {"violations": []}`
+// Structured output erzwingt valides Schema modellunabhängig (PROJ-40 D: gemini-3.5-flash hielt
+// die frühere „JSON-only"-Textanweisung nicht ein → Prosa/Truncation/Fallback).
+const GroundingSchema = z.object({
+  violations: z.array(
+    z.object({
+      turn: z.number().describe('Turn-Nummer des Agent-Texts'),
+      claim: z.string().describe('die falsche Zuschreibung'),
+      reason: z.string().describe('kurz, warum ungedeckt'),
+    }),
+  ),
+})
 
 export interface TalkerFactualGroundingResult {
   violations: number
@@ -81,24 +90,29 @@ export async function scoreTalkerFactualGrounding(
     // PROJ-40 D: Judge-Override für die Kalibrierung (s. dialogNaturalness).
     const judgeModelString = judgeModelOverride ?? getJudgeModel(evalModel)
     const model = resolveModel(judgeModelString)
-    const result = await generateText({
+    const { object, usage } = await generateObject({
       model,
+      schema: GroundingSchema,
       system: JUDGE_SYSTEM,
       prompt: `Transkript:\n\n${transcript}`,
-      maxOutputTokens: 800,
+      maxOutputTokens: 1200,
       temperature: 0,
     })
     onTokenUsage?.({
       component: 'judge_talker_grounding',
       model: judgeModelString,
-      inputTokens: result.usage.inputTokens ?? 0,
-      cacheReadTokens: (result.usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
-      outputTokens: result.usage.outputTokens ?? 0,
+      inputTokens: usage.inputTokens ?? 0,
+      cacheReadTokens: (usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+      outputTokens: usage.outputTokens ?? 0,
     })
-    return parseGroundingResponse(result.text)
+    const violations = object.violations
+    const rationale = violations
+      .map((v) => `Turn ${v.turn}: "${v.claim}" — ${v.reason}`)
+      .join('\n')
+    return { violations: violations.length, rationale }
   } catch (err) {
     console.warn('[scorer:talker_factual_grounding] judge call failed, returning 0:', err)
-    // A failed judge call is an unreliable 0, same artifact class as a parser fallback.
+    // A failed structured-output call is an unreliable 0, same artifact class as the old parser fallback.
     return { violations: 0, rationale: '', parseFailed: true }
   }
 }

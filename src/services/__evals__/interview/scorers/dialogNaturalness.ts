@@ -1,4 +1,5 @@
-import { generateText } from 'ai'
+import { generateText, generateObject } from 'ai'
+import { z } from 'zod'
 import { resolveModel } from '@/lib/llm-provider'
 import type { TurnRecord, TokenUsageRecord } from './types'
 
@@ -15,16 +16,20 @@ export function getJudgeModel(evalModel: string): string {
 }
 
 const JUDGE_SYSTEM = `Du bist ein Qualitätsprüfer für KI-Interview-Dialoge auf Deutsch.
-Bewerte die folgenden Agent-Texte nach ihrer Gesprächsnatürlichkeit.
+Bewerte die folgenden Agent-Texte nach ihrer Gesprächsnatürlichkeit und gib eine Stufe (1-3) mit kurzer Begründung (max 80 Wörter).
 
 Rubrik:
 - Stufe 1 (oberflächlich): generische Einleitungen/Floskeln ("Sicher!", "Natürlich!", "Gerne!", "Das ist eine gute Frage!"), häufige Stilbrüche, inkonsistente Du-Form
 - Stufe 2 (angemessen): überwiegend natürliche Sprache, vereinzelte Mängel, Du-Form meist eingehalten
-- Stufe 3 (exzellent): durchgehend natürlich, höflich, keine generischen Floskeln, konsequente Du-Form, keine abrupten Themensprünge
+- Stufe 3 (exzellent): durchgehend natürlich, höflich, keine generischen Floskeln, konsequente Du-Form, keine abrupten Themensprünge`
 
-WICHTIG: Antworte AUSSCHLIESSLICH mit einem JSON-Objekt. Kein Markdown, keine Überschriften, kein Fließtext davor oder danach.
-Exaktes Format (beginne direkt mit der öffnenden geschweifte Klammer):
-{"stufe": 2, "begruendung": "kurze Begründung in max 80 Wörtern"}`
+// Structured output erzwingt valides Schema modellunabhängig (PROJ-40 D). Die frühere
+// „AUSSCHLIESSLICH JSON"-Textanweisung hielt gemini-3.5-flash nicht ein (Prosa/Truncation → Fallback).
+const DialogSchema = z.object({
+  stufe: z.number().int().min(1).max(3).describe('1=oberflächlich, 2=angemessen, 3=exzellent'),
+  begruendung: z.string().describe('kurze Begründung, max 80 Wörter'),
+})
+const STUFE_TO_SCORE: Record<number, number> = { 1: 0.33, 2: 0.67, 3: 1.0 }
 
 const MAX_SAMPLE_TURNS = 8
 
@@ -113,22 +118,23 @@ export async function scoreDialogNaturalness(
 
   try {
     const model = resolveModel(judgeModelString)
-    const result = await generateText({
+    const { object, usage } = await generateObject({
       model,
+      schema: DialogSchema,
       system: JUDGE_SYSTEM,
       prompt: `Agent-Texte:\n\n${sample.map((t, i) => `[${i + 1}] ${t}`).join('\n\n')}`,
-      maxOutputTokens: 600,
+      maxOutputTokens: 1000,
       temperature: 0,
     })
     onTokenUsage?.({
       component: 'judge_dialog_naturalness',
       model: judgeModelString,
-      inputTokens: result.usage.inputTokens ?? 0,
-      cacheReadTokens: (result.usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
-      outputTokens: result.usage.outputTokens ?? 0,
+      inputTokens: usage.inputTokens ?? 0,
+      cacheReadTokens: (usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+      outputTokens: usage.outputTokens ?? 0,
     })
 
-    return parseJudgeResponse(result.text)
+    return { score: STUFE_TO_SCORE[object.stufe] ?? 0.5, rationale: object.begruendung }
   } catch (err) {
     console.warn('[scorer:dialog_naturalness] judge call failed, returning 0.5:', err)
     return { score: 0.5, rationale: '' }

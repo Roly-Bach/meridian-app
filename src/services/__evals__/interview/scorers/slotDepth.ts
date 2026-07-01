@@ -1,7 +1,20 @@
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
+import { z } from 'zod'
 import { resolveModel } from '@/lib/llm-provider'
 import type { StepEntry } from '@/services/interviewSemantic'
 import type { TurnRecord, TokenUsageRecord } from './types'
+
+// Structured output erzwingt valides Schema modellunabhängig (PROJ-40 D): die frühere
+// „JSON-Array"-Textanweisung lieferte bei gemini-3.5-flash nur 3/29 parsebare Antworten.
+const SlotDepthSchema = z.object({
+  bewertungen: z.array(
+    z.object({
+      slot: z.string(),
+      begruendung: z.string(),
+      stufe: z.number().int().min(1).max(3),
+    }),
+  ),
+})
 
 export interface SlotDepthResult {
   depth_score: number | null
@@ -76,7 +89,7 @@ function getStepTurns(stepTitle: string, turns: TurnRecord[]): TurnRecord[] {
 interface SlotJudgment {
   slot: string
   begruendung: string
-  stufe: 1 | 2 | 3
+  stufe: number // schema-garantiert 1|2|3 (min(1).max(3).int)
 }
 
 async function callJudge(
@@ -101,6 +114,7 @@ ${RUBRIC}
 
 Beurteile jeden Slot unabhängig voneinander. Schreibe für jeden Slot zuerst die Begründung, dann die Stufe (REQ-010: Begründung vor Stufe).
 Verweise in der Begründung eines Slots nicht auf das Urteil anderer Slots in diesem Batch.
+Gib für jeden zu bewertenden Slot genau einen Eintrag zurück.
 
 Prozessschritt: ${step.title}
 
@@ -108,48 +122,20 @@ Gesprächsauszüge des Schritts (für Stufe-3-Beurteilung):
 ${turnsText}
 
 Zu bewertende Slots:
-${slotsText}
-
-Antworte ausschließlich als JSON-Array:
-[
-  { "slot": "<slot_name>", "begruendung": "<begründung>", "stufe": <1|2|3> }
-]`
+${slotsText}`
 
   try {
     const model = resolveModel(judgeModelString)
-    const result = await generateText({ model, prompt, temperature: 0, maxOutputTokens: 2048 })
+    const { object, usage } = await generateObject({ model, schema: SlotDepthSchema, prompt, temperature: 0, maxOutputTokens: 2048 })
     onTokenUsage?.({
       component: 'judge_slot_depth',
       model: judgeModelString,
-      inputTokens: result.usage.inputTokens ?? 0,
-      cacheReadTokens: (result.usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
-      outputTokens: result.usage.outputTokens ?? 0,
+      inputTokens: usage.inputTokens ?? 0,
+      cacheReadTokens: (usage.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+      outputTokens: usage.outputTokens ?? 0,
     })
-    const text = result.text
-    // First attempt: strip Markdown fences and parse directly
-    const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(cleaned)
-    } catch {
-      // Second attempt: extract JSON array by finding first '[' and last ']'
-      // Handles prose-wrapped outputs or fence variants the first pass missed
-      const start = text.indexOf('[')
-      const end = text.lastIndexOf(']')
-      if (start === -1 || end === -1 || end <= start) return null
-      try {
-        parsed = JSON.parse(text.slice(start, end + 1))
-      } catch {
-        return null
-      }
-    }
-    if (!Array.isArray(parsed)) return null
-    return parsed.filter(
-      (j): j is SlotJudgment =>
-        typeof (j as SlotJudgment).slot === 'string' &&
-        typeof (j as SlotJudgment).begruendung === 'string' &&
-        [1, 2, 3].includes((j as SlotJudgment).stufe),
-    )
+    // Schema garantiert Form + stufe∈{1,2,3}; der spätere Loop filtert defensiv erneut.
+    return object.bewertungen
   } catch {
     return null
   }

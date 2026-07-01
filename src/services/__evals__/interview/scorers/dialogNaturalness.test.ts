@@ -1,16 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('ai', () => ({ generateText: vi.fn() }))
+vi.mock('ai', () => ({ generateText: vi.fn(), generateObject: vi.fn() }))
 vi.mock('@/lib/llm-provider', () => ({ resolveModel: vi.fn().mockReturnValue({}) }))
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: vi.fn() }),
 }))
 
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
 import { parseJudgeResponse, scoreDialogNaturalness } from './dialogNaturalness'
 import type { TurnRecord } from './types'
 
 const hasApiKey = !!(process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.ANTHROPIC_API_KEY)
+
+// generateObject-Mock-Helfer: Hauptpfad (isolatedCriteria=false) nutzt structured output (PROJ-40 D).
+const asDialogObj = (stufe: number, begruendung = 'ok') =>
+  ({ object: { stufe, begruendung }, usage: { inputTokens: 0, outputTokens: 0 } } as unknown as Awaited<ReturnType<typeof generateObject>>)
 
 // ─── Parser Tests ─────────────────────────────────────────────────────────────
 
@@ -164,7 +168,7 @@ describe('scoreDialogNaturalness — Positions-Swap Integration (key-gated)', ()
   it.skipIf(!hasApiKey)(
     'Positions-Swap: gemappter Score-Delta ≤ 0.34 (Stufen-Differenz ≤ 1, EVAL-J-02)',
     async () => {
-      const mockGenerateText = vi.mocked(generateText)
+      const mockGenerateObject = vi.mocked(generateObject)
 
       const sampleTurns: TurnRecord[] = [
         { turnNumber: 1, userInput: 'Ich bearbeite täglich Eingangsrechnungen.', agentText: 'Hallo Andreas. Schön, dass wir sprechen.', phase: 'intro', toolCalls: [] },
@@ -176,9 +180,9 @@ describe('scoreDialogNaturalness — Positions-Swap Integration (key-gated)', ()
         .map((t, i) => ({ ...t, turnNumber: i + 1 }))
 
       // Simulate judge returning Stufe 2 for both orderings (invariant case)
-      mockGenerateText
-        .mockResolvedValueOnce({ text: 'Überwiegend natürliche Sprache, vereinzelte Mängel.\n\nStufe: 2' } as Awaited<ReturnType<typeof generateText>>)
-        .mockResolvedValueOnce({ text: 'Angemessene Sprachqualität, konsistente Du-Form.\n\nStufe: 2' } as Awaited<ReturnType<typeof generateText>>)
+      mockGenerateObject
+        .mockResolvedValueOnce(asDialogObj(2, 'Überwiegend natürliche Sprache, vereinzelte Mängel.'))
+        .mockResolvedValueOnce(asDialogObj(2, 'Angemessene Sprachqualität, konsistente Du-Form.'))
 
       const result1 = await scoreDialogNaturalness(sampleTurns, 'google/gemini-3.1-flash-lite', false)
       const result2 = await scoreDialogNaturalness(reversedTurns, 'google/gemini-3.1-flash-lite', false)
@@ -207,10 +211,10 @@ function makeTurns(n: number): TurnRecord[] {
 }
 
 async function capturePrompt(turns: TurnRecord[]): Promise<string> {
-  const mockGenerateText = vi.mocked(generateText)
-  mockGenerateText.mockResolvedValueOnce({ text: '{"stufe": 2, "begruendung": "ok"}' } as Awaited<ReturnType<typeof generateText>>)
+  const mockGenerateObject = vi.mocked(generateObject)
+  mockGenerateObject.mockResolvedValueOnce(asDialogObj(2))
   await scoreDialogNaturalness(turns, 'google/gemini-3.5-flash', false)
-  const lastCall = mockGenerateText.mock.calls.at(-1)![0] as { prompt: string }
+  const lastCall = mockGenerateObject.mock.calls.at(-1)![0] as { prompt: string }
   return lastCall.prompt
 }
 

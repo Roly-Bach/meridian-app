@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('ai', () => ({ generateText: vi.fn() }))
+vi.mock('ai', () => ({ generateObject: vi.fn() }))
 vi.mock('@/lib/llm-provider', () => ({ resolveModel: vi.fn().mockReturnValue({}) }))
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: vi.fn() }),
 }))
 
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
 import { scoreSlotDepth } from './slotDepth'
 import { scoreSlotCoverage } from './slotCoverage'
 import type { StepEntry } from '@/services/interviewSemantic'
@@ -15,10 +15,14 @@ import shallowFixture from '../__fixtures__/depth-falsification/shallow.json'
 import adequateFixture from '../__fixtures__/depth-falsification/adequate.json'
 import deepFixture from '../__fixtures__/depth-falsification/deep.json'
 
-const mockGenerateText = vi.mocked(generateText)
+const mockGenerateObject = vi.mocked(generateObject)
 
-function makeJudgeResponse(slots: string[], stufe: 1 | 2 | 3): string {
-  return JSON.stringify(slots.map(s => ({ slot: s, begruendung: `Test-Begründung für ${s}`, stufe })))
+// generateObject liefert { object, usage } (structured output, PROJ-40 D) — kein Text-Parsing mehr.
+type Bewertung = { slot: string; begruendung: string; stufe: number }
+const asDepthObj = (bewertungen: Bewertung[]) =>
+  ({ object: { bewertungen }, usage: { inputTokens: 0, outputTokens: 0 } } as unknown as Awaited<ReturnType<typeof generateObject>>)
+function makeJudgeObj(slots: string[], stufe: number) {
+  return asDepthObj(slots.map(s => ({ slot: s, begruendung: `Test-Begründung für ${s}`, stufe })))
 }
 
 function getSlotNames(steps: StepEntry[]): string[][] {
@@ -39,13 +43,13 @@ describe('scoreSlotDepth — Monotonie-Test', () => {
     const adequateSlots = getSlotNames(adequateFixture.finalStepTracker as StepEntry[])
     const deepSlots = getSlotNames(deepFixture.finalStepTracker as StepEntry[])
 
-    mockGenerateText.mockResolvedValue({ text: makeJudgeResponse(shallowSlots[0], 1) } as Awaited<ReturnType<typeof generateText>>)
+    mockGenerateObject.mockResolvedValue(makeJudgeObj(shallowSlots[0], 1))
     const shallowResult = await scoreSlotDepth(shallowFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
 
-    mockGenerateText.mockResolvedValue({ text: makeJudgeResponse(adequateSlots[0], 2) } as Awaited<ReturnType<typeof generateText>>)
+    mockGenerateObject.mockResolvedValue(makeJudgeObj(adequateSlots[0], 2))
     const adequateResult = await scoreSlotDepth(adequateFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
 
-    mockGenerateText.mockResolvedValue({ text: makeJudgeResponse(deepSlots[0], 3) } as Awaited<ReturnType<typeof generateText>>)
+    mockGenerateObject.mockResolvedValue(makeJudgeObj(deepSlots[0], 3))
     const deepResult = await scoreSlotDepth(deepFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
 
     expect(shallowResult.depth_score).not.toBeNull()
@@ -77,7 +81,7 @@ describe('scoreSlotDepth — Adversarial-Test', () => {
     }))
 
     const slotNames = getSlotNames(shallowSteps)
-    mockGenerateText.mockResolvedValue({ text: makeJudgeResponse(slotNames[0], 1) } as Awaited<ReturnType<typeof generateText>>)
+    mockGenerateObject.mockResolvedValue(makeJudgeObj(slotNames[0], 1))
 
     const shallowResult = await scoreSlotDepth(shallowSteps, [], EVAL_MODEL)
     const adversarialResult = await scoreSlotDepth(adversarialSteps, [], EVAL_MODEL)
@@ -100,7 +104,7 @@ describe('scoreSlotDepth — Konstrukt-Unabhängigkeit', () => {
 describe('scoreSlotDepth — Reproduzierbarkeits-Test', () => {
   it('zwei Aufrufe auf derselben Fixture weichen ≤ 5% voneinander ab', async () => {
     const slotNames = getSlotNames(deepFixture.finalStepTracker as StepEntry[])
-    mockGenerateText.mockResolvedValue({ text: makeJudgeResponse(slotNames[0], 3) } as Awaited<ReturnType<typeof generateText>>)
+    mockGenerateObject.mockResolvedValue(makeJudgeObj(slotNames[0], 3))
 
     const result1 = await scoreSlotDepth(deepFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
     const result2 = await scoreSlotDepth(deepFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
@@ -134,8 +138,8 @@ describe('scoreSlotDepth — Edge Cases', () => {
     expect(result.depth_score).toBeNull()
   })
 
-  it('Fallback bei JSON-Parse-Fehler des Judges: Schritt wird übersprungen', async () => {
-    mockGenerateText.mockResolvedValue({ text: 'invalid json' } as Awaited<ReturnType<typeof generateText>>)
+  it('Judge-Call schlägt fehl (Schema-Verletzung/Timeout): Schritt wird übersprungen → null', async () => {
+    mockGenerateObject.mockRejectedValue(new Error('schema validation failed'))
     const result = await scoreSlotDepth(shallowFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
     expect(result.depth_score).toBeNull()
   })
@@ -144,10 +148,10 @@ describe('scoreSlotDepth — Edge Cases', () => {
     const slotNames = getSlotNames(deepFixture.finalStepTracker as StepEntry[])
     // Simulate mixed stufen: step1 = stufe 2, step2 = stufe 3
     let callCount = 0
-    mockGenerateText.mockImplementation(async () => {
+    mockGenerateObject.mockImplementation(async () => {
       callCount++
       const stufe = callCount === 1 ? 2 : 3
-      return { text: makeJudgeResponse(slotNames[0], stufe as 2 | 3) } as Awaited<ReturnType<typeof generateText>>
+      return makeJudgeObj(slotNames[0], stufe)
     })
 
     const result = await scoreSlotDepth(deepFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
@@ -158,38 +162,32 @@ describe('scoreSlotDepth — Edge Cases', () => {
   })
 })
 
-// ─── Tolerantes JSON-Parsing ──────────────────────────────────────────────────
+// ─── Structured-Output-Contract (ersetzt das frühere tolerante Text-Parsing) ─────
+//
+// Mit generateObject erzwingt das SDK das Schema: entweder ein valides Objekt oder ein
+// throw. Die alten Prosa-/Fence-Toleranztests sind damit gegenstandslos — geprüft wird
+// jetzt der neue Vertrag.
 
-describe('scoreSlotDepth — Tolerantes Judge-Parsing', () => {
+describe('scoreSlotDepth — Structured-Output-Contract', () => {
   beforeEach(() => {
-    mockGenerateText.mockReset()
+    mockGenerateObject.mockReset()
   })
 
-  it('JSON-Array in Prosatext eingebettet wird geparst (kein null)', async () => {
+  it('valides bewertungen-Objekt → nicht null', async () => {
     const slotNames = getSlotNames(shallowFixture.finalStepTracker as StepEntry[])
-    const jsonArray = makeJudgeResponse(slotNames[0], 2)
-    // Simulate judge wrapping the JSON in prose text
-    const prosaOutput = `Hier ist meine Bewertung:\n\n${jsonArray}\n\nIch hoffe das hilft.`
-    mockGenerateText.mockResolvedValue({ text: prosaOutput } as Awaited<ReturnType<typeof generateText>>)
-
+    mockGenerateObject.mockResolvedValue(makeJudgeObj(slotNames[0], 2))
     const result = await scoreSlotDepth(shallowFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
     expect(result.depth_score).not.toBeNull()
   })
 
-  it('JSON-Array mit abweichender Fence-Variante (```JSON statt ```json) wird geparst', async () => {
-    const slotNames = getSlotNames(adequateFixture.finalStepTracker as StepEntry[])
-    const jsonArray = makeJudgeResponse(slotNames[0], 3)
-    // Uppercase JSON fence — handled by the first-pass strip regex (/i flag); prose-embedded
-    // case above is what exercises the second-pass bracket extraction.
-    const fenceOutput = `\`\`\`JSON\n${jsonArray}\n\`\`\``
-    mockGenerateText.mockResolvedValue({ text: fenceOutput } as Awaited<ReturnType<typeof generateText>>)
-
-    const result = await scoreSlotDepth(adequateFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
-    expect(result.depth_score).not.toBeNull()
+  it('leeres bewertungen-Array → null (kein bewertbarer Slot)', async () => {
+    mockGenerateObject.mockResolvedValue(asDepthObj([]))
+    const result = await scoreSlotDepth(shallowFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
+    expect(result.depth_score).toBeNull()
   })
 
-  it('echtes Nicht-JSON gibt null zurück (Edge Case bleibt erhalten)', async () => {
-    mockGenerateText.mockResolvedValue({ text: 'invalid json — kein Array hier' } as Awaited<ReturnType<typeof generateText>>)
+  it('generateObject wirft (Schema nicht erfüllbar) → null', async () => {
+    mockGenerateObject.mockRejectedValue(new Error('no object generated'))
     const result = await scoreSlotDepth(shallowFixture.finalStepTracker as StepEntry[], [], EVAL_MODEL)
     expect(result.depth_score).toBeNull()
   })
@@ -197,16 +195,11 @@ describe('scoreSlotDepth — Tolerantes Judge-Parsing', () => {
 
 // ─── Order-Swap-Test (BL-E5.2) ────────────────────────────────────────────────
 //
-// Verifiziert, dass die Parser-Logik invariant gegenüber Slot-Reihenfolge im
-// Batch-Input ist. Da LLM gemockt: der Test sichert, dass gleiche Slots in
-// anderer Reihenfolge dasselbe Ergebnis liefern.
-//
-// Integration-Test für echten Order-Swap mit LLM benötigt API-Keys (key-gated).
+// Verifiziert, dass die Aggregation invariant gegenüber Slot-Reihenfolge im Batch-Input
+// ist. Da LLM gemockt: gleiche Slots in anderer Reihenfolge liefern denselben Score.
 
 describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
   it('Slots in umgekehrter Reihenfolge im StepEntry → gleicher Score (mit gemocktem LLM)', async () => {
-    // Build two StepEntry objects with same slots but different property insertion order.
-    // getFilledSlots() sorts by name, so both should produce the same sorted batch.
     const baseStep: StepEntry = {
       title: 'Rechnungsprüfung',
       reihenfolge: 1,
@@ -224,9 +217,7 @@ describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
       },
     }
 
-    // Reverse-order step: same data, but object properties created in different order.
-    // Since JS object property order can affect Object.entries() on older engines,
-    // we explicitly create the slots object in reverse alphabetical order.
+    // Reverse-order step: same data, different property insertion order.
     const reverseOrderStep: StepEntry = {
       ...baseStep,
       slots: {
@@ -239,31 +230,28 @@ describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
       },
     }
 
-    const stufe2Response = JSON.stringify([
+    const stufe2 = asDepthObj([
       { slot: 'entscheidungslogik', begruendung: 'Erklärender Kontext vorhanden', stufe: 2 },
       { slot: 'inputs', begruendung: 'Oberflächlich benannt', stufe: 2 },
       { slot: 'hilfsmittel', begruendung: 'Nur Tool-Name', stufe: 2 },
     ])
-    mockGenerateText.mockResolvedValue({ text: stufe2Response } as Awaited<ReturnType<typeof generateText>>)
-
+    mockGenerateObject.mockResolvedValue(stufe2)
     const result1 = await scoreSlotDepth([baseStep], [], EVAL_MODEL)
 
-    mockGenerateText.mockResolvedValue({ text: stufe2Response } as Awaited<ReturnType<typeof generateText>>)
+    mockGenerateObject.mockResolvedValue(stufe2)
     const result2 = await scoreSlotDepth([reverseOrderStep], [], EVAL_MODEL)
 
     expect(result1.depth_score).not.toBeNull()
     expect(result2.depth_score).not.toBeNull()
-    // Parser-Invarianz: gleicher Mock-Output → gleicher Score
+    // Invarianz: gleicher Mock-Output → gleicher Score
     expect(result1.depth_score).toBe(result2.depth_score)
   })
 })
 
 // ─── Prompt-Content-Test: getStepTurns-Grenzen (2026-06-24 audit) ───────────────
 //
-// getStepTurns() filtert Turns anhand von toolCalls[].args.step_title. Bisherige
-// Tests prüfen nie, OB der pro-Schritt-Prompt tatsächlich nur die zugehörigen
-// Turns enthält — ein Bug hier (z.B. alle Turns statt nur die des Schritts) würde
-// von keinem reinen Output-Mock-Test gefangen, nur am tatsächlich gesendeten Prompt.
+// getStepTurns() filtert Turns anhand von toolCalls[].args.step_title. Prüft, dass der
+// pro-Schritt-Prompt nur die zugehörigen Turns enthält, am tatsächlich gesendeten Prompt.
 
 describe('scoreSlotDepth — Prompt-Inhalt: getStepTurns-Grenzen', () => {
   it('Gesprächsauszüge im Prompt enthalten nur Turns des jeweiligen Schritts, nicht andere Schritte', async () => {
@@ -309,19 +297,18 @@ describe('scoreSlotDepth — Prompt-Inhalt: getStepTurns-Grenzen', () => {
       },
     ]
 
-    const judgeResponse = JSON.stringify([{ slot: 'entscheidungslogik', begruendung: 'ok', stufe: 2 }])
-    mockGenerateText.mockReset()
-    mockGenerateText.mockResolvedValue({ text: judgeResponse } as Awaited<ReturnType<typeof generateText>>)
+    mockGenerateObject.mockReset()
+    mockGenerateObject.mockResolvedValue(asDepthObj([{ slot: 'entscheidungslogik', begruendung: 'ok', stufe: 2 }]))
 
     await scoreSlotDepth([stepA, stepB], turns, EVAL_MODEL)
 
     // Erster Call (Step A): nur dessen eigener Turn-Inhalt, NICHT der von Step B.
-    const promptA = (mockGenerateText.mock.calls[0][0] as { prompt: string }).prompt
+    const promptA = (mockGenerateObject.mock.calls[0][0] as { prompt: string }).prompt
     expect(promptA).toContain('USERINPUT_SCHRITT_A')
     expect(promptA).not.toContain('USERINPUT_SCHRITT_B')
 
     // Zweiter Call (Step B): nur dessen eigener Turn-Inhalt, NICHT der von Step A.
-    const promptB = (mockGenerateText.mock.calls[1][0] as { prompt: string }).prompt
+    const promptB = (mockGenerateObject.mock.calls[1][0] as { prompt: string }).prompt
     expect(promptB).toContain('USERINPUT_SCHRITT_B')
     expect(promptB).not.toContain('USERINPUT_SCHRITT_A')
   })

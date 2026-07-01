@@ -1,14 +1,18 @@
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('ai', () => ({ generateText: vi.fn() }))
+vi.mock('ai', () => ({ generateObject: vi.fn() }))
 vi.mock('@/lib/llm-provider', () => ({ resolveModel: vi.fn().mockReturnValue({}) }))
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: vi.fn() }),
 }))
 
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
 import { parseGroundingResponse, scoreTalkerFactualGrounding } from './talkerFactualGrounding'
 import type { TurnRecord } from './types'
+
+// generateObject-Mock-Helfer: liefert { object, usage } wie das SDK (structured output, PROJ-40 D).
+const asObj = (violations: Array<{ turn: number; claim: string; reason: string }>) =>
+  ({ object: { violations }, usage: { inputTokens: 0, outputTokens: 0 } } as unknown as Awaited<ReturnType<typeof generateObject>>)
 
 // ─── Parser Tests ───────────────────────────────────────────────────────────────
 
@@ -65,14 +69,14 @@ describe('scoreTalkerFactualGrounding', () => {
     ]
     const result = await scoreTalkerFactualGrounding(turns, 'google/gemini-3.5-flash')
     expect(result.violations).toBe(0)
-    expect(generateText).not.toHaveBeenCalled()
+    expect(generateObject).not.toHaveBeenCalled()
   })
 
   it('reproduziert KI-9: erfundene Zahlen-Prämisse wird als Verletzung erkannt', async () => {
-    const mockGenerateText = vi.mocked(generateText)
-    mockGenerateText.mockResolvedValueOnce({
-      text: '{"violations": [{"turn": 13, "claim": "Du hast vorhin 1200 Minuten erwähnt", "reason": "Persona nannte nur 2-3 Tage für den Monatsabschluss, nie eine Minutenzahl für die Rechnungsprüfung"}]}',
-    } as Awaited<ReturnType<typeof generateText>>)
+    const mockGenerateObject = vi.mocked(generateObject)
+    mockGenerateObject.mockResolvedValueOnce(asObj([
+      { turn: 13, claim: 'Du hast vorhin 1200 Minuten erwähnt', reason: 'Persona nannte nur 2-3 Tage für den Monatsabschluss, nie eine Minutenzahl für die Rechnungsprüfung' },
+    ]))
 
     const turns: TurnRecord[] = [
       { turnNumber: 5, userInput: 'Der Monatsabschluss dauert zwei bis drei Tage.', agentText: 'Wie lange dauert der Monatsabschluss?', phase: 'walkthrough_step', toolCalls: [] },
@@ -83,9 +87,9 @@ describe('scoreTalkerFactualGrounding', () => {
     expect(result.rationale).toContain('1200 Minuten')
   })
 
-  it('Judge-Call schlägt fehl → 0 statt throw', async () => {
-    const mockGenerateText = vi.mocked(generateText)
-    mockGenerateText.mockRejectedValueOnce(new Error('API down'))
+  it('Judge-Call schlägt fehl → 0 statt throw, parseFailed markiert', async () => {
+    const mockGenerateObject = vi.mocked(generateObject)
+    mockGenerateObject.mockRejectedValueOnce(new Error('API down'))
 
     const turns: TurnRecord[] = [
       { turnNumber: 1, userInput: 'a', agentText: 'b', phase: 'intro', toolCalls: [] },
@@ -93,6 +97,7 @@ describe('scoreTalkerFactualGrounding', () => {
     ]
     const result = await scoreTalkerFactualGrounding(turns, 'google/gemini-3.5-flash')
     expect(result.violations).toBe(0)
+    expect(result.parseFailed).toBe(true)
   })
 })
 
@@ -106,8 +111,8 @@ describe('scoreTalkerFactualGrounding', () => {
 
 describe('scoreTalkerFactualGrounding — Prompt-Inhalt (würde den KI-9-Bug fangen)', () => {
   it('baut das Transkript in Mitarbeiter→Agent-Reihenfolge je Turn (Kausalreihenfolge)', async () => {
-    const mockGenerateText = vi.mocked(generateText)
-    mockGenerateText.mockResolvedValueOnce({ text: '{"violations": []}' } as Awaited<ReturnType<typeof generateText>>)
+    const mockGenerateObject = vi.mocked(generateObject)
+    mockGenerateObject.mockResolvedValueOnce(asObj([]))
 
     const turns: TurnRecord[] = [
       { turnNumber: 1, userInput: 'USERINPUT_EINS', agentText: 'AGENTTEXT_EINS', phase: 'intro', toolCalls: [] },
@@ -115,7 +120,7 @@ describe('scoreTalkerFactualGrounding — Prompt-Inhalt (würde den KI-9-Bug fan
     ]
     await scoreTalkerFactualGrounding(turns, 'google/gemini-3.5-flash')
 
-    const lastCall = mockGenerateText.mock.calls.at(-1)![0] as { prompt: string }
+    const lastCall = mockGenerateObject.mock.calls.at(-1)![0] as { prompt: string }
     const prompt = lastCall.prompt
 
     // Innerhalb jedes Turns muss Mitarbeiter VOR Agent erscheinen — Agent (Turn N)
