@@ -13,7 +13,16 @@ import { resolveModel } from '../src/lib/llm-provider'
 
 async function main() {
   let ok = true
-  for (const m of ['anthropic/claude-sonnet-4-5', 'anthropic/claude-haiku-4-5']) {
+  // Union aus Referenz-Judges (wie der Lauf sie liest) und den beiden möglichen Prod-Judges
+  // (getJudgeModel: Gemini-Interview → Haiku, Anthropic-Interview → gemini-3.1-flash-lite).
+  const refs = (
+    process.env.EVAL_REFERENCE_JUDGE_MODELS ??
+    process.env.EVAL_REFERENCE_JUDGE_MODEL ??
+    'anthropic/claude-sonnet-4-5,google/gemini-3.5-flash'
+  ).split(',').map(s => s.trim()).filter(Boolean)
+  const prodCandidates = ['anthropic/claude-haiku-4-5', 'google/gemini-3.1-flash-lite']
+  const models = [...new Set([...refs, ...prodCandidates])]
+  for (const m of models) {
     try {
       const r = await generateText({ model: resolveModel(m), prompt: 'Antworte nur mit: ok', maxOutputTokens: 5 })
       console.log('PREFLIGHT', m, 'OK', JSON.stringify(r.text.trim().slice(0, 20)))

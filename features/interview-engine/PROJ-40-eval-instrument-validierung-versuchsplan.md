@@ -201,6 +201,16 @@ Reine Instrumentierung des Judge-Kalibrierungs-Harness, kein LLM-Kosten. Anlass:
 - **Verifikation (LLM-frei):** `tsc --noEmit` grün; `npm test` 814 passed / 1 skipped / 0 failed, davon neue Tests für `confusionMatrix`/`computeWeightedAgreement`/`ordinalOffset`/`toOrdinal` + Aggregations-/Rendering-Test (`computeAggregates`/`buildMarkdown` mit synthetischen Records: depth-null-Filter, grounding roh/clean-Split, Artefakt-Zählung, ✗/⚠-Marker, zwei Panels). Offline-Persistenz-Smoke-Test (Wegwerf) bestätigte JSON+MD-Schreibpfad ohne Judge-Call.
 - **Nicht enthalten (separat, budget-gegatet):** der eigentliche Multi-Judge-Re-Run (Anthropic-Budget + Google-Quota für gemini-3.5-flash); das PASS-Gate-Kriterium bei mehreren Referenzen (Cross-Vendor primär, Sonnet Stärke-Check) gehört in den Versuchsplan. Der KI-18-Parser-Fallback selbst (talkerFactualGrounding-Judge-Format) bleibt ein eigener offener Befund; hier wird er nur sichtbar gemacht, nicht behoben.
 
+### Checkpoint D Stufe 1 — ausgeführt 2026-07-01 (Verdikt: NO-GO als Gate)
+
+Multi-Referenz-Lauf (n=29, prod=getJudgeModel, refs=Sonnet + gemini-3.5-flash). Vollständige Analyse + Verdikt: [checkpoint-d-stufe1-ergebnis.md](../../docs/evals/instrument-validierung/checkpoint-d-stufe1-ergebnis.md), Rohdaten `judge-kalibrierung-2026-07-01-multiref.{md,json}`. Vier trennscharfe Befunde:
+1. **Blocker:** gemini-3.5-flash hält die JSON-only-Vorgabe nicht ein (dialog ~alle Fallback 0.5, depth nur 3/29 parsebar, grounding 13/29 parseFailed + nie eine Verletzung geflaggt) → Cross-Vendor-Check faktisch nicht erfolgt. Entschieden: Judge-Scorer auf Structured-Output umstellen, dann Wiederholung.
+2. dialog (Anthropic-Paar): systematischer Strenge-Offset (Versatz −0.72, Adjazenz 0.83, Sonnet vergibt nie Stufe 1) plus echter Sachdissens auf ~6 Transkripten.
+3. depth (Anthropic-Paar): eigentlich gut (Match 0.83, Adjazenz 1.0), κ-0.34-FAIL ist Kappa-Paradox (Stufe-2-Prävalenz). Kein Judge vergibt je Stufe 3.
+4. grounding (Anthropic-Paar): echt schwache Übereinstimmung (κ 0.04→0.09 bereinigt), Definition zu subjektiv (KI-18-nah).
+
+Die Instrumentierung hat ihren Zweck erfüllt: aus „alles FAIL" wurden vier handhabbare Diagnosen. Erster Single-Ref-Lauf als Baseline gesichert: `judge-kalibrierung-2026-07-01-single-ref-baseline.md`.
+
 ## QA Test Results
 _To be added by /qa_
 
