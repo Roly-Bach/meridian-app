@@ -38,6 +38,7 @@ import {
   scoreTalkerFactualGrounding,
   type TurnRecord,
 } from '../scorers'
+import { getJudgeModel } from '../scorers/dialogNaturalness'
 import { normalizeStepEntry } from '@/services/interviewSemantic'
 import type { StepEntry } from '@/services/interviewSemantic'
 
@@ -294,12 +295,15 @@ function aggregateDim(dim: Dim, pairs: Array<{ prod: number; ref: number }>): Di
 export function computeAggregates(records: PerTranscriptRecord[], refs: string[]): Record<string, RefAggregate> {
   const aggregates: Record<string, RefAggregate> = {}
   for (const refModel of refs) {
-    const dialogPairs = records.map(r => ({ prod: r.byReference[refModel].dialog.prodLevel, ref: r.byReference[refModel].dialog.refLevel }))
-    const depthPairs = records
+    // Exclude-Self: ein Referenz-Judge bewertet nicht jedes Transkript (nur die, die er nicht selbst
+    // erzeugt hat). Nur Records berücksichtigen, die für diesen Judge ein Observation tragen.
+    const applicable = records.filter(r => r.byReference[refModel] != null)
+    const dialogPairs = applicable.map(r => ({ prod: r.byReference[refModel].dialog.prodLevel, ref: r.byReference[refModel].dialog.refLevel }))
+    const depthPairs = applicable
       .map(r => r.byReference[refModel].depth)
       .filter((d): d is DimObservation => d !== null)
       .map(d => ({ prod: d.prodLevel, ref: d.refLevel }))
-    const groundingObs = records.map(r => r.byReference[refModel].grounding)
+    const groundingObs = applicable.map(r => r.byReference[refModel].grounding)
     const groundingPairs = groundingObs.map(g => ({ prod: g.prodLevel, ref: g.refLevel }))
     const cleanObs = groundingObs.filter(g => !g.prodParseFailed && !g.refParseFailed)
     const groundingCleanPairs = cleanObs.map(g => ({ prod: g.prodLevel, ref: g.refLevel }))
@@ -367,6 +371,7 @@ export function buildMarkdown(
     out.push('|---|---|---|---|---|---|')
     for (const r of records) {
       const o = r.byReference[refModel]
+      if (o == null) continue // Exclude-Self: dieser Judge hat dieses Transkript nicht bewertet
       const dCell = `${o.dialog.prodLevel}/${o.dialog.refLevel}${o.dialog.match ? '' : ' ✗'}`
       const deCell = o.depth ? `${o.depth.prodLevel}/${o.depth.refLevel}${o.depth.match ? '' : ' ✗'}` : '—'
       const gWarn = o.grounding.prodParseFailed || o.grounding.refParseFailed ? ' ⚠' : ''
@@ -392,12 +397,18 @@ async function main(): Promise<void> {
     'anthropic/claude-sonnet-4-5,google/gemini-3.5-flash'
   ).split(',').map(s => s.trim()).filter(Boolean)
 
+  // Exclude-Self (PROJ-40 D): ein Referenz-Judge, der das Interviewer-Modell (oder der Prod-Judge)
+  // eines Transkripts IST, benotet dort seine eigene Ausgabe → Selbst-Bewertung (ADR-020-Milde-Bias).
+  // Mit dem Flag wird er für genau diese Transkripte übersprungen; die Aggregation nutzt nur die
+  // verbleibenden. So bewertet z.B. gemini-3.5-flash nur die gemini-3.1-lite-Transkripte und umgekehrt.
+  const excludeSelf = process.env.EVAL_JUDGE_EXCLUDE_SELF === 'true'
+
   // Preflight (Regel „Judge-API-Key validieren"): jeder Referenz-Judge muss auflösen, sonst hart
   // scheitern statt still Fallback-Scores mitten im teuren Lauf. Prod-Judge = getJudgeModel(model).
   for (const m of referenceJudgeModels) resolveModel(m)
 
   const sample = loadSample()
-  console.log(`[judgeCalibration] ${sample.length} Transkripte, prod=getJudgeModel(model), refs=[${referenceJudgeModels.join(', ')}]`)
+  console.log(`[judgeCalibration] ${sample.length} Transkripte, prod=getJudgeModel(model), refs=[${referenceJudgeModels.join(', ')}]${excludeSelf ? ' (exclude-self aktiv)' : ''}`)
 
   const records: PerTranscriptRecord[] = []
 
@@ -411,8 +422,15 @@ async function main(): Promise<void> {
       scoreTalkerFactualGrounding(t.turns, item.model),
     ])
 
+    // Exclude-Self: Referenz-Judge überspringen, wenn er das Interviewer-Modell oder der Prod-Judge
+    // dieses Transkripts ist (keine Selbst-/Degenerat-Bewertung).
+    const prodJudge = getJudgeModel(item.model)
+    const applicableRefs = excludeSelf
+      ? referenceJudgeModels.filter(r => r !== item.model && r !== prodJudge)
+      : referenceJudgeModels
+
     const byReference: PerTranscriptRecord['byReference'] = {}
-    for (const refModel of referenceJudgeModels) {
+    for (const refModel of applicableRefs) {
       const [rDialog, rDepth, rGrounding] = await Promise.all([
         scoreDialogNaturalness(t.turns, item.model, false, undefined, refModel),
         scoreSlotDepth(t.finalStepTracker, t.turns, item.model, undefined, refModel),
@@ -459,7 +477,7 @@ async function main(): Promise<void> {
       qualityTier: item.qualityTier,
       byReference,
     })
-    console.log(`[judgeCalibration] ${transcriptId(item)} (${item.persona}/${item.model}) → ${referenceJudgeModels.length} Referenz(en)`)
+    console.log(`[judgeCalibration] ${transcriptId(item)} (${item.persona}/${item.model}) → ${applicableRefs.length} Referenz(en)${excludeSelf && applicableRefs.length < referenceJudgeModels.length ? ' [self ausgeschlossen]' : ''}`)
   }
 
   // ─── Aggregation je Referenz-Judge ───

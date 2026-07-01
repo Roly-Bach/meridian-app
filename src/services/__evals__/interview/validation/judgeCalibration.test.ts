@@ -188,6 +188,19 @@ describe('computeAggregates', () => {
   })
 })
 
+describe('computeAggregates — Exclude-Self (Record ohne Referenz)', () => {
+  it('ein Judge, der ein Transkript nicht bewertet hat, zählt dort nicht mit', () => {
+    const recs = mkRecords() // 4 Records, alle mit ref-A und ref-B
+    delete recs[0].byReference['ref-B'] // simuliert Exclude-Self für ref-B auf T1
+    const agg = computeAggregates(recs, REFS)
+    expect(agg['ref-A'].dialog.n).toBe(4) // ref-A unverändert
+    expect(agg['ref-B'].dialog.n).toBe(3) // ref-B: T1 ausgeschlossen
+    // buildMarkdown darf mit fehlender Referenz nicht crashen und die Zeile überspringen
+    const md = buildMarkdown('2026-07-01', recs, REFS, agg)
+    expect(md).toContain('## Referenz-Judge: ref-B')
+  })
+})
+
 describe('buildMarkdown', () => {
   const md = buildMarkdown('2026-07-01', mkRecords(), REFS, computeAggregates(mkRecords(), REFS))
 
