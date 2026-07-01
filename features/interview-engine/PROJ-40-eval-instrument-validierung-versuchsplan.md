@@ -211,6 +211,8 @@ Multi-Referenz-Lauf (n=29, prod=getJudgeModel, refs=Sonnet + gemini-3.5-flash). 
 
 Die Instrumentierung hat ihren Zweck erfüllt: aus „alles FAIL" wurden vier handhabbare Diagnosen. Erster Single-Ref-Lauf als Baseline gesichert: `judge-kalibrierung-2026-07-01-single-ref-baseline.md`.
 
+**Lauf 2 — Structured Output (Commit 9d04265):** dialog/depth/grounding-Scorer auf `generateObject`+zod umgestellt. Format-Fallbacks 30/15→0. Anthropic-Judges laufen fehlerfrei; das Anthropic-Paar ist jetzt belastbar (dialog Match 0.34→0.69, grounding κ 0.04→0.46, depth Match 0.79 = Kappa-Paradox bestätigt). Neuer Befund: gemini-3.5-flash wirft at-scale `NoObjectGeneratedError` (dialog 25/29, depth 21/29) — vermutlich Token-Limit-Truncation (geschwätziges Modell). Cross-Vendor weiter offen. Details im [Nachtrag](../../docs/evals/instrument-validierung/checkpoint-d-stufe1-ergebnis.md), Rohdaten `judge-kalibrierung-2026-07-01-structured-output.{md,json}`. Nächster Schritt: Token-Limit-Test für gemini.
+
 ## QA Test Results
 _To be added by /qa_
 
