@@ -32,6 +32,14 @@ Keine Verletzungen gefunden: {"violations": []}`
 export interface TalkerFactualGroundingResult {
   violations: number
   rationale: string
+  /**
+   * True only when the score is a fallback-0 from an unparseable judge response or a failed judge
+   * call, NOT a genuinely observed "0 violations". Lets consumers (Judge-Kalibrierung, PROJ-40 D)
+   * distinguish a real zero from the KI-18 parser-fallback artifact, which otherwise pollutes the
+   * grounding agreement statistic. Unset (falsy) on the normal path and on the len<2 no-op — the
+   * prod runner reads only `.violations`/`.rationale`, so this stays backward-compatible.
+   */
+  parseFailed?: boolean
 }
 
 export function parseGroundingResponse(text: string): TalkerFactualGroundingResult {
@@ -49,7 +57,7 @@ export function parseGroundingResponse(text: string): TalkerFactualGroundingResu
     // fall through
   }
   console.warn('[talkerFactualGrounding] unexpected judge format, fallback 0')
-  return { violations: 0, rationale: '' }
+  return { violations: 0, rationale: '', parseFailed: true }
 }
 
 export async function scoreTalkerFactualGrounding(
@@ -90,6 +98,7 @@ export async function scoreTalkerFactualGrounding(
     return parseGroundingResponse(result.text)
   } catch (err) {
     console.warn('[scorer:talker_factual_grounding] judge call failed, returning 0:', err)
-    return { violations: 0, rationale: '' }
+    // A failed judge call is an unreliable 0, same artifact class as a parser fallback.
+    return { violations: 0, rationale: '', parseFailed: true }
   }
 }
