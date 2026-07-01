@@ -33,12 +33,28 @@ function crossVendorJudgeModel(talkerModel: string): string {
 
 const GUARD_SYSTEM = `Du prüfst EINE Agent-Antwort aus einem laufenden Interview auf falsche Prämissen.
 
-Suche im Agent-Text nach Referenzen auf frühere Mitarbeiter-Aussagen, z.B. "Du hast vorhin X erwähnt", "Du sagtest X", "Wie du beschrieben hast, X", "Du hast von X gesprochen", "Du hattest X genannt". Prüfe für jede solche Referenz, ob X (wörtlich oder sinngemäß) tatsächlich in einem VORHERIGEN Mitarbeiter-Turn so vorkommt — auch eine Verletzung, wenn X einem ANDEREN im Verlauf genannten Sachverhalt zugeordnet wird (z.B. eine Zeit- oder Mengenangabe aus Prozess A wird Prozess B zugeschrieben), oder wenn X erst im AKTUELLEN Turn zum ersten Mal genannt wurde.
+Suche im Agent-Text nach Referenzen auf frühere Mitarbeiter-Aussagen, z.B. "Du hast vorhin X erwähnt", "Du sagtest X", "Wie du beschrieben hast, X", "Du hast von X gesprochen", "Du hattest X genannt". Prüfe für jede solche Referenz, ob X (wörtlich oder sinngemäß) tatsächlich in einem VORHERIGEN Mitarbeiter-Turn so vorkommt.
 
-Legitime Rückbezüge auf tatsächlich Gesagtes (auch grob gerundet) sind KEINE Verletzung.
+Eine Verletzung liegt insbesondere in folgenden vier Fällen vor — auch wenn der Agent-Text den Bezug plausibel oder beiläufig formuliert:
 
-Antworte AUSSCHLIESSLICH mit JSON, kein Markdown, kein Fließtext:
-{"violation": true/false, "claim": "<falsche Zuschreibung, falls violation>", "reason": "<kurz>"}`
+1. ZAHL/WERT-FABRIKATION: X ist eine Zahl, Dauer oder Menge, die der Mitarbeiter so nie genannt hat (auch nicht gerundet oder umgerechnet) — egal ob völlig erfunden oder aus einer anderen Aussage "abgeleitet".
+   Beispiel VERLETZUNG: Mitarbeiter sagte "3 bis 5 Hardware-Tausche wöchentlich. Zeitaufwand? Kommt drauf an." (explizite Nicht-Antwort auf die Dauer-Frage). Agent sagt später: "Du hast vorhin 3 bis 5 Tausche pro Woche erwähnt – jetzt klang es so, als würde der Prozess 3 Minuten dauern." → VERLETZUNG: "3 Minuten" wurde nie genannt, der Mitarbeiter hat die Dauer explizit offengelassen. Eine Weigerung oder ein Ausweichen ("kommt drauf an", "schwer zu sagen", "variiert") ist KEIN Anker für einen konkreten Wert, egal wie der Agent ihn formuliert.
+
+2. SACHVERHALT-ZUORDNUNG: ein Wert oder eine Aussage aus Sachverhalt A wird im Agent-Text Sachverhalt B zugeschrieben.
+   Beispiel VERLETZUNG: Mitarbeiter nannte eine Zahl für Prozess A. Agent sagt "Du hast vorhin bei Prozess B X erwähnt" — X gehörte zu A, nicht B.
+
+3. GENERALISIERUNG/UMDEUTUNG: eine spezifische, enge Aussage des Mitarbeiters wird im Agent-Text zu einer breiteren oder andersartigen Behauptung verallgemeinert, die der Mitarbeiter so nicht gemacht hat — auch wenn der ursprüngliche Fakt korrekt zitiert wirkt.
+   Beispiel VERLETZUNG: Mitarbeiter sagte "Im Schnitt dreifacher Wechsel zwischen Jira, Remote Desktop und Wiki" (eine reine Häufigkeits-/Mengenangabe). Agent sagt "Du hast vorhin den Wechsel zwischen Jira, Remote Desktop und Wiki als Standard beschrieben" → VERLETZUNG: die Mengenangabe ("dreifach") wurde stillschweigend zu einer anderen Behauptung ("als Standard beschrieben", einer Aussage über Prozessstatus statt Häufigkeit) umgedeutet. Prüfe bei jeder Zusammenfassung/Paraphrase: behauptet der Agent-Satz etwas qualitativ Anderes als das Original, auch wenn einzelne Wörter übereinstimmen?
+
+4. WORTWAHL-ZUSCHREIBUNG: der Agent behauptet, der Mitarbeiter habe ein bestimmtes WORT oder eine bestimmte FORMULIERUNG bereits in einem früheren Turn benutzt, obwohl der Mitarbeiter dort nur sinngemäß/umschrieben formuliert hat und das konkrete Wort erstmals im AKTUELLEN oder einem späteren Turn fällt.
+   Beispiel VERLETZUNG: Mitarbeiter sagte in Turn 9 "Kommt drauf an. Kann ich keine pauschale Zeitangabe machen. Hängt vom Einzelfall ab." (Umschreibung, OHNE das Wort "unmöglich"). In Turn 10 sagt der Mitarbeiter dann erstmals "Pauschale Dauer unmöglich". Agent sagt in seiner Antwort auf Turn 10: "Du hast vorhin gesagt, eine pauschale Zeitangabe sei unmöglich, und jetzt sprichst du wieder davon, dass sie nicht machbar ist." → VERLETZUNG: der Agent konstruiert eine falsche Kontinuität, als hätte der Mitarbeiter das Wort "unmöglich" schon in Turn 9 verwendet — tatsächlich war Turn 9 nur eine Umschreibung, "unmöglich" fiel erstmals in Turn 10 (also im selben Turn wie die Agent-Antwort, nicht "vorhin"). Sinngemäße Paraphrasen sind erlaubt — eine falsche Zeitangabe ("vorhin") für ein Wort, das so erst gerade gefallen ist, ist es nicht.
+
+Kein Sonderfall, sondern Grundregel für alle vier: wenn du unsicher bist, ob die Mitarbeiter-Aussage X wirklich so trägt wie im Agent-Text behauptet, ist das eine Verletzung — im Zweifel für die Erkennung, nicht für den Agent-Text.
+
+Legitime Rückbezüge auf tatsächlich Gesagtes (auch grob gerundet, ohne Bedeutungsverschiebung) sind KEINE Verletzung. Auch KEINE Verletzung: der Agent stellt eine neue Frage ohne Rückbezug auf eine frühere Aussage. Auch KEINE Verletzung: der Agent paraphrasiert eine frühere Mitarbeiter-Aussage korrekt, ohne ein Wort fälschlich als "vorhin gesagt" zu markieren, das erst jetzt fiel.
+
+Antworte AUSSCHLIESSLICH mit JSON, kein Markdown, kein Fließtext. "reason" MAXIMAL EIN Satz (unter 20 Wörter) — knapp halten, nicht die Beispiele oben nacherzählen:
+{"violation": true/false, "claim": "<falsche Zuschreibung, falls violation>", "reason": "<max. 1 kurzer Satz, welcher der vier Fälle (1/2/3/4) zutrifft>"}`
 
 export interface GroundingGuardResult {
   violation: boolean
@@ -54,8 +70,24 @@ export function parseGuardResponse(text: string): GroundingGuardResult {
       return { violation: parsed.violation === true, claim: parsed.claim, reason: parsed.reason }
     }
   } catch {
-    // fall through
+    // fall through — full JSON may be truncated (e.g. maxOutputTokens cutoff
+    // mid-"reason"), no closing brace for the regex above. "violation" is the
+    // first field the judge emits per GUARD_SYSTEM's schema, so it usually
+    // survives truncation even when claim/reason don't — recover it directly
+    // instead of defaulting to no-violation on a partial response (2026-06-30:
+    // a real violation shipped unguarded this way, the parse failure swallowed
+    // a genuine "violation": true).
   }
+  const violationMatch = text.match(/"violation"\s*:\s*(true|false)/)
+  if (violationMatch) {
+    console.warn('[talkerGroundingGuard] truncated/malformed judge JSON, recovered violation flag via partial parse')
+    return {
+      violation: violationMatch[1] === 'true',
+      claim: text.match(/"claim"\s*:\s*"([^"]*)/)?.[1],
+      reason: text.match(/"reason"\s*:\s*"([^"]*)/)?.[1],
+    }
+  }
+  console.warn('[talkerGroundingGuard] unexpected judge format, fallback no-violation')
   return { violation: false }
 }
 
@@ -79,7 +111,7 @@ export async function checkGroundingViolation(
       model,
       system: GUARD_SYSTEM,
       prompt: `Bisheriger Verlauf:\n${transcript}\n\nZU PRÜFENDE Agent-Antwort:\n"${candidateText}"`,
-      maxOutputTokens: 300,
+      maxOutputTokens: 500,
       temperature: 0,
     })
     onTokenUsage?.({

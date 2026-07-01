@@ -262,16 +262,30 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
   // Two prompt-only fix attempts already failed (regressed dialog_naturalness
   // on it-support without reducing violations) — this checks the actual
   // candidate against history with a judge instead of relying on instruction
-  // compliance from a lite model. Capped at one repair attempt to bound cost/latency.
-  const guard = await checkGroundingViolation(finalText, opts.history, modelString, opts.traceCtx, opts.onTokenUsage)
-  if (guard.violation) {
-    console.warn('[talker:grounding] violation detected, regenerating once', {
+  // compliance from a lite model. Capped at MAX_GROUNDING_REPAIRS repair
+  // attempts to bound cost/latency; each repair is re-checked by the guard
+  // (the 1-attempt design shipped an unverified repair silently — KI-18 2026-06-30).
+  const MAX_GROUNDING_REPAIRS = 2
+  let guard = await checkGroundingViolation(finalText, opts.history, modelString, opts.traceCtx, opts.onTokenUsage)
+  let groundingAttempt = 0
+  while (guard.violation && groundingAttempt < MAX_GROUNDING_REPAIRS) {
+    groundingAttempt++
+    console.warn('[talker:grounding] violation detected, regenerating', {
+      attempt: groundingAttempt,
       claim: guard.claim,
       reason: guard.reason,
       interviewId: opts.context.interviewId,
     })
+    // Repair wording (2026-06-30, after parser-truncation fix exposed more real
+    // catches): the original "stelle eine neue Frage ohne Rückbezug" bail-out
+    // pushed the lite model toward disconnected, generic follow-ups under
+    // repeated repair pressure (dialogNaturalness median 0.67→0.33 at seed 99
+    // once the guard started catching cases it previously missed). Explicitly
+    // forbidding a repeat of the same false value and asking for topical
+    // continuity (instead of permission to abandon the thread) targets that
+    // without touching STATIC_PROMPT/talkerPrompt.ts.
     const repaired = await generate(
-      `KORREKTUR (intern, nicht erwähnen): Deine vorherige Antwort enthielt eine falsche Zuschreibung an den Mitarbeiter: "${guard.claim}". Das hat der Mitarbeiter so nicht gesagt. Schreibe die Antwort neu — beziehe dich nur auf tatsächlich Gesagtes, oder stelle eine neue Frage ohne Rückbezug.`,
+      `KORREKTUR (intern, nicht erwähnen): Deine vorherige Antwort enthielt eine falsche Zuschreibung an den Mitarbeiter: "${guard.claim}" (Grund: ${guard.reason ?? 'nicht spezifiziert'}). Das hat der Mitarbeiter so nicht gesagt. Schreibe die Antwort im selben natürlichen, gesprächsnahen Ton neu: beziehe dich nur auf Werte oder Aussagen, die der Mitarbeiter wörtlich so gemacht hat (keine eigene Rundung oder Hochrechnung), und bleibe thematisch am laufenden Gespräch dran — kein Themensprung, keine generische Anschlussfrage. Verwende auf keinen Fall erneut den fehlerhaften Wert oder eine ähnliche Variante davon.`,
     )
     finalText = repaired.text
     {
@@ -284,6 +298,15 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
         outputTokens: repaired.usage.outputTokens ?? 0,
       })
     }
+    guard = await checkGroundingViolation(finalText, opts.history, modelString, opts.traceCtx, opts.onTokenUsage)
+  }
+  if (guard.violation) {
+    console.error('[talker:grounding] shipping after exhausting repair attempts, still flagged', {
+      attempts: groundingAttempt,
+      claim: guard.claim,
+      reason: guard.reason,
+      interviewId: opts.context.interviewId,
+    })
   }
 
   // Pt13: Filler phrase tracking — persist detected opening phrases into
