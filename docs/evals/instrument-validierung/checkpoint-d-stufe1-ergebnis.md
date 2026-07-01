@@ -99,3 +99,47 @@ jetzt belastbar; der Cross-Vendor-Check hängt allein an gemini-3.5-flash.
 **Offen:** (a) Token-Limit-Test für gemini-3.5-flash (dialog/depth deutlich hochsetzen, gemini allein
 neu laufen lassen) — wenn die `NoObjectGeneratedError` verschwinden, ist gemini als Cross-Vendor-Judge
 nutzbar; sonst anderen Cross-Vendor-Judge wählen. (b) depth-Gate auf prävalenz-adjustiert umstellen.
+
+## Nachtrag: Lauf 3 — Cross-Vendor, self-grading-frei (2026-07-01, Commits f8fa006 + 6da9671)
+
+Rohdaten: `judge-kalibrierung-2026-07-01-crossvendor-excludeself.{md,json}`. Zwei Änderungen:
+(1) **Token-Limits angehoben** (dialog 1000→3000, depth 2048→4000, grounding 1200→2500) — Einzel-Test
+am 35-Turn-Worst-Case bestätigte die Truncation-Hypothese, `NoObjectGeneratedError` 96→8.
+(2) **Exclude-Self** (`EVAL_JUDGE_EXCLUDE_SELF=true`): jedes Gemini bewertet nur Transkripte, die es
+NICHT selbst erzeugt hat. gemini-3.5-flash → 18 gemini-3.1-lite-Transkripte + 1 haiku (n=19);
+gemini-3.1-flash-lite → 10 gemini-3.5-flash-Transkripte (n=10). Prod-Judge bleibt Haiku (cross-vendor).
+
+Damit ist das Instrument technisch solide (Format valide, self-grading raus). Das verbleibende Signal
+ist echt, kein Artefakt.
+
+**Kernbefund dialog — gerichtete Vendor-Milde:**
+
+| Judge | n | ref milder als Haiku | gleich | ref strenger |
+|---|---|---|---|---|
+| gemini-3.5-flash | 19 | 15 | 4 | 0 |
+| gemini-3.1-flash-lite | 10 | 5 | 5 | 0 |
+
+Beide Gemini-Judges sind systematisch milder als Haiku und in KEINEM Fall strenger (20/29 höher,
+9 gleich, 0 niedriger). Verdikt-Zahlen: gemini-3.5-flash dialog Match 0.21 / κ 0.03 / Versatz −0.79;
+gemini-3.1-flash-lite dialog Match 0.50 / κ 0 / Versatz −0.50. Beide FAIL.
+
+**depth:** hohe Übereinstimmung, aber prävalenz-degeneriert — Werte fast konstant Stufe 2
+(gemini-3.1-flash-lite 9×„2/2" + 1×„1/1" → Match 1.0 / κ 1 PASS, aber nicht aussagekräftig;
+gemini-3.5-flash 12/19 Match). Kein Vendor-Konflikt, kaum Diskriminierung.
+
+**grounding:** weiter subjektiv/verrauscht über Vendor-Grenze (gemini-3.5-flash Match 0.42 / κ 0.10 /
+Versatz +0.58 = Haiku over-flaggt; gemini-3.1-flash-lite κ −0.15). 4 Rest-`NoObjectGeneratedError`.
+
+**Verdikt Checkpoint D Stufe 1 (definitiv):** Die κ≥0.61-Cross-Vendor-Schwelle wird nicht erreicht,
+aber aus einem belastbaren Grund — Anthropic- und Google-Judges kalibrieren subjektive Dialogqualität
+echt unterschiedlich (Gemini milder), nicht wegen Instrument-Defekten. Genau die Vendor-Blindstelle,
+die der Check aufdecken sollte.
+
+**Konsequenzen für den Versuchsplan (separat zu entscheiden):**
+1. dialog/grounding-Absolutwerte sind vendor-abhängig → mit einem festen Judge-Vendor kalibrieren
+   (Haiku = der konservative/strengere). Absolute Schwellen sind judge-vendor-spezifisch.
+2. depth ist über Vendor robust, aber fast konstant Stufe 2 → geringe Aussagekraft; κ-Gate hier
+   bedeutungslos (Kappa-Paradox über drei Läufe bestätigt) → prävalenz-adjustiert (PABAK) oder
+   Match-Quote statt κ.
+3. Die κ≥0.61-Cross-Vendor-Forderung selbst für subjektive Dialogqualität überdenken — perfekte
+   Vendor-Übereinstimmung ist hier womöglich unrealistisch.
