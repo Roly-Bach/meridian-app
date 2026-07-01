@@ -1,0 +1,4677 @@
+{
+  "evalRunId": "3668bce9-abc1-4295-9291-a8ac115a8bf7",
+  "interviewId": "583032eb-5655-4943-a59c-9e925bcb1484",
+  "model": "google/gemini-3.1-flash-lite",
+  "persona": "it-support",
+  "status": "completed",
+  "turns": [
+    {
+      "turnNumber": 1,
+      "userInput": "Ticket-Bearbeitung und Hardware-Tausch. Ständiger Wechsel zwischen Tools. Hohes Aufkommen.",
+      "agentText": "Lass uns mit dem Hardware-Tausch beginnen. Was ist der erste Schritt, sobald ein Defekt gemeldet wird?",
+      "phase": "process_loop",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Annahme und Bearbeitung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Vorbereitung und Durchführung"
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Ticket-Bearbeitung",
+              "Hardware-Tausch"
+            ],
+            "open": [
+              "Detaillierte Prozessabläufe",
+              "Tool-Landschaft",
+              "Aufkommens-Details"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Detaillierter Ablauf der Ticket-Bearbeitung",
+            "suggested_question": "Könntest du mir bitte den Ablauf der Ticket-Bearbeitung beschreiben, angefangen beim Eingang des Tickets?"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Annahme und Bearbeitung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Vorbereitung und Durchführung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Annahme und Bearbeitung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Vorbereitung und Durchführung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Annahme und Bearbeitung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Vorbereitung und Durchführung"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 2,
+      "userInput": "Vorgang aus Jira übernehmen. Fehlerursache via Remote-Zugriff oder direkt vor Ort prüfen. Dann im Asset-Management-System schauen.",
+      "agentText": "Wie lange dauert die Fehlerdiagnose im Schnitt, wenn du den Remote-Zugriff nutzt?",
+      "phase": "process_loop",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Vorgang aus Jira übernehmen und Fehler prüfen"
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch: Vorgang aus Jira übernehmen und Fehler prüfen",
+            "process_steps": [
+              "Vorgang aus Jira übernehmen",
+              "Fehlerursache via Remote-Zugriff oder direkt vor Ort prüfen",
+              "Asset-Management-System prüfen"
+            ]
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Hardware-Tausch: Vorgang aus Jira übernehmen und Fehler prüfen",
+            "systeme": [
+              "Jira",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Hardware-Tausch: Vorgang aus Jira übernehmen und Fehler prüfen",
+            "description": "Ständiger Wechsel zwischen Tools bei der Ticket-Bearbeitung und Hardware-Tausch",
+            "severity": "high"
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch: Prozessstart"
+            ],
+            "open": [
+              "Ticket-Bearbeitung: Prozessdetails"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Hardware-Tausch: Dauer und Häufigkeit der Durchführung",
+            "suggested_question": "Wie oft kommt ein solcher Hardware-Tausch ungefähr im Monat vor und wie viel Zeit beansprucht ein einzelner Tausch im Durchschnitt?"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Hardware-Tausch Prozess"
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch: Hardware-Tausch Prozess",
+            "process_steps": [
+              "Vorgang aus Jira übernehmen",
+              "Fehlerursache via Remote-Zugriff oder direkt vor Ort prüfen",
+              "Asset-Management-System prüfen"
+            ]
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Hardware-Tausch: Hardware-Tausch Prozess",
+            "systeme": [
+              "Jira",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Hardware-Tausch: Prozessdetails (Frequenz/Dauer)",
+            "suggested_question": "Wie häufig führen Sie einen Hardware-Tausch pro Monat durch und wie lange benötigen Sie typischerweise für einen einzelnen Vorgang?"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Prozessdurchführung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch"
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "process_steps": [
+              "Vorgang aus Jira übernehmen",
+              "Fehlerursache via Remote-Zugriff oder direkt vor Ort prüfen",
+              "Asset-Management-System prüfen"
+            ],
+            "friction_points": [
+              "ständiger Wechsel zwischen Tools"
+            ]
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "systeme": [
+              "Jira",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "inputs",
+            "value": [
+              "Jira-Ticket"
+            ],
+            "evidence_span": "Vorgang aus Jira übernehmen"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Asset-Management-System schauen"
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Hardware-Tausch: Prozessdetails (Frequenz/Dauer)",
+            "suggested_question": "Wie häufig führen Sie einen Hardware-Tausch pro Monat durch und wie lange benötigen Sie typischerweise für einen einzelnen Vorgang?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 3,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar.",
+      "agentText": "Lassen wir das so stehen. Eher 10 Minuten oder eher 30 Minuten für die Diagnose?",
+      "phase": "walkthrough_step",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "duration_minutes",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Nicht genau bezifferbar",
+            "confidence": "unknown",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "process_steps": [
+              "Vorgang aus Jira übernehmen",
+              "Fehlerursache via Remote-Zugriff oder direkt vor Ort prüfen",
+              "Im Asset-Management-System schauen"
+            ],
+            "friction_points": [
+              "Ständiger Wechsel zwischen Tools"
+            ],
+            "friction_tools": [
+              "Jira",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch Ablauf"
+            ],
+            "open": [
+              "Ticket-Bearbeitung Detailablauf",
+              "Frequenz Hardware-Tausch",
+              "Frequenz Ticket-Bearbeitung"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung Prozessschritte",
+            "suggested_question": "Verstanden, das ist bei der Diagnose schwierig. Lass uns kurz auf die Ticket-Bearbeitung schauen: Wie sieht dort der typische Ablauf aus?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 4,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar.",
+      "agentText": "Ok, das passt so. Wie viele Hardware-Tausche führst du im Durchschnitt pro Monat durch?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "duration_minutes",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Nicht genau bezifferbar",
+            "confidence": "unknown",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch: Fehlerdiagnose Dauer"
+            ],
+            "open": [
+              "Ticket-Bearbeitung: Prozessschritte",
+              "Hardware-Tausch: Asset-Management Prozess"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Hardware-Tausch: Asset-Management Prozess",
+            "suggested_question": "Wenn die Diagnose abgeschlossen ist, wie verläufst du dann im Asset-Management-System weiter?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 5,
+      "userInput": "Etwa 12 bis 20 Vorgänge. Schwankt je nach Bedarf.",
+      "agentText": "Wenn du im Asset-Management-System geprüft hast, entscheidest du dann immer nach demselben Schema, ob ein Gerät getauscht wird, oder gibt es da Abweichungen?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 7
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch Frequenz"
+            ],
+            "open": [
+              "Ticket-Bearbeitung Detailprozess",
+              "Hardware-Tausch Dauer Diagnose",
+              "Hardware-Tausch Dauer Gesamtdauer",
+              "Ticket-Bearbeitung Frequenz"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung",
+            "suggested_question": "Du hattest eingangs auch die Ticket-Bearbeitung erwähnt. Wie sieht bei dir der Ablauf bei der Bearbeitung eines Tickets aus?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 6,
+      "userInput": "Unterschiedlich. Fehlersuche oder direkt Ersatz. Manchmal Fehler nicht im Handbuch gelistet. Individuelle Prüfung nötig.",
+      "agentText": "An welchen Anzeichen machst du bei dieser individuellen Prüfung fest, dass ein Tausch unumgänglich ist?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Annahme und Erfassung"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "entscheidungslogik",
+            "value": "Individuelle Prüfung nötig aufgrund fehlender Handbucheinträge",
+            "evidence_span": "Individuelle Prüfung nötig.",
+            "confidence": "confirmed"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "Etwa 12 bis 20 Vorgänge.",
+            "confidence": "estimate"
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "friction_points": [
+              "Häufige individuelle Prüfung erforderlich, da Fehler nicht im Handbuch gelistet sind"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch",
+              "Ticket-Bearbeitung"
+            ],
+            "open": [
+              "Frequenz Ticket-Bearbeitung",
+              "Dauer Ticket-Bearbeitung"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung: Annahme und Erfassung",
+            "suggested_question": "Wie viele Tickets bearbeitest du ungefähr in einem typischen Monat?"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Standardprozess"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung: Standardprozess",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge.",
+            "confidence": "estimate",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung: Standardprozess",
+            "suggested_question": "Wie sieht bei der Ticket-Bearbeitung der typische Ablauf aus, nachdem ein Ticket bei dir eingegangen ist?"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge.",
+            "confidence": "estimate",
+            "source_turn": 4
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung",
+            "suggested_question": "Wie sieht bei der Ticket-Bearbeitung der typische Ablauf aus, nachdem ein Ticket bei dir eingegangen ist?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge.",
+            "confidence": "estimate",
+            "source_turn": 4
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 7,
+      "userInput": "Hardware defekt. Reparatur unwirtschaftlich. Keine Dokumentation im Wiki. Eigenständige Analyse nötig.",
+      "agentText": "Wenn die Reparatur unwirtschaftlich ist, ist der Austausch gesetzt. Wie viel Zeit investierst du im Schnitt in die Bearbeitung eines einzelnen Tickets, vom Eingang bis zur Lösung?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "tazite_cues",
+            "value": [
+              "Hardware defekt",
+              "Reparatur unwirtschaftlich",
+              "Keine Dokumentation im Wiki"
+            ],
+            "evidence_span": "Hardware defekt. Reparatur unwirtschaftlich. Keine Dokumentation im Wiki."
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch"
+            ],
+            "open": [
+              "Ticket-Bearbeitung"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung",
+            "suggested_question": "Wie sieht die Ticket-Bearbeitung typischerweise aus, wenn kein Hardware-Tausch notwendig ist?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 8,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar. Die Komplexität variiert.",
+      "agentText": "Eher 15 Minuten oder eher eine Stunde pro Ticket?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "duration_minutes",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Nicht genau bezifferbar",
+            "source_turn": 15
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch: Prozessschritte",
+              "Hardware-Tausch: Frequenz",
+              "Ticket-Bearbeitung: Prozessschritte"
+            ],
+            "open": [
+              "Ticket-Bearbeitung: Frequenz pro Monat",
+              "Ticket-Bearbeitung: Dauer pro Ticket",
+              "Hardware-Tausch: Dauer pro Ticket"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung: Frequenz pro Monat",
+            "suggested_question": "Wie viele Tickets bearbeitest du ungefähr pro Monat im Rahmen der Ticket-Bearbeitung?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 9,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar. Die Dauer schwankt stark.",
+      "agentText": "Halten wir das offen. Welche Informationen oder Unterlagen liegen dir als Input vor, wenn du ein Ticket zur Bearbeitung öffnest?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "duration_minutes",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Die Dauer schwankt stark.",
+            "source_turn": 11
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch",
+              "Ticket-Bearbeitung"
+            ],
+            "open": [
+              "Ticket-Bearbeitung Prozessbeschreibung"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung",
+            "suggested_question": "Wie würdest du den typischen Prozessablauf bei der Ticket-Bearbeitung beschreiben, von der Annahme bis zur Erledigung?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 10,
+      "userInput": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+      "agentText": "Was hältst du am Ende der Ticket-Bearbeitung als Ergebnis fest, um den Vorgang abzuschließen?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 10,
+            "evidence_span": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Fehlerbeschreibungen durch Anwender",
+              "Fehlermeldungen aus der Remote-Sitzung"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch: Prozessübersicht",
+              "Hardware-Tausch: Frequenz",
+              "Hardware-Tausch: Entscheidungslogik",
+              "Ticket-Bearbeitung: Input-Quellen"
+            ],
+            "open": [
+              "Ticket-Bearbeitung: Häufigkeit",
+              "Ticket-Bearbeitung: Dauer",
+              "Ticket-Bearbeitung: Output"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung: Output",
+            "suggested_question": "Welchen Output erzeugst du, wenn die Ticket-Bearbeitung abgeschlossen ist, also was ist das Ergebnis deiner Arbeit?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Fehlerbeschreibungen durch Anwender",
+              "Fehlermeldungen aus der Remote-Sitzung"
+            ],
+            "evidence_span": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender.",
+            "source_turn": 10
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 11,
+      "userInput": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+      "agentText": "Wie oft kommt es vor, dass du bei der Dokumentation der Lösung im Ticket feststellst, dass die Informationen aus dem ursprünglichen Jira-Eintrag oder der Remote-Sitzung unvollständig waren und du nachhaken musst?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "Etwa 12 bis 20 Vorgänge",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 8
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Abschluss in Jira",
+              "Dokumentation der Lösung"
+            ],
+            "evidence_span": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "source_turn": 10
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch: Frequenz",
+              "Ticket-Bearbeitung: Output"
+            ],
+            "open": [
+              "Hardware-Tausch: Dauer",
+              "Hardware-Tausch: Regelbasierung",
+              "Ticket-Bearbeitung: Dauer",
+              "Ticket-Bearbeitung: Frequenz"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Dauer der Ticket-Bearbeitung",
+            "clarification_cards": [
+              {
+                "options": [
+                  "10-20 min",
+                  "20-40 min",
+                  "40-60 min",
+                  "über 60 min",
+                  "Weiß ich nicht"
+                ],
+                "process_step_id": "S001",
+                "answer_type": "single",
+                "question": "Wie viel Zeit benötigt ein Hardware-Tausch durchschnittlich, wenn wir die Analyse und die Dokumentation zusammenrechnen?",
+                "step_title": "Hardware-Tausch",
+                "slot_key": "duration_minutes"
+              },
+              {
+                "answer_type": "single",
+                "process_step_id": "S002",
+                "options": [
+                  "immer gleich",
+                  "variiert stark",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "rule_based",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Folgt die Ticket-Bearbeitung einem festen Schema oder variiert der Prozess je nach Ticket-Art stark?"
+              }
+            ],
+            "suggested_question": "Wenn wir den gesamten Prozess betrachten, von der Übernahme aus Jira bis zur Dokumentation, wie lange dauert das bei einem durchschnittlichen Ticket ungefähr?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Schwankt je nach Bedarf.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 8
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Dauer der Ticket-Bearbeitung",
+            "suggested_question": "Wenn wir den gesamten Prozess betrachten, von der Übernahme aus Jira bis zur Dokumentation, wie lange dauert das bei einem durchschnittlichen Ticket ungefähr?",
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie viel Zeit benötigt ein Hardware-Tausch durchschnittlich, wenn wir die Analyse und die Dokumentation zusammenrechnen?",
+                "options": [
+                  "10-30 min",
+                  "30-60 min",
+                  "über 60 min",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Folgt die Ticket-Bearbeitung einem festen Schema oder variiert der Prozess je nach Ticket-Art stark?",
+                "options": [
+                  "immer gleich",
+                  "variiert stark",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "rule_based",
+                "answer_type": "single"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 12,
+      "userInput": "Kommt drauf an. Passiert regelmäßig. Erfordert meist Rücksprache mit Anwendern.",
+      "agentText": "Wie oft schätzt du, kommt es vor, dass Informationen so unvollständig sind, dass du das Ticket pausieren musst, um beim Anwender nachzuhaken?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "friction_points": [
+              "Häufig unvollständige Informationen bei Ticket-Eingang",
+              "Notwendige Rücksprache mit Anwendern bei unvollständiger Dokumentation"
+            ]
+          }
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "description": "Häufig unvollständige Informationen im Jira-Ticket erfordern zeitintensive Rücksprachen mit Anwendern.",
+            "severity": "medium"
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Ticket-Bearbeitung",
+              "Hardware-Tausch"
+            ],
+            "open": [
+              "Quantitative Daten zu Dauer und Häufigkeit für beide Prozesse noch offen"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "suggested_question": "Du hast erwähnt, dass die Dauer der Ticket-Bearbeitung stark schwankt. Könntest du grob schätzen, wie viele Tickets du in einem durchschnittlichen Monat insgesamt bearbeitest?",
+            "next_focus": "Ticket-Bearbeitung: Häufigkeit und Dauer",
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "slot_key": "duration_minutes",
+                "options": [
+                  "10-30 min",
+                  "30-60 min",
+                  "1-2 h",
+                  "> 2 h",
+                  "Weiß ich nicht"
+                ],
+                "question": "Wie lange dauert ein durchschnittlicher Hardware-Tausch von der Diagnose bis zum Abschluss?",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "slot_key": "rule_based",
+                "options": [
+                  "immer gleich",
+                  "variiert je nach Fall",
+                  "nach festem Schema",
+                  "Weiß ich nicht"
+                ],
+                "question": "Folgt der Hardware-Tausch immer dem gleichen Regelwerk oder variiert dies stark?",
+                "answer_type": "single"
+              },
+              {
+                "step_title": "Ticket-Bearbeitung",
+                "process_step_id": "S002",
+                "question": "Wie viele Tickets bearbeitest du ungefähr pro Monat?",
+                "answer_type": "single",
+                "slot_key": "frequency_per_month",
+                "options": [
+                  "1-50",
+                  "50-100",
+                  "100-200",
+                  "> 200",
+                  "Weiß ich nicht"
+                ]
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "options": [
+                  "< 15 min",
+                  "15-30 min",
+                  "30-60 min",
+                  "> 1 h",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single",
+                "question": "Wie viel Zeit investierst du im Schnitt in ein Ticket?"
+              }
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung: Häufigkeit und Dauer",
+            "suggested_question": "Du hast erwähnt, dass die Dauer der Ticket-Bearbeitung stark schwankt. Könntest du grob schätzen, wie viele Tickets du in einem durchschnittlichen Monat insgesamt bearbeitest?",
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie lange dauert ein durchschnittlicher Hardware-Tausch von der Diagnose bis zum Abschluss?",
+                "options": [
+                  "10-60 min",
+                  "1-2 h",
+                  "> 2 h",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Folgt der Hardware-Tausch immer dem gleichen Regelwerk oder variiert dies stark?",
+                "options": [
+                  "immer gleich",
+                  "variiert",
+                  "nach Schema",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "rule_based",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viele Tickets bearbeitest du ungefähr pro Monat?",
+                "options": [
+                  "< 50",
+                  "50-150",
+                  "> 150",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "frequency_per_month",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viel Zeit investierst du im Schnitt in ein Ticket?",
+                "options": [
+                  "< 30 min",
+                  "30-60 min",
+                  "> 1 h",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 13,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar. Die Häufigkeit variiert je nach Fall.",
+      "agentText": "Dann belassen wir es bei dieser Einschätzung. Welche Anwendungen nutzt du neben Jira parallel, um die Bearbeitung durchzuführen?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "Etwa 12 bis 20 Vorgänge.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 6
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "inputs",
+            "evidence_span": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+            "step_title": "Ticket-Bearbeitung",
+            "value": [
+              "Jira-Eintrag",
+              "Fehlerbeschreibungen durch Anwender",
+              "Fehlermeldungen aus der Remote-Sitzung"
+            ],
+            "step_id": "S002",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Abschluss in Jira",
+              "Dokumentation der Lösung"
+            ],
+            "evidence_span": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "source_turn": 10
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency_per_month",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Kommt drauf an. Nicht genau bezifferbar. Die Häufigkeit variiert je nach Fall.",
+            "source_turn": 12
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch (Frequenz)",
+              "Ticket-Bearbeitung (Inputs/Outputs)"
+            ],
+            "open": [
+              "Detail-Herausforderungen Ticket-Bearbeitung",
+              "Prozess-Reibungspunkte vertiefen"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Prozess-Reibungspunkte (Tool-Wechsel)",
+            "suggested_question": "Du hattest vorhin erwähnt, dass es einen ständigen Wechsel zwischen den Tools gibt. Welche Tools sind das genau und in welchen Momenten empfindest du diesen Wechsel als besonders mühsam?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge.",
+            "confidence": "estimate",
+            "source_turn": 6
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Fehlerbeschreibungen durch Anwender",
+              "Fehlermeldungen aus der Remote-Sitzung"
+            ],
+            "evidence_quote": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Abschluss in Jira",
+              "Dokumentation der Lösung"
+            ],
+            "evidence_quote": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "source_turn": 10
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 14,
+      "userInput": "Remote Desktop. Internes Wiki. Asset-Management-System bei Hardware-Tausch. Ständiger Wechsel zwischen den Anwendungen.",
+      "agentText": "In welchen Momenten empfindest du den Wechsel zwischen diesen Anwendungen als besonders mühsam, und wie oft musst du bei der Ticket-Bearbeitung aufgrund fehlender Informationen Medienbrüche in Kauf nehmen?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "inputs",
+            "step_title": "Ticket-Bearbeitung",
+            "step_id": "S002",
+            "confidence": "confirmed",
+            "value": [
+              "Jira-Eintrag",
+              "ergänzende Fehlerbeschreibungen durch Anwender",
+              "Fehlermeldungen aus der Remote-Sitzung"
+            ],
+            "evidence_span": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung."
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Abschluss in Jira",
+              "Dokumentation der Lösung"
+            ],
+            "evidence_span": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "confidence": "confirmed"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Remote Desktop",
+              "Internes Wiki",
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Remote Desktop. Internes Wiki. Asset-Management-System bei Hardware-Tausch.",
+            "confidence": "confirmed"
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "systeme": [
+              "Jira",
+              "Remote Desktop",
+              "Internes Wiki",
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Ständiger Wechsel zwischen den Anwendungen."
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "friction_points": [
+              "Ständiger Wechsel zwischen den Anwendungen"
+            ],
+            "friction_tools": [
+              "Jira",
+              "Remote Desktop",
+              "Internes Wiki",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Input/Output Ticket-Bearbeitung",
+              "Tool-Landschaft Ticket-Bearbeitung"
+            ],
+            "open": [
+              "Frequenz Hardware-Tausch (erfasst)",
+              "Dauer Hardware-Tausch (offen)",
+              "Entscheidungslogik Hardware-Tausch (erfasst)",
+              "Dauer Ticket-Bearbeitung (offen)"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Hardware-Tausch: Prozess-Dauer und Abschluss",
+            "suggested_question": "Kommen wir zurück zum Hardware-Tausch: Wie lange dauert ein solcher Tausch von der Diagnose bis zum Abschluss im System normalerweise?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Anwender-Fehlerbeschreibung",
+              "Remote-Fehlermeldung"
+            ],
+            "evidence_span": "Jira-Eintrag. Anwender. Fehlermeldungen Remote-Sitzung.",
+            "confidence": "confirmed"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Ticket-Protokollierung",
+              "Jira-Abschluss",
+              "Lösungsdokumentation"
+            ],
+            "evidence_span": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation.",
+            "confidence": "confirmed"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Fehlerbeschreibung Anwender"
+            ],
+            "evidence_span": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender.",
+            "confidence": "confirmed"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Abschluss in Jira",
+              "Dokumentation der Lösung"
+            ],
+            "evidence_span": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Anwender-Ergänzung",
+              "Remote-Fehlermeldung"
+            ],
+            "evidence_quote": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+            "confidence": "confirmed",
+            "source_turn": 10
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Ticket-Protokollierung",
+              "Jira-Abschluss",
+              "Lösungsdokumentation"
+            ],
+            "evidence_quote": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 15,
+      "userInput": "Besonders mühsam bei fehlenden Infos. Häufiger Wechsel – dreimal pro Ticket im Schnitt. Medienbrüche leider Alltag. Kommt drauf an.",
+      "agentText": "Bei wie viel Prozent der Tickets musst du aufgrund fehlender Informationen oder Ausnahmen vom Standardprozess abweichen – eher 20 Prozent oder eher 50 Prozent?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "media_breaks",
+            "value": 3,
+            "evidence_span": "dreimal pro Ticket im Schnitt",
+            "confidence": "confirmed",
+            "source_turn": 15
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "friction_points": [
+              "Wechsel der Anwendungen bei fehlenden Infos",
+              "Medienbrüche Alltag"
+            ],
+            "friction_tools": [
+              "Jira",
+              "Remote Desktop",
+              "Internes Wiki",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "description": "Mühsamer App-Wechsel bei fehlenden Informationen führt zu häufigen Medienbrüchen.",
+            "severity": "medium"
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Ticket-Bearbeitung Prozessschritte",
+              "Medienbrüche bei Ticket-Bearbeitung"
+            ],
+            "open": [
+              "S001 Hardware-Tausch Frequenz/Dauer",
+              "S002 Ticket-Bearbeitung Dauer"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Prozess-Dauer und Häufigkeit der Aufgaben",
+            "suggested_question": "Da wir nun die Häufigkeit der Medienbrüche kennen: Könntest du grob schätzen, wie viele Tickets du insgesamt pro Monat bearbeitest?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 16,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar. Die Häufigkeit variiert je nach Fall.",
+      "agentText": "Notieren wir das als variabel. Welche spezifischen Ausnahmen führen bei der Ticket-Bearbeitung am häufigsten dazu, dass du vom Standard-Workflow abweichen musst?",
+      "phase": "slot_completion",
+      "toolCalls": [
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch",
+              "Ticket-Bearbeitung"
+            ],
+            "open": []
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung: Frequenz und Dauer",
+            "suggested_question": "Verstanden, die Komplexität variiert stark. Um ein besseres Gefühl für die Auslastung zu bekommen: Wie viele Tickets bearbeitest du etwa in einem typischen Monat?",
+            "clarification_cards": [
+              {
+                "options": [
+                  "< 30 min",
+                  "30-60 min",
+                  "> 60 min",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "question": "Wie lange dauert ein Hardware-Tausch im Durchschnitt?",
+                "answer_type": "single",
+                "step_title": "Hardware-Tausch",
+                "process_step_id": "S001"
+              },
+              {
+                "options": [
+                  "< 10 pro Monat",
+                  "10-50 pro Monat",
+                  "> 50 pro Monat",
+                  "Weiß ich nicht"
+                ],
+                "question": "Wie viele Tickets bearbeitest du etwa pro Monat?",
+                "slot_key": "frequency_per_month",
+                "step_title": "Ticket-Bearbeitung",
+                "process_step_id": "S002",
+                "answer_type": "single"
+              },
+              {
+                "options": [
+                  "< 15 min",
+                  "15-30 min",
+                  "30-60 min",
+                  "> 60 min",
+                  "Weiß ich nicht"
+                ],
+                "answer_type": "single",
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "slot_key": "duration_minutes",
+                "question": "Wie lange dauert die Bearbeitung eines typischen Tickets im Schnitt?"
+              },
+              {
+                "options": [
+                  "Immer gleich (nach Schema)",
+                  "Variiert je Fall",
+                  "Weiß ich nicht"
+                ],
+                "question": "Folgt die Ticket-Bearbeitung immer einem festen Schema?",
+                "slot_key": "rule_based",
+                "answer_type": "single",
+                "step_title": "Ticket-Bearbeitung",
+                "process_step_id": "S002"
+              }
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Ticket-Bearbeitung: Frequenz und Dauer",
+            "suggested_question": "Verstanden, die Komplexität variiert stark. Um ein besseres Gefühl für die Auslastung zu bekommen: Wie viele Tickets bearbeitest du etwa in einem typischen Monat?",
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie lange dauert ein Hardware-Tausch im Durchschnitt?",
+                "options": [
+                  "< 30 min",
+                  "30-60 min",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viele Tickets bearbeitest du etwa pro Monat?",
+                "options": [
+                  "< 20 pro Monat",
+                  "20-50 pro Monat",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "frequency_per_month",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie lange dauert die Bearbeitung eines typischen Tickets im Schnitt?",
+                "options": [
+                  "< 30 min",
+                  "30-60 min",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Folgt die Ticket-Bearbeitung immer einem festen Schema?",
+                "options": [
+                  "Festes Schema",
+                  "Variabel",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "rule_based",
+                "answer_type": "single"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 17,
+      "userInput": "Fehler nicht im Handbuch. Komponenten im Bestand laut System gelistet, aber unauffindbar. Software-Genehmigungen durch IT-Leiter dauern oft zu lange. Individuelle Analyse erforderlich.",
+      "agentText": "Bei wie vielen der Tickets treten diese genannten Komplikationen wie unauffindbare Komponenten oder verzögerte Genehmigungen auf – eher bei jedem vierten oder eher bei jedem zweiten Ticket?",
+      "phase": "coverage_check",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "media_breaks",
+            "value": 3,
+            "evidence_span": "Häufiger Wechsel – dreimal pro Ticket im Schnitt.",
+            "confidence": "estimate",
+            "source_turn": 22
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "media_breaks",
+            "value": 3,
+            "evidence_span": "dreimal pro Ticket im Schnitt",
+            "confidence": "estimate",
+            "source_turn": 22
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "confidence": "confirmed",
+            "evidence_span": "Fehler nicht im Handbuch. Komponenten im Bestand laut System gelistet, aber unauffindbar. Software-Genehmigungen durch IT-Leiter dauern oft zu lange. Individuelle Analyse erforderlich.",
+            "value": [
+              "Fehler nicht im Handbuch",
+              "Komponenten im Bestand nicht auffindbar",
+              "Verzögerungen bei Software-Genehmigungen",
+              "Individuelle Analyse erforderlich"
+            ],
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "ausnahmen",
+            "source_turn": 22,
+            "step_id": "S002"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "source_turn": 22,
+            "step_title": "Hardware-Tausch",
+            "slot": "ausnahmen",
+            "value": [
+              "Fehler nicht im Handbuch",
+              "Komponenten im Bestand nicht auffindbar",
+              "Individuelle Analyse erforderlich"
+            ],
+            "confidence": "confirmed",
+            "evidence_span": "Fehler nicht im Handbuch. Komponenten im Bestand laut System gelistet, aber unauffindbar. Individuelle Analyse erforderlich."
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "friction_points": [
+              "ständiger Wechsel zwischen Anwendungen",
+              "Medienbrüche bei fehlenden Informationen",
+              "lange Wartezeiten bei Software-Genehmigungen",
+              "Komponenten physisch nicht auffindbar"
+            ],
+            "friction_tools": [
+              "Jira",
+              "Remote Desktop",
+              "Internes Wiki",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "friction_points": [
+              "ständiger Wechsel zwischen Anwendungen",
+              "Medienbrüche bei fehlenden Informationen",
+              "Komponenten physisch nicht auffindbar"
+            ],
+            "friction_tools": [
+              "Jira",
+              "Remote Desktop",
+              "Internes Wiki",
+              "Asset-Management-System"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch: Prozessübersicht und Häufigkeit",
+              "Ticket-Bearbeitung: Input, Output und Medienbrüche",
+              "Ausnahmen im Prozess"
+            ],
+            "open": [
+              "Konkrete Dauer für Diagnose und Bearbeitung (nicht quantifizierbar)"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Abschluss der Prozessaufnahme und Konsolidierung der Pain Points",
+            "clarification_cards": [
+              {
+                "question": "Wie lautet die geschätzte Dauer für die Fehlerdiagnose in Minuten?",
+                "step_title": "Hardware-Tausch",
+                "slot_key": "duration_minutes",
+                "answer_type": "single",
+                "options": [],
+                "process_step_id": "S001"
+              },
+              {
+                "slot_key": "duration_minutes",
+                "process_step_id": "S002",
+                "options": [],
+                "answer_type": "single",
+                "question": "Wie lautet die geschätzte Dauer für die Ticket-Bearbeitung in Minuten?",
+                "step_title": "Ticket-Bearbeitung"
+              }
+            ],
+            "suggested_question": "Wir haben nun einen guten Überblick über die Abläufe und die Herausforderungen bei der Dokumentation und dem Wechsel zwischen den Systemen. Gibt es aus deiner Sicht noch einen weiteren Prozessschritt oder ein kritisches Thema, das wir noch nicht besprochen haben?"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "media_breaks",
+            "value": 3,
+            "evidence_span": "dreimal pro Ticket im Schnitt",
+            "confidence": "estimate",
+            "source_turn": 22
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": [
+              "Fehler nicht im Handbuch",
+              "Komponenten im Bestand nicht auffindbar",
+              "Verzögerungen bei Software-Genehmigungen",
+              "Individuelle Analyse erforderlich"
+            ],
+            "evidence_span": "Fehler nicht im Handbuch. Komponenten im Bestand laut System gelistet, aber unauffindbar.",
+            "source_turn": 22,
+            "slot": "ausnahmen",
+            "step_title": "Ticket-Bearbeitung",
+            "step_id": "S002",
+            "confidence": "confirmed"
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "evidence_span": "Fehler nicht im Handbuch. Komponenten im Bestand laut System gelistet, aber unauffindbar.",
+            "value": [
+              "Fehler nicht im Handbuch",
+              "Komponenten im Bestand nicht auffindbar",
+              "Individuelle Analyse erforderlich"
+            ],
+            "source_turn": 22,
+            "slot": "ausnahmen",
+            "step_title": "Hardware-Tausch",
+            "confidence": "confirmed",
+            "step_id": "S001"
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Abschluss der Prozessaufnahme und Konsolidierung der Pain Points",
+            "suggested_question": "Wir haben nun einen guten Überblick über die Abläufe und die Herausforderungen bei der Dokumentation und dem Wechsel zwischen den Systemen. Gibt es aus deiner Sicht noch einen weiteren Prozessschritt oder ein kritisches Thema, das wir noch nicht besprochen haben?",
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie lange dauert die Fehlerdiagnose beim Hardware-Tausch im Schnitt?",
+                "options": [
+                  "10 Minuten",
+                  "30 Minuten",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie lange dauert die Ticket-Bearbeitung im Schnitt?",
+                "options": [
+                  "15 Minuten",
+                  "60 Minuten",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              }
+            ]
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "media_breaks",
+            "value": 3,
+            "evidence_span": "dreimal pro Ticket",
+            "confidence": "estimate",
+            "source_turn": 22
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "ausnahmen",
+            "value": [
+              "Fehler nicht im Handbuch",
+              "Komponenten im Bestand nicht auffindbar",
+              "Verzögerungen bei Software-Genehmigungen",
+              "Individuelle Analyse erforderlich"
+            ],
+            "evidence_span": "Fehler nicht im Handbuch.",
+            "confidence": "confirmed",
+            "source_turn": 22
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Hardware-Tausch",
+            "slot": "ausnahmen",
+            "value": [
+              "Fehler nicht im Handbuch",
+              "Komponenten im Bestand nicht auffindbar",
+              "Individuelle Analyse erforderlich"
+            ],
+            "evidence_span": "Fehler nicht im Handbuch.",
+            "confidence": "confirmed",
+            "source_turn": 22
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "media_breaks",
+            "value": 3,
+            "evidence_quote": "Häufiger Wechsel – dreimal pro Ticket im Schnitt.",
+            "confidence": "estimate",
+            "source_turn": 22
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 18,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar. Die Häufigkeit variiert je nach Fall.",
+      "agentText": "Verstanden — weiter im Ablauf. Gibt es neben den genannten Punkten noch einen weiteren Prozessschritt oder ein kritisches Thema, das wir bisher nicht abgedeckt haben?",
+      "phase": "coverage_check",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "evidence_span": "Individuelle Prüfung nötig",
+            "step_title": "Hardware-Tausch",
+            "value": "Variabel, individuelle Prüfung nötig",
+            "slot": "rule_based",
+            "confidence": "confirmed",
+            "source_turn": 11
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 15,
+            "step_title": "Hardware-Tausch",
+            "evidence_span": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+            "confidence": "confirmed",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Anwender-Fehlerbeschreibung",
+              "Remote-Fehlermeldung"
+            ]
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Jira-Abschluss",
+              "Lösungsdokumentation"
+            ],
+            "evidence_span": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "confidence": "confirmed",
+            "source_turn": 17
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Remote Desktop",
+              "Wiki",
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Remote Desktop. Internes Wiki. Asset-Management-System bei Hardware-Tausch.",
+            "confidence": "confirmed",
+            "source_turn": 21
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 15,
+            "slot": "inputs",
+            "confidence": "confirmed",
+            "value": [
+              "Jira-Eintrag",
+              "Anwender-Fehlerbeschreibung",
+              "Remote-Fehlermeldung"
+            ],
+            "step_title": "Ticket-Bearbeitung",
+            "evidence_span": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung."
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Jira-Abschluss",
+              "Lösungsdokumentation"
+            ],
+            "evidence_span": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "confidence": "confirmed",
+            "source_turn": 17
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Remote Desktop",
+              "Wiki",
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Remote Desktop. Internes Wiki. Asset-Management-System bei Hardware-Tausch.",
+            "confidence": "confirmed",
+            "source_turn": 21
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch Prozess und Frequenz",
+              "Ticket-Bearbeitung Input/Output/Tools",
+              "Komplikationen und Ausnahmen",
+              "Medienbrüche und Tool-Wechsel"
+            ],
+            "open": [
+              "Dauer pro Ticket und Hardware-Tausch (kann nicht geschätzt werden)"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Prozessabschluss und Zusammenfassung",
+            "suggested_question": "Wir haben nun ein gutes Bild deiner Prozesse und der Herausforderungen wie Tool-Wechsel und Ausnahmen. Gibt es aus deiner Sicht noch einen Aspekt oder eine konkrete Verbesserungsidee, die wir bisher nicht angesprochen haben?",
+            "wrap_up_question_asked": true,
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "question": "Wie viele Minuten dauert ein Hardware-Tausch im Durchschnitt?",
+                "answer_type": "single",
+                "step_title": "Hardware-Tausch",
+                "options": [],
+                "slot_key": "duration_minutes"
+              },
+              {
+                "options": [],
+                "step_title": "Ticket-Bearbeitung",
+                "process_step_id": "S002",
+                "question": "Wie viele Tickets bearbeitest du durchschnittlich pro Monat?",
+                "answer_type": "single",
+                "slot_key": "frequency_per_month"
+              },
+              {
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viele Minuten dauert eine Ticket-Bearbeitung durchschnittlich?",
+                "answer_type": "single",
+                "process_step_id": "S002",
+                "options": [],
+                "slot_key": "duration_minutes"
+              }
+            ]
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge.",
+            "confidence": "estimate",
+            "source_turn": 9
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "entscheidungslogik",
+            "value": "Individuelle Prüfung nötig, da Fehler oft nicht im Handbuch gelistet.",
+            "evidence_quote": "Individuelle Prüfung nötig.",
+            "confidence": "confirmed",
+            "source_turn": 11
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Anwender-Fehlerbeschreibung",
+              "Remote-Fehlermeldung"
+            ],
+            "evidence_quote": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+            "confidence": "confirmed",
+            "source_turn": 15
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Jira-Abschluss",
+              "Lösungsdokumentation"
+            ],
+            "evidence_quote": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "confidence": "confirmed",
+            "source_turn": 17
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Remote Desktop",
+              "Wiki",
+              "Asset-Management-System"
+            ],
+            "evidence_quote": "Remote Desktop. Internes Wiki. Asset-Management-System bei Hardware-Tausch.",
+            "confidence": "confirmed",
+            "source_turn": 21
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Eintrag",
+              "Anwender-Fehlerbeschreibung",
+              "Remote-Fehlermeldung"
+            ],
+            "evidence_quote": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+            "confidence": "confirmed",
+            "source_turn": 15
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "outputs",
+            "value": [
+              "Protokollierung im Ticket",
+              "Jira-Abschluss",
+              "Lösungsdokumentation"
+            ],
+            "evidence_quote": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+            "confidence": "confirmed",
+            "source_turn": 17
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Remote Desktop",
+              "Wiki",
+              "Asset-Management-System"
+            ],
+            "evidence_quote": "Remote Desktop. Internes Wiki. Asset-Management-System bei Hardware-Tausch.",
+            "confidence": "confirmed",
+            "source_turn": 21
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Prozessabschluss und Zusammenfassung",
+            "suggested_question": "Wir haben nun ein gutes Bild deiner Prozesse und der Herausforderungen wie Tool-Wechsel und Ausnahmen. Gibt es aus deiner Sicht noch einen Aspekt oder eine konkrete Verbesserungsidee, die wir bisher nicht angesprochen haben?",
+            "wrap_up_question_asked": true,
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie viele Minuten dauert ein Hardware-Tausch im Durchschnitt?",
+                "options": [
+                  "10-30 Minuten",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viele Tickets bearbeitest du durchschnittlich pro Monat?",
+                "options": [
+                  "Unter 50 pro Monat",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "frequency_per_month",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viele Minuten dauert eine Ticket-Bearbeitung durchschnittlich?",
+                "options": [
+                  "15-60 Minuten",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 19,
+      "userInput": "Nutzer-Einweisung nach dem Hardware-Tausch. Auch die Datenmigration gehört dazu. Diese Schritte folgen direkt nach der Einrichtung mit dem Imaging-Tool.",
+      "agentText": "Wie hoch ist bei der allgemeinen Ticket-Bearbeitung der Anteil der Vorgänge, bei denen die erste Lösung nicht greift und eine Nachbesserung notwendig ist – eher 10 Prozent oder eher 30 Prozent?",
+      "phase": "coverage_check",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Nutzer-Einweisung"
+          }
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Datenmigration"
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch: Nutzer-Einweisung",
+            "process_steps": [
+              "Einweisung nach Tausch"
+            ]
+          }
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch: Datenmigration",
+            "process_steps": [
+              "Datenmigration nach Einrichtung mit Imaging-Tool"
+            ]
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Hardware-Tausch: Nutzer-Einweisung",
+            "systeme": [
+              "Imaging-Tool"
+            ]
+          }
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Hardware-Tausch: Datenmigration",
+            "systeme": [
+              "Imaging-Tool"
+            ]
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch",
+              "Ticket-Bearbeitung",
+              "Nutzer-Einweisung",
+              "Datenmigration"
+            ],
+            "open": []
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Nutzer-Einweisung und Datenmigration",
+            "suggested_question": "Wie viel Zeit nimmst du dir im Durchschnitt für die Nutzer-Einweisung und wie umfangreich ist die Datenmigration typischerweise?"
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 20,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar. Die Häufigkeit variiert je nach Fall.",
+      "agentText": "Klar, dann holen wir das später nach. Wie viel Zeit planst du im Durchschnitt für die Nutzer-Einweisung und die Datenmigration ein, nachdem das Imaging-Tool durchgelaufen ist?",
+      "phase": "coverage_check",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "Etwa 12 bis 20 Vorgänge",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 6
+          }
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "error_rate_percent",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Kommt drauf an. Nicht genau bezifferbar. Die Häufigkeit variiert je nach Fall.",
+            "source_turn": 15
+          }
+        },
+        {
+          "toolName": "update_topics",
+          "args": {
+            "covered": [
+              "Hardware-Tausch",
+              "Ticket-Bearbeitung",
+              "Prozess-Inputs und Outputs",
+              "Medienbrüche",
+              "Reibungspunkte",
+              "Nachbesserung/Fehlerquote"
+            ],
+            "open": [
+              "Dauer der Ticket-Bearbeitung",
+              "Dauer des Hardware-Tauschs",
+              "Häufigkeit der Ticket-Bearbeitung",
+              "Regelbasierung der Prozesse"
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Klärung der Zeitaufwände und Frequenzen zur besseren Einordnung der Ticket-Bearbeitung und des Hardware-Tauschs.",
+            "suggested_question": "Um den Aufwand besser einordnen zu können: Wenn du die Zeit für die eigentliche Ticket-Bearbeitung betrachtest – wie lange dauert ein typischer Fall im Schnitt, wenn keine ungewöhnlichen Komplikationen auftreten?",
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie viele Minuten dauert ein Hardware-Tausch (ohne Imaging und Einweisung) im Durchschnitt?",
+                "answer_type": "single",
+                "options": [],
+                "slot_key": "duration_minutes"
+              },
+              {
+                "question": "Wie viele Tickets bearbeitest du ungefähr pro Monat?",
+                "answer_type": "single",
+                "options": [],
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "slot_key": "frequency_per_month"
+              },
+              {
+                "question": "Wie viele Minuten dauert die Bearbeitung eines Standard-Tickets im Durchschnitt?",
+                "answer_type": "single",
+                "options": [],
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "slot_key": "duration_minutes"
+              }
+            ]
+          }
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "next_focus": "Klärung der Zeitaufwände und Frequenzen zur besseren Einordnung der Ticket-Bearbeitung und des Hardware-Tauschs.",
+            "suggested_question": "Um den Aufwand besser einordnen zu können: Wenn du die Zeit für die eigentliche Ticket-Bearbeitung betrachtest – wie lange dauert ein typischer Fall im Schnitt, wenn keine ungewöhnlichen Komplikationen auftreten?",
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie viele Minuten dauert ein Hardware-Tausch (ohne Imaging und Einweisung) im Durchschnitt?",
+                "options": [
+                  "Weiß ich nicht",
+                  "Andere"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viele Tickets bearbeitest du ungefähr pro Monat?",
+                "options": [
+                  "Weiß ich nicht",
+                  "Andere"
+                ],
+                "slot_key": "frequency_per_month",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Ticket-Bearbeitung",
+                "question": "Wie viele Minuten dauert die Bearbeitung eines Standard-Tickets im Durchschnitt?",
+                "options": [
+                  "Weiß ich nicht",
+                  "Andere"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "turnNumber": 21,
+      "userInput": "Kommt drauf an. Nicht genau bezifferbar. Dauer hängt von Datenmenge und Nutzerkenntnissen ab.",
+      "agentText": "Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute noch nicht erwähnt haben?",
+      "phase": "wrap_up",
+      "toolCalls": []
+    }
+  ],
+  "finalStepTracker": [
+    {
+      "id": "S001",
+      "slots": {
+        "inputs": {
+          "quote": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+          "value": [
+            "Jira-Eintrag",
+            "Anwender-Fehlerbeschreibung",
+            "Remote-Fehlermeldung"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "outputs": {
+          "quote": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+          "value": [
+            "Protokollierung im Ticket",
+            "Jira-Abschluss",
+            "Lösungsdokumentation"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "ausnahmen": {
+          "quote": "Fehler nicht im Handbuch. Komponenten im Bestand laut System gelistet, aber unauffindbar.",
+          "value": [
+            "Fehler nicht im Handbuch",
+            "Komponenten im Bestand nicht auffindbar",
+            "Individuelle Analyse erforderlich"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "hilfsmittel": {
+          "quote": "Diese Schritte folgen direkt nach der Einrichtung mit dem Imaging-Tool.",
+          "value": [
+            "Imaging-Tool"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": {
+          "quote": "Hardware defekt. Reparatur unwirtschaftlich. Keine Dokumentation im Wiki. Eigenständige Analyse nötig.",
+          "value": [
+            "Hardware defekt",
+            "Reparatur unwirtschaftlich",
+            "Keine Dokumentation im Wiki"
+          ],
+          "nicht_befund_typ": null
+        },
+        "entscheidungslogik": {
+          "quote": "Individuelle Prüfung nötig.",
+          "value": "Individuelle Prüfung nötig, da Fehler oft nicht im Handbuch gelistet.",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "Hardware-Tausch",
+      "status": "done",
+      "embedding": [
+        0.17368259,
+        -0.0663904,
+        0.06369161,
+        0.04872828,
+        0.09811626,
+        0.07772535,
+        -0.01823562,
+        0.17716104,
+        -0.05535533,
+        0.00513896,
+        -0.05169696,
+        0.08774089,
+        -0.03803805,
+        0.00441928,
+        -0.00378206,
+        -0.08192348,
+        -0.08528198,
+        -0.02037592,
+        0.00020991,
+        0.0917591,
+        -0.023562,
+        0.05946349,
+        0.08000433,
+        0.12498429,
+        -0.08930019,
+        0.04716897,
+        -0.01075114,
+        0.04974782,
+        -0.04863832,
+        0.07856498,
+        0.16504642,
+        0.07280755,
+        -0.02734781,
+        -0.11718776,
+        -0.04228115,
+        -0.04991275,
+        -0.06785975,
+        -0.00754351,
+        -0.05546778,
+        -0.07232776,
+        0.01538314,
+        0.03893014,
+        -0.04545974,
+        -0.08954009,
+        -0.00489298,
+        0.00098956,
+        0.0025074,
+        0.00987029,
+        -0.00812263,
+        0.02093067,
+        0.01585918,
+        0.00535004,
+        -0.00402196,
+        0.00274401,
+        0.05331624,
+        0.02817244,
+        -0.03199574,
+        0.01211647,
+        -0.04390043,
+        0.01835182,
+        -0.00551192,
+        0.02881716,
+        0.02000858,
+        0.03826294,
+        -0.0511572,
+        0.01645517,
+        -0.02157538,
+        -0.0134715,
+        -0.02098502,
+        -0.024478,
+        -0.04333068,
+        0.02305972,
+        0.03069132,
+        0.00991011,
+        0.00283561,
+        0.04833845,
+        0.11700785,
+        -0.02329809,
+        0.01595664,
+        -0.03556415,
+        0.09337838,
+        -0.01431393,
+        -0.03752827,
+        0.01139398,
+        -0.01604285,
+        0.08870047,
+        -0.0697789,
+        0.03154594,
+        -0.09403808,
+        -0.0139138,
+        0.05142708,
+        -0.05775426,
+        0.0262533,
+        -0.03361502,
+        0.02171407,
+        0.02818744,
+        -0.03758825,
+        0.02445668,
+        -0.04572962,
+        -0.04486,
+        -0.08156364,
+        0.02594593,
+        -0.03923751,
+        0.00961072,
+        -0.04018209,
+        0.09823621,
+        0.03704099,
+        0.00977939,
+        -0.03625572,
+        0.01045315,
+        -0.02770765,
+        -0.01940323,
+        -0.03670364,
+        0.00529264,
+        0.04893818,
+        -0.03291033,
+        0.04029079,
+        -0.0661805,
+        0.03446963,
+        -0.02243375,
+        -0.01314539,
+        0.00554003,
+        -0.01362143,
+        0.03937245,
+        0.0061229,
+        0.03018155,
+        -0.04815853,
+        0.03725839,
+        -0.00616038,
+        -0.07184798,
+        0.00104813,
+        -0.019496,
+        -0.04430525,
+        -0.02701795,
+        -0.04806858,
+        -0.00316546,
+        -0.00136627,
+        -0.04917808,
+        -0.06896926,
+        -0.00790054,
+        0.00343816,
+        0.01451728,
+        0.0158142,
+        -0.03872774,
+        0.03154594,
+        -0.02427418,
+        -0.07019871,
+        -0.06726002,
+        0.01178849,
+        -0.05712454,
+        0.04929803,
+        -0.01500831,
+        -0.0237794,
+        -0.02499761,
+        0.01212608,
+        0.01093762,
+        0.03922252,
+        0.04683912,
+        -0.01864419,
+        0.01944258,
+        -0.05532534,
+        0.00226774,
+        0.015281,
+        -0.05037754,
+        -0.05962842,
+        -0.00759693,
+        0.01782705,
+        -0.00094645,
+        -0.0068455,
+        -0.01922893,
+        -0.0117,
+        0.02740778,
+        0.09793635,
+        0.00408427,
+        0.04794863,
+        -0.00408568,
+        -0.00333834,
+        0.09763648,
+        0.05379602,
+        0.02538369,
+        -0.00590362,
+        -0.07340728,
+        -0.03306026,
+        0.01276306,
+        0.02084821,
+        0.00427684,
+        0.03142599,
+        0.05826403,
+        -0.03366,
+        0.01708489,
+        0.02449533,
+        0.01452103,
+        -0.0001955,
+        0.02935316,
+        -0.01174352,
+        0.0244541,
+        0.01182973,
+        0.02323215,
+        -0.02260992,
+        -0.06633043,
+        0.08192348,
+        0.03180083,
+        -0.03916254,
+        -0.01054311,
+        -0.04181636,
+        0.06429134,
+        0.02293228,
+        0.02194272,
+        -0.01078019,
+        -0.0062747,
+        0.00913843,
+        -0.00668702,
+        0.02473335,
+        -0.00602731,
+        -0.05055746,
+        0.02632827,
+        0.0188466,
+        0.05466563,
+        0.00437219,
+        -0.02993416,
+        -0.05958344,
+        0.02356949,
+        0.01521072,
+        -0.00801768,
+        0.01376199,
+        0.00923963,
+        0.02708543,
+        -0.00738983,
+        0.02183027,
+        -0.00551567,
+        -0.03988222,
+        0.01021584,
+        0.03779815,
+        -0.06105279,
+        -0.00612477,
+        0.0114727,
+        -0.00928461,
+        -0.0150383,
+        0.02313469,
+        -0.01784954,
+        -0.00391326,
+        -0.01775115,
+        -0.03303028,
+        -0.0462094,
+        -0.01984787,
+        -0.0164889,
+        0.0374533,
+        0.00939144,
+        -0.02572103,
+        -0.02896709,
+        -0.01672504,
+        -0.0367936,
+        -0.02563107,
+        0.07094838,
+        0.00432135,
+        0.04938799,
+        0.04515987,
+        0.01925142,
+        -0.01884168,
+        0.00358809,
+        0.00140188,
+        0.06027313,
+        0.0005257,
+        0.03524929,
+        -0.00344542,
+        0.00699813,
+        -0.0093071,
+        0.00199599,
+        0.02234004,
+        -0.05694462,
+        -0.04953792,
+        0.02301474,
+        -0.03620886,
+        0.01606909,
+        -0.00528889,
+        -0.03730337,
+        0.04596951,
+        -0.01406233,
+        0.04656924,
+        0.00547818,
+        0.005183,
+        -0.03238557,
+        -0.02698797,
+        0.07274757,
+        -0.01172196,
+        -0.0019079,
+        0.0036791,
+        0.02229694,
+        0.0214367,
+        -0.01488649,
+        0.00003373,
+        0.00458233,
+        -0.00358621,
+        0.0054913,
+        -0.05499548,
+        0.03013657,
+        -0.01683187,
+        -0.00370429,
+        0.00783401,
+        -0.02703295,
+        -0.02818744,
+        0.07166805,
+        0.02676307,
+        -0.00603106,
+        0.04932801,
+        -0.05247661,
+        0.02784259,
+        -0.00811115,
+        -0.02382438,
+        0.00936333,
+        -0.0121071,
+        -0.01718984,
+        -0.03042144,
+        0.02730283,
+        -0.01158234,
+        0.0361189,
+        0.00708013,
+        0.04842841,
+        0.06591062,
+        0.01823187,
+        0.035894,
+        0.01322268,
+        -0.01566802,
+        0.0363438,
+        -0.01620965,
+        -0.02521126,
+        -0.0266881,
+        -0.02439225,
+        -0.01373575,
+        0.00857993,
+        0.0320857,
+        -0.00248139,
+        0.0015237,
+        -0.00883106,
+        0.0587738,
+        0.01131316,
+        -0.05409589,
+        0.01958127,
+        0.01168354,
+        0.01644017,
+        -0.01816066,
+        0.02830738,
+        -0.00503916,
+        -0.0035403,
+        -0.01615155,
+        0.0150383,
+        0.02165597,
+        -0.03460458,
+        -0.00657457,
+        -0.00339692,
+        -0.0480086,
+        0.00451299,
+        -0.02030282,
+        -0.00026988,
+        -0.00080402,
+        -0.00381018,
+        -0.04818852,
+        -0.03428972,
+        -0.01125061,
+        -0.0008989,
+        -0.00890462,
+        0.013464,
+        -0.0179545,
+        -0.00175047,
+        0.04791864,
+        0.0275877,
+        -0.01280429,
+        0.06612053,
+        -0.02210015,
+        0.01685998,
+        0.02469399,
+        -0.04130659,
+        0.00009371,
+        0.0282624,
+        0.03572533,
+        0.01063401,
+        0.01673442,
+        0.02308221,
+        -0.02571073,
+        -0.00789398,
+        -0.00630282,
+        -0.02688302,
+        0.0187229,
+        -0.0307363,
+        -0.00738046,
+        -0.05928357,
+        0.1141891,
+        -0.03346508,
+        0.00001124,
+        -0.02010979,
+        -0.02997164,
+        -0.01221112,
+        -0.01823937,
+        0.00322169,
+        0.02599841,
+        -0.00273815,
+        0.04923805,
+        -0.02967927,
+        0.01112129,
+        -0.00974566,
+        -0.0316209,
+        0.02212264,
+        -0.00497028,
+        -0.01014673,
+        0.00909813,
+        0.01769961,
+        0.00240268,
+        -0.04003216,
+        0.0713382,
+        0.04168142,
+        0.00146138,
+        0.04216121,
+        0.01207149,
+        0.03197325,
+        -0.00330228,
+        -0.01278836,
+        -0.02032719,
+        -0.01442357,
+        -0.01887284,
+        -0.01880912,
+        -0.02857726,
+        0.01798448,
+        -0.09373822,
+        -0.01257564,
+        0.00705436,
+        0.03800806,
+        0.00048353,
+        -0.01501909,
+        0.01463348,
+        -0.01864653,
+        0.01524071,
+        0.0007328,
+        -0.0139063,
+        -0.0210956,
+        0.01546935,
+        0.00684445,
+        -0.00667203,
+        0.0028506,
+        0.02340832,
+        0.01688997,
+        0.00120134,
+        -0.03624822,
+        -0.00985811,
+        -0.02017726,
+        0.03263295,
+        -0.00815636,
+        0.04208624,
+        0.03977727,
+        -0.0442003,
+        -0.01748221,
+        0.01133588,
+        -0.01067899,
+        -0.02362197,
+        -0.02955183,
+        0.02201769,
+        -0.01221581,
+        0.0105403,
+        0.01949131,
+        -0.00536011,
+        0.0208707,
+        0.05490553,
+        -0.00852065,
+        0.0208557,
+        -0.0343197,
+        0.0262383,
+        0.01011299,
+        0.02605839,
+        -0.03963858,
+        0.01634084,
+        0.02674808,
+        0.01456976,
+        0.01234325,
+        -0.03370498,
+        0.01060028,
+        -0.01032196,
+        -0.03796308,
+        -0.03241555,
+        -0.01843663,
+        0.02663563,
+        0.01154368,
+        -0.00777029,
+        -0.01854673,
+        0.01570363,
+        0.04743886,
+        -0.05841396,
+        -0.00335663,
+        -0.01658261,
+        -0.00653334,
+        0.01897029,
+        0.06333178,
+        -0.01578047,
+        -0.00720897,
+        -0.01876414,
+        0.02521876,
+        0.00145435,
+        -0.02114526,
+        0.06210232,
+        0.01271996,
+        -0.02385437,
+        -0.0601232,
+        -0.02855665,
+        -0.01146989,
+        0.00245844,
+        -0.01170416,
+        -0.00307925,
+        0.04349561,
+        -0.01321649,
+        -0.03683858,
+        -0.03273041,
+        -0.01148863,
+        0.01632772,
+        -0.00365087,
+        -0.03637379,
+        -0.02246748,
+        0.0096407,
+        0.02947686,
+        -0.01765088,
+        -0.01787953,
+        -0.02313469,
+        -0.01384633,
+        -0.00329947,
+        -0.02266989,
+        -0.0255786,
+        -0.00559438,
+        0.02162036,
+        0.03892265,
+        0.0097063,
+        0.01511607,
+        0.00281664,
+        -0.00171135,
+        -0.03285036,
+        -0.01232451,
+        -0.03503938,
+        -0.01606534,
+        -0.01624526,
+        0.00239143,
+        0.00632671,
+        -0.00034953,
+        -0.00222135,
+        -0.00506024,
+        0.00098113,
+        -0.00984686,
+        -0.00427169,
+        -0.00495529,
+        -0.03425973,
+        0.00544,
+        -0.00801018,
+        0.0152632,
+        0.00227875,
+        0.00198193,
+        -0.02753523,
+        0.003932,
+        0.0001743,
+        0.01355302,
+        0.01826748,
+        -0.01529318,
+        0.05973338,
+        -0.03722841,
+        0.00703936,
+        0.01284178,
+        0.01431862,
+        0.02487766,
+        -0.00509539,
+        0.02279734,
+        -0.01160527,
+        -0.03228061,
+        0.00193695,
+        0.0276027,
+        -0.01747846,
+        0.02097565,
+        -0.00188541,
+        -0.05979335,
+        -0.00048236,
+        -0.02323964,
+        -0.02854728,
+        -0.01239403,
+        -0.00002565,
+        0.08594169,
+        -0.02747525,
+        -0.01585449,
+        -0.01515075,
+        -0.01409559,
+        0.00322731,
+        -0.00694753,
+        -0.03072131,
+        -0.01826186,
+        -0.01650015,
+        -0.00560797,
+        -0.02329961,
+        -0.04277593,
+        -0.00473039,
+        0.00101017,
+        0.0289371,
+        -0.00824445,
+        -0.02070577,
+        -0.00494264,
+        -0.00475897,
+        0.01674753,
+        0.02151166,
+        0.02323964,
+        -0.00412785,
+        0.00710871,
+        0.00592423,
+        -0.01127123,
+        0.01449291,
+        -0.00118447,
+        0.0194126,
+        0.00020991,
+        -0.03509935,
+        -0.02892211,
+        0.03201073,
+        0.02885464,
+        0.03563911,
+        -0.00666078,
+        -0.03928249,
+        0.00624785,
+        0.0102976,
+        -0.0558651,
+        0.00091834,
+        0.01775958,
+        0.03147097,
+        0.0112225,
+        -0.01714861,
+        -0.02094192,
+        -0.01741474,
+        0.01008675,
+        0.0215304,
+        0.03950739,
+        0.04596951,
+        -0.0200798,
+        -0.02419921,
+        0.03526428,
+        0.00127472,
+        0.0048166,
+        -0.02301474,
+        0.01716735,
+        0.01186534,
+        0.00604114,
+        0.04833845,
+        0.01482839,
+        0.00081128,
+        -0.00228648,
+        0.03751328,
+        0.01265061,
+        -0.0027747,
+        -0.0199636,
+        0.03773818,
+        0.02664313,
+        -0.0318608,
+        -0.01404312,
+        -0.0376782,
+        0.05133712,
+        -0.01044659,
+        0.00950389,
+        -0.03815799,
+        -0.04920807,
+        -0.05175693,
+        0.01314164,
+        -0.01024418,
+        -0.02260617,
+        0.02584098,
+        -0.01060777,
+        0.07130822,
+        -0.01750845,
+        -0.02247498,
+        0.04695907,
+        -0.02123803,
+        0.00370991,
+        0.0242367,
+        -0.00506774,
+        -0.01111754,
+        -0.01190095,
+        0.00569652,
+        -0.00263461,
+        -0.02245999,
+        0.01661259,
+        0.03584902,
+        0.0361189,
+        -0.00362276,
+        -0.00571433,
+        0.00982624,
+        0.03378791,
+        0.03361502,
+        -0.03195076,
+        -0.01800323,
+        -0.02451407,
+        0.00462825,
+        -0.01180911,
+        0.02809935,
+        0.01628274,
+        -0.00233708,
+        -0.01807444,
+        0.03295531,
+        0.00655536,
+        -0.00977189,
+        0.02590845,
+        0.00809873,
+        -0.01892157,
+        0.02349453,
+        0.01665588,
+        0.02044339,
+        -0.02857726,
+        -0.0143561,
+        -0.01404686,
+        0.02553362,
+        -0.00746105,
+        -0.02296226,
+        0.03452961,
+        0.00617912,
+        0.0468991,
+        -0.01400188,
+        -0.00744418,
+        -0.00732798,
+        0.02808248,
+        -0.01125155,
+        0.00222217,
+        0.00298929,
+        0.01474593,
+        0.00477002,
+        -0.00006419,
+        0.08630153,
+        0.040392,
+        0.01500831,
+        0.00813013,
+        -0.01103133,
+        0.0361189,
+        0.04022707,
+        0.03120109,
+        0.00276568,
+        0.0130217,
+        0.02487391,
+        -0.03066133,
+        -0.01868917,
+        0.03159092,
+        -0.00132972,
+        -0.00090235,
+        -0.00055475,
+        -0.0063075,
+        -0.01344104,
+        0.00099378,
+        0.00631968,
+        0.05033256,
+        -0.01802197,
+        0.015147,
+        0.02620832,
+        -0.00357403,
+        0.03541421,
+        0.01373013,
+        -0.00094926,
+        -0.02880966,
+        -0.03328516,
+        -0.02346454,
+        -0.00330603,
+        0.07277756,
+        0.00133815,
+        0.00304458,
+        -0.03048141,
+        0.01923432,
+        0.00248456,
+        -0.03719842,
+        -0.01821688,
+        -0.00107249,
+        -0.02166534,
+        0.01462973,
+        0.02572103,
+        -0.01539814,
+        -0.02925196,
+        -0.02319466,
+        -0.01242196,
+        0.02730658,
+        0.02256319,
+        -0.04177138,
+        -0.0021328,
+        -0.0104897,
+        0.03150096,
+        0.01428113,
+        -0.00292463,
+        0.01261313,
+        0.0132831,
+        -0.00129692,
+        -0.05189187,
+        0.01108709,
+        -0.00759411,
+        -0.00640027,
+        -0.00234083,
+        0.01608033,
+        0.00780777,
+        0.0249039,
+        0.01389412,
+        0.00404538,
+        -0.00316921,
+        0.00001499,
+        -0.01607658,
+        -0.0079416,
+        0.00812263,
+        -0.03136602,
+        -0.04033202,
+        -0.01842679,
+        0.02030095,
+        0.06824958,
+        0.02653817,
+        0.00577992,
+        0.00102329,
+        -0.02296976,
+        0.01520697,
+        -0.00322637,
+        0.00117698,
+        0.03244554,
+        0.00701312,
+        -0.00697189,
+        -0.04204126,
+        -0.02232692,
+        0.01022638,
+        -0.02392933,
+        -0.04208624,
+        -0.0042314,
+        -0.01518073,
+        -0.00263133,
+        -0.05337621,
+        0.00916654,
+        -0.01358301,
+        -0.00510429,
+        0.00735047,
+        -0.01014673,
+        -0.03062947,
+        0.01012424,
+        -0.01356145,
+        0.04042198,
+        -0.01230951,
+        0.01419305,
+        0.00599006,
+        -0.00734298,
+        -0.01270684,
+        -0.0157055,
+        -0.00318046,
+        -0.02448409,
+        -0.00371553,
+        -0.0222126,
+        -0.00005622,
+        -0.00074217,
+        -0.03168088,
+        0.01339278,
+        -0.0084581,
+        0.00205408,
+        0.00209532,
+        0.02174031,
+        0.0136814,
+        -0.02775263,
+        -0.01993361,
+        -0.01435985,
+        0.00113094,
+        0.01917645,
+        -0.02044339,
+        -0.05166697,
+        -0.00554378,
+        -0.03322519,
+        -0.00040482,
+        0.0163877,
+        0.00837002,
+        -0.01741474,
+        -0.03823296,
+        -0.01934888,
+        -0.04427527,
+        -0.02259493,
+        -0.01361393,
+        0.03312024,
+        -0.0219802,
+        0.00249545,
+        -0.01415369,
+        -0.00839251,
+        0.02103937,
+        -0.01632772,
+        0.00036546,
+        0.00687444,
+        0.00389264,
+        -0.02622706,
+        0.0028827,
+        -0.00224525,
+        0.00285248,
+        0.03022653,
+        0.06621049,
+        0.03108115,
+        -0.025796,
+        0.02234754,
+        0.02038341,
+        0.013464,
+        0.05871383,
+        -0.01932639,
+        -0.00443615,
+        0.0228873,
+        0.00358785,
+        -0.01524446,
+        0.0050565,
+        0.01141975,
+        -0.02329212,
+        -0.02342706,
+        -0.01042036,
+        -0.01614031,
+        0.00561125,
+        -0.03069132,
+        -0.00918715,
+        -0.0096079,
+        0.04141154,
+        0.01168167,
+        0.0048166,
+        -0.02521126,
+        0.00463668,
+        0.00751962,
+        -0.03671863,
+        -0.00510288,
+        0.00085462,
+        -0.0009427,
+        0.01596788,
+        -0.00936707,
+        0.00562999,
+        0.02118556,
+        0.01541992,
+        0.04298584,
+        -0.01543562,
+        0.01484291,
+        0.00365275,
+        -0.00441928,
+        -0.01787766,
+        -0.03935746,
+        -0.00512022,
+        -0.01213896,
+        -0.00053226,
+        -0.00739545,
+        0.00142437,
+        0.00177015,
+        -0.01942009,
+        -0.00987685,
+        -0.00295181,
+        0.0347695,
+        -0.01918395,
+        0.00227711,
+        -0.00817511,
+        -0.01321286,
+        -0.01151211,
+        0.00520737,
+        -0.01433361,
+        0.02731782,
+        -0.02853228,
+        0.03607392,
+        0.01828435,
+        -0.03406482,
+        0.00458046,
+        -0.01491929,
+        -0.00210094,
+        0.00499471,
+        -0.01225704,
+        0.00732517,
+        -0.01482839,
+        0.04884823,
+        0.01959626,
+        -0.02784259,
+        0.03850284,
+        -0.00833347,
+        -0.0088142,
+        -0.0011245,
+        0.03862279,
+        0.00249311,
+        0.04902815,
+        0.02355825,
+        -0.00066955,
+        0.00160241,
+        -0.00567263,
+        0.00884793,
+        -0.02016601,
+        0.00496279,
+        0.00096742,
+        -0.00287028,
+        0.00470978,
+        0.02162036,
+        0.00992558,
+        -0.01013173,
+        -0.0043647,
+        0.00926962,
+        -0.02031594,
+        -0.02631327,
+        -0.02841983,
+        0.01975006,
+        0.0129055,
+        0.002517,
+        0.02198301,
+        0.00243641,
+        -0.01579546,
+        -0.00977939,
+        0.02156039,
+        0.00100455,
+        -0.02680055,
+        -0.02133549,
+        -0.00457437,
+        -0.03493443,
+        -0.01867792,
+        -0.01644017,
+        0.00433682,
+        0.01474593,
+        0.03075129,
+        -0.00889994,
+        0.00789398,
+        0.00147309,
+        0.00464793,
+        -0.01798308,
+        0.00905034,
+        -0.00717664,
+        0.02117056,
+        -0.01892157,
+        -0.00511272,
+        -0.01279492,
+        -0.0596734,
+        0.00480536,
+        -0.00655208,
+        0.00562249,
+        -0.00675168,
+        -0.0179545,
+        -0.01121313,
+        -0.0175047,
+        0.00817323,
+        -0.02318716,
+        -0.00339411,
+        0.01433361,
+        -0.03548918,
+        0.00719586
+      ],
+      "potenzial": {
+        "media_breaks": {
+          "quote": "Nicht genau bezifferbar.",
+          "value": null,
+          "writeSource": "quick",
+          "nicht_befund_typ": "unbekannt"
+        },
+        "duration_minutes": {
+          "quote": "Nicht genau bezifferbar.",
+          "value": null,
+          "writeSource": "analyst_online",
+          "nicht_befund_typ": "unbekannt"
+        },
+        "error_rate_percent": {
+          "quote": "Nicht genau bezifferbar.",
+          "value": null,
+          "writeSource": "quick",
+          "nicht_befund_typ": "unbekannt"
+        },
+        "frequency_per_month": {
+          "quote": "Etwa 12 bis 20 Vorgänge.",
+          "value": 16,
+          "qualifier": "Spanne: 12-20",
+          "confidence": "estimate",
+          "writeSource": "quick"
+        }
+      },
+      "governance": {
+        "rolle": null,
+        "systeme": [
+          "Imaging-Tool"
+        ],
+        "nicht_befund_typ": null,
+        "organisationseinheit": null
+      },
+      "reihenfolge": 1,
+      "process_steps": [
+        "Datenmigration nach Einrichtung mit Imaging-Tool"
+      ],
+      "friction_tools": [
+        "Jira",
+        "Remote Desktop",
+        "Internes Wiki",
+        "Asset-Management-System"
+      ],
+      "abhaengigkeiten": null,
+      "friction_points": [
+        "ständiger Wechsel zwischen Anwendungen",
+        "Medienbrüche bei fehlenden Informationen",
+        "Komponenten physisch nicht auffindbar"
+      ],
+      "pain_point_primary": null
+    },
+    {
+      "id": "S002",
+      "slots": {
+        "inputs": {
+          "quote": "Jira-Eintrag. Gelegentlich ergänzende Fehlerbeschreibungen durch Anwender. Manchmal Fehlermeldungen aus der Remote-Sitzung.",
+          "value": [
+            "Jira-Eintrag",
+            "Anwender-Fehlerbeschreibung",
+            "Remote-Fehlermeldung"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "outputs": {
+          "quote": "Protokollierung im Ticket. Abschluss in Jira. Dokumentation der Lösung.",
+          "value": [
+            "Protokollierung im Ticket",
+            "Jira-Abschluss",
+            "Lösungsdokumentation"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "ausnahmen": {
+          "quote": "Fehler nicht im Handbuch. Komponenten im Bestand laut System gelistet, aber unauffindbar. Software-Genehmigungen durch IT-Leiter dauern oft zu lange. Individuelle Analyse erforderlich.",
+          "value": [
+            "Fehler nicht im Handbuch",
+            "Komponenten laut System gelistet, aber unauffindbar",
+            "Wartezeiten bei Software-Genehmigungen",
+            "Notwendigkeit individueller Analyse"
+          ],
+          "nicht_befund_typ": null
+        },
+        "hilfsmittel": {
+          "quote": "Remote Desktop. Internes Wiki. Asset-Management-System bei Hardware-Tausch.",
+          "value": [
+            "Remote Desktop",
+            "Wiki",
+            "Asset-Management-System"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": {
+          "quote": "Erfordert meist Rücksprache mit Anwendern.",
+          "value": [
+            "Rücksprache mit Anwendern"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "entscheidungslogik": {
+          "quote": "Kommt drauf an.",
+          "value": "Kommt drauf an",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "Ticket-Bearbeitung",
+      "status": "done",
+      "embedding": [
+        0.11017152,
+        -0.16426398,
+        0.10903631,
+        0.17391321,
+        0.07901018,
+        0.02473325,
+        -0.04486893,
+        0.13088898,
+        0.08786476,
+        -0.01357278,
+        -0.0349359,
+        0.08485648,
+        -0.02872065,
+        0.00634295,
+        -0.03897296,
+        -0.10052229,
+        -0.06425253,
+        0.09989793,
+        -0.04015783,
+        0.02900445,
+        -0.01743247,
+        -0.00330983,
+        -0.17822699,
+        0.03141676,
+        -0.09671935,
+        -0.02358386,
+        0.00151213,
+        0.03436829,
+        0.00579309,
+        0.08281311,
+        0.09984117,
+        0.01865282,
+        -0.04421619,
+        -0.0554547,
+        -0.07492345,
+        0.00387034,
+        0.03524807,
+        -0.064735,
+        -0.04296746,
+        0.06306057,
+        0.05542632,
+        0.01814197,
+        0.00851758,
+        -0.00135382,
+        -0.03302024,
+        -0.03076402,
+        -0.0072857,
+        0.02670567,
+        -0.00341093,
+        0.04645821,
+        -0.00292315,
+        0.02565206,
+        -0.02264731,
+        0.0322185,
+        0.0105498,
+        -0.00912952,
+        -0.00763513,
+        0.02117997,
+        -0.04153427,
+        0.05190719,
+        -0.01513546,
+        0.06300381,
+        0.00585897,
+        -0.01271206,
+        0.00191832,
+        0.05732779,
+        0.05443302,
+        0.02277857,
+        0.07949264,
+        0.01113919,
+        -0.00519167,
+        0.01331736,
+        0.0174644,
+        0.0075725,
+        -0.02623739,
+        -0.05999552,
+        0.0905325,
+        -0.01508313,
+        0.00515099,
+        0.00229879,
+        0.04227215,
+        0.05863327,
+        0.02843685,
+        0.01841159,
+        -0.0546033,
+        0.06053474,
+        0.03076757,
+        0.04909756,
+        -0.09075954,
+        0.02489289,
+        0.05429112,
+        -0.0911001,
+        -0.02635092,
+        0.01452351,
+        0.02296127,
+        0.03090592,
+        -0.03394259,
+        0.05769673,
+        0.04475541,
+        0.00693006,
+        0.00136136,
+        -0.00784887,
+        -0.00732229,
+        -0.05185043,
+        -0.09734372,
+        0.05202071,
+        0.06226592,
+        -0.04925365,
+        -0.00471642,
+        0.06720406,
+        -0.02825593,
+        -0.01850559,
+        -0.03374393,
+        0.04657173,
+        0.01621922,
+        -0.03967537,
+        0.11369065,
+        -0.01583609,
+        0.09683287,
+        -0.01144427,
+        0.001568,
+        -0.02985586,
+        -0.05951306,
+        0.02710299,
+        0.04012945,
+        -0.00023414,
+        0.00702407,
+        0.02636511,
+        -0.01371158,
+        -0.00611591,
+        -0.00627643,
+        0.03381488,
+        0.01072679,
+        0.0082014,
+        -0.02878806,
+        0.04736638,
+        0.04691229,
+        -0.00549332,
+        -0.01624051,
+        -0.04140656,
+        -0.02239899,
+        0.01211253,
+        -0.00865238,
+        0.00698062,
+        0.01216619,
+        -0.01744666,
+        -0.05886031,
+        -0.05565336,
+        0.00909582,
+        0.01583786,
+        0.01985897,
+        -0.03015385,
+        -0.04824616,
+        -0.0380577,
+        0.00155026,
+        0.00840051,
+        0.00899339,
+        0.07095023,
+        -0.01716996,
+        -0.04027135,
+        -0.01900047,
+        -0.03049796,
+        -0.05204909,
+        0.02751627,
+        -0.00983548,
+        0.04438647,
+        -0.00900713,
+        0.01112588,
+        -0.01249655,
+        -0.04512435,
+        -0.01711896,
+        0.014065,
+        0.05210585,
+        0.0017844,
+        0.03136,
+        -0.00595982,
+        0.05216261,
+        0.0983654,
+        0.07339092,
+        0.00583654,
+        0.00404461,
+        0.01496695,
+        0.0353616,
+        0.01220244,
+        0.04702581,
+        0.05877517,
+        0.08076975,
+        0.04044163,
+        -0.02220742,
+        0.02722361,
+        -0.00174094,
+        -0.05014763,
+        -0.01370404,
+        0.04003012,
+        -0.01565162,
+        -0.02173206,
+        0.00186898,
+        -0.02988424,
+        -0.02240608,
+        0.00007272,
+        0.04560681,
+        0.04454255,
+        0.0059182,
+        0.0315019,
+        -0.07012721,
+        0.01523257,
+        -0.0002164,
+        0.03355946,
+        -0.01109662,
+        -0.02924568,
+        -0.04765018,
+        0.02329296,
+        0.01767725,
+        -0.00414527,
+        -0.00285176,
+        -0.02992681,
+        -0.01609506,
+        0.02784087,
+        0.04958002,
+        -0.06970151,
+        0.01681166,
+        0.00273691,
+        -0.01129882,
+        0.03753267,
+        -0.0276635,
+        -0.01980931,
+        0.01122787,
+        -0.0113437,
+        0.00563411,
+        0.03866788,
+        -0.01595671,
+        -0.02860713,
+        0.00343665,
+        0.01381046,
+        0.01962838,
+        -0.04374791,
+        -0.02210809,
+        -0.03646842,
+        -0.01819873,
+        -0.03076402,
+        0.03917162,
+        0.01610748,
+        0.03160123,
+        0.04949488,
+        -0.00006386,
+        -0.05304239,
+        0.09285966,
+        -0.00617533,
+        -0.05781025,
+        0.00113786,
+        0.02867809,
+        -0.00822845,
+        0.03208369,
+        0.04702581,
+        0.02571237,
+        -0.00404062,
+        0.03794418,
+        -0.00734512,
+        0.03099106,
+        0.01423883,
+        0.01903417,
+        0.03060261,
+        0.02693271,
+        0.01614035,
+        -0.04093828,
+        0.00837567,
+        -0.00641523,
+        -0.02867809,
+        -0.00808833,
+        -0.04123627,
+        -0.04081057,
+        0.02033522,
+        -0.03953347,
+        -0.00399095,
+        -0.00818056,
+        0.00360072,
+        -0.02029177,
+        0.03056536,
+        0.03297767,
+        0.005488,
+        -0.00293291,
+        0.00700545,
+        -0.02961463,
+        -0.00400159,
+        0.00493193,
+        -0.01876811,
+        -0.02382509,
+        0.04199544,
+        0.01582988,
+        -0.03800095,
+        0.01698903,
+        -0.02034498,
+        0.03814639,
+        0.03429734,
+        -0.03890911,
+        0.01630436,
+        0.02663472,
+        -0.00195468,
+        0.0300829,
+        0.00136579,
+        -0.02715975,
+        0.07781821,
+        0.05667504,
+        0.00157864,
+        0.00710744,
+        -0.02829495,
+        0.00804664,
+        -0.03062212,
+        -0.04973611,
+        0.0664378,
+        0.00042038,
+        0.05562498,
+        -0.00808123,
+        -0.00374706,
+        0.03807189,
+        0.00960001,
+        -0.0260955,
+        0.02977072,
+        0.01727638,
+        0.01534831,
+        -0.02601745,
+        0.02057557,
+        -0.07566133,
+        0.00143342,
+        -0.02971396,
+        -0.00729191,
+        -0.01539797,
+        -0.02575493,
+        0.01346902,
+        0.02311204,
+        -0.02210809,
+        -0.00596824,
+        0.00020576,
+        0.0146193,
+        0.02009931,
+        -0.03280739,
+        -0.05168015,
+        0.01048911,
+        0.02325749,
+        0.02032015,
+        0.06484851,
+        0.01160391,
+        0.04058354,
+        0.02076153,
+        -0.02490353,
+        -0.03919291,
+        -0.0022775,
+        -0.03216884,
+        -0.03001195,
+        -0.0118274,
+        -0.0551709,
+        0.01262914,
+        -0.02540018,
+        -0.03836989,
+        -0.00566005,
+        0.01807812,
+        0.00276839,
+        -0.00594829,
+        -0.00980976,
+        -0.01647464,
+        -0.00579486,
+        0.0340703,
+        0.00777969,
+        -0.00475367,
+        0.02924568,
+        0.02293821,
+        0.00484546,
+        0.03462372,
+        0.00772958,
+        -0.00608576,
+        0.00760409,
+        -0.04810426,
+        -0.01286017,
+        -0.01613053,
+        0.01496252,
+        -0.02626577,
+        -0.02208991,
+        -0.02019953,
+        0.00666577,
+        -0.08133734,
+        -0.01071083,
+        -0.02204069,
+        -0.04108018,
+        -0.02673405,
+        0.01716286,
+        -0.00302691,
+        0.08250093,
+        -0.01563388,
+        0.0238109,
+        0.00225799,
+        0.01807812,
+        -0.01234889,
+        -0.02517314,
+        -0.0019192,
+        0.00190147,
+        -0.01409781,
+        0.02268988,
+        -0.05219099,
+        0.03842665,
+        0.01034543,
+        0.03858273,
+        0.01099174,
+        -0.00480688,
+        -0.00609108,
+        0.05244641,
+        0.00567957,
+        -0.01716286,
+        -0.05982523,
+        0.03088463,
+        -0.01854994,
+        0.0148286,
+        0.02904702,
+        0.00762715,
+        0.00345816,
+        0.02631722,
+        0.01425035,
+        0.01960355,
+        -0.00114939,
+        -0.01591768,
+        -0.02544985,
+        -0.03907939,
+        -0.01273956,
+        -0.02819208,
+        0.00744091,
+        -0.00978404,
+        0.01415324,
+        0.02330006,
+        -0.04543653,
+        -0.01668749,
+        -0.07007045,
+        0.00109884,
+        0.03561702,
+        0.00346947,
+        -0.01252538,
+        -0.01056227,
+        -0.01724534,
+        -0.00819475,
+        0.00081083,
+        0.00731497,
+        0.00419493,
+        0.06325922,
+        -0.00237595,
+        -0.02444945,
+        -0.01635758,
+        -0.00125937,
+        0.00506141,
+        0.02056138,
+        0.02767414,
+        -0.01689857,
+        -0.05094226,
+        0.01975255,
+        -0.00443794,
+        -0.01158263,
+        0.034496,
+        -0.02524409,
+        -0.02534342,
+        -0.01260786,
+        -0.0079553,
+        -0.05204909,
+        0.06845279,
+        -0.01762758,
+        -0.00824796,
+        -0.00548534,
+        -0.01569419,
+        0.05196395,
+        0.02164825,
+        -0.00858498,
+        0.01677973,
+        -0.01831935,
+        0.05508576,
+        0.01228864,
+        0.03429734,
+        0.01651721,
+        -0.0137726,
+        0.05945629,
+        -0.05681695,
+        0.00491641,
+        0.02706042,
+        0.04712514,
+        0.00537803,
+        -0.05851975,
+        -0.00076272,
+        0.00609817,
+        -0.0431945,
+        -0.01573499,
+        -0.01195378,
+        -0.04816102,
+        -0.00230411,
+        0.05202071,
+        0.03646842,
+        0.01575627,
+        0.01028512,
+        0.01992726,
+        -0.00647332,
+        0.00115294,
+        0.00967229,
+        0.01614295,
+        -0.02903638,
+        -0.00325174,
+        -0.01856058,
+        -0.01706442,
+        -0.07583161,
+        0.04518111,
+        0.00156091,
+        -0.00429227,
+        0.05238965,
+        -0.01370758,
+        0.00561926,
+        0.04259852,
+        0.00106736,
+        -0.00058091,
+        -0.03472304,
+        0.01561792,
+        -0.04952326,
+        0.01809231,
+        0.0201747,
+        0.02040174,
+        -0.02746129,
+        -0.05358162,
+        -0.03544674,
+        0.01619528,
+        0.00206731,
+        0.03530483,
+        -0.01499799,
+        0.02758545,
+        -0.0081963,
+        -0.02735841,
+        -0.01513901,
+        0.01734024,
+        -0.00853354,
+        0.01382288,
+        -0.01133785,
+        0.0069488,
+        -0.02401665,
+        -0.03788742,
+        0.00064565,
+        0.05485872,
+        -0.03551769,
+        -0.00898585,
+        -0.01444547,
+        0.02960044,
+        -0.00188284,
+        -0.04327964,
+        0.00279256,
+        0.01320029,
+        0.02768478,
+        -0.0135107,
+        0.00568311,
+        0.02505962,
+        0.03026737,
+        -0.04421619,
+        -0.00877477,
+        -0.00025365,
+        0.03270096,
+        0.02311115,
+        0.00087978,
+        0.00704536,
+        -0.02900445,
+        -0.01559841,
+        -0.01171388,
+        0.01464413,
+        0.0070917,
+        0.04410267,
+        -0.01671011,
+        0.00770431,
+        -0.03147352,
+        0.01800717,
+        -0.00682896,
+        -0.0278054,
+        0.00680767,
+        -0.01598863,
+        -0.02860713,
+        -0.00216842,
+        0.0098592,
+        -0.03372974,
+        -0.01829452,
+        -0.01430712,
+        0.05511414,
+        -0.00541927,
+        -0.016417,
+        0.00387034,
+        0.00290896,
+        0.01109573,
+        -0.00169571,
+        -0.01869184,
+        -0.04698325,
+        -0.01160923,
+        -0.00597756,
+        -0.0477637,
+        -0.01438072,
+        -0.01913883,
+        -0.02828076,
+        -0.01871667,
+        0.00749767,
+        0.02274664,
+        0.02995519,
+        0.01145137,
+        0.00955522,
+        -0.0223777,
+        -0.03495008,
+        0.00109795,
+        -0.02067845,
+        0.05656153,
+        -0.0051297,
+        0.0053665,
+        -0.01656688,
+        -0.00546893,
+        0.00507738,
+        0.00473415,
+        -0.0287916,
+        -0.0133892,
+        0.02329296,
+        -0.00469369,
+        -0.02918893,
+        0.0127533,
+        -0.01958226,
+        0.02720232,
+        -0.04012945,
+        -0.02408051,
+        -0.00160702,
+        0.01336193,
+        -0.00303401,
+        -0.01112854,
+        0.02433593,
+        0.02332844,
+        0.02433548,
+        0.01548666,
+        0.04140656,
+        0.0015915,
+        0.01041549,
+        -0.02371157,
+        0.04745151,
+        -0.02205843,
+        -0.00393774,
+        0.0130983,
+        0.02847588,
+        -0.02088775,
+        -0.01260076,
+        0.02728746,
+        0.00513502,
+        0.03448181,
+        -0.03069307,
+        0.02456297,
+        -0.01676554,
+        0.03357365,
+        0.0111853,
+        0.01643562,
+        -0.00467917,
+        -0.00815396,
+        -0.02108286,
+        0.00294089,
+        -0.00285486,
+        0.00665336,
+        -0.00554831,
+        -0.00124518,
+        -0.03284996,
+        0.00663385,
+        0.0104084,
+        -0.00646711,
+        0.01172807,
+        -0.06726082,
+        0.01606313,
+        0.043904,
+        0.00547026,
+        -0.02312268,
+        0.00160348,
+        -0.02039464,
+        -0.02962882,
+        0.00668351,
+        -0.00261097,
+        -0.01687551,
+        0.01775884,
+        0.02815305,
+        0.02595359,
+        -0.03807189,
+        -0.01776594,
+        -0.01214225,
+        0.02287436,
+        0.02186686,
+        -0.00294532,
+        -0.01928073,
+        -0.04044163,
+        0.02582588,
+        -0.02078842,
+        -0.02280341,
+        -0.00180214,
+        0.00109795,
+        -0.00633586,
+        0.02696109,
+        -0.00181411,
+        0.03483656,
+        -0.02473325,
+        0.01070816,
+        0.00460112,
+        0.0125573,
+        -0.0039463,
+        0.02756417,
+        -0.03068243,
+        0.00654161,
+        0.00674737,
+        -0.011125,
+        -0.03859693,
+        -0.01306194,
+        0.00092235,
+        0.01027714,
+        0.00858143,
+        -0.00186023,
+        0.00659394,
+        0.02312978,
+        0.00343044,
+        -0.01283279,
+        0.00819298,
+        0.01101857,
+        -0.02299497,
+        -0.05321268,
+        -0.03794418,
+        0.00065984,
+        0.01162165,
+        -0.04066867,
+        -0.00046206,
+        0.03402773,
+        0.01050418,
+        0.02548533,
+        0.00455323,
+        -0.00582147,
+        0.04560681,
+        -0.00797835,
+        -0.00325529,
+        0.01109662,
+        -0.00120261,
+        0.07401528,
+        -0.0491827,
+        -0.02757126,
+        0.00134157,
+        0.03057955,
+        0.01028601,
+        0.01265397,
+        -0.01321093,
+        -0.02314397,
+        0.02228547,
+        0.02017115,
+        0.0380577,
+        -0.00467429,
+        0.03229655,
+        0.03368717,
+        0.00089397,
+        0.05613583,
+        0.00241231,
+        -0.025237,
+        -0.01548311,
+        -0.01759366,
+        0.00187663,
+        0.00507959,
+        0.04001593,
+        0.0151532,
+        0.00216321,
+        -0.00706132,
+        0.02085582,
+        -0.03675222,
+        -0.03147352,
+        -0.01569419,
+        -0.02049043,
+        -0.02938759,
+        0.02853618,
+        0.0307924,
+        -0.03851179,
+        -0.05812243,
+        0.02599617,
+        -0.03526226,
+        0.03709278,
+        -0.00213738,
+        -0.02725908,
+        -0.00857461,
+        0.01800007,
+        0.03368717,
+        0.03047312,
+        -0.02901864,
+        -0.03729144,
+        0.02046205,
+        -0.01604894,
+        -0.05786701,
+        -0.01431066,
+        -0.00350982,
+        -0.01377144,
+        -0.01165003,
+        -0.01316836,
+        -0.00134495,
+        0.02378252,
+        -0.00810872,
+        -0.01136955,
+        -0.02008601,
+        -0.03917872,
+        -0.00481974,
+        -0.00402288,
+        -0.01442418,
+        -0.02507381,
+        -0.02163982,
+        -0.00379584,
+        0.02250541,
+        0.05338296,
+        0.0166733,
+        -0.01722672,
+        -0.01208105,
+        -0.01070284,
+        -0.01483835,
+        -0.01340605,
+        0.01424681,
+        0.00532171,
+        -0.01586447,
+        -0.0593144,
+        0.00704181,
+        -0.02304463,
+        -0.00229347,
+        -0.01825549,
+        0.00048024,
+        -0.00764134,
+        -0.00416212,
+        -0.01068865,
+        -0.04696906,
+        0.00119196,
+        -0.00136934,
+        -0.02744355,
+        -0.000392,
+        -0.01963991,
+        -0.00635714,
+        -0.0161833,
+        -0.03879559,
+        -0.00193694,
+        -0.01263624,
+        -0.02189524,
+        0.00781982,
+        -0.00751363,
+        -0.0038618,
+        -0.04242824,
+        -0.00052104,
+        -0.00501086,
+        -0.01563034,
+        -0.01122577,
+        0.00058179,
+        0.00214913,
+        -0.01979512,
+        -0.00561571,
+        -0.01585383,
+        -0.01631146,
+        0.00194049,
+        0.00185402,
+        0.00431998,
+        -0.00067358,
+        -0.02488934,
+        -0.01338299,
+        -0.00058667,
+        -0.00764311,
+        -0.01709191,
+        -0.01524011,
+        -0.03306281,
+        -0.03016804,
+        -0.00527338,
+        -0.01780895,
+        -0.04293908,
+        0.0100501,
+        -0.05060171,
+        -0.00459048,
+        -0.03865369,
+        0.01000044,
+        0.00974501,
+        0.02295949,
+        -0.01772337,
+        -0.01594074,
+        -0.06655132,
+        -0.01134117,
+        -0.00962085,
+        -0.00630393,
+        -0.00472883,
+        0.03529064,
+        0.00975566,
+        -0.04035649,
+        0.00312669,
+        -0.02501705,
+        0.00443084,
+        -0.00290453,
+        0.02968558,
+        0.01227439,
+        -0.00996296,
+        -0.00188728,
+        0.03458114,
+        -0.01721253,
+        0.04293908,
+        -0.00468005,
+        -0.00631812,
+        0.02657086,
+        0.01712029,
+        -0.01248724,
+        -0.00590927,
+        -0.03412706,
+        -0.01720543,
+        -0.02987005,
+        -0.01020264,
+        -0.01765242,
+        0.00097424,
+        -0.00394461,
+        0.02611501,
+        0.00022172,
+        0.00950733,
+        0.00586758,
+        -0.02530085,
+        0.00022349,
+        0.01863153,
+        -0.00732029,
+        0.0073939,
+        -0.0110842,
+        0.00710212,
+        -0.02927407,
+        0.00472883,
+        -0.00703582,
+        -0.00283625,
+        0.02585426,
+        0.00130903,
+        0.06760138,
+        0.01084829,
+        0.00795352,
+        0.0193907,
+        0.01239855,
+        -0.00920225,
+        -0.03927805,
+        0.00549155,
+        0.01948825,
+        -0.00368675,
+        -0.00248681,
+        -0.01082701,
+        -0.02435012,
+        -0.00717396,
+        0.01508402,
+        -0.01963902,
+        0.01761694,
+        0.00601037,
+        -0.02456297,
+        0.02141988,
+        -0.02667729,
+        0.00308634,
+        -0.00328411,
+        -0.04620279,
+        -0.02535761,
+        0.00608686,
+        0.0084892,
+        -0.00203029,
+        -0.00923329,
+        0.00134096,
+        -0.01617311,
+        -0.00906744,
+        -0.00336348,
+        0.00852977,
+        0.0072316,
+        -0.01939779,
+        0.04830292,
+        0.01917785,
+        -0.00805995,
+        0.02094451,
+        0.0059882,
+        -0.00177287,
+        0.01562324,
+        0.01562324,
+        -0.01056272,
+        0.04222958,
+        0.03836989,
+        0.03760362,
+        -0.00972284,
+        -0.02210809,
+        0.01776594,
+        -0.02818498,
+        -0.0004328,
+        0.01069575,
+        -0.0290896,
+        -0.00180845,
+        0.03099106,
+        -0.00273868,
+        0.01733314,
+        0.00006252,
+        0.01673716,
+        0.04049839,
+        0.02393861,
+        -0.02484677,
+        0.03066469,
+        0.01660945,
+        0.01011839,
+        -0.02112898,
+        0.0169571,
+        -0.00503924,
+        -0.00609729,
+        0.02257636,
+        -0.00444503,
+        -0.01121014,
+        0.00843066,
+        0.00375859,
+        -0.00676865,
+        -0.01538201,
+        -0.02076359,
+        0.02669148,
+        0.0161128,
+        0.01074098,
+        -0.01689325,
+        -0.03083497,
+        0.0118274,
+        -0.00802802,
+        0.01254755,
+        -0.00302957,
+        -0.01110726,
+        -0.00861735,
+        -0.01724091,
+        -0.00521839,
+        0.00666932,
+        0.00568045,
+        -0.00541705,
+        -0.00727417,
+        -0.00518868,
+        -0.01598509,
+        -0.01742538,
+        -0.00506452,
+        -0.01546715,
+        0.03113296,
+        -0.02092322,
+        0.02629416,
+        -0.01999378,
+        -0.01729767,
+        0.02226773
+      ],
+      "potenzial": {
+        "media_breaks": {
+          "quote": "Häufiger Wechsel – dreimal pro Ticket im Schnitt.",
+          "value": 3,
+          "confidence": "estimate",
+          "writeSource": "quick"
+        },
+        "duration_minutes": {
+          "quote": "Die Dauer schwankt stark.",
+          "value": null,
+          "writeSource": "analyst_online",
+          "nicht_befund_typ": "unbekannt"
+        },
+        "error_rate_percent": {
+          "quote": "Kommt drauf an. Nicht genau bezifferbar. Die Häufigkeit variiert je nach Fall.",
+          "value": null,
+          "writeSource": "analyst_online",
+          "nicht_befund_typ": "unbekannt"
+        },
+        "frequency_per_month": {
+          "quote": "Etwa 12 bis 20 Vorgänge.",
+          "value": 16,
+          "writeSource": "analyst_catchup"
+        }
+      },
+      "governance": {
+        "rolle": null,
+        "systeme": [
+          "Jira",
+          "Remote Desktop",
+          "Internes Wiki",
+          "Asset-Management-System"
+        ],
+        "nicht_befund_typ": null,
+        "organisationseinheit": null
+      },
+      "reihenfolge": 2,
+      "process_steps": [
+        "Protokollierung im Ticket",
+        "Abschluss in Jira",
+        "Dokumentation der Lösung"
+      ],
+      "friction_tools": [
+        "Jira",
+        "Remote Desktop",
+        "Internes Wiki",
+        "Asset-Management-System"
+      ],
+      "abhaengigkeiten": null,
+      "friction_points": [
+        "ständiger Wechsel zwischen Anwendungen",
+        "Medienbrüche bei fehlenden Informationen",
+        "lange Wartezeiten bei Software-Genehmigungen",
+        "Komponenten physisch nicht auffindbar"
+      ],
+      "pain_point_primary": "fehlende Infos und Medienbrüche"
+    }
+  ],
+  "scores": {
+    "slotCoverage": 0.89,
+    "dedupSlotCoverage": 0.89,
+    "slotCoveragePreClarification": 0.89,
+    "dedupSlotCoveragePreClarification": 0.89,
+    "clarificationCoverageDelta": 0,
+    "phaseAdherence": 1,
+    "phaseProgression": 1,
+    "anchoringViolations": 0,
+    "anchoringViolationRate": 0,
+    "toolCallPlausibility": 0.68,
+    "dialogNaturalness": 0.67,
+    "dialogNaturalnessRationale": "Überwiegend natürliche, gesprächsorientierte Fragen mit konsistenter Du-Form. Die Fragen sind spezifisch und kontextbezogen, vermeiden generische Floskeln. Kleine Schwäche: Einige Fragen sind sehr lang und komplex strukturiert (z.B. [3], [4], [6]), was die Natürlichkeit leicht beeinträchtigt. Insgesamt aber angemessen für ein professionelles Interview.",
+    "completionCorrectness": true,
+    "stepRegistrationCoverage": 1,
+    "schemaConformanceRate": 1,
+    "hallucinationRate": 0,
+    "confidenceTriggerRate": 0.5,
+    "depth_score": 1.87,
+    "depth_distribution": {
+      "p1": 0.4,
+      "p2": 0.33,
+      "p3": 0.27
+    },
+    "slotDepthRationale": "[Hardware-Tausch/ausnahmen] Stufe 3: Der Slot benennt drei konkrete Ausnahmefälle (Fehler nicht im Handbuch, Komponenten nicht auffindbar, individuelle Analyse erforderlich) und verknüpft sie mit der Bedingung, unter der sie auftreten. Der Agent fragt gezielt nach diesen Komplikationen nach, und der Mitarbeiter bestätigt sie als wiederkehrende Abweichungen vom Standardablauf. Dies zeigt eine Kausalstruktur: Wenn diese Bedingungen vorliegen, wird der Standardprozess unterbrochen. Die Ausnahmefälle sind nicht nur benannt, sondern in ihrem Kontext (wann/unter welcher Bedingung sie relevant werden) erfasst.\n[Hardware-Tausch/entscheidungslogik] Stufe 3: Der Slot erfasst die Entscheidungsregel, dass eine individuelle Prüfung erforderlich ist, wenn Fehler nicht im Handbuch gelistet sind. Dies geht über eine bloße Benennung hinaus: Es wird eine Bedingung (Fehler nicht dokumentiert) mit einer Konsequenz (individuelle Prüfung) verknüpft. Der Agent fragt nach den Anzeichen für einen Tausch nach, und der Mitarbeiter nennt konkrete Kriterien (Hardware defekt, Reparatur unwirtschaftlich). Die Kausalstruktur ist erkennbar, auch wenn sie nicht vollständig quantifiziert ist.\n[Hardware-Tausch/hilfsmittel] Stufe 1: Der Slot nennt das Imaging-Tool als Hilfsmittel. Der Beleg stammt jedoch aus einer Agent-Frage, die im Gesprächsauszug nicht vom Mitarbeiter beantwortet wird. Das Imaging-Tool wird vom Mitarbeiter in den vorliegenden Gesprächsauszügen nicht erwähnt oder bestätigt. Der Slot enthält nur eine Sachverhaltsbenennung ohne erklärendem Kontext (wann, unter welcher Bedingung, warum dieses Tool verwendet wird). Es fehlt jede Kontextualisierung durch den Mitarbeiter selbst.\n[Hardware-Tausch/inputs] Stufe 2: Der Slot benennt drei Eingabequellen (Jira-Eintrag, Anwender-Fehlerbeschreibung, Remote-Fehlermeldung) mit erklärendem Kontext. Der Beleg zeigt, dass diese Inputs unter unterschiedlichen Bedingungen verfügbar sind (\"Gelegentlich\", \"Manchmal\"), was eine situative Differenzierung darstellt. Dies geht über eine bloße Aufzählung hinaus und zeigt, unter welchen Umständen welche Inputs herangezogen werden. Der Mitarbeiter differenziert zwischen regelmäßigen und optionalen Eingaben.\n[Hardware-Tausch/outputs] Stufe 1: Der Slot benennt drei Outputs (Protokollierung, Jira-Abschluss, Lösungsdokumentation) ohne erklärendem Kontext. Es wird nicht erläutert, unter welchen Bedingungen diese Outputs erzeugt werden, in welcher Reihenfolge, oder welche Abhängigkeiten zwischen ihnen bestehen. Der Beleg ist eine direkte Aufzählung ohne Kausalstruktur oder Bedingungslogik. Dies ist eine reine Sachverhaltsbenennung.\n[Hardware-Tausch/tazite_cues] Stufe 3: Der Slot erfasst drei implizite Entscheidungskriterien (Hardware defekt, Reparatur unwirtschaftlich, Keine Dokumentation im Wiki), die der Mitarbeiter nennt, wenn er nach Anzeichen für einen unumgänglichen Tausch gefragt wird. Diese Kriterien werden durch konversationelles Nachfragen des Agenten extrahiert und stellen tacite Aspekte dar, die nicht von Anfang an explizit genannt wurden. Die Kausalstruktur ist erkennbar: Diese Kriterien führen zur Entscheidung eines Tauschs. Der Agent bestätigt sogar die Logik (\"Wenn die Reparatur unwirtschaftlich ist, ist der Austausch gesetzt\").\n[Hardware-Tausch/frequency_per_month] Stufe 2: Der Slot aggregiert die Aussage des Mitarbeiters (\"Etwa 12 bis 20 Vorgänge\") zu einem Mittelwert (16). Dies ist eine Quantifizierung mit erklärendem Kontext: Der Mitarbeiter gibt eine Spanne an und erwähnt, dass die Häufigkeit \"je nach Bedarf\" schwankt. Dies zeigt eine Bedingung (Bedarf variiert), unter der die Frequenz variiert. Die Aggregation zu einem Durchschnittswert ist adäquat kontextualisiert.\n[Ticket-Bearbeitung/ausnahmen] Stufe 3: Der Slot enthält eine konkrete Aufzählung von vier Ausnahmefällen mit spezifischen Kontexten: (1) Fehler außerhalb des Handbuchs, (2) Bestandsdiskrepanzen im System, (3) Verzögerungen bei Genehmigungsprozessen, (4) Notwendigkeit individueller Analyse. Dies geht über bloße Benennung hinaus und zeigt die Kausalstruktur: Diese Ausnahmefälle erfordern Abweichungen vom Standardprozess. Die Antwort demonstriert erklärendes Wissen über Bedingungen, unter denen der Prozess nicht linear verläuft.\n[Ticket-Bearbeitung/entscheidungslogik] Stufe 1: Der Wert 'Kommt drauf an' ist eine Nicht-Antwort ohne erklärenden Kontext. Es wird weder benannt, worauf es ankommt, noch unter welchen Bedingungen welche Entscheidung getroffen wird, noch welche Kausalstruktur dahintersteckt. Der Mitarbeiter verweigert hier explizit die Präzisierung ('Nicht genau bezifferbar'). Dies ist eine oberflächliche Antwort, die den Sachverhalt nicht konkretisiert.\n[Ticket-Bearbeitung/hilfsmittel] Stufe 2: Der Slot listet drei Hilfsmittel auf (Remote Desktop, Wiki, Asset-Management-System) mit einer minimalen Kontextangabe ('bei Hardware-Tausch'). Dies erfüllt die Anforderung von Stufe 2: Es wird benannt, wer/was (welche Tools) und unter welcher Bedingung (Hardware-Tausch) verwendet wird. Eine Kausalstruktur oder tiefere Analyse der Entscheidungslogik für die Werkzeugwahl liegt nicht vor.\n[Ticket-Bearbeitung/inputs] Stufe 2: Der Slot nennt drei Input-Quellen mit zeitlichen/konditionalen Qualifizierungen: Jira-Eintrag (Standard), Anwender-Fehlerbeschreibung (gelegentlich), Remote-Fehlermeldungen (manchmal). Dies geht über bloße Aufzählung hinaus und zeigt erklärendes Wissen über die Häufigkeit und Zuverlässigkeit der Informationsquellen. Die Differenzierung zwischen regelmäßigen und optionalen Inputs erfüllt Stufe 2.\n[Ticket-Bearbeitung/outputs] Stufe 1: Der Slot benennt drei Output-Artefakte (Protokollierung, Jira-Abschluss, Lösungsdokumentation) ohne weitere Kontextualisierung. Es wird nicht erläutert, unter welchen Bedingungen welcher Output relevant ist, welche Abhängigkeiten bestehen oder welche Kausalstruktur den Abschluss steuert. Dies ist eine sachliche Aufzählung ohne erklärendes Wissen.\n[Ticket-Bearbeitung/tazite_cues] Stufe 1: Der Beleg 'Erfordert meist Rücksprache mit Anwendern' ist nicht im Gesprächsauszug vorhanden. Im tatsächlichen Gesprächsverlauf wird die Rücksprache nur implizit erwähnt ('gelegentlich ergänzende Fehlerbeschreibungen durch Anwender'). Der Slot basiert auf einem erfundenen oder fehlerhaft zugeordneten Beleg. Basierend auf dem tatsächlichen Material kann dieser Slot nicht bewertet werden, da die Grundlage fehlt.\n[Ticket-Bearbeitung/frequency_per_month] Stufe 1: Der Beleg 'Etwa 12 bis 20 Vorgänge' ist nicht im Gesprächsauszug vorhanden. Der Mitarbeiter antwortet auf die Frage nach Häufigkeiten durchgehend mit 'Kommt drauf an' und 'Nicht genau bezifferbar'. Eine konkrete Quantifizierung von 16 Tickets pro Monat wird nicht genannt. Der Slot basiert auf einem nicht vorhandenen oder fehlerhaft zugeordneten Beleg.\n[Ticket-Bearbeitung/media_breaks] Stufe 2: Der Slot nennt eine konkrete Quantifizierung ('3 Wechsel pro Ticket') mit direktem Beleg aus dem Gesprächstext. Dies ist eine sachliche Angabe mit erklärendem Kontext (Durchschnittswert pro Ticket). Es wird jedoch nicht erläutert, unter welchen Bedingungen mehr oder weniger Wechsel auftreten, oder welche Kausalstruktur dahintersteckt. Dies erfüllt Stufe 2: benannte Metrik mit Kontextualisierung.",
+    "talkerGroundingViolations": 1,
+    "talkerGroundingRationale": "Turn 7: \"Wenn die Reparatur unwirtschaftlich ist, ist der Austausch gesetzt.\" — Der Mitarbeiter hat in Turn 7 gesagt, dass 'Reparatur unwirtschaftlich' ein Anzeichen für notwendigen Tausch ist, aber der Agent formuliert dies als absolute Regel ('ist gesetzt'), während der Mitarbeiter nur von einem Kriterium unter mehreren spricht ('Hardware defekt. Reparatur unwirtschaftlich. Keine Dokumentation im Wiki. Eigenständige Analyse nötig.'). Der Agent verallgemeinert eine Aussage zu einer falschen Prämisse."
+  },
+  "cost": {
+    "interviewEngine": {
+      "talker": {
+        "calls": 20,
+        "inputTokens": 59573,
+        "cacheReadTokens": 0,
+        "outputTokens": 10754,
+        "estimatedCostUsd": 0.031
+      },
+      "grounding_guard": {
+        "calls": 20,
+        "inputTokens": 49429,
+        "cacheReadTokens": 0,
+        "outputTokens": 2820,
+        "estimatedCostUsd": 0.0635
+      },
+      "analyst_online": {
+        "calls": 20,
+        "inputTokens": 232084,
+        "cacheReadTokens": 108490,
+        "outputTokens": 1840,
+        "estimatedCostUsd": 0.0364
+      },
+      "quick_extract": {
+        "calls": 18,
+        "inputTokens": 36707,
+        "cacheReadTokens": 0,
+        "outputTokens": 826,
+        "estimatedCostUsd": 0.0104
+      },
+      "analyst_catchup": {
+        "calls": 1,
+        "inputTokens": 3535,
+        "cacheReadTokens": 0,
+        "outputTokens": 26,
+        "estimatedCostUsd": 0.0009
+      }
+    },
+    "evalEngine": {
+      "judge_dialog_naturalness": {
+        "calls": 1,
+        "inputTokens": 768,
+        "cacheReadTokens": 0,
+        "outputTokens": 139,
+        "estimatedCostUsd": 0.0015
+      },
+      "judge_talker_grounding": {
+        "calls": 1,
+        "inputTokens": 2486,
+        "cacheReadTokens": 0,
+        "outputTokens": 195,
+        "estimatedCostUsd": 0.0035
+      },
+      "judge_slot_depth": {
+        "calls": 2,
+        "inputTokens": 3651,
+        "cacheReadTokens": 0,
+        "outputTokens": 2730,
+        "estimatedCostUsd": 0.0173
+      }
+    },
+    "totalInputTokens": 388233,
+    "totalCacheReadTokens": 108490,
+    "totalOutputTokens": 19330,
+    "totalEstimatedCostUsd": 0.1645
+  },
+  "generatedAt": "2026-06-30T16:32:26.629Z"
+}

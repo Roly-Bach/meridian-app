@@ -1,12 +1,17 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // interviewTalker imports getSupabaseAdmin (used inside onFinish). Mock it so the
 // module loads without a live supabase env — the guard tests below are pure.
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: vi.fn() }),
 }))
+vi.mock('ai', () => ({ generateText: vi.fn() }))
+vi.mock('@/lib/llm-provider', () => ({ resolveModel: vi.fn().mockReturnValue({}) }))
+vi.mock('./talkerGroundingGuard', () => ({ checkGroundingViolation: vi.fn() }))
 
-import { detectNumberAnchoring, detectFillerPhrases } from './interviewTalker'
+import { generateText } from 'ai'
+import { detectNumberAnchoring, detectFillerPhrases, createTalkerStream } from './interviewTalker'
+import { checkGroundingViolation } from './talkerGroundingGuard'
 
 // ─── detectNumberAnchoring (Pt7, output guard) ───────────────────────────────
 
@@ -72,5 +77,104 @@ describe('detectFillerPhrases (F1c question templates)', () => {
     const fillers = detectFillerPhrases('Notiere ich als variabel. Nächster Punkt: Wie sieht der Abschluss aus?')
     expect(fillers).toContain('Notiere ich als variabel')
     expect(fillers).toContain('Nächster Punkt')
+  })
+})
+
+// ─── createTalkerStream — KI-18 grounding repair loop ────────────────────────
+
+function baseContext() {
+  return {
+    interviewId: 'interview-1',
+    workspaceId: 'workspace-1',
+    employeeName: 'Test Mitarbeiter',
+    employeeRole: null,
+    department: 'IT',
+    focusTopics: null,
+    phase: 'intro' as const,
+    timerMinutes: 0,
+    topicsCovered: [],
+    topicsOpen: [],
+    extractionsLog: [],
+    maxDurationMinutes: 60,
+    stepTracker: [],
+  }
+}
+
+describe('createTalkerStream — KI-18 grounding repair loop', () => {
+  beforeEach(() => {
+    vi.mocked(generateText).mockReset()
+    vi.mocked(checkGroundingViolation).mockReset()
+  })
+
+  function mockGenerated(text: string) {
+    return {
+      text,
+      usage: { inputTokens: 1, outputTokens: 1, inputTokenDetails: {} },
+      providerMetadata: {},
+    } as unknown as Awaited<ReturnType<typeof generateText>>
+  }
+
+  it('guard clean beim 1. Versuch → keine Regeneration, 1x generateText', async () => {
+    vi.mocked(generateText).mockResolvedValueOnce(mockGenerated('Saubere Antwort.'))
+    vi.mocked(checkGroundingViolation).mockResolvedValueOnce({ violation: false })
+
+    const stream = await createTalkerStream({ context: baseContext(), history: [] })
+    const text = await stream.text
+
+    expect(text).toBe('Saubere Antwort.')
+    expect(generateText).toHaveBeenCalledTimes(1)
+    expect(checkGroundingViolation).toHaveBeenCalledTimes(1)
+  })
+
+  it('guard verletzt 1x, clean beim Repair → 1 Regeneration, 2x generateText', async () => {
+    vi.mocked(generateText)
+      .mockResolvedValueOnce(mockGenerated('Du hast vorhin 3 Minuten erwähnt.'))
+      .mockResolvedValueOnce(mockGenerated('Reparierte Antwort.'))
+    vi.mocked(checkGroundingViolation)
+      .mockResolvedValueOnce({ violation: true, claim: '3 Minuten', reason: 'fabriziert' })
+      .mockResolvedValueOnce({ violation: false })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const stream = await createTalkerStream({ context: baseContext(), history: [] })
+    const text = await stream.text
+
+    expect(text).toBe('Reparierte Antwort.')
+    expect(generateText).toHaveBeenCalledTimes(2)
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[talker:grounding] violation detected, regenerating',
+      expect.objectContaining({ attempt: 1 }),
+    )
+    warnSpy.mockRestore()
+
+    // Repair-Anweisung verbietet explizit Wiederholung des falschen Werts und
+    // fordert thematische Kontinuität statt eines themenfremden Ausweich-Bailouts
+    // (2026-06-30: dialogNaturalness-Regression durch "stelle eine neue Frage
+    // ohne Rückbezug" bei wiederholten Repairs).
+    const repairCall = vi.mocked(generateText).mock.calls[1]![0] as { system: string }
+    expect(repairCall.system).toContain('3 Minuten')
+    expect(repairCall.system).toContain('Verwende auf keinen Fall erneut den fehlerhaften Wert')
+    expect(repairCall.system).toContain('kein Themensprung')
+  })
+
+  it('guard verletzt bei beiden Repair-Versuchen → 3x generateText, console.error mit attempts:2', async () => {
+    vi.mocked(generateText)
+      .mockResolvedValueOnce(mockGenerated('Erster Versuch, fabriziert.'))
+      .mockResolvedValueOnce(mockGenerated('Zweiter Versuch, immer noch fabriziert.'))
+      .mockResolvedValueOnce(mockGenerated('Dritter Versuch (2. Repair), immer noch fabriziert.'))
+    vi.mocked(checkGroundingViolation).mockResolvedValue({ violation: true, claim: 'X', reason: 'fabriziert' })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const stream = await createTalkerStream({ context: baseContext(), history: [] })
+    const text = await stream.text
+
+    expect(text).toBe('Dritter Versuch (2. Repair), immer noch fabriziert.')
+    expect(generateText).toHaveBeenCalledTimes(3)
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[talker:grounding] shipping after exhausting repair attempts, still flagged',
+      expect.objectContaining({ attempts: 2 }),
+    )
+    errorSpy.mockRestore()
+    warnSpy.mockRestore()
   })
 })
