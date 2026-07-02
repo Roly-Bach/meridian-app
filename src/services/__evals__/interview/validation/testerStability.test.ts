@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { compareRankings, aggregateQuality } from './testerStability'
+import {
+  compareRankings,
+  aggregateQuality,
+  aggregateCells,
+  buildContrast,
+  contrastPasses,
+  type TranscriptRow,
+} from './testerStability'
 import type { ScoreSet } from '../scorers'
 
 describe('compareRankings', () => {
@@ -53,5 +60,96 @@ describe('aggregateQuality', () => {
 
   it('empty → 0', () => {
     expect(aggregateQuality([])).toBe(0)
+  })
+})
+
+// ─── Cell aggregation + contrast selection ───────────────────────────────────────
+
+function row(model: string, tester: string, mode: string, dedup: number, persona = 'buchhalter'): TranscriptRow {
+  return { model, persona, testerModel: tester, disclosureMode: mode, scores: { dedupSlotCoverage: dedup } as ScoreSet }
+}
+
+const WEAK = 'google/gemini-3.1-flash-lite'
+const STRONG = 'anthropic/claude-sonnet-4-5'
+const MODE_B = 'withhold_numbers_only'
+const MODE_A = 'withhold_tools_and_numbers'
+
+describe('aggregateCells', () => {
+  it('groups by (tester, mode) cell and medians quality per interview model', () => {
+    const rows = [
+      row('m1', WEAK, MODE_B, 0.8), row('m1', WEAK, MODE_B, 0.9), // m1 median 0.85
+      row('m2', WEAK, MODE_B, 0.5),
+      row('m1', STRONG, MODE_B, 0.7),
+    ]
+    const cells = aggregateCells(rows)
+    // deterministic order: STRONG (anthropic) sorts before WEAK (google)
+    expect(cells.map(c => c.testerModel)).toEqual([STRONG, WEAK])
+    const weakCell = cells.find(c => c.testerModel === WEAK && c.disclosureMode === MODE_B)!
+    expect(weakCell.qualityByModel).toEqual({ m1: 0.85, m2: 0.5 })
+    expect(weakCell.runsByModel).toEqual({ m1: 2, m2: 1 })
+  })
+})
+
+describe('buildContrast', () => {
+  const cells = aggregateCells([
+    // reference mode B: weak ranks m1>m2, strong ranks m1>m2 (concordant)
+    row('m1', WEAK, MODE_B, 0.9), row('m2', WEAK, MODE_B, 0.6),
+    row('m1', STRONG, MODE_B, 0.8), row('m2', STRONG, MODE_B, 0.4),
+    // mode A under weak: ranking flips (m2>m1)
+    row('m1', WEAK, MODE_A, 0.3), row('m2', WEAK, MODE_A, 0.7),
+  ])
+
+  it('tester-strength contrast holds mode fixed, varies tester', () => {
+    const c = buildContrast(cells, {
+      dimension: 'Tester-Stärke', vary: 'testerModel', valueA: WEAK, valueB: STRONG,
+      fixed: 'disclosureMode', fixedValue: MODE_B,
+    })!
+    expect(c.modelsCompared).toEqual(['m1', 'm2'])
+    expect(c.stability.pairAgreement).toBe(1)
+    expect(c.stability.topRankStable).toBe(true)
+    expect(contrastPasses(c, 0.8)).toBe(true)
+  })
+
+  it('disclosure contrast catches a mode-induced ranking flip', () => {
+    const c = buildContrast(cells, {
+      dimension: 'Offenlegungs-Modus', vary: 'disclosureMode', valueA: MODE_A, valueB: MODE_B,
+      fixed: 'testerModel', fixedValue: WEAK,
+    })!
+    // mode A: m2>m1; mode B: m1>m2 → fully reversed
+    expect(c.stability.pairAgreement).toBe(0)
+    expect(c.stability.topRankStable).toBe(false)
+    expect(contrastPasses(c, 0.8)).toBe(false)
+  })
+
+  it('returns null when a required cell is absent', () => {
+    const c = buildContrast(cells, {
+      dimension: 'Tester-Stärke', vary: 'testerModel', valueA: WEAK, valueB: STRONG,
+      fixed: 'disclosureMode', fixedValue: MODE_A, // no STRONG cell under mode A
+    })
+    expect(c).toBeNull()
+  })
+
+  it('returns null when fewer than two shared models remain', () => {
+    const thin = aggregateCells([
+      row('m1', WEAK, MODE_B, 0.9),
+      row('m2', STRONG, MODE_B, 0.5), // different model → no overlap
+    ])
+    const c = buildContrast(thin, {
+      dimension: 'Tester-Stärke', vary: 'testerModel', valueA: WEAK, valueB: STRONG,
+      fixed: 'disclosureMode', fixedValue: MODE_B,
+    })
+    expect(c).toBeNull()
+  })
+})
+
+describe('contrastPasses', () => {
+  const mk = (pa: number, top: boolean) => ({
+    dimension: 'x', conditionA: 'a', conditionB: 'b', modelsCompared: ['m1', 'm2'],
+    stability: { rankingWeak: [], rankingStrong: [], pairAgreement: pa, topRankStable: top },
+  })
+  it('needs both pairAgreement ≥ band AND stable top rank', () => {
+    expect(contrastPasses(mk(0.8, true), 0.8)).toBe(true)
+    expect(contrastPasses(mk(0.8, false), 0.8)).toBe(false) // top rank flipped
+    expect(contrastPasses(mk(0.79, true), 0.8)).toBe(false) // below band
   })
 })

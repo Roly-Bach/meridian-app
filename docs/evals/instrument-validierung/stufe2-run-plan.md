@@ -1,0 +1,84 @@
+# Checkpoint D Stufe 2 — Tester-Stabilität: Run-Plan
+
+> Vorbereitet 2026-07-02. Harness runnable (`validation/testerStability.ts`), Runner taggt
+> transcript.json jetzt mit `testerModel` + `disclosureMode` (Zell-Zuordnung). Ausführung ist der
+> budget-gegatete Schritt (eigene Freigabe), analog zum Stufe-1-Verdikt-Lauf.
+
+## Frage (Versuchsplan §6 Stufe 2)
+Bleibt das Ranking der Interview-Modelle stabil, wenn (1) der Tester stärker wird und (2) der
+Offenlegungs-Modus wechselt? Wenn nicht, ist der Tester/Modus Teil des Messfehlers und PROJ-41
+kann dem Benchmark nicht trauen. Band je Kontrast: `pairAgreement ≥ 0.8` UND Top-Rang stabil.
+
+## Versuchsdesign — 3-Zellen-Shared-Baseline
+Zwei 2-stufige Kontraste, die sich eine Basiszelle teilen (spart ein Drittel der Läufe):
+
+| Zelle | Tester | Disclosure-Modus | Rolle |
+|---|---|---|---|
+| C1 | schwach (`gemini-3.1-flash-lite`) | `withhold_numbers_only` (B) | Basis (in beiden Kontrasten) |
+| C2 | stark (`claude-sonnet-4-5`) | `withhold_numbers_only` (B) | Tester-Stärke-Kontrast (C1 vs C2) |
+| C3 | schwach (`gemini-3.1-flash-lite`) | `withhold_tools_and_numbers` (A) | Disclosure-Kontrast (C1 vs C3) |
+
+Referenz-Modus = B, Referenz-Tester = schwach (matcht die Harness-Defaults
+`TESTER_REFERENCE_MODE` / `TESTER_REFERENCE_TESTER`).
+
+## Interview-Modell-Satz (das Gerankte) — ENTSCHEIDUNG offen
+Vorschlag: 3 Modelle mit plausiblem Qualitäts-Spread → 3 Paare, nicht-degeneriertes Ranking:
+`google/gemini-3.1-flash-lite` (Baseline) · `google/gemini-3.5-flash` (mittel) ·
+`anthropic/claude-haiku-4-5` (stark).
+
+**Risiko (Spread):** die Gate-Kennzahl `dedupSlotCoverage` liegt für gute Modelle eng beieinander
+(gemini-lite bereits ~0.89). Falls die drei Modelle nicht klar streuen, misst „Ranking-Stabilität"
+Rauschen statt Signal. Gegenmittel: ein bewusst schwaches viertes Modell aufnehmen, oder eine
+trennschärfere Kennzahl wählen (`STABILITY_QUALITY_KEY`). Vor dem großen Lauf mit einer Mini-Charge
+(1 Persona, 1 Run) prüfen, ob überhaupt ein Spread existiert.
+
+## Sweep-Größe + Kosten — ENTSCHEIDUNG offen
+Läufe gesamt = 3 Modelle × Personas × Runs × 3 Zellen. Kosten grob (getrackt Interview+Eval
+~$0.15–0.35/Lauf je nach Interview-Modell; Tester-Bucket ungetrackt: schwach ~$0.02, Sonnet
+~$0.10–0.15/Lauf, betrifft nur C2):
+
+| Option | Personas × Runs | Läufe | Kosten grob | Zeit grob |
+|---|---|---|---|---|
+| Minimal | 1 × 2 | 18 | ~$5–8 | ~30–60 min |
+| **Moderat (empfohlen)** | 3 × 2 | 54 | ~$14–24 | ~1.5–3 h |
+| Voll | 3 × 3 | 81 | ~$21–36 | ~2.5–4 h |
+
+Moderat: 3 Personas geben eine über-Persona-stabile Qualitätsschätzung je Modell, 2 Runs minimale
+Replikation. Seed `42`, `--store pglite` (reproduzierbar, DB-frei).
+
+## Ausführung (nach Freigabe)
+
+**Preflight (Pflicht):** Keys für die 3 Interview-Modelle + beide Tester validieren:
+```bash
+EVAL_REFERENCE_JUDGE_MODELS="anthropic/claude-sonnet-4-5,anthropic/claude-haiku-4-5,google/gemini-3.5-flash" \
+  npx tsx scripts/judge-preflight.ts
+```
+
+**Sweep (je Zelle ein Runner-Aufruf, Disclosure über Env → wird ins Tag geschrieben):**
+```bash
+MODELS="google/gemini-3.1-flash-lite,google/gemini-3.5-flash,anthropic/claude-haiku-4-5"
+PERS="buchhalter,vertriebler,it-support"
+
+# C1 — schwacher Tester, Modus B (Basis)
+TESTER_MODEL=google/gemini-3.1-flash-lite TESTER_DISCLOSURE_MODE=withhold_numbers_only \
+  npm run eval:interview -- --models "$MODELS" --personas "$PERS" --runs 2 --seed 42 --store pglite
+
+# C2 — starker Tester, Modus B
+TESTER_MODEL=anthropic/claude-sonnet-4-5 TESTER_DISCLOSURE_MODE=withhold_numbers_only \
+  npm run eval:interview -- --models "$MODELS" --personas "$PERS" --runs 2 --seed 42 --store pglite
+
+# C3 — schwacher Tester, Modus A
+TESTER_MODEL=google/gemini-3.1-flash-lite TESTER_DISCLOSURE_MODE=withhold_tools_and_numbers \
+  npm run eval:interview -- --models "$MODELS" --personas "$PERS" --runs 2 --seed 42 --store pglite
+```
+
+**Auswertung:**
+```bash
+npx tsx src/services/__evals__/interview/validation/testerStability.ts --dir docs/evals/interview/<datum>
+```
+Schreibt `tester-stabilitaet-<datum>.md` mit Zellen-Inventar + beiden Kontrasten + GO/NO-GO.
+
+## Offene Entscheidungen (vor Ausführung)
+1. **Interview-Modell-Satz** (3 wie vorgeschlagen? viertes schwaches Modell für klaren Spread?).
+2. **Sweep-Größe** (Minimal / Moderat / Voll).
+3. **Spread-Vorabtest** (empfohlen: Mini-Charge 1×1 vor dem großen Lauf).

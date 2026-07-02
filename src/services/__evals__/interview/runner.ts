@@ -619,6 +619,10 @@ function writeReport(opts: {
     interviewId: opts.interviewId,
     model: opts.model,
     persona: opts.personaName,
+    // Tester + disclosure identify the experiment cell (PROJ-40 Stufe 2). Env is authoritative:
+    // main() writes the effective disclosure mode back to TESTER_DISCLOSURE_MODE, testerModel is env-only.
+    testerModel: process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite',
+    disclosureMode: process.env.TESTER_DISCLOSURE_MODE ?? 'withhold_numbers_only',
     status: opts.interviewStatus,
     turns: opts.turns,
     finalStepTracker: opts.finalStepTracker,
@@ -1109,6 +1113,11 @@ function writeAggregateReport(opts: {
 
 async function main() {
   const { models, personas, baselineLabel, runs, seed, noPerturbation, isolatedCriteria, store, disclosureMode } = parseArgs()
+
+  // Make the effective disclosure mode (flag > env > default) authoritative for downstream env reads.
+  // writeReport tags each transcript.json with TESTER_DISCLOSURE_MODE (PROJ-40 Stufe 2 groups by cell),
+  // and testerStability aggregates by it — so the flag path must not leave a stale/absent env value.
+  process.env.TESTER_DISCLOSURE_MODE = disclosureMode
 
   if (personas.length === 0) {
     printUsage()
