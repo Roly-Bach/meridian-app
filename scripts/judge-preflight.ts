@@ -18,7 +18,7 @@ async function main() {
   const refs = (
     process.env.EVAL_REFERENCE_JUDGE_MODELS ??
     process.env.EVAL_REFERENCE_JUDGE_MODEL ??
-    'anthropic/claude-sonnet-4-5,google/gemini-3.5-flash'
+    'anthropic/claude-sonnet-4-5'
   ).split(',').map(s => s.trim()).filter(Boolean)
   const prodCandidates = ['anthropic/claude-haiku-4-5', 'google/gemini-3.1-flash-lite']
   const models = [...new Set([...refs, ...prodCandidates])]

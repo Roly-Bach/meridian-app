@@ -8,16 +8,19 @@
  *
  * Idea: re-score a fixed, stratified sample of existing transcripts (calibration-sample.json,
  * produced offline by selectCalibrationSample.ts) with the production judge PLUS one or more
- * reference judges (EVAL_REFERENCE_JUDGE_MODELS, default: Anthropic frontier for the strength check
- * + a cross-vendor Gemini for the independence check), then measure how often they assign the same
- * discrete level (Level-Match-Quote) and the chance-corrected agreement (Cohen's Kappa). Using fixed
- * transcripts isolates the judge from interview-model variance: the same frozen inputs are graded by
- * every judge (ADR-020; Tech Design C).
+ * reference judges (EVAL_REFERENCE_JUDGE_MODELS, default 2026-07-02: Anthropic frontier — Sonnet — as
+ * a same-vendor strength check), then measure how often they assign the same discrete level
+ * (Level-Match-Quote) plus role-/scale-appropriate agreement (nominal + linear-weighted Kappa, ordinal
+ * offset, adjacency). Using fixed transcripts isolates the judge from interview-model variance: the
+ * same frozen inputs are graded by every judge (ADR-020; Tech Design C).
  *
- * At least one reference judge should be a different vendor than the production judge to preserve
- * cross-vendor integrity (ADR-020 D1 — Test/Eval are EU-free, frontier models allowed). gemini-3.1-
- * flash-lite is deliberately excluded as a reference: it is the interviewer model, so grading its own
- * transcripts would be self-serving (ADR-020).
+ * Single-Vendor by default: Checkpoint D (Läufe 1–3) showed the cross-vendor κ≥0.61 requirement is
+ * unrealistic for subjective dialogue quality (a genuine vendor-leniency gradient, not an instrument
+ * defect) AND that no suitable cross-vendor judge exists — gemini-3.5-flash ceilings (Ø dialog 0.97),
+ * gemini-3.1-flash-lite is the interviewer model (self-grading). So the reference is a same-vendor
+ * frontier model (Sonnet), realising ADR-020 D3.2's weak-prod-vs-strong-reference strength check.
+ * A cross-vendor reference can still be added via EVAL_REFERENCE_JUDGE_MODELS once a usable one exists;
+ * gemini-3.1-flash-lite stays excluded either way (interviewer → self-serving).
  *
  * Observability (PROJ-40): the harness persists, per transcript and per reference judge, both judges'
  * discrete level AND their rationale for all three dimensions, plus a confusion matrix and ordinal
@@ -387,20 +390,24 @@ export function buildMarkdown(
 // ─── CLI runner (Checkpoint execution; guarded against import) ───────────────────
 
 async function main(): Promise<void> {
-  // Multi-Referenz (PROJ-40 D, Cross-Vendor): Liste statt Einzel-Modell. Rückwärtskompatibel zum
-  // alten Einzel-Env EVAL_REFERENCE_JUDGE_MODEL. Default: Anthropic-Frontier (Stärke-Check) PLUS
-  // echter Cross-Vendor (Unabhängigkeits-Check). gemini-3.1-flash-lite bewusst NICHT dabei — das ist
-  // das Interviewer-Modell, seine eigenen Transkripte zu benoten wäre Selbst-Bewertung (ADR-020).
+  // Referenz-Judge(s) (PROJ-40 D): Liste statt Einzel-Modell, rückwärtskompatibel zum alten Einzel-Env
+  // EVAL_REFERENCE_JUDGE_MODEL. Default seit 2026-07-02 Single-Vendor: nur Anthropic-Frontier (Sonnet)
+  // als Stärke-Check (ADR-020 D3.2). Die frühere Cross-Vendor-Referenz (gemini-3.5-flash) ist entfernt —
+  // Deckeneffekt (Ø dialog 0.97, benotet fast alles Stufe 3, kaum Diskriminierung), taugt nicht als
+  // Judge (Checkpoint D Lauf 1–3, ADR-020-Nachtrag 2026-07-02). gemini-3.1-flash-lite bleibt ausgeschlossen
+  // (Interviewer-Modell → Selbst-Bewertung). Ein Cross-Vendor-Judge kann per Env wieder ergänzt werden,
+  // sobald ein tauglicher (Google/OpenAI) verfügbar ist.
   const referenceJudgeModels = (
     process.env.EVAL_REFERENCE_JUDGE_MODELS ??
     process.env.EVAL_REFERENCE_JUDGE_MODEL ??
-    'anthropic/claude-sonnet-4-5,google/gemini-3.5-flash'
+    'anthropic/claude-sonnet-4-5'
   ).split(',').map(s => s.trim()).filter(Boolean)
 
   // Exclude-Self (PROJ-40 D): ein Referenz-Judge, der das Interviewer-Modell (oder der Prod-Judge)
   // eines Transkripts IST, benotet dort seine eigene Ausgabe → Selbst-Bewertung (ADR-020-Milde-Bias).
   // Mit dem Flag wird er für genau diese Transkripte übersprungen; die Aggregation nutzt nur die
-  // verbleibenden. So bewertet z.B. gemini-3.5-flash nur die gemini-3.1-lite-Transkripte und umgekehrt.
+  // verbleibenden. Beim Single-Vendor-Default (Sonnet-Referenz, alle Interviews Gemini) ist nichts
+  // auszuschließen; relevant wieder, sobald per Env ein Gemini-Referenz-Judge ergänzt wird.
   const excludeSelf = process.env.EVAL_JUDGE_EXCLUDE_SELF === 'true'
 
   // Preflight (Regel „Judge-API-Key validieren"): jeder Referenz-Judge muss auflösen, sonst hart

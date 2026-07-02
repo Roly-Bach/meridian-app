@@ -167,3 +167,27 @@ unterschiedliche Subsets (exclude-self); Haiks Eigenmittel über Subsets stabil 
 Definitiv klärbar nur mit einem 4-Judge-Paarvergleich auf identischen Transkripten. Fürs Gate ändert
 das nichts (Single-Vendor-Kalibrierung), aber gemini-3.5-flash scheidet wegen Deckeneffekt als Judge
 ohnehin aus.
+
+## Entscheidung: Stufe-1-Gate neugestaltet (2026-07-02)
+
+Die drei Konsequenzen oben sind in Versuchsplan §6 und im Code umgesetzt. Beschlossen (Rückfragen
+2026-07-02):
+
+1. **Single-Vendor-Kalibrierung.** Prod-Judge `claude-haiku-4-5` (Anker), Referenz `claude-sonnet-4-5`
+   (same-vendor Frontier, Stärke-Check nach ADR-020 D3.2). Die Cross-Vendor-`κ≥0.61`-Forderung ist
+   zurückgezogen — kein tauglicher Cross-Vendor-Judge (gemini-3.5 Deckeneffekt, gemini-3.1 =
+   Interviewer). ADR-020-Nachtrag 2026-07-02.
+2. **Kriterium rollen-/skalen-gerecht statt uniform-κ.** dialog (gatet in `evaluateGate`): Match ≥ 0.66
+   + Adjazenz ≥ 0.90 + |Versatz| ≤ 0.5, gewichtetes κ als Begleitwert. depth (Diskriminator): PABAK ≥ 0.5
+   (= Match ≥ 0.75) + Adjazenz = 1.0, nominal-κ verworfen (Kappa-Paradox über 3 Läufe).
+3. **grounding zu Diagnose deklassiert** — kein Kalibrierungs-Gate (kein Gate in runner, same-vendor
+   schwach, an KI-18 gekoppelt).
+4. **Neue Reliabilitäts-Voraussetzung:** Haiku Test-Retest ≥ 0.85 je Dimension (ersetzt die
+   Referenz-Selbststabilität, da Haiku im Single-Vendor-Design sein eigener Anker ist).
+5. **gemini-3.5-flash als Judge gestrichen** — Default `EVAL_REFERENCE_JUDGE_MODELS` jetzt Sonnet-only
+   (judgeCalibration.ts + judge-preflight.ts).
+
+**Offen (nächster Checkpoint-D-Schritt):** der bewertete Kalibrierungslauf gegen diese neuen Schwellen
+— Haiku-Test-Retest (Reliabilität) + Haiku-vs-Sonnet-Pass/Fail je Dimension. Die Lauf-2-Zahlen (Match
+dialog 0.69, depth 0.79) sind Indikatoren, aber vor-Neugestaltung erhoben; der Verdikt-Lauf gegen die
+finalen Kriterien steht noch aus.

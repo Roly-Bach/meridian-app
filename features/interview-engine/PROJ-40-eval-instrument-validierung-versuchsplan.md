@@ -215,6 +215,15 @@ Die Instrumentierung hat ihren Zweck erfüllt: aus „alles FAIL" wurden vier ha
 
 **Lauf 3 — Cross-Vendor, self-grading-frei (Commits f8fa006 Token-Fix + 6da9671 Exclude-Self):** Token-Limits hoch (dialog 3000, depth 4000, grounding 2500) → `NoObjectGeneratedError` 96→8; `EVAL_JUDGE_EXCLUDE_SELF` lässt jedes Gemini nur fremde Transkripte bewerten. Instrument damit technisch solide, Signal echt. **Definitives Verdikt: Cross-Vendor κ≥0.61 nicht erreicht, aber aus belastbarem Grund** — beide Gemini-Judges sind systematisch milder als Haiku auf dialog (20/29 höher, 9 gleich, **0 strenger**), grounding subjektiv/verrauscht, depth robust aber prävalenz-degeneriert (fast konstant Stufe 2). Anthropic- und Google-Judges kalibrieren subjektive Dialogqualität echt unterschiedlich. Konsequenzen für den Versuchsplan (separat): Single-Vendor-Kalibrierung (Haiku, konservativ), depth-Gate prävalenz-adjustiert statt κ, κ-Cross-Vendor-Forderung überdenken. Details + Zahlen im [Nachtrag](../../docs/evals/instrument-validierung/checkpoint-d-stufe1-ergebnis.md), Rohdaten `judge-kalibrierung-2026-07-01-crossvendor-excludeself.{md,json}`.
 
+### Kriterium E — Stufe-1-Gate neugestaltet, 2026-07-02
+
+Die drei Lauf-3-Konsequenzen sind in Versuchsplan §6 und im Code umgesetzt (Rückfragen 2026-07-02: grounding zu Diagnose deklassiert, Cross-Vendor zurückgezogen). [Versuchsplan §6](../../docs/evals/versuchsplan-modell-benchmarking.md) + [Verdikt-Doc „Entscheidung"](../../docs/evals/instrument-validierung/checkpoint-d-stufe1-ergebnis.md) + [ADR-020-Nachtrag 2026-07-02](../../docs/adr/ADR-020-eval-methodik-modell-benchmarking.md).
+
+- **Single-Vendor-Kalibrierung** statt Cross-Vendor: Prod `claude-haiku-4-5` (Anker) vs. Referenz `claude-sonnet-4-5` (same-vendor Frontier, Stärke-Check nach ADR-020 D3.2). Cross-Vendor-Referenz zurückgezogen — kein tauglicher Judge (gemini-3.5 Deckeneffekt Ø 0.97, gemini-3.1 = Interviewer). Default `EVAL_REFERENCE_JUDGE_MODELS` → Sonnet-only ([judgeCalibration.ts](../../src/services/__evals__/interview/validation/judgeCalibration.ts) + [judge-preflight.ts](../../scripts/judge-preflight.ts)).
+- **Kriterium rollen-/skalen-gerecht statt uniform-κ:** dialog (gatet in `evaluateGate`) Match ≥ 0.66 + Adjazenz ≥ 0.90 + |Versatz| ≤ 0.5, gewichtetes κ Begleitwert; depth (Diskriminator) PABAK ≥ 0.5 + Adjazenz = 1.0, nominal-κ verworfen (Kappa-Paradox über 3 Läufe); grounding zu Diagnose deklassiert (kein Gate, an KI-18 gekoppelt).
+- **Neue Reliabilitäts-Voraussetzung:** Haiku Test-Retest ≥ 0.85 je Dimension (ersetzt Referenz-Selbststabilität; Haiku ist im Single-Vendor-Design sein eigener Anker).
+- **Offen (nächster Checkpoint-D-Schritt):** der bewertete Verdikt-Lauf gegen diese finalen Schwellen (Haiku-Test-Retest + Haiku-vs-Sonnet je Dimension). Die Lauf-2-Zahlen (dialog Match 0.69, depth 0.79) sind Indikatoren, aber vor-Neugestaltung erhoben.
+
 ## QA Test Results
 _To be added by /qa_
 

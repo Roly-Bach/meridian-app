@@ -174,3 +174,35 @@ quantitative Potenzial-Facetten als ROI-Eingang); der Wissensverlust-/Wissensman
 - `hallucination_rate`: nicht ins Gate; der grobe 10-Zeichen-Prefix-Prüfer wird auf semantische bzw.
   Span-Vertrauens-Prüfung umgebaut (string-genaues Zitat-Matching ist im LLM-Kontext der falsche Test).
 - `schemaConformanceRate`: Diagnose (capture-then-normalize), kein harter Gate-Floor.
+
+## Nachtrag (2026-07-02): Judge-Kalibrierung Single-Vendor, Cross-Vendor-Referenz zurückgezogen
+
+> Amendment, nicht Änderung. D1–D6 bleiben gültig. Hält das empirische Ergebnis von Checkpoint D
+> Stufe 1 (Läufe 1–3) fest und dessen Folge für die Stufe-1-Kriterien. Details:
+> `docs/evals/instrument-validierung/checkpoint-d-stufe1-ergebnis.md`, Schwellen im Versuchsplan (D6 §6).
+
+D3.2 verlangt für die Judge-Kalibrierung „schwacher Prod- vs. starker Referenz-Judge" — vendor-agnostisch
+formuliert. Die praktische Umsetzung zielte zunächst auf einen **Cross-Vendor**-Referenz-Judge
+(gemini-3.5-flash), um zusätzlich die Vendor-Unabhängigkeit im Sinne von D1 zu prüfen. Drei
+Kalibrierungsläufe auf der fixierten Stichprobe zeigen, dass das nicht trägt:
+
+- **Kein tauglicher Cross-Vendor-Judge verfügbar.** gemini-3.5-flash hat einen Deckeneffekt (Ø dialog
+  0.97, benotet fast alles Stufe 3, kaum Diskriminierung) und ist als Judge unbrauchbar. Der einzige
+  andere EU-freie Google-Kandidat, gemini-3.1-flash-lite, ist das Interviewer-Modell — es seine eigenen
+  Transkripte benoten zu lassen wäre Selbst-Bewertung.
+- **Die uniforme Cross-Vendor-`κ ≥ 0.61`-Forderung ist für subjektive Dialogqualität unrealistisch.**
+  Gemessen wurde ein echter Vendor-Milde-Gradient (Haiku 0.69 → Sonnet 0.76 → gemini-3.1 0.84 →
+  gemini-3.5 0.97), kein Instrument-Defekt. Anthropic kalibriert streng, Google mild. Perfekte
+  Vendor-Übereinstimmung bei einer subjektiven Rubrik ist kein sinnvolles Validitätskriterium.
+
+**Beschluss:** Die Stufe-1-Judge-Kalibrierung läuft **Single-Vendor** — Prod-Judge `claude-haiku-4-5`
+(konservativer Anker), Referenz-Judge `claude-sonnet-4-5` (same-vendor Frontier) als reiner
+Stärke-Check nach D3.2. Die Cross-Vendor-**Referenz** für die Eval-Judge-Kalibrierung ist
+zurückgezogen, reaktivierbar per `EVAL_REFERENCE_JUDGE_MODELS`, sobald ein tauglicher Google/OpenAI-
+Judge existiert. Das Kriterium wird pro Dimension rollen-/skalen-gerecht statt uniform-κ (dialog:
+Match + Adjazenz + Versatz; depth: PABAK; grounding zu Diagnose deklassiert — Versuchsplan §6).
+
+**Abgrenzung:** Das betrifft ausschließlich den **eval-zeitlichen Judge** (Stufe 1). Die
+Cross-Vendor-Anforderung an den **Prod-Guard** (`grounding_guard`, D2 — ein Modell darf seine eigene
+Ausgabe nicht bewerten, plus EU-Familie) bleibt unberührt; sie hängt an KI-18, nicht an dieser
+Kalibrierung.

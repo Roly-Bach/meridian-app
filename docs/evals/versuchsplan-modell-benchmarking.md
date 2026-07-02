@@ -21,7 +21,7 @@ Eval-Rollen vorab als ausreichend validiert sind?
 | **Interview-Modell** | Prüfling (PROJ-41 variiert) | `gemini-3.1-flash-lite` (Baseline) + PROJ-41-Kandidaten (OSS-Screening, EU-Route) | In PROJ-40-Validierung fixiert, damit das Instrument isoliert geprüft wird |
 | **Tester-Modell-Stärke** | Instrument (Stufe 2) | schwach (`gemini-3.1-flash-lite`) · stark (Frontier, z.B. `claude-sonnet-4-5`) | EU-frei, ADR-020 D1 |
 | **Tester-Offenlegungs-Modus** | Instrument/Kontrolle (C) | A `withhold_tools_and_numbers` · B `withhold_numbers_only` | Entkoppelt von Persona-Persönlichkeit |
-| **Judge-Modell** | Instrument (Stufe 1) | Prod-Judge (`claude-haiku-4-5` / `gemini-3.1-flash-lite` cross-vendor) · Referenz-Judge (Frontier) | Kalibrierung Prod vs. Referenz |
+| **Judge-Modell** | Instrument (Stufe 1) | Prod-Judge `claude-haiku-4-5` (Anker) · Referenz-Judge `claude-sonnet-4-5` (Frontier, Stärke-Check) | Single-Vendor-Kalibrierung; Cross-Vendor zurückgezogen (s. §6 + ADR-020-Nachtrag) |
 | **Persona** | Block | buchhalter · vertriebler · it-support | Persönlichkeiten bleiben divers (C); Block, kein Treatment |
 
 ## 3. Zielgrößen (Antwortvariablen)
@@ -60,12 +60,52 @@ PROJ-41 Stage-2 gegen die echte Provider-API (ADR-020, Metrik-Audit §5).
 ## 6. Schwellen aus Stufe 1 und 2
 
 ### Stufe 1 — Judge-Kalibrierung (Design-Eignung Eval-Rolle)
-- **Anker-Vorprüfung:** der Referenz-Judge muss selbst stabil sein — zwei Läufe auf derselben
-  Stichprobe, Selbst-Übereinstimmung `Cohen-κ ≥ 0.8`. Sonst ist die Kalibrierung wertlos (Edge Case).
-- **Kriterium je eval-zeitlichem Judge:** Übereinstimmung Prod-Judge vs. Referenz-Judge auf der
-  stratifizierten Stichprobe `Cohen-κ ≥ 0.61` (Landis-Koch „substantial"), Level-Match-Quote als
-  Begleitwert berichtet. `κ < 0.61` ⟶ Verdikt „Prod-Judge nicht ausreichend" für diese Dimension.
-- Gilt je Judge-Dimension (dialog_naturalness, slot_depth, talker_grounding) getrennt.
+
+> Neugestaltet 2026-07-02 nach den Checkpoint-D-Läufen 1–3 (drei Kalibrierungsläufe auf der
+> fixierten Stichprobe). Begründung + Rohdaten:
+> [checkpoint-d-stufe1-ergebnis.md](instrument-validierung/checkpoint-d-stufe1-ergebnis.md).
+> Kernbefund: die frühere einheitliche `Cohen-κ ≥ 0.61`-Cross-Vendor-Forderung ist für subjektive
+> Dialogqualität unrealistisch (echter Vendor-Milde-Gradient Haiku 0.69 → Sonnet 0.76 →
+> gemini-3.1 0.84 → gemini-3.5 0.97, kein Instrument-Defekt), und es existiert kein tauglicher
+> Cross-Vendor-Judge (gemini-3.5-flash Deckeneffekt bei Ø 0.97, gemini-3.1-flash-lite = Interviewer
+> → Selbst-Bewertung). Kalibrierung daher **Single-Vendor**, Kriterium rollen- und skalen-gerecht
+> statt uniform-κ.
+
+**Aufstellung:** Prod-Judge `claude-haiku-4-5` (konservativer, trennschärfster Anker — nutzt alle
+drei Stufen). Referenz-Judge `claude-sonnet-4-5` (gleiche Vendor-Familie, Frontier) als Stärke-Check
+im Sinne von [ADR-020 D3.2](../adr/ADR-020-eval-methodik-modell-benchmarking.md) (schwacher Prod- vs.
+starker Referenz-Judge — vendor-agnostisch formuliert). Cross-Vendor-Referenz zurückgezogen bis ein
+tauglicher Google/OpenAI-Judge verfügbar ist (ADR-020-Nachtrag 2026-07-02).
+
+**Reliabilität (Voraussetzung, ersetzt die alte Referenz-Selbststabilität):** im Single-Vendor-Design
+ist der Prod-Judge (Haiku) sein eigener Anker. Daher Test-Retest auf identischer Stichprobe, zwei
+Läufe, **Selbst-Match ≥ 0.85 je Dimension** (Test-Retest ist strenger als Cross-Judge-Übereinstimmung,
+daher die höhere Schwelle). Darunter ist der Judge zu verrauscht, um als Anker zu dienen.
+
+**Kriterium je Dimension — rollen- und skalen-gerecht (nicht mehr uniform nominal-κ):**
+
+- **dialog_naturalness** (einzige Judge-Dimension, die in `evaluateGate` gatet → muss validiert sein):
+  Prod (Haiku) vs. Referenz (Sonnet) auf der Stichprobe —
+  **Level-Match ≥ 0.66** UND **Adjazenz ≥ 0.90** (`|idxProd − idxRef| ≤ 1`) UND
+  **|mittlerer signierter Versatz| ≤ 0.5** (kein grober systematischer Bias). Nominal-κ ist KEINE
+  Schwelle (ordinaler Offset + Prävalenz machen es ungeeignet), gewichtetes κ wird als Begleitwert
+  berichtet. Verfehlt eine der drei Bedingungen ⟶ „Judge nicht ausreichend kalibriert für dialog".
+
+- **slot_depth** (primärer Diskriminator, kein Gate in runner):
+  **PABAK ≥ 0.5** (prävalenz-adjustiert, = Level-Match ≥ 0.75) UND **Adjazenz = 1.0**. Nominal-κ
+  explizit verworfen (Kappa-Paradox über drei Läufe bestätigt: Match 0.79–0.83 bei κ 0.30–0.34,
+  22/29 Stufe 2). Caveat: die Skala ist stark prävalenz-degeneriert (fast konstant Stufe 2, nie
+  Stufe 3) → geringe Diskriminierung; als Ranking-Diskriminator nur mit dieser Einschränkung nutzen.
+
+- **talker_grounding**: zu **Diagnose deklassiert, KEIN Kalibrierungs-Gate**. Begründung: (a) in
+  `evaluateGate` ohnehin keine Gate-Metrik; (b) Übereinstimmung auch same-vendor schwach (Match 0.72 /
+  κ 0.46), die Verletzungs-Definition ist zu subjektiv; (c) an offenes KI-18 gekoppelt (Grounding-
+  Guard/-Judge noch nicht robust). Wird berichtet, nicht als validiert gelabelt, bis KI-18 gelöst ist.
+
+**Verdikt-Logik:** Stufe 1 gilt als bestanden, wenn **Reliabilität + dialog + depth** ihre Bedingungen
+erfüllen. grounding zählt nicht ins Gate. Ein Nicht-Bestehen auf **dialog** blockt PROJ-41 (dialog gatet
+die Läufe). Ein Nicht-Bestehen auf **depth** degradiert depth zu „mit Vorbehalt berichtet", blockt
+allein nicht.
 
 ### Stufe 2 — Tester-Stabilität (Eignung Test-Rolle)
 - **Tester-Stärke:** Interview-Modell-Ranking über schwachen vs. starken Tester, `pairAgreement ≥ 0.8`
@@ -106,7 +146,9 @@ dokumentiertem Go/No-Go-Verdikt je Rolle bestanden sind. Bei „nein" ohne verf�
 bleibt das Verdikt „nein"; Beschaffung/Auswahl ist PROJ-41, PROJ-40 blockt sauber statt zu beschönigen.
 
 ## 8. Offen vor Ausführung
-- Judge-API-Key-Preflight (Referenz-Judge), Google-Quota-Status (KI-18-Risiko: AI-Studio-Spend-Cap).
+- Judge-API-Key-Preflight: nach dem Single-Vendor-Umbau (§6) sind Prod- und Referenz-Judge beide
+  Anthropic → nur der Anthropic-Key ist Stufe-1-kritisch. Google-Quota (AI-Studio-Spend-Cap) blockt
+  Stufe 1 nicht mehr, bleibt aber Risiko für die Interview-Modell-Läufe selbst (KI-18).
 - Code-Voraussetzungen aus Batch 2 / C: neue Scorer, `disclosureMode`-Parametrisierung, Ground-Truth-
   Block, hallucination-Prüfer-Umbau. Stufe-1-Judge-Kalibrierung läuft schon jetzt (offline auf
   bestehenden Transkripten, Harness aus Batch 1).
