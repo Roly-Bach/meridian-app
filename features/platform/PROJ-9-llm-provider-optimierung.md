@@ -100,7 +100,7 @@ Das Interview ist der Kern-Use-Case. Qualität, Latenz und Kosten des LLM haben 
 - [ ] `EXTRACTION_MODEL` auf Vercel setzen (z.B. `google/gemini-3.1-flash-lite`)
 - [ ] `ENRICHMENT_MODEL` auf Vercel setzen (z.B. `google/gemini-3.1-flash-lite`)
 - [ ] `GOOGLE_GENERATIVE_AI_API_KEY` auf Vercel hinterlegt (falls nicht vorhanden)
-- [ ] `.env.local.example` aktualisiert mit allen drei Env-Vars
+- [x] `.env.local.example` aktualisiert mit allen drei Env-Vars
 
 ### Kostenkontrolle
 
