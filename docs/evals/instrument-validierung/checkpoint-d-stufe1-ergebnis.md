@@ -143,3 +143,27 @@ die der Check aufdecken sollte.
    Match-Quote statt κ.
 3. Die κ≥0.61-Cross-Vendor-Forderung selbst für subjektive Dialogqualität überdenken — perfekte
    Vendor-Übereinstimmung ist hier womöglich unrealistisch.
+
+### Präzisierung: Milde-Spektrum, kein Haiku-Einzelausreißer (Rückfrage 2026-07-02)
+
+Da auch Sonnet milder als Haiku war, die Frage: reißt Haiku als einziger nach unten aus? Absolute
+dialog-Mittelwerte (gepaart je Panel, Fallbacks raus):
+
+| Judge | Ø dialog | Δ zu Haiku |
+|---|---|---|
+| Haiku (prod) | ~0.69 | — (strengster) |
+| Sonnet | 0.76 | +0.07 |
+| gemini-3.1-flash-lite | 0.84 | +0.16 |
+| gemini-3.5-flash | 0.97 | +0.26 |
+
+Es ist ein **Milde-Gradient**, kein einzelner Ausreißer: Sonnet (gleicher Vendor) liegt nur +0.07
+über Haiku, die beiden Anthropic-Modelle clustern am strengen Ende; die Geminis sind progressiv
+milder. Die vier Werte sind fast gleichmäßig gestaffelt (0.69/0.76/0.84/0.97). Wenn ein Modell
+„ausreißt", dann gemini-3.5-flash an der Decke (Ø 0.97 = bewertet fast alles Stufe 3, kaum
+Diskriminierung — der schlechtere Judge). Haiku ist nicht „falsch nach unten", sondern der
+konservative, trennschärfste Anker (nutzt alle drei Stufen). Das frühere Framing „Gemini mild" war
+Haiku-zentriert; korrekt ist „Anthropic streng, Google mild, gemini-3.5 nahe Decke". Caveat:
+unterschiedliche Subsets (exclude-self); Haiks Eigenmittel über Subsets stabil (0.67–0.71).
+Definitiv klärbar nur mit einem 4-Judge-Paarvergleich auf identischen Transkripten. Fürs Gate ändert
+das nichts (Single-Vendor-Kalibrierung), aber gemini-3.5-flash scheidet wegen Deckeneffekt als Judge
+ohnehin aus.
