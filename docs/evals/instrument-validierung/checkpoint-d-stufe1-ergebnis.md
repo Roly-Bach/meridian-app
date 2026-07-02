@@ -194,17 +194,25 @@ Single-Vendor-Kalibrierung, `EVAL_REFERENCE_JUDGE_MODELS=anthropic/claude-sonnet
 n=29, Judge-temp 0. Rohdaten: `judge-kalibrierung-2026-07-02.{md,json}`. Alle drei Keys per Preflight
 validiert (Sonnet + Haiku + gemini-3.1-flash-lite für das eine Anthropic-Interview).
 
-**Reliabilität — Haiku Test-Retest (Panel Haiku vs. Haiku, zwei unabhängige Judge-Passes):**
+**Reliabilität — Haiku Test-Retest (Panel Haiku vs. Haiku, zwei unabhängige Judge-Passes).**
+Korrektur (Nachweis 2026-07-02): der Harness-Panel-Nenner ist 29, aber das eine Anthropic-Interview
+(`2026-06-04…`) hat als Prod-Judge `gemini-3.1-flash-lite` (getJudgeModel), nicht Haiku — es ist ein
+gemini-vs-Haiku-Vergleich, kein Haiku-Selbstvergleich, und selbst ein depth-Mismatch. Die echte
+Selbstkonsistenz zählt nur über die 28 google-Transkripte (Prod = Haiku):
 
-| Dim | Selbst-Match | Schwelle ≥ 0.85 |
-|---|---|---|
-| dialog | 1.0 | ✓ |
-| depth | 0.8276 | ✗ (5/29 Selbst-Dissens) |
-| grounding | 1.0 | ✓ (deklassiert, Reliabilität moot) |
+| Dim | Selbst-Match (korrekt, n=28) | Harness-Panel (n=29) | Schwelle ≥ 0.85 |
+|---|---|---|---|
+| dialog | 28/28 = 1.0 | 1.0 | ✓ |
+| depth | 24/28 = **0.857** | 0.8276 (verwässert) | ✓ |
+| grounding | 28/28 = 1.0 | 1.0 | ✓ (deklassiert) |
 
-depth verfehlt knapp: das `depth_score`-Mittel über die Slots wird gerundet (`Math.round`), Grenzfälle
-(~x.5) kippen bei minimaler Per-Slot-Varianz zwischen zwei Passes. Konstruktions-Limit der Metrik, kein
-reines Judge-Rauschen. dialog + grounding sind bei temp 0 vollständig deterministisch (29/29).
+Alle drei bestehen die Reliabilität. Die 4 echten depth-Selbst-Abweichungen sind ausnahmslos 1↔2-Flips,
+also per Konstruktion Grenzfälle an der Rundungsschwelle 1.5 (`Math.round` des Slot-Mittels). Slot-weise
+Rekonstruktion zweier Fälle: Ø 1.11 vs. 1.56 bzw. Ø 1.69 vs. 1.44 — beide straddeln 1.5, Differenz je
+≤ 0.45. Ursache ist spürbare Per-Slot-Nichtdeterminie bei temp 0 (einzelne Slots schwanken ±1, teils
+±2 zwischen zwei Passes), deren Aggregat nahe 1.5 sitzt; der „wahre" depth-Wert dieser Transkripte ist
+genuin ambig (~1.5), der Judge oszilliert um eine echte Ambiguität, nicht wild. dialog + grounding sind
+bei temp 0 vollständig deterministisch (28/28).
 
 **Verdikt-Panel — Haiku (prod, Anker) vs. Sonnet (Referenz, Stärke-Check):**
 
@@ -220,11 +228,13 @@ reines Judge-Rauschen. dialog + grounding sind bei temp 0 vollständig determini
   drei Bedingungen UND die Reliabilitäts-Vorbedingung (Haiku dialog-Selbst-Match 1.0). Match 0.72 zum
   same-vendor Frontier-Judge, Adjazenz 1.0, kleiner Strenge-Offset (−0.21). Der Prod-Judge Haiku ist
   für dialog ausreichend kalibriert.
-- **depth — caveated Diskriminator.** Übereinstimmung mit Sonnet erfüllt PABAK + Adjazenz, aber die
-  Haiku-Reliabilität (0.83) verfehlt die 0.85-Vorbedingung knapp. Da depth kein Gate ist (nur
-  Ranking-Diskriminator) und ohnehin prävalenz-degeneriert (fast konstant Stufe 2, nie Stufe 3, geringe
-  Diskriminierung), bleibt es „mit Vorbehalt berichtet" — nicht blockend, aber nicht als feines
-  Ranking-Instrument belastbar. Schwelle bewusst NICHT auf 0.83 gesenkt (kein Goalpost-Moving).
+- **depth — reliabel, aber caveated Diskriminator.** Übereinstimmung mit Sonnet erfüllt PABAK + Adjazenz,
+  und die Haiku-Reliabilität besteht (0.857 korrekt gerechnet, s.o.; die 4 Selbst-Abweichungen sind
+  ausnahmslos benigne 1↔2-Rundungsgrenzfälle um eine echte ~1.5-Ambiguität). Der Vorbehalt bleibt, aber
+  aus einem anderen Grund als der Reliabilität: depth ist prävalenz-degeneriert (fast konstant Stufe 2,
+  nie Stufe 3, geringe Trennschärfe). Als Gate taugt es nicht (ist auch keins), als feines
+  Ranking-Instrument nur mit Vorbehalt. Reliabilitäts-Schwelle bewusst NICHT abgesenkt (kein
+  Goalpost-Moving) — sie wird sauber gerechnet erfüllt.
 - **grounding — Diagnose, nicht gegated** (an KI-18 gekoppelt). Match 0.72 berichtet.
 
 **Konsequenz:** Stufe 1 ist für die gate-relevante Dimension (dialog) **bestanden**. depth trägt als
