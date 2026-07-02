@@ -187,7 +187,48 @@ Die drei Konsequenzen oben sind in Versuchsplan §6 und im Code umgesetzt. Besch
 5. **gemini-3.5-flash als Judge gestrichen** — Default `EVAL_REFERENCE_JUDGE_MODELS` jetzt Sonnet-only
    (judgeCalibration.ts + judge-preflight.ts).
 
-**Offen (nächster Checkpoint-D-Schritt):** der bewertete Kalibrierungslauf gegen diese neuen Schwellen
-— Haiku-Test-Retest (Reliabilität) + Haiku-vs-Sonnet-Pass/Fail je Dimension. Die Lauf-2-Zahlen (Match
-dialog 0.69, depth 0.79) sind Indikatoren, aber vor-Neugestaltung erhoben; der Verdikt-Lauf gegen die
-finalen Kriterien steht noch aus.
+## Verdikt-Lauf gegen die neuen Schwellen (2026-07-02)
+
+Single-Vendor-Kalibrierung, `EVAL_REFERENCE_JUDGE_MODELS=anthropic/claude-sonnet-4-5,anthropic/claude-haiku-4-5`
+(Sonnet = Verdikt-Referenz, Haiku = zweiter unabhängiger Pass für Test-Retest), kein Exclude-Self,
+n=29, Judge-temp 0. Rohdaten: `judge-kalibrierung-2026-07-02.{md,json}`. Alle drei Keys per Preflight
+validiert (Sonnet + Haiku + gemini-3.1-flash-lite für das eine Anthropic-Interview).
+
+**Reliabilität — Haiku Test-Retest (Panel Haiku vs. Haiku, zwei unabhängige Judge-Passes):**
+
+| Dim | Selbst-Match | Schwelle ≥ 0.85 |
+|---|---|---|
+| dialog | 1.0 | ✓ |
+| depth | 0.8276 | ✗ (5/29 Selbst-Dissens) |
+| grounding | 1.0 | ✓ (deklassiert, Reliabilität moot) |
+
+depth verfehlt knapp: das `depth_score`-Mittel über die Slots wird gerundet (`Math.round`), Grenzfälle
+(~x.5) kippen bei minimaler Per-Slot-Varianz zwischen zwei Passes. Konstruktions-Limit der Metrik, kein
+reines Judge-Rauschen. dialog + grounding sind bei temp 0 vollständig deterministisch (29/29).
+
+**Verdikt-Panel — Haiku (prod, Anker) vs. Sonnet (Referenz, Stärke-Check):**
+
+| Dim | Match | PABAK | Adjazenz | Versatz | gew-κ | Kriterium | Verdikt |
+|---|---|---|---|---|---|---|---|
+| dialog | 0.7241 | — | 1.0 | −0.2069 | 0.1008 | Match ≥0.66 ∧ Adj ≥0.90 ∧ \|Versatz\| ≤0.5 | **PASS** |
+| depth | 0.7931 | 0.5862 | 1.0 | −0.1379 | 0.1635 | PABAK ≥0.5 ∧ Adj =1.0 | PASS (Übereinstimmung), Reliabilität ✗ |
+| grounding | 0.7241 | — | 1.0 | +0.1379 | 0.4423 | deklassiert (Diagnose) | — |
+
+**Verdikt Checkpoint D Stufe 1 (definitiv, nach Neugestaltung):**
+
+- **dialog — validiert (PASS).** Die einzige Judge-Dimension, die in `evaluateGate` gatet, erfüllt alle
+  drei Bedingungen UND die Reliabilitäts-Vorbedingung (Haiku dialog-Selbst-Match 1.0). Match 0.72 zum
+  same-vendor Frontier-Judge, Adjazenz 1.0, kleiner Strenge-Offset (−0.21). Der Prod-Judge Haiku ist
+  für dialog ausreichend kalibriert.
+- **depth — caveated Diskriminator.** Übereinstimmung mit Sonnet erfüllt PABAK + Adjazenz, aber die
+  Haiku-Reliabilität (0.83) verfehlt die 0.85-Vorbedingung knapp. Da depth kein Gate ist (nur
+  Ranking-Diskriminator) und ohnehin prävalenz-degeneriert (fast konstant Stufe 2, nie Stufe 3, geringe
+  Diskriminierung), bleibt es „mit Vorbehalt berichtet" — nicht blockend, aber nicht als feines
+  Ranking-Instrument belastbar. Schwelle bewusst NICHT auf 0.83 gesenkt (kein Goalpost-Moving).
+- **grounding — Diagnose, nicht gegated** (an KI-18 gekoppelt). Match 0.72 berichtet.
+
+**Konsequenz:** Stufe 1 ist für die gate-relevante Dimension (dialog) **bestanden**. depth trägt als
+caveated Diskriminator in den Versuchsplan, grounding als Diagnose. Reproduzierbarkeit gegen Lauf 2
+(structured-output, identisches Instrument): dialog Match 0.69→0.72, depth 0.79→0.79, grounding
+0.72→0.72 — stabil. Nominal-κ variiert prävalenzbedingt (depth κ 0.30→0.16), was den Wechsel weg von
+κ als Bestehensgrenze empirisch bestätigt. Nächster Schritt: Checkpoint D Stufe 2 (Tester-Stabilität).
