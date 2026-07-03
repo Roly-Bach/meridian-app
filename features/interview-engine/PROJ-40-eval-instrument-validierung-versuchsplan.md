@@ -234,6 +234,8 @@ Scaffold zu runnable Harness ausgebaut ([validation/testerStability.ts](../../sr
 
 **Gating-Konsequenz:** PROJ-40 Kriterium F (PROJ-41-Gate) verlangt Stufe 1 UND Stufe 2. Stufe 1 ist bestanden; **Stufe 2 bleibt offen (zurückgestellt)** → PROJ-41 bleibt sauber gegated. PROJ-40 pausiert an dieser Stelle statt zu beschönigen (kein „Approved" ohne Stufe-2-Verdikt).
 
+**Nachtrag 2026-07-03 — Stufe 2 kosten-proportional statt Blanket-Vorab-Gate.** Damit PROJ-41 nicht hinter einem ~$20-Vorab-Sweep blockiert, wurde Kriterium F angepasst: der Offenlegungs-Modus wird als Kontrolle fixiert (Confounder ausgeschaltet ohne Lauf), und die Tester-Stärke-Prüfung wird als gezielter Spot-Check auf dem entscheidenden Paar (Baseline + führender Kandidat, starker Sonnet-Tester, ~$1–3) in den PROJ-41-Benchmark eingefaltet. Gegated ist die *Entscheidung*, nicht der *Start* von PROJ-41; der Blanket-Sweep bleibt Eskalation, falls der Spot-Check kippt. Zusätzlich: Ranking über mehrere Kennzahlen (nicht `dedupSlotCoverage` allein, wegen des kontraintuitiven Vorabtest-Befunds). Festgeschrieben in [Versuchsplan §4/§6/§7](../../docs/evals/versuchsplan-modell-benchmarking.md) + [ADR-020-Nachtrag 2026-07-03](../../docs/adr/ADR-020-eval-methodik-modell-benchmarking.md). PROJ-41 kann damit unter der günstigen Regel starten, sobald angegangen.
+
 ## QA Test Results
 _To be added by /qa_
 

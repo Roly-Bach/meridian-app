@@ -206,3 +206,33 @@ Match + Adjazenz + Versatz; depth: PABAK; grounding zu Diagnose deklassiert — 
 Cross-Vendor-Anforderung an den **Prod-Guard** (`grounding_guard`, D2 — ein Modell darf seine eigene
 Ausgabe nicht bewerten, plus EU-Familie) bleibt unberührt; sie hängt an KI-18, nicht an dieser
 Kalibrierung.
+
+## Nachtrag (2026-07-03): Stufe 2 als kosten-proportionaler In-Benchmark-Check statt Vorab-Gate
+
+> Amendment. Verschiebt die *Ausführung* der Stufe-2-Tester-Stabilität, nicht ihren Validierungs-Intent.
+> D3 (geschichtete Validierung) bleibt gültig. Schwellen + Ausführungsform stehen im Versuchsplan (D6 §6/§7).
+
+D3 rahmt die Validierung als drei harte Gates hintereinander (Design → Eignung → Benchmarking). Für die
+Judge-Kalibrierung (Stufe 1) trägt das: sie läuft offline auf fixierten Transkripten, günstig. Für die
+**Tester-Stabilität (Stufe 2)** erzwingt ein striktes Vorab-Gate dagegen einen teuren Blanket-Sweep
+(alle Interview-Modelle × schwacher/starker Tester × zwei Offenlegungs-Modi, ~$14–24, mehrere Stunden),
+BEVOR PROJ-41 überhaupt beginnen darf. Kosten-Nutzen: dieser Sweep validiert nur einen generischen
+Ranking-Vergleich, während PROJ-41 tatsächlich nur die Zusicherung braucht, dass *seine konkrete
+Entscheidung* kein Tester-Artefakt ist.
+
+**Beschluss:** Stufe 2 wird kosten-proportional und in PROJ-41 eingefaltet, statt als Blanket-Vorab-Gate:
+
+- **Offenlegungs-Modus:** als Kontrolle **fixiert** (`withhold_numbers_only`) statt über A/B getestet.
+  Ein konstant gehaltener Faktor kann nicht confounden; der Modus-Kontrast entfällt (Versuchsplan §4/§6).
+- **Tester-Stärke:** ein **gezielter Spot-Check** mit dem starken Tester nur auf dem entscheidenden Paar
+  (Baseline + führender Kandidat), eingefaltet in den PROJ-41-Benchmark (~4 Interviews, ~$1–3), statt
+  eines Sweeps über alle Modelle. Gegated ist die *Entscheidung*, nicht der *Start*: ein Modellwechsel
+  wird erst festgeschrieben, wenn der Spot-Check die Ordnung des Paars unter dem starken Tester hält.
+
+**Warum das D3 nicht bricht:** Der Validierungs-Intent von D3.2 bleibt — die Entscheidung wird weiterhin
+an Tester-Stabilitäts-Evidenz gebunden, nur wird sie kosten-proportional auf der tatsächlich
+relevanten Vergleichs-Teilmenge erhoben statt blanket vorab. Das Risiko eines Vorab-Gate-Wegfalls ist
+begrenzt, weil der Benchmark selbst günstig ist (schwacher Tester) und die Entscheidung, nicht der Lauf,
+das Gate trägt. Kippt der Spot-Check, ist der volle Tester-Sweep die dokumentierte Eskalation und dann
+sein Mehrwert genuin hoch. Der blanket-Sweep bleibt als Option geparkt
+(`docs/evals/instrument-validierung/stufe2-run-plan.md`).

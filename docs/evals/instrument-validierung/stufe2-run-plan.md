@@ -1,11 +1,14 @@
 # Checkpoint D Stufe 2 — Tester-Stabilität: Run-Plan
 
-> **Status: ZURÜCKGESTELLT (2026-07-03).** Harness + Tagging fertig und getestet, Vorabtest gefahren.
-> Der eigentliche Sweep (~$14–24, ~1.5–3 h) ist zurückgestellt, bis sein Mehrwert als „sehr hoch"
-> und seine Ergebnisse als „zentral" eingeschätzt werden (Nutzer-Entscheidung 2026-07-03).
-> **Reaktivierungs-Auslöser:** PROJ-41 (Interview-Modell-Auswahl) wird konkret angegangen — dann muss
-> dem Modell-Ranking vertraut werden, was die Tester-Stabilität zentral macht. Der Vorabtest-Befund
-> unten erhöht diese Relevanz (kontraintuitive Ranking-Richtung auf `dedupSlotCoverage`).
+> **Status: ESKALATIONS-OPTION (zurückgestellt, 2026-07-03).** Der hier beschriebene Blanket-Sweep
+> (~$14–24, ~1.5–3 h) ist **nicht mehr** der reguläre Stufe-2-Weg. Stufe 2 wurde 2026-07-03 von einem
+> Blanket-Vorab-Gate auf einen **kosten-proportionalen In-Benchmark-Check** umgestellt: Offenlegungs-
+> Modus fixiert (Kontrolle), Tester-Stärke nur als gezielter Spot-Check auf dem entscheidenden Paar,
+> in PROJ-41 eingefaltet (~$1–3). Regulärer Weg: [Versuchsplan §6/§7](../versuchsplan-modell-benchmarking.md)
+> + [ADR-020-Nachtrag 2026-07-03](../../adr/ADR-020-eval-methodik-modell-benchmarking.md). Der große
+> Sweep unten bleibt als **Eskalation** geparkt, falls der Spot-Check die Paar-Ordnung kippt — dann ist
+> sein Mehrwert genuin hoch. Der Vorabtest-Befund unten (kontraintuitive Ranking-Richtung) motiviert
+> zusätzlich das Ranking über mehrere Kennzahlen (Versuchsplan §7 Punkt 7).
 >
 > Vorbereitet 2026-07-02. Harness runnable (`validation/testerStability.ts`), Runner taggt
 > transcript.json mit `testerModel` + `disclosureMode` (Zell-Zuordnung). Ausführung bleibt der

@@ -50,6 +50,12 @@ PROJ-41 Stage-2 gegen die echte Provider-API (ADR-020, Metrik-Audit §5).
 - Talker-/Analyst-Thinking-Budgets, Prompt-Versionen, `MAX_TURNS=35`.
 - Persona-Definitionen + Ground-Truth-Block (eingefroren je Benchmark-Charge).
 - Greeting/Reconnect-Prompts.
+- **Offenlegungs-Modus fixiert** auf `withhold_numbers_only` (Modus B, realistischer Default). Statt
+  ihn als Faktor über Modus A/B zu variieren und die Ranking-Stabilität zu testen (Stufe 2, alt), wird
+  er als Kontrolle konstant gehalten — ein für alle Modelle gleicher Faktor kann den Vergleich nicht
+  confounden. Das entspricht der Versuchsplan-eigenen Regel „bei Confounder-Verdacht fixieren" und
+  erspart den Modus-Kontrast-Sweep (s. §6 Stufe 2 neu). Der Modus-Effekt selbst bleibt damit ungemessen;
+  falls er später interessiert, ist das eine eigenständige Studie, kein PROJ-41-Vorab-Gate.
 
 ## 5. Replikation
 - **3 Läufe je Zelle** (Modell × Persona), fester Seed, Median-basiert (Min/Max als Streuung).
@@ -108,13 +114,35 @@ die Läufe). Ein Nicht-Bestehen auf **depth** degradiert depth zu „mit Vorbeha
 allein nicht.
 
 ### Stufe 2 — Tester-Stabilität (Eignung Test-Rolle)
-- **Tester-Stärke:** Interview-Modell-Ranking über schwachen vs. starken Tester, `pairAgreement ≥ 0.8`
-  UND Top-Rang stabil. Darunter ⟶ der schwache Tester verzerrt das Ranking ⟶ Verdikt „nicht
-  ausreichend", PROJ-41 braucht stärkeren Tester.
-- **Offenlegungs-Modus (C):** Ranking über Modus A vs. B, gleiches Band `pairAgreement ≥ 0.8`. Kippt
-  das Ranking, ist der Modus ein starker Confounder und muss vor dem Benchmarking kontrolliert
-  (fixiert) werden, nicht frei gelassen.
-- Konservativ bei Uneindeutigkeit: teils-stabil ⟶ als „nein/unklar" werten (Edge Case).
+
+> Neugestaltet 2026-07-03: von einem blanket Vorab-Gate (alle Modelle × beide Tester × beide Modi,
+> ~$14–24) auf einen **kosten-proportionalen, gezielten In-Benchmark-Check** umgestellt. Grund: der
+> teure Vorab-Sweep ist nicht gerechtfertigt, solange er nur einen generischen Ranking-Vergleich
+> validiert; PROJ-41 braucht nur die Zusicherung, dass *seine konkrete Entscheidung* kein Tester-
+> Artefakt ist. Der blanket-Sweep bleibt als optionale Eskalation geparkt
+> ([stufe2-run-plan.md](instrument-validierung/stufe2-run-plan.md)). ADR-020-Nachtrag 2026-07-03.
+
+- **Offenlegungs-Modus (C): fixiert statt getestet.** Der Modus wird als Kontrolle konstant gehalten
+  (§4, Modus B), nicht über A/B variiert. Ein für alle Modelle gleicher Faktor kann nicht confounden;
+  der Modus-Kontrast-Sweep entfällt kostenlos.
+
+- **Tester-Stärke: gezielter Spot-Check auf dem entscheidenden Paar, in PROJ-41 eingefaltet.** PROJ-41
+  fährt seine Kandidaten ohnehin unter dem Produktions-Tester (schwach). Zusätzlich läuft der starke
+  Tester (`claude-sonnet-4-5`) **nur auf den zwei Modellen, die die Entscheidung tragen** (Baseline +
+  führender Kandidat) × 1 Persona × 2 Läufe (~4 Interviews, ~$1–3). Der Harness
+  ([testerStability.ts](instrument-validierung/../../../src/services/__evals__/interview/validation/testerStability.ts))
+  vergleicht automatisch die in beiden Tester-Zellen gemeinsame Modell-Teilmenge (`buildContrast`
+  restringiert darauf) — kein neuer Code. **Kriterium:** die relative Ordnung des entscheidenden Paars
+  bleibt unter dem starken Tester erhalten (`topRankStable` für das Paar, `pairAgreement = 1` bei zwei
+  Modellen). Kippt sie ⟶ Entscheidung ist tester-abhängig ⟶ dann (und erst dann) ist der größere
+  Tester-Sweep gerechtfertigt (Eskalation).
+
+- Rationale für „nur das entscheidende Paar": die Entscheidungsregel (§7) ist satisficing +
+  Nicht-Unterlegenheit + kosten-primär, kein Argmax. Die exakte Platzierung abgeschlagener Modelle ist
+  irrelevant; robust muss nur der Sieger-gegen-Herausforderer-Vergleich sein.
+
+- Konservativ bei Uneindeutigkeit: kippt das Paar oder ist der Spot-Check nicht berechenbar ⟶ als
+  „nein/unklar" werten, Entscheidung aussetzen bis der Eskalations-Sweep Klarheit schafft (Edge Case).
 
 ### Datengestützte Schwellen ⟶ aus erstem Benchmark
 - `potenzialCoverage`-Gate-Schwelle: nach dem ersten vollständigen Benchmark aus der realen Verteilung
@@ -140,10 +168,22 @@ gegenübergestellt.
    als die 3-Lauf-Streuung — sonst bleibt die Baseline (Status-quo-Reibung gegen Rauschen).
 6. **Widersprüchliche Diskriminatoren** (A besser auf Potenzial, B auf Effizienz): kein Auto-Argmax,
    sondern dokumentierte Abwägung über die kleine Kandidatenmenge.
+7. **Ranking über mehrere Kennzahlen, nicht `dedupSlotCoverage` allein.** Der Stufe-2-Vorabtest
+   (2026-07-03) zeigte, dass `dedupSlotCoverage` gegenläufig zu `dialogNaturalness` rankt (das billigste
+   Modell schnitt auf dedup am besten, auf dialog am schlechtesten ab). Ein Ein-Kennzahl-Argmax wäre
+   irreführend. Das Ranking wird daher auf mehreren Kennzahlen berichtet (`dedupSlotCoverage`,
+   `dialogNaturalness`, `potenzialCoverage`); der Harness re-aggregiert dieselben Transkripte je
+   `STABILITY_QUALITY_KEY` ohne Extra-Läufe. Ein Kandidat, dessen Vorteil nur auf einer Kennzahl steht
+   und auf einer anderen umkippt, ist kein klarer Fall (Punkt 6 greift).
 
-**Gating (Kriterium F):** PROJ-41-Screening darf erst starten, wenn Stufe 1 UND Stufe 2 mit
-dokumentiertem Go/No-Go-Verdikt je Rolle bestanden sind. Bei „nein" ohne verfügbares stärkeres Modell
-bleibt das Verdikt „nein"; Beschaffung/Auswahl ist PROJ-41, PROJ-40 blockt sauber statt zu beschönigen.
+**Gating (Kriterium F) — angepasst 2026-07-03:** PROJ-41-Screening darf starten, sobald **Stufe 1**
+mit dokumentiertem Go/No-Go bestanden ist (erfüllt, 2026-07-02). **Stufe 2 ist kein Vorab-Gate mehr,
+sondern in PROJ-41 eingefaltet:** der gezielte Tester-Stärke-Spot-Check (§6 neu) läuft als Teil des
+Benchmarks auf dem entscheidenden Paar. Gegated ist damit nicht der *Start* von PROJ-41, sondern die
+*Entscheidung*: ein Modellwechsel wird erst festgeschrieben, wenn der Spot-Check die Ordnung des
+entscheidenden Paars unter dem starken Tester bestätigt. Kippt er ⟶ Entscheidung aussetzen, größeren
+Tester-Sweep als Eskalation fahren. Bei „nein" ohne verfügbares stärkeres Modell bleibt das Verdikt
+„nein"; PROJ-40 blockt sauber statt zu beschönigen.
 
 ## 8. Offen vor Ausführung
 - Judge-API-Key-Preflight: nach dem Single-Vendor-Umbau (§6) sind Prod- und Referenz-Judge beide
