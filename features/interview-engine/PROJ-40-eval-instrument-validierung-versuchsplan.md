@@ -1,13 +1,13 @@
 # PROJ-40: Eval-Instrument-Validierung + Versuchsplan
 
-## Status: In Progress
+## Status: In Review
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-31
 **Appetite:** L
 **Bugs:** —
 **Created:** 2026-06-30
-**Last Updated:** 2026-06-30 (Batch 1 gebaut)
+**Last Updated:** 2026-07-03 (Stufe 2 ausgeführt — GO; alle Acceptance-Kriterien erfüllt)
 
 ## Dependencies
 - Requires: PROJ-31 (Eval-Schärfung) — die bestehenden Scorer + Gate-Logik, die hier auditiert und revidiert werden
@@ -58,15 +58,15 @@ Zwei Befunde aus dem Grilling treiben die Spec:
 - [ ] Gezielte Transkript-Fehlersuche auf definierte Fehlermodi (Rollenbruch, Voraus-Komplett-Offenlegung, Über-Kooperation) ist durchgeführt und dokumentiert.
 
 ### D — Instrument-Validierung Stufe 2: Modell-Eignung + Verdikt
-- [ ] Judge-Kalibrierung durchgeführt: Übereinstimmung Produktions-Judge vs. stärkerer Referenz-Judge auf einer Stichprobe gemessen und gegen die Versuchsplan-Schwelle bewertet, mit dokumentiertem ja/nein je eval-zeitlichem Judge.
-- [ ] Tester-Stabilität durchgeführt: Reihenfolge der Interview-Modelle über schwachen vs. stärkeren Tester verglichen und gegen das Versuchsplan-Stabilitätsband bewertet, mit dokumentiertem ja/nein.
-- [ ] Go/No-Go-Verdikt dokumentiert: „Sind die aktuellen Test- und Eval-Modelle ausreichend?" je Rolle, mit Begründung. Bei „nein": welche Mindeststärke nötig ist (die Auswahl des stärkeren Modells selbst ist PROJ-41).
+- [x] Judge-Kalibrierung durchgeführt: Übereinstimmung Produktions-Judge vs. stärkerer Referenz-Judge auf einer Stichprobe gemessen und gegen die Versuchsplan-Schwelle bewertet, mit dokumentiertem ja/nein je eval-zeitlichem Judge. → **GO** (Stufe 1, Single-Vendor, 2026-07-02; [checkpoint-d-stufe1-ergebnis.md](../../docs/evals/instrument-validierung/checkpoint-d-stufe1-ergebnis.md)).
+- [x] Tester-Stabilität durchgeführt: Reihenfolge der Interview-Modelle über schwachen vs. stärkeren Tester verglichen und gegen das Versuchsplan-Stabilitätsband bewertet, mit dokumentiertem ja/nein. → **GO** (fokussierter Check 2026-07-03, [checkpoint-d-stufe2-ergebnis.md](../../docs/evals/instrument-validierung/checkpoint-d-stufe2-ergebnis.md)).
+- [x] Go/No-Go-Verdikt dokumentiert: „Sind die aktuellen Test- und Eval-Modelle ausreichend?" je Rolle, mit Begründung. Bei „nein": welche Mindeststärke nötig ist (die Auswahl des stärkeren Modells selbst ist PROJ-41). → Eval-Rolle (Stufe 1): GO für dialog, depth reliabel-aber-caveated; Test-Rolle (Stufe 2): GO.
 
 ### E — Versuchsplan
-- [ ] `docs/evals/versuchsplan-modell-benchmarking.md` existiert mit: Faktoren, Stufen, Zielgrößen (validierte Metriken + Latenz + Kosten je Bucket), Kontrollen (konstant gehaltene Größen), Replikation (runs × seeds), Analyse + Entscheidungsregel, sowie den konkreten Schwellen aus Stufe 1 und 2.
+- [x] `docs/evals/versuchsplan-modell-benchmarking.md` existiert mit: Faktoren, Stufen, Zielgrößen (validierte Metriken + Latenz + Kosten je Bucket), Kontrollen (konstant gehaltene Größen), Replikation (runs × seeds), Analyse + Entscheidungsregel, sowie den konkreten Schwellen aus Stufe 1 und 2.
 
 ### F — Gating (hartes Gate auf PROJ-41)
-- [ ] Dokumentiert ist: PROJ-41-Screening darf erst starten, wenn Stufe 1 und Stufe 2 mit dokumentiertem Verdikt bestanden sind.
+- [x] Dokumentiert ist: PROJ-41-Screening darf erst starten, wenn Stufe 1 und Stufe 2 mit dokumentiertem Verdikt bestanden sind. → Beide bestanden (Stufe 1 GO 2026-07-02, Stufe 2 GO 2026-07-03). Gating angepasst 2026-07-03: der Finalist-Spot-Check ist in PROJ-41 eingefaltet (gegated ist die *Entscheidung*, nicht der *Start*; Versuchsplan §7).
 
 ## Edge Cases
 - Eine Metrik wird im Audit als fundamental ungültig erkannt (nicht nur Schwelle daneben): entfernen oder aufspalten, im Audit-Dokument begründet, Tests und Gate entsprechend angepasst.
@@ -235,6 +235,19 @@ Scaffold zu runnable Harness ausgebaut ([validation/testerStability.ts](../../sr
 **Gating-Konsequenz:** PROJ-40 Kriterium F (PROJ-41-Gate) verlangt Stufe 1 UND Stufe 2. Stufe 1 ist bestanden; **Stufe 2 bleibt offen (zurückgestellt)** → PROJ-41 bleibt sauber gegated. PROJ-40 pausiert an dieser Stelle statt zu beschönigen (kein „Approved" ohne Stufe-2-Verdikt).
 
 **Nachtrag 2026-07-03 — Stufe 2 kosten-proportional statt Blanket-Vorab-Gate.** Damit PROJ-41 nicht hinter einem ~$20-Vorab-Sweep blockiert, wurde Kriterium F angepasst: der Offenlegungs-Modus wird als Kontrolle fixiert (Confounder ausgeschaltet ohne Lauf), und die Tester-Stärke-Prüfung wird als gezielter Spot-Check auf dem entscheidenden Paar (Baseline + führender Kandidat, starker Sonnet-Tester, ~$1–3) in den PROJ-41-Benchmark eingefaltet. Gegated ist die *Entscheidung*, nicht der *Start* von PROJ-41; der Blanket-Sweep bleibt Eskalation, falls der Spot-Check kippt. Zusätzlich: Ranking über mehrere Kennzahlen (nicht `dedupSlotCoverage` allein, wegen des kontraintuitiven Vorabtest-Befunds). Festgeschrieben in [Versuchsplan §4/§6/§7](../../docs/evals/versuchsplan-modell-benchmarking.md) + [ADR-020-Nachtrag 2026-07-03](../../docs/adr/ADR-020-eval-methodik-modell-benchmarking.md). PROJ-41 kann damit unter der günstigen Regel starten, sobald angegangen.
+
+### Stufe 2 — Tester-Stabilität: fokussierter Check AUSGEFÜHRT, Verdikt GO (2026-07-03)
+
+Der kosten-proportionale Check (nicht der zurückgestellte Blanket-Sweep) ist gefahren. Vollständige Analyse + Grenzen: [checkpoint-d-stufe2-ergebnis.md](../../docs/evals/instrument-validierung/checkpoint-d-stufe2-ergebnis.md), Rohartefakt [tester-stabilitaet-2026-07-03.md](../../docs/evals/instrument-validierung/tester-stabilitaet-2026-07-03.md).
+
+- **Design:** Proxy-Paar `gemini-3.1-flash-lite` (Baseline) vs. `claude-haiku-4-5` (weitester heute verfügbarer Spread; PROJ-41s echte OSS-Kandidaten sind noch nicht als Provider verdrahtet — OpenRouter = PROJ-41 Stage 1). Persona buchhalter ×2, Seed 42, pglite, Modus B fixiert. Zwei Zellen: C1 schwacher Tester (gemini-lite) vs. C2 starker Tester (sonnet). 8 Interviews, Preflight bestanden.
+- **Ergebnis:** Unter beiden Testern rankt haiku über gemini-lite — auf allen drei Kennzahlen (dedup 0.925/0.795 → 0.91/0.85; dialog 1.0/0.67 → 1.0/0.67; potenzial 1.0/0.875 → 0.915/0.805). `pairAgreement=1`, `topRankStable=true` durchgehend. Tester-Stärke verschiebt Absolutwerte leicht (nivellierend), kippt die Ordnung nicht.
+- **Vorabtest-Korrektur:** der n=1-Vorabtest (gemini-lite > haiku auf dedup) war reines Einzellauf-Rauschen; mit n=2 kehrt es sich um und ist über beide Tester + alle drei Kennzahlen konsistent. Bestätigt die ≥2-Läufe-Wahl fürs Verdikt.
+- **Grenze:** gilt fürs Proxy-Paar + buchhalter. PROJ-41 wiederholt den Spot-Check auf seinem tatsächlichen Finalisten-Paar (codifizierte Entscheidungs-Gate §7); kippt er dort, greift die Eskalation.
+
+**Harness-Angleichung (LLM-frei):** `testerStability.ts` globales Verdikt via neuer reiner Funktion `stufe2Pass` — bei fixiertem Modus (kein Mode-A-Datensatz) keyt es allein auf den Tester-Kontrast statt einen (per Design fehlenden) Modus-Kontrast als NO-GO zu werten. Modus-Sektion rendert „n/a — als Kontrolle fixiert". 6 neue/erweiterte Unit-Tests (`stufe2Pass`-Fälle: Modus fixiert vs. variiert, fehlender Tester-Kontrast). `tsc` grün.
+
+**Stufe 1 + Stufe 2 beide GO → PROJ-41-Gate (Kriterium F) erfüllt.** Alle Acceptance-Kriterien A–F erfüllt; Status In Review (Handoff `/qa` → `/deploy`). Der Eval-Gate für Interview-Engine-Features (erfolgreicher `eval:interview`-Lauf) ist durch die 8 Stufe-2-Interviews nachgewiesen.
 
 ## QA Test Results
 _To be added by /qa_

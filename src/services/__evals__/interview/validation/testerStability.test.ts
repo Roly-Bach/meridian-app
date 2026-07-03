@@ -5,6 +5,8 @@ import {
   aggregateCells,
   buildContrast,
   contrastPasses,
+  stufe2Pass,
+  type Contrast,
   type TranscriptRow,
 } from './testerStability'
 import type { ScoreSet } from '../scorers'
@@ -151,5 +153,30 @@ describe('contrastPasses', () => {
     expect(contrastPasses(mk(0.8, true), 0.8)).toBe(true)
     expect(contrastPasses(mk(0.8, false), 0.8)).toBe(false) // top rank flipped
     expect(contrastPasses(mk(0.79, true), 0.8)).toBe(false) // below band
+  })
+})
+
+describe('stufe2Pass', () => {
+  const mk = (pa: number, top: boolean): Contrast => ({
+    dimension: 'x', conditionA: 'a', conditionB: 'b', modelsCompared: ['m1', 'm2'],
+    stability: { rankingWeak: [], rankingStrong: [], pairAgreement: pa, topRankStable: top },
+  })
+  const good = mk(1, true)
+  const bad = mk(0, false)
+
+  it('mode fixed as control → verdict keys on tester contrast alone', () => {
+    // disclosureVaried=false: disclosure contrast is null-by-design, must NOT drag verdict to fail
+    expect(stufe2Pass(good, null, false, 0.8)).toBe(true)
+    expect(stufe2Pass(bad, null, false, 0.8)).toBe(false)
+  })
+
+  it('tester contrast missing → fail even with mode fixed', () => {
+    expect(stufe2Pass(null, null, false, 0.8)).toBe(false)
+  })
+
+  it('mode varied (escalation) → both contrasts must pass', () => {
+    expect(stufe2Pass(good, good, true, 0.8)).toBe(true)
+    expect(stufe2Pass(good, bad, true, 0.8)).toBe(false) // disclosure flips
+    expect(stufe2Pass(good, null, true, 0.8)).toBe(false) // disclosure uncomputable
   })
 })

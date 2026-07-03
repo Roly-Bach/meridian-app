@@ -1,18 +1,19 @@
 # Checkpoint D Stufe 2 — Tester-Stabilität: Run-Plan
 
-> **Status: ESKALATIONS-OPTION (zurückgestellt, 2026-07-03).** Der hier beschriebene Blanket-Sweep
-> (~$14–24, ~1.5–3 h) ist **nicht mehr** der reguläre Stufe-2-Weg. Stufe 2 wurde 2026-07-03 von einem
-> Blanket-Vorab-Gate auf einen **kosten-proportionalen In-Benchmark-Check** umgestellt: Offenlegungs-
-> Modus fixiert (Kontrolle), Tester-Stärke nur als gezielter Spot-Check auf dem entscheidenden Paar,
-> in PROJ-41 eingefaltet (~$1–3). Regulärer Weg: [Versuchsplan §6/§7](../versuchsplan-modell-benchmarking.md)
-> + [ADR-020-Nachtrag 2026-07-03](../../adr/ADR-020-eval-methodik-modell-benchmarking.md). Der große
-> Sweep unten bleibt als **Eskalation** geparkt, falls der Spot-Check die Paar-Ordnung kippt — dann ist
-> sein Mehrwert genuin hoch. Der Vorabtest-Befund unten (kontraintuitive Ranking-Richtung) motiviert
-> zusätzlich das Ranking über mehrere Kennzahlen (Versuchsplan §7 Punkt 7).
+> **Status: ESKALATIONS-OPTION (der Blanket-Sweep unten ist NICHT ausgeführt).** Der reguläre
+> Stufe-2-Check — der kosten-proportionale, fokussierte Tester-Stärke-Spot-Check — ist am **2026-07-03
+> ausgeführt und mit GO bestanden**: [checkpoint-d-stufe2-ergebnis.md](checkpoint-d-stufe2-ergebnis.md)
+> (Paar gemini-3.1-flash-lite vs. claude-haiku-4-5, buchhalter ×2, C1 schwacher vs. C2 starker Tester;
+> `pairAgreement=1`, `topRankStable=true` über dedup/dialog/potenzial). Damit ist Stufe 2 erfüllt und
+> PROJ-41 kann unter der günstigen Regel starten.
 >
-> Vorbereitet 2026-07-02. Harness runnable (`validation/testerStability.ts`), Runner taggt
-> transcript.json mit `testerModel` + `disclosureMode` (Zell-Zuordnung). Ausführung bleibt der
-> budget-gegatete Schritt (eigene Freigabe), analog zum Stufe-1-Verdikt-Lauf.
+> Der hier beschriebene Blanket-Sweep (~$14–24, ~1.5–3 h) bleibt die **Eskalation**, falls PROJ-41s
+> Spot-Check auf seinem *tatsächlichen* Finalisten-Paar die Ordnung kippt — nur dann ist sein Mehrwert
+> genuin hoch. Regulärer Weg: [Versuchsplan §6/§7](../versuchsplan-modell-benchmarking.md)
+> + [ADR-020-Nachtrag 2026-07-03](../../adr/ADR-020-eval-methodik-modell-benchmarking.md). Der
+> Vorabtest-Befund unten (kontraintuitive n=1-Ranking-Richtung) motivierte das Ranking über mehrere
+> Kennzahlen (Versuchsplan §7 Punkt 7) — im ausgeführten Check mit n=2 war die Ordnung über alle drei
+> Kennzahlen konsistent (Vorabtest war reines n=1-Rauschen).
 
 ## Vorabtest-Ergebnis (2026-07-03) — Spread bestätigt, Ranking kontraintuitiv
 

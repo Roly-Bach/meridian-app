@@ -121,6 +121,12 @@ allein nicht.
 > validiert; PROJ-41 braucht nur die Zusicherung, dass *seine konkrete Entscheidung* kein Tester-
 > Artefakt ist. Der blanket-Sweep bleibt als optionale Eskalation geparkt
 > ([stufe2-run-plan.md](instrument-validierung/stufe2-run-plan.md)). ADR-020-Nachtrag 2026-07-03.
+>
+> **Ausgeführt 2026-07-03 — GO.** Der fokussierte Check lief auf dem Proxy-Paar
+> `gemini-3.1-flash-lite` vs. `claude-haiku-4-5` (buchhalter ×2, C1 schwacher vs. C2 starker Tester):
+> `pairAgreement=1`, `topRankStable=true` über alle drei Kennzahlen (dedup/dialog/potenzial), Ordnung
+> tester-unabhängig. Verdikt + Grenzen: [checkpoint-d-stufe2-ergebnis.md](instrument-validierung/checkpoint-d-stufe2-ergebnis.md).
+> Der Spot-Check auf PROJ-41s tatsächlichem Finalisten-Paar bleibt die codifizierte Entscheidungs-Gate (§7).
 
 - **Offenlegungs-Modus (C): fixiert statt getestet.** Der Modus wird als Kontrolle konstant gehalten
   (§4, Modus B), nicht über A/B variiert. Ein für alle Modelle gleicher Faktor kann nicht confounden;
