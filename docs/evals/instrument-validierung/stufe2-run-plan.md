@@ -1,8 +1,41 @@
 # Checkpoint D Stufe 2 — Tester-Stabilität: Run-Plan
 
+> **Status: ZURÜCKGESTELLT (2026-07-03).** Harness + Tagging fertig und getestet, Vorabtest gefahren.
+> Der eigentliche Sweep (~$14–24, ~1.5–3 h) ist zurückgestellt, bis sein Mehrwert als „sehr hoch"
+> und seine Ergebnisse als „zentral" eingeschätzt werden (Nutzer-Entscheidung 2026-07-03).
+> **Reaktivierungs-Auslöser:** PROJ-41 (Interview-Modell-Auswahl) wird konkret angegangen — dann muss
+> dem Modell-Ranking vertraut werden, was die Tester-Stabilität zentral macht. Der Vorabtest-Befund
+> unten erhöht diese Relevanz (kontraintuitive Ranking-Richtung auf `dedupSlotCoverage`).
+>
 > Vorbereitet 2026-07-02. Harness runnable (`validation/testerStability.ts`), Runner taggt
-> transcript.json jetzt mit `testerModel` + `disclosureMode` (Zell-Zuordnung). Ausführung ist der
+> transcript.json mit `testerModel` + `disclosureMode` (Zell-Zuordnung). Ausführung bleibt der
 > budget-gegatete Schritt (eigene Freigabe), analog zum Stufe-1-Verdikt-Lauf.
+
+## Vorabtest-Ergebnis (2026-07-03) — Spread bestätigt, Ranking kontraintuitiv
+
+Mini-Charge (3 Modelle × buchhalter × 1 Run, Zelle C1: schwacher Tester, Modus B), je n=1:
+
+| Interview-Modell | turns | dedupSlotCoverage | dialogNaturalness | potenzialCoverage |
+|---|---|---|---|---|
+| gemini-3.1-flash-lite | 17 | **0.94** | 0.67 | 1.0 |
+| gemini-3.5-flash | 27 | 0.81 | 0.33 | 0.83 |
+| claude-haiku-4-5 | 19 | **0.70** | 1.0 | 0.67 |
+
+- **Spread existiert** (Range 0.24) → das Ranking ist nicht-degeneriert, die Stabilitätsprüfung wäre
+  aussagekräftig. Der Vorabtest hat seinen Zweck erfüllt.
+- **Kontraintuitive Richtung:** das billigste Modell (gemini-lite) rankt am besten auf der Gate-Kennzahl,
+  das stärkste (haiku) am schlechtesten; `dialogNaturalness` läuft exakt gegenläufig. `dedupSlotCoverage`
+  scheint ein knappes, effizientes Interview zu belohnen und ein längeres, natürlicheres zu bestrafen.
+  n=1, verrauscht, aber ein echtes Signal — und ein **Metrik-Validitäts-Hinweis** (Kriterium A): ob
+  `dedupSlotCoverage` das für das KI-Potenzial-Ziel Richtige misst, ist erneut zu prüfen, bevor ein
+  Modell-Ranking daraus PROJ-41-Entscheidungen trägt.
+- depth (`slotDepth`) ist im Live-Lauf `null` (erwartet — der Live-Runner rechnet den depth-Judge nicht,
+  nur der Kalibrierungs-Harness auf fixierten Transkripten). Für das Ranking irrelevant.
+- **Kostenfrei nachrüstbar bei Reaktivierung:** der Harness re-aggregiert aus denselben Transkripten,
+  Stabilität lässt sich auf mehreren Kennzahlen rechnen (`STABILITY_QUALITY_KEY=dialogNaturalness` etc.)
+  ohne Extra-Läufe — entschärft die Kennzahl-Richtungs-Frage.
+
+Artefakte des Vorabtests: `docs/evals/interview/2026-07-03/*.transcript.json` (getaggt).
 
 ## Frage (Versuchsplan §6 Stufe 2)
 Bleibt das Ranking der Interview-Modelle stabil, wenn (1) der Tester stärker wird und (2) der
