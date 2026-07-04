@@ -1,13 +1,13 @@
 # PROJ-41: Interview-Modell-Auswahl (OSS-Screening + EU-Prod-Route)
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Platform
 **Extends:** PROJ-9
 **Appetite:** L
 **Bugs:** —
 **Created:** 2026-07-02
-**Last Updated:** 2026-07-02
+**Last Updated:** 2026-07-04 (Architektur + Kandidaten-Satz revidiert: 7 Modelle, getiertes Screening, Provider-Wahl nach Screening)
 
 ## Dependencies
 - Requires: PROJ-40 (Eval-Instrument-Validierung + Versuchsplan) — Stufe 1 + Stufe 2 PASS sind hartes Gate vor Stage 1 Screening (ADR-020 §7 Gating, Versuchsplan Kriterium F)
@@ -29,7 +29,7 @@ Feature: Faktoren, Schwellen, Entscheidungsregeln und das Gating-Kriterium F sin
 - Als KI-Berater möchte ich, dass das Interview-System auf einem EU-konformen Provider läuft, damit
   ich es bedenkenlos bei deutschen Unternehmenskunden einsetzen kann.
 - Als Entwickler möchte ich das Interview-Modell via `INTERVIEW_MODEL`-Env wechseln können, ohne Code
-  zu ändern — und der neue Provider (Nebius) muss dafür in `llm-provider.ts` registriert sein.
+  zu ändern — und der nach dem Screening gewählte EU-Inference-Provider muss dafür in `llm-provider.ts` registriert sein.
 - Als Solo-Developer möchte ich die monatlichen LLM-Kosten senken, ohne Interview-Qualität messbar zu
   verschlechtern — das Screening liefert die Datengrundlage für diese Entscheidung.
 - Als Entwickler möchte ich, dass der Prod-Guard-Judge nach dem Modellwechsel EU-konform und
@@ -40,36 +40,64 @@ Feature: Faktoren, Schwellen, Entscheidungsregeln und das Gating-Kriterium F sin
 ## Acceptance Criteria
 
 ### Hartes Gate (vor Stage 1)
-- [ ] PROJ-40 Stufe 1 UND Stufe 2 haben ein dokumentiertes Go-Verdikt — kein Screening ohne dieses Gate
+- [x] PROJ-40 Stufe 1 UND Stufe 2 haben ein dokumentiertes Go-Verdikt — kein Screening ohne dieses Gate → beide GO (Stufe 1 2026-07-02, Stufe 2 2026-07-03).
 
-### Stage 1 — Screening via OpenRouter
+### Kandidaten-Satz (Stage 1)
 
-- [ ] `openrouter`-Provider in `llm-provider.ts` verfügbar (eval-only, Format `openrouter/provider/model`)
+7 Open-Weight-Modelle nach Intelligence-Score, gegen die **Referenz** `google/gemini-3.1-flash-lite`
+(Score 25, ~$0.22/1M). Alle 7 auf OpenRouter verfügbar (Recherche 2026-07-04):
+
+| # | Modell | Kontext | Score | ~$/1M (Ref-Liste) |
+|---|---|---|---|---|
+| 1 | GLM-5.2 | 1M | 51 | 0.90 |
+| 2 | MiniMax-M3 | 1M | 44 | 0.22 |
+| 3 | DeepSeek V4 Pro | 1M | 44 | 0.18 |
+| 4 | Kimi K2.6 | 256K | 43 | 0.70 |
+| 5 | MiMo-V2.5-Pro | 1M | 42 | 0.18 |
+| 6 | DeepSeek V4 Flash | 1M | 40 | 0.06 |
+| 7 | MiMo-V2.5 | 1M | 40 | 0.06 |
+
+Exakte OpenRouter-Slugs + reale Preise weichen je Backend ab (z.B. GLM-5.2 $0.90 vs. $1.40 input je
+Quelle) und werden beim Stage-1-Bau direkt aus OpenRouter gepinnt, nicht aus dieser Liste.
+
+### Stage 1 — Screening via OpenRouter (getiert)
+
+- [ ] `openrouter`-Provider in `llm-provider.ts` verfügbar (eval-only, Format `openrouter/<vendor>/<modell>`)
 - [ ] `OPENROUTER_API_KEY` in `.env.local.example` dokumentiert (eval-only, kein Prod-Env)
-- [ ] Stage 1 ausgeführt: 3 Kandidaten (Kimi K2.6, DeepSeek V4 Flash, Gemini 3.5 Flash) × 3 Personas × 3 Runs, Versuchsplan (Seed 42, `--store pglite`, MAX_TURNS=35) strikt befolgt
+- [ ] Reproduzierbarkeit: OpenRouter je Kandidat auf ein festes Backend gepinnt (Routing-Präferenz), sonst untergräbt Backend-Varianz Seed 42
+- [ ] **Pass A (Vorfilter):** alle 7 × 1 Persona × 2 Läufe (Seed 42, pglite) → Shortlist Top 2–3 nach Gate-Pass + Diskriminatoren
+- [ ] **Pass B (voll):** Shortlist + Referenz × 3 Personas × 3 Läufe, Versuchsplan strikt (Seed 42, `--store pglite`, MAX_TURNS=35)
 - [ ] Aggregate-Reports je Kandidat × Persona vorhanden (`docs/evals/` Artefakte)
-- [ ] Finalist per Entscheidungsregel des Versuchsplans (§7: Gate-Pass + Nicht-Unterlegenheit + Kosten) dokumentiert
+- [ ] Finalist per Entscheidungsregel §7 (Gate-Pass + Nicht-Unterlegenheit + Kosten, Ranking über mehrere Kennzahlen) + eingefalteter Sonnet-Tester-Spot-Check (PROJ-40 Stufe 2) dokumentiert
 - [ ] Entscheidungs-Dokument schriftlich: Kandidat, Gate-Ergebnis, Kosten-Vergleich ($/Run nach Bucket), Begründung
 
-### Stage 2 — Prod-Validierung auf EU-Route (Nebius)
+### Stage 1.5 — Inference-Provider-Recherche (nach Screening, vor Verifikation)
 
-- [ ] `nebius`-Provider in `llm-provider.ts` verfügbar (OpenAI-kompatibler Endpoint, Format `nebius/model-id`, NEBIUS_API_KEY)
-- [ ] Finalist auf Nebius-Route erneut evaluiert: 3 Personas × 3 Runs, sonst gleiche Parameter wie Stage 1
+Der Prod-Inference-Provider wird erst gewählt, wenn der Finalist feststeht — nicht vorab auf Nebius festgelegt.
+
+- [ ] Für den Finalisten geeignete Inference-Provider recherchiert auf: EU-Datenresidenz (ADR-020 D1), Modell-Abdeckung (hostet er den Finalisten?), Kosten $/1M, Latenz/TTFT, Reife/SLA
+- [ ] Kandidaten-Provider verglichen — Nebius ist EINE Option (EU-stark, aber vermutlich teurer + dünnere Abdeckung); Fireworks, DeepInfra o.a. als Alternativen
+- [ ] Provider-Wahl dokumentiert mit Begründung (EU-Fit vs. Kosten vs. Abdeckung vs. Latenz)
+
+### Stage 2 — Prod-Verifikation auf gewähltem Backend
+
+- [ ] Gewählter Provider in `llm-provider.ts` verfügbar (`<provider>/<modell-id>`, `<PROVIDER>_API_KEY`)
+- [ ] Finalist auf der Prod-Route erneut evaluiert: 3 Personas × 3 Läufe, sonst gleiche Parameter wie Stage 1 Pass B
 - [ ] Latenz/TTFT pro Turn gemessen — Stage-2-spezifisch (echter Netz-Call, nicht pglite-synthetisch), TTFT-Zielwert < 3s (aus PROJ-9)
-- [ ] Go/No-Go dokumentiert: Stage-2-Gate-Metriken ≥ Stage-1-Werte (kein Rückschritt durch Quantisierung/Sampling-Differenz), TTFT-Ziel erfüllt
-- [ ] Falls Finalist Stage 2 nicht besteht: nächster Kandidat aus Stage 1 wird Stage 2 durchlaufen; falls alle scheitern: Baseline bleibt, Entscheidung dokumentiert
+- [ ] Go/No-Go dokumentiert: Stage-2-Gate-Metriken ≥ Stage-1-Pass-B-Werte (kein Rückschritt durch Quantisierung/Sampling/Backend-Differenz), TTFT-Ziel erfüllt
+- [ ] Falls Finalist Stage 2 nicht besteht: nächster Shortlist-Kandidat wird verifiziert; falls alle scheitern: Baseline bleibt, Entscheidung dokumentiert
 
 ### Provider-Infra
 
-- [ ] `llm-provider.ts` erweitert: `nebius` und `openrouter` als Provider neben `anthropic`/`google`
+- [ ] `llm-provider.ts`: `openrouter` (eval-only) ergänzt; der in Stage 1.5 gewählte Prod-Provider verfügbar. `nebius`/`fireworks` existieren bereits (PROJ-9) und sind Provider-Kandidaten, keine Vorfestlegung.
 - [ ] Fehler bei fehlendem API-Key: hard fail mit klarer Fehlermeldung, kein stiller Fallback auf Fallback-Modell
-- [ ] `NEBIUS_API_KEY` in `.env.local.example` dokumentiert (Prod-Env)
-- [ ] Alle drei `MODEL_PRICING`-Einträge (Interview-, Tester-, Eval-Bucket) für Nebius-Modelle ergänzt (ADR-020 D4: $/Token je vollem `provider/model`-String)
+- [ ] Key des gewählten Prod-Providers in `.env.local.example` dokumentiert (Prod-Env)
+- [ ] `MODEL_PRICING`-Einträge für alle 7 Screening-Modelle (OpenRouter, gepinnte reale Preise) + den Finalisten auf dem gewählten Prod-Provider ergänzt (ADR-020 D4: $/Token je vollem `provider/model`-String)
 
 ### D2 — Prod-Guard EU-Judge (ADR-020)
 
 - [ ] `talkerGroundingGuard.ts` `crossVendorJudgeModel` nicht mehr hardcoded Gemini/Anthropic, sondern via `GUARD_JUDGE_MODEL`-Env konfigurierbar
-- [ ] Default für EU-Route: `nebius/<andere-familie-als-talker>` (z.B. Talker = DeepSeek auf Nebius → Guard-Judge = Kimi auf Nebius oder umgekehrt; nie gleiche Modellfamilie)
+- [ ] Default für EU-Route: `<gewählter-Provider>/<andere-familie-als-talker>` (nie gleiche Modellfamilie; konkreter Wert erst nach Provider-Wahl in Stage 1.5)
 - [ ] Constraint dokumentiert und per Assert geprüft: Guard-Judge-Familie ≠ Talker-Familie
 - [ ] `GUARD_JUDGE_MODEL` in `.env.local.example` dokumentiert
 
@@ -82,7 +110,7 @@ Feature: Faktoren, Schwellen, Entscheidungsregeln und das Gating-Kriterium F sin
 ### Vercel-Produktion
 
 - [ ] `INTERVIEW_MODEL` auf Vercel auf den Finalist (Stage-2-validiertes Modell) gesetzt
-- [ ] `NEBIUS_API_KEY` auf Vercel hinterlegt
+- [ ] API-Key des gewählten Prod-Providers auf Vercel hinterlegt
 - [ ] `GUARD_JUDGE_MODEL` auf Vercel gesetzt (EU-konformer Guard-Judge für Prod-Guard)
 
 ### Entscheidungs-Dokumentation
@@ -93,27 +121,143 @@ Feature: Faktoren, Schwellen, Entscheidungsregeln und das Gating-Kriterium F sin
 ## Edge Cases
 
 - **OpenRouter Key fehlt bei Stage 1:** hartes Eval-Fail mit Fehlermeldung, kein stiller Fallback — verhindert, dass ein Kandidat auf dem falschen Provider gemessen wird
-- **Nebius API transienter Fehler bei Stage 2:** bestehende `withRetry()`-Logik (KI-11) greift; TTFT-Messung zählt Wall-Clock (inkl. Retry), repräsentiert echte Prod-Latenz
+- **Prod-Provider transienter Fehler bei Stage 2:** bestehende `withRetry()`-Logik (KI-11) greift; TTFT-Messung zählt Wall-Clock (inkl. Retry), repräsentiert echte Prod-Latenz
 - **Guard-Judge-Modell nicht erreichbar:** Interview schlägt fehl (kein stiller Fallback) — der Prod-Guard muss immer laufen, Degradation auf "kein Guard" ist kein akzeptierter Zustand
-- **Finalist besteht Stage 2 Gate-Metriken nicht** (Rückschritt durch Quantisierung auf Nebius): nächster Kandidat aus Stage-1-Ranking; falls alle scheitern: Baseline (`gemini-3.1-flash-lite`) bleibt, Entscheidung dokumentiert
-- **Alle drei Kandidaten scheitern Stage 1:** kein Wechsel, Baseline bleibt, Erkenntnisse für zukünftige Kandidaten-Recherche festgehalten
+- **Finalist besteht Stage 2 Gate-Metriken nicht** (Rückschritt durch Quantisierung/Backend auf dem gewählten Provider): nächster Shortlist-Kandidat; falls alle scheitern: Baseline (`gemini-3.1-flash-lite`) bleibt, Entscheidung dokumentiert
+- **Kein Provider hostet den Finalisten EU-konform/bezahlbar (Stage 1.5):** nächster Shortlist-Kandidat, dessen Provider-Lage besser ist; im Zweifel Baseline behalten und dokumentieren
+- **Alle 7 Kandidaten scheitern Stage 1:** kein Wechsel, Baseline bleibt, Erkenntnisse für zukünftige Kandidaten-Recherche festgehalten
 - **TTFT-Ziel knapp verfehlt (3–4s):** User-Entscheidung ob akzeptabel (kein Auto-Reject) — Entscheidungsregel §7 erlaubt Abwägung
 - **Guard-Judge-Familie = Talker-Familie durch Fehlkonfiguration:** Assert fängt das bei Start, hartes Fail
-- **Nebius-Modell-ID ändert sich nach Deployment:** Fehler bricht den Call, kein stiller Fallback — Env-Var-Update nötig
+- **Prod-Modell-ID ändert sich nach Deployment:** Fehler bricht den Call, kein stiller Fallback — Env-Var-Update nötig
 
 ## Technical Requirements
 
-- **EU-Compliance:** Talker (Interview-Rolle) UND Guard-Judge müssen auf EU-gehosteten Providern laufen (ADR-020 D1). Extraction/Enrichment hat keine EU-Pflicht (async, Gemini bleibt).
-- **Stage 2 TTFT:** < 3s Zeit bis erster Token (echter Netz-Call gegen Nebius-Endpoint)
-- **Model Pricing vollständig:** alle Nebius-Modelle mit realen $/Token-Werten in `MODEL_PRICING` (ADR-020 D4), kein Fallback auf Gemini-Lite-Preis
-- **OpenRouter:** ausschließlich eval-only — nicht in Prod konfigurierbar, kein Prod-Env-Eintrag
-- **Versuchsplan-Bindung:** Stage 1 folgt strikt dem festgeschriebenen Versuchsplan (Seed 42, pglite, Personas buchhalter/vertriebler/it-support, Entscheidungsregel §7) — keine Ad-hoc-Abweichungen
+- **EU-Compliance:** Talker (Interview-Rolle) UND Guard-Judge müssen auf EU-gehosteten Providern laufen (ADR-020 D1). Extraction/Enrichment hat keine EU-Pflicht (async, Gemini bleibt). Screening (Stage 1) ist eval-only → EU-frei (ADR-020 D1), OpenRouter zulässig.
+- **Stage 2 TTFT:** < 3s Zeit bis erster Token (echter Netz-Call gegen den in Stage 1.5 gewählten Prod-Endpoint)
+- **Model Pricing vollständig:** alle 7 Screening-Modelle (OpenRouter) + der Finalist auf dem gewählten Prod-Provider mit realen $/Token-Werten in `MODEL_PRICING` (ADR-020 D4), kein Fallback auf Gemini-Lite-Preis
+- **OpenRouter:** ausschließlich eval-only — nicht in Prod konfigurierbar, kein Prod-Env-Eintrag; je Kandidat auf ein festes Backend gepinnt (Reproduzierbarkeit unter Seed 42)
+- **Versuchsplan-Bindung:** Stage 1 folgt dem festgeschriebenen Versuchsplan (Seed 42, pglite, Personas buchhalter/vertriebler/it-support, Entscheidungsregel §7). Einzige gebilligte Abweichung: die getierte Screening-Struktur (Pass A Vorfilter → Pass B voll), im Versuchsplan §5 festgeschrieben.
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+> Erstellt 2026-07-04, revidiert 2026-07-04 nach Nutzer-Korrektur: (1) **7 Kandidaten** statt 3,
+> (2) **Provider erst nach Screening** wählen (Nebius nicht vorausgesetzt), (3) Versuchsplan
+> angeglichen. Screening-Route (Nutzer-Entscheid): **OpenRouter** als eval-only Aggregator. Baut auf
+> PROJ-9 (Provider-Layer, EU-Analyse) und PROJ-40 (validiertes Eval-Instrument, Stufe 1+2 GO).
+
+### Überblick — was gebaut wird
+
+Kein UI, kein DB-Schema, kein Nutzer-Flow. Reines Infra-/Konfig-Feature in vier Bausteinen plus ein
+**dreistufiger** Mess- und Entscheidungs-Prozess:
+
+1. **Provider-Erweiterung** — OpenRouter als eval-only Aggregator (fürs Screening aller 7 Kandidaten,
+   inkl. der Modelle, die einzelne Prod-Provider nicht hosten). Der Prod-Provider wird erst nach dem
+   Screening gewählt, nicht vorab.
+2. **Kosten-Modell** — reale Preise für die 7 Screening-Modelle + den Finalisten eintragen (kein stiller Fallback).
+3. **Prod-Guard EU-tauglich** — der Faktentreue-Wächter darf nach dem Modellwechsel nicht mehr fest auf
+   Anthropic/Google verdrahtet sein, sondern konfigurierbar + EU-konform (Familie ≠ Talker).
+4. **Umgebungs-Konfiguration** — API-Keys + Modell-Wahl lokal (eval) und auf Vercel (prod).
+
+Ablauf: **Stage 1 Screening (getiert)** → **Stage 1.5 Provider-Recherche** → **Stage 2 Verifikation** → Modellwahl.
+
+### A) Modul-/Konfig-Struktur (was sich ändert)
+
+```
+PROJ-41
+├── Provider-Layer (src/lib/llm-provider.ts)
+│   └── + openrouter (eval-only, OpenAI-kompatibler Endpoint — Muster wie nebius/fireworks)
+│       Prod-Provider aus Stage 1.5; nebius/fireworks existieren (PROJ-9), sind Kandidaten
+├── Kosten-Modell (MODEL_PRICING, scorers/costSummary.ts)
+│   └── + Einträge für die 7 Screening-Modelle (OpenRouter, gepinnte reale Preise)
+│       + Finalist auf gewähltem Prod-Provider; fehlender Eintrag warnt/failt (PROJ-40 B)
+├── Prod-Guard (src/services/talkerGroundingGuard.ts)
+│   └── crossVendorJudgeModel() → GUARD_JUDGE_MODEL-Env; Default = <prod-provider>/<andere-Familie>
+│       Assert: Guard-Familie ≠ Talker-Familie (nie Selbstbewertung)
+├── Umgebung (.env.local.example + Vercel)
+│   └── + OPENROUTER_API_KEY (eval-only), <PROD-PROVIDER>_API_KEY, GUARD_JUDGE_MODEL
+│       Vercel: INTERVIEW_MODEL=Finalist, EXTRACTION_MODEL/ENRICHMENT_MODEL=google/gemini-3.5-flash
+└── Dokumente
+    ├── Stage-1/1.5/2 Reports (docs/evals/) + Provider-Recherche + Entscheidungs-Dokument
+    └── ADR-020 PROJ-41-Nachtrag (Ergebnis + Modell- + Provider-Wahl)
+```
+
+### B) Konfig-Modell (Klartext, keine Geheimnisse im Repo)
+
+**Modell-Kennungen** (als Format, nicht als Code):
+- Screening (eval): `openrouter/<vendor>/<modell>` — ein Aggregator-String je Kandidat, Backend gepinnt.
+- Prod: `<gewählter-provider>/<modell-id>` — erst nach Stage 1.5 bekannt.
+- Referenz (Vergleich): `google/gemini-3.1-flash-lite` (unverändert, Score 25).
+
+**Kandidaten Stage 1** — 7 Open-Weight-Modelle (Score/~$ s. Kandidaten-Satz oben): GLM-5.2, MiniMax-M3,
+DeepSeek V4 Pro, Kimi K2.6, MiMo-V2.5-Pro, DeepSeek V4 Flash, MiMo-V2.5. Alle auf OpenRouter verfügbar
+(Recherche 2026-07-04); exakte Slugs + reale Preise werden beim Bau gepinnt.
+
+**Umgebungs-Variablen:**
+| Variable | Wo | Zweck |
+|---|---|---|
+| `OPENROUTER_API_KEY` | nur lokal (.env.local) | Stage-1-Screening; NIE auf Vercel/Prod |
+| `<PROD-PROVIDER>_API_KEY` | lokal + Vercel | Stage-2 + Prod-Interview + Prod-Guard (Provider aus Stage 1.5) |
+| `GUARD_JUDGE_MODEL` | lokal + Vercel | EU-konformer Faktentreue-Wächter, Familie ≠ Talker |
+| `INTERVIEW_MODEL` | Vercel | der gewählte Finalist |
+| `EXTRACTION_MODEL` / `ENRICHMENT_MODEL` | Vercel | `google/gemini-3.5-flash` (PROJ-9, async, keine EU-Pflicht) |
+
+### C) Tech-Entscheidungen (WARUM, PM-lesbar)
+
+| Entscheidung | Begründung |
+|---|---|
+| OpenRouter nur fürs Screening, nie in Prod | Ein Aggregator erreicht alle 7 Kandidaten mit einem Key — billiges Wegwerf-Screening, egal welcher Anbieter ein Modell hostet. Für Prod ungeeignet, weil intransparent geroutet (Datenschutz) → dort ein dedizierter EU-Provider. |
+| Provider erst nach dem Screening wählen (Stage 1.5) | Welcher Inference-Provider optimal ist, hängt vom Sieger ab (hostet er ihn? Preis, Latenz, EU-Fit). Nebius vorab festzulegen wäre verfrüht — vermutlich teurer + dünnere Abdeckung. Provider-Wahl ist ein eigener, dokumentierter Rechercheschritt. |
+| Getiertes Screening (Pass A Vorfilter → Pass B voll) | 7 Modelle × 3 Personas × 3 Läufe wäre teuer und größtenteils an chancenlosen Modellen verschwendet. Pass A (billig, 1 Persona × 2 Läufe) filtert auf die Top 2–3, Pass B misst nur die mit vollem Versuchsplan-Rigor. Kosten-/Rigor-Balance. |
+| Dreistufig (Screening ≠ Prod-Route) mit Stage-2-Gate „≥ Stage 1" | Ein auf OpenRouter gescreentes Modell kann auf dem Prod-Provider anders quantisiert/gesampelt sein. Der Finalist wird auf der echten Prod-Route erneut gemessen; sinkt eine Gate-Metrik, gilt er als durchgefallen (nächster Kandidat oder Baseline bleibt). |
+| Guard-Judge konfigurierbar + Familie ≠ Talker | Kein Modell darf seine eigene Ausgabe bewerten (Bias). Nach dem Wechsel auf ein OSS-Modell muss der Wächter EU-konform auf dem gewählten Provider laufen, nicht mehr fest Anthropic/Google. |
+| Kein stiller Preis-Fallback | Ein unbekanntes Modell mit Gemini-Lite-Preisen zu rechnen verfälscht den Kostenvergleich — der ganze Anlass des Features. Fehlender Preis warnt/failt (PROJ-40 B). |
+| Tester-Stärke-Spot-Check eingefaltet (PROJ-40 Stufe 2) | Der starke Sonnet-Tester läuft zusätzlich auf dem entscheidenden Paar (Referenz + Finalist); kippt die Ordnung, ist die Entscheidung tester-abhängig → Eskalation. Gegated ist die Entscheidung, nicht der Start. |
+
+### D) Dependencies
+
+**Keine neuen npm-Pakete.** OpenRouter spricht denselben OpenAI-kompatiblen Endpoint wie Nebius/Fireworks
+und nutzt das schon installierte `@ai-sdk/openai` (nur andere Basis-URL + Key). Nebius/Fireworks-Provider
+existieren bereits (PROJ-9). Ein etwaiger neuer Prod-Provider aus Stage 1.5 folgt demselben Muster.
+
+### E) Prozess-Ablauf (drei Stufen)
+
+```
+Stage 1 — Screening (eval-only, OpenRouter, getiert)
+  Pass A: alle 7 × 1 Persona × 2 Läufe (Seed 42, pglite) → Shortlist Top 2–3
+  Pass B: Shortlist + Referenz × 3 Personas × 3 Läufe (Versuchsplan §4–7)
+  → Aggregate-Reports; Finalist per §7 (Gate + Nicht-Unterlegenheit + Kosten, Multi-Kennzahl-Ranking)
+  → + eingefalteter Tester-Stärke-Spot-Check auf Referenz+Finalist (PROJ-40 Stufe 2)
+
+Stage 1.5 — Inference-Provider-Recherche (nach Finalist)
+  Provider für den Finalisten vergleichen: EU-Fit · Abdeckung · Kosten · Latenz · SLA
+  (Nebius = eine Option, nicht gesetzt) → dokumentierte Provider-Wahl
+
+Stage 2 — Prod-Verifikation (gewählter Provider)
+  Finalist × 3 Personas × 3 Läufe, gleiche Parameter wie Pass B
+  + Latenz/TTFT gegen echten Netz-Call (Ziel < 3s) — hier erstmals real messbar
+  → Go/No-Go: Gate-Metriken ≥ Stage-1-Pass-B, TTFT-Ziel erfüllt
+  → Fällt durch: nächster Shortlist-Kandidat; alle durch: Baseline bleibt
+  → Entscheidungs-Doc + ADR-020-Nachtrag
+```
+
+### F) Abgrenzung + Risiken
+
+- **Transfer-Validität** (OpenRouter-Screening → Prod-Provider): Kernrisiko der getrennten Routen, bewusst
+  von Stage 2 abgefangen (Re-Validierung auf der Prod-Route mit Gate „≥ Stage 1").
+- **OpenRouter-Reproduzierbarkeit:** der Aggregator kann denselben Modell-String über Läufe an
+  unterschiedliche Backends/Quantisierungen routen — das untergräbt Seed 42. **Empfehlung:** OpenRouter
+  je Kandidat auf ein festes Backend pinnen (Routing-Präferenz), vor Stage 1 zu fixieren. Betrifft auch
+  die Preise (variieren je Backend, s. Kandidaten-Satz).
+- **DeepSeek V4 Flash / MiMo-V2.5** (billigste Kandidaten): niedrigster Score im Satz; V4 Flash mit
+  bekanntem Halluzinations-Risiko bei Wissenslücken (PROJ-9) — Screening muss `hallucinationRate` +
+  `talker_grounding` besonders beobachten; das offene KI-18 (Guard-Sensitivität) berührt genau das.
+- **Kosten:** Pass A ~$2–4, Pass B ~$5–8, Spot-Check ~$1–3 → gesamt ~$7–12. Vor jeder Ausführung bestätigen.
+- **Externe Blocker:** Stage 1 braucht `OPENROUTER_API_KEY`, Stage 2 den Key des gewählten Providers —
+  beide aktuell nicht gesetzt. Der Code (Provider, Pricing, Guard) ist ohne Keys baubar; die Läufe nicht.
+- **Kein Eingriff in Extraktion/Anreicherung außer Env** — die bleiben auf Gemini (async, keine EU-Pflicht).
 
 ## QA Test Results
 _To be added by /qa_

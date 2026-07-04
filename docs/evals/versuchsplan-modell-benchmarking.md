@@ -18,7 +18,7 @@ Eval-Rollen vorab als ausreichend validiert sind?
 
 | Faktor | Rolle | Stufen | Anmerkung |
 |--------|-------|--------|-----------|
-| **Interview-Modell** | Prüfling (PROJ-41 variiert) | `gemini-3.1-flash-lite` (Baseline) + PROJ-41-Kandidaten (OSS-Screening, EU-Route) | In PROJ-40-Validierung fixiert, damit das Instrument isoliert geprüft wird |
+| **Interview-Modell** | Prüfling (PROJ-41 variiert) | `gemini-3.1-flash-lite` (Referenz) + 7 Screening-Kandidaten (GLM-5.2, MiniMax-M3, DeepSeek V4 Pro/Flash, Kimi K2.6, MiMo-V2.5-Pro/-V2.5) via OpenRouter | In PROJ-40-Validierung fixiert; PROJ-41 variiert. Prod-Provider erst nach dem Screening gewählt (nicht vorab EU-Route festlegen), s. [PROJ-41 Stage 1.5](../../features/platform/PROJ-41-interview-modell-auswahl.md) |
 | **Tester-Modell-Stärke** | Instrument (Stufe 2) | schwach (`gemini-3.1-flash-lite`) · stark (Frontier, z.B. `claude-sonnet-4-5`) | EU-frei, ADR-020 D1 |
 | **Tester-Offenlegungs-Modus** | Instrument/Kontrolle (C) | A `withhold_tools_and_numbers` · B `withhold_numbers_only` | Entkoppelt von Persona-Persönlichkeit |
 | **Judge-Modell** | Instrument (Stufe 1) | Prod-Judge `claude-haiku-4-5` (Anker) · Referenz-Judge `claude-sonnet-4-5` (Frontier, Stärke-Check) | Single-Vendor-Kalibrierung; Cross-Vendor zurückgezogen (s. §6 + ADR-020-Nachtrag) |
@@ -62,6 +62,11 @@ PROJ-41 Stage-2 gegen die echte Provider-API (ADR-020, Metrik-Audit §5).
 - Aggregat-Report je Modell×Persona (vorhandene `writeAggregateReport`-Mechanik).
 - Stufe-1/2-Validierung getrennt (eigene Harnesses, Batch 1): Judge-Kalibrierung offline auf den
   fixierten Transkripten (stratifizierte Stichprobe, 29 Stück), Tester-Stabilität über frische Läufe.
+- **Getiertes Screening (ab PROJ-41, größerer Kandidaten-Satz):** bei mehr als ~3 Kandidaten wird das
+  Screening zweistufig gefahren, um Kosten und Rigor zu balancieren: **Pass A** (Vorfilter) alle
+  Kandidaten × 1 Persona × 2 Läufe → Shortlist der Top 2–3 nach Gate-Pass + Diskriminatoren; **Pass B**
+  (voll) nur die Shortlist + Referenz mit den regulären 3 Personas × 3 Läufen. Pass A ersetzt nicht die
+  Replikations-Regel, er filtert nur, welche Modelle sie durchlaufen. Das Verdikt (§7) beruht auf Pass B.
 
 ## 6. Schwellen aus Stufe 1 und 2
 
