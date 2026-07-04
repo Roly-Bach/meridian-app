@@ -18,6 +18,19 @@ export const MODEL_PRICING: Record<string, { inputPer1M: number; cachePer1M: num
   'google/gemini-3.5-flash':      { inputPer1M: 1.50,  cachePer1M: 0.150, outputPer1M: 9.00 },
   'anthropic/claude-haiku-4-5':   { inputPer1M: 1.00,  cachePer1M: 0.10,  outputPer1M: 5.00 },
   'anthropic/claude-sonnet-4-5':  { inputPer1M: 3.00,  cachePer1M: 0.30,  outputPer1M: 15.00 },
+  // PROJ-41 Stage-1 screening candidates. Keyed by the full model string the components log
+  // (INTERVIEW_MODEL="openrouter/<vendor>/<model>"). Real per-1M prices pinned from OpenRouter's
+  // public catalog on 2026-07-04 (prompt / input_cache_read / completion). OpenRouter routes a slug
+  // to varying backends → these are the list prices; a pinned backend (Stage-1 reproducibility)
+  // may differ. Re-pin if the routing preference changes. mimo-v2.5 exposes no cache-read tier →
+  // cache billed at input rate.
+  'openrouter/z-ai/glm-5.2':               { inputPer1M: 0.91,  cachePer1M: 0.169,    outputPer1M: 2.86 },
+  'openrouter/minimax/minimax-m3':         { inputPer1M: 0.30,  cachePer1M: 0.06,     outputPer1M: 1.20 },
+  'openrouter/deepseek/deepseek-v4-pro':   { inputPer1M: 0.435, cachePer1M: 0.003625, outputPer1M: 0.87 },
+  'openrouter/moonshotai/kimi-k2.6':       { inputPer1M: 0.66,  cachePer1M: 0.14,     outputPer1M: 3.41 },
+  'openrouter/xiaomi/mimo-v2.5-pro':       { inputPer1M: 0.435, cachePer1M: 0.0036,   outputPer1M: 0.87 },
+  'openrouter/deepseek/deepseek-v4-flash': { inputPer1M: 0.09,  cachePer1M: 0.018,    outputPer1M: 0.18 },
+  'openrouter/xiaomi/mimo-v2.5':           { inputPer1M: 0.105, cachePer1M: 0.105,    outputPer1M: 0.28 },
 }
 
 // PROJ-40 (a): a MODEL_PRICING miss must not silently fall back to Gemini-Lite

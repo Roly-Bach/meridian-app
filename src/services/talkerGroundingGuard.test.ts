@@ -1,10 +1,16 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
 vi.mock('ai', () => ({ generateText: vi.fn() }))
 vi.mock('@/lib/llm-provider', () => ({ resolveModel: vi.fn().mockReturnValue({}) }))
 
 import { generateText } from 'ai'
-import { parseGuardResponse, checkGroundingViolation } from './talkerGroundingGuard'
+import {
+  parseGuardResponse,
+  checkGroundingViolation,
+  modelFamily,
+  resolveGuardJudgeModel,
+  assertGuardFamilyDiffersFromTalker,
+} from './talkerGroundingGuard'
 import type { TurnMessage } from './interviewTypes'
 
 // ─── Parser Tests ───────────────────────────────────────────────────────────────
@@ -120,6 +126,94 @@ describe('checkGroundingViolation', () => {
     const priorTurns: TurnMessage[] = [{ role: 'user', content: 'a' }]
     const result = await checkGroundingViolation('b', priorTurns, 'google/gemini-3.1-flash-lite')
     expect(result.violation).toBe(false)
+  })
+})
+
+// ─── PROJ-41 D2: Guard-Judge-Konfiguration + Familie-Assert ───────────────────────
+
+describe('modelFamily', () => {
+  it.each([
+    ['anthropic/claude-haiku-4-5', 'anthropic'],
+    ['google/gemini-3.1-flash-lite', 'google'],
+    ['openrouter/deepseek/deepseek-v4-flash', 'deepseek'],
+    ['nebius/deepseek-ai/DeepSeek-V4-Pro', 'deepseek'],
+    ['openrouter/z-ai/glm-5.2', 'zhipu'],
+    ['openrouter/moonshotai/kimi-k2.6', 'moonshot'],
+    ['openrouter/xiaomi/mimo-v2.5', 'xiaomi'],
+    ['openrouter/minimax/minimax-m3', 'minimax'],
+  ])('normalizes %s to family %s', (model, fam) => {
+    expect(modelFamily(model)).toBe(fam)
+  })
+
+  it('falls back to the vendor segment for an unknown aggregator slug', () => {
+    expect(modelFamily('openrouter/acme/some-new-model')).toBe('acme')
+  })
+})
+
+describe('resolveGuardJudgeModel', () => {
+  const original = process.env.GUARD_JUDGE_MODEL
+  afterEach(() => {
+    if (original === undefined) delete process.env.GUARD_JUDGE_MODEL
+    else process.env.GUARD_JUDGE_MODEL = original
+  })
+
+  it('returns GUARD_JUDGE_MODEL when set', () => {
+    process.env.GUARD_JUDGE_MODEL = 'nebius/meta-llama/Llama-3.3-70B'
+    expect(resolveGuardJudgeModel('openrouter/deepseek/deepseek-v4-flash')).toBe('nebius/meta-llama/Llama-3.3-70B')
+  })
+
+  it('ignores an empty/whitespace GUARD_JUDGE_MODEL and uses the cross-vendor default', () => {
+    process.env.GUARD_JUDGE_MODEL = '   '
+    expect(resolveGuardJudgeModel('google/gemini-3.1-flash-lite')).toBe('anthropic/claude-haiku-4-5')
+  })
+
+  it('default: gemini talker → anthropic judge, non-gemini talker → gemini judge', () => {
+    delete process.env.GUARD_JUDGE_MODEL
+    expect(resolveGuardJudgeModel('google/gemini-3.1-flash-lite')).toBe('anthropic/claude-haiku-4-5')
+    expect(resolveGuardJudgeModel('openrouter/deepseek/deepseek-v4-flash')).toBe('google/gemini-3.1-flash-lite')
+  })
+})
+
+describe('assertGuardFamilyDiffersFromTalker', () => {
+  it('throws when guard judge shares the talker family', () => {
+    expect(() =>
+      assertGuardFamilyDiffersFromTalker('openrouter/deepseek/deepseek-v4-pro', 'openrouter/deepseek/deepseek-v4-flash'),
+    ).toThrow(/may not grade its own output/)
+  })
+
+  it('passes when families differ', () => {
+    expect(() =>
+      assertGuardFamilyDiffersFromTalker('google/gemini-3.1-flash-lite', 'openrouter/deepseek/deepseek-v4-flash'),
+    ).not.toThrow()
+  })
+})
+
+describe('checkGroundingViolation — Familie-Assert (hard fail, nicht geschluckt)', () => {
+  const original = process.env.GUARD_JUDGE_MODEL
+  afterEach(() => {
+    if (original === undefined) delete process.env.GUARD_JUDGE_MODEL
+    else process.env.GUARD_JUDGE_MODEL = original
+  })
+
+  it('wirft (nicht no-violation), wenn GUARD_JUDGE_MODEL dieselbe Familie wie der Talker hat', async () => {
+    vi.mocked(generateText).mockClear() // shared mock; assert no judge call is made in THIS test
+    process.env.GUARD_JUDGE_MODEL = 'openrouter/deepseek/deepseek-v4-pro'
+    const priorTurns: TurnMessage[] = [{ role: 'user', content: 'a' }]
+    await expect(
+      checkGroundingViolation('b', priorTurns, 'openrouter/deepseek/deepseek-v4-flash'),
+    ).rejects.toThrow(/may not grade its own output/)
+    expect(generateText).not.toHaveBeenCalled()
+  })
+
+  it('nutzt das GUARD_JUDGE_MODEL-Override für den Judge-Call bei verschiedener Familie', async () => {
+    process.env.GUARD_JUDGE_MODEL = 'google/gemini-3.1-flash-lite'
+    const mockGenerateText = vi.mocked(generateText)
+    mockGenerateText.mockResolvedValueOnce({ text: '{"violation": false}' } as Awaited<ReturnType<typeof generateText>>)
+
+    const priorTurns: TurnMessage[] = [{ role: 'user', content: 'a' }]
+    const result = await checkGroundingViolation('b', priorTurns, 'openrouter/deepseek/deepseek-v4-flash')
+    expect(result.violation).toBe(false)
+    expect(mockGenerateText).toHaveBeenCalled()
   })
 })
 

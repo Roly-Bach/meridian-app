@@ -25,10 +25,72 @@ type OnTokenUsage = (r: {
  * duplicated here (not imported from __evals__) to keep prod code independent
  * of the eval-only module tree.
  */
-function crossVendorJudgeModel(talkerModel: string): string {
+/**
+ * Coarse vendor "family" of a model string, used to guarantee the guard judge never
+ * shares a lineage with the talker (no self-assessment). Robust to provider/aggregator
+ * prefixes: `anthropic/claude-…`, `nebius/deepseek-ai/…`, `openrouter/deepseek/…` all
+ * normalize to their vendor family. Substring table first (handles prefix variants), then
+ * a structural fallback to the vendor segment of the slug. Heuristic by design — err toward
+ * grouping models that share a base model, since the cost of a false "same family" is only a
+ * config error the operator resolves, while a false "different" would let a model grade itself.
+ */
+export function modelFamily(modelString: string): string {
+  const s = modelString.toLowerCase()
+  const table: Array<[RegExp, string]> = [
+    [/claude|anthropic/, 'anthropic'],
+    [/gemini|gemma|(^|\/)google\//, 'google'],
+    [/deepseek/, 'deepseek'],
+    [/glm|z-ai|zhipu/, 'zhipu'],
+    [/minimax/, 'minimax'],
+    [/kimi|moonshot/, 'moonshot'],
+    [/mimo|xiaomi/, 'xiaomi'],
+    [/qwen/, 'qwen'],
+    [/llama|meta-llama/, 'meta'],
+    [/mistral|mixtral/, 'mistral'],
+    [/(^|\/)gpt|openai\/|(^|\/)o[134](-|$)/, 'openai'],
+  ]
+  for (const [re, fam] of table) {
+    if (re.test(s)) return fam
+  }
+  // Fallback: the vendor segment. Aggregator strings (openrouter/nebius/fireworks + 3 segments)
+  // carry the real vendor in segment[1]; provider-native strings put it in segment[0].
+  const parts = s.split('/')
+  const aggregators = new Set(['openrouter', 'nebius', 'fireworks'])
+  if (parts.length >= 3 && aggregators.has(parts[0])) return parts[1]
+  return parts[0]
+}
+
+/** Existing cross-vendor default used when GUARD_JUDGE_MODEL is unset (dev/eval convenience). */
+function defaultGuardJudgeModel(talkerModel: string): string {
   const isGemini =
     talkerModel.toLowerCase().includes('gemini') || talkerModel.toLowerCase().startsWith('google/')
   return isGemini ? 'anthropic/claude-haiku-4-5' : 'google/gemini-3.1-flash-lite'
+}
+
+/**
+ * PROJ-41 (D2): the prod guard judge must be configurable so the EU route can pin it to the
+ * chosen provider (ADR-020 D2/D5) instead of the hardcoded Gemini/Anthropic pair. Honors
+ * GUARD_JUDGE_MODEL; falls back to the cross-vendor default otherwise.
+ */
+export function resolveGuardJudgeModel(talkerModel: string): string {
+  const override = process.env.GUARD_JUDGE_MODEL?.trim()
+  return override && override.length > 0 ? override : defaultGuardJudgeModel(talkerModel)
+}
+
+/**
+ * Hard invariant (ADR-020 D2): a model must never grade its own output. Throws on a config
+ * error so a misconfigured guard fails the interview loudly instead of running a biased judge.
+ * Deliberately raised OUTSIDE the judge-call try/catch in checkGroundingViolation so it is not
+ * swallowed into a silent no-violation.
+ */
+export function assertGuardFamilyDiffersFromTalker(guardModel: string, talkerModel: string): void {
+  const guardFam = modelFamily(guardModel)
+  const talkerFam = modelFamily(talkerModel)
+  if (guardFam === talkerFam) {
+    throw new Error(
+      `GUARD_JUDGE_MODEL misconfigured: guard judge "${guardModel}" (family "${guardFam}") shares the talker's model family "${talkerModel}" — a model may not grade its own output (ADR-020 D2). Set GUARD_JUDGE_MODEL to a different vendor family.`,
+    )
+  }
 }
 
 const GUARD_SYSTEM = `Du prüfst EINE Agent-Antwort aus einem laufenden Interview auf falsche Prämissen.
@@ -98,6 +160,12 @@ export async function checkGroundingViolation(
   _traceCtx?: unknown,
   onTokenUsage?: OnTokenUsage,
 ): Promise<GroundingGuardResult> {
+  // Resolve + validate the judge model on every call, BEFORE the empty-history early return and
+  // OUTSIDE the try/catch below: a family clash is a config error that must hard-fail the interview,
+  // not degrade to a silent no-violation (ADR-020 D2). Cheap, pure — no judge call here.
+  const judgeModel = resolveGuardJudgeModel(talkerModelString)
+  assertGuardFamilyDiffersFromTalker(judgeModel, talkerModelString)
+
   if (priorTurns.length === 0) return { violation: false }
 
   const transcript = priorTurns
@@ -105,7 +173,6 @@ export async function checkGroundingViolation(
     .join('\n')
 
   try {
-    const judgeModel = crossVendorJudgeModel(talkerModelString)
     const model = resolveModel(judgeModel)
     const result = await generateText({
       model,

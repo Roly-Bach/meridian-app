@@ -32,6 +32,40 @@ describe('estimateTokenCost', () => {
     expect(cost).toBeCloseTo(expected, 10)
   })
 
+  // PROJ-41: the 7 Stage-1 screening candidates must be priced so their cost is not silently
+  // reported as 0 (the whole point of the cost comparison). Keyed by the full logged model string.
+  describe('PROJ-41 screening-candidate pricing', () => {
+    const screeningModels = [
+      'openrouter/z-ai/glm-5.2',
+      'openrouter/minimax/minimax-m3',
+      'openrouter/deepseek/deepseek-v4-pro',
+      'openrouter/moonshotai/kimi-k2.6',
+      'openrouter/xiaomi/mimo-v2.5-pro',
+      'openrouter/deepseek/deepseek-v4-flash',
+      'openrouter/xiaomi/mimo-v2.5',
+    ]
+
+    it('prices all 7 screening candidates with a non-zero cost (no unknown-model fallback to 0)', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000 }
+      for (const m of screeningModels) {
+        expect(MODEL_PRICING[m]).toBeDefined()
+        expect(estimateTokenCost(usage, m)).toBeGreaterThan(0)
+      }
+      expect(warnSpy).not.toHaveBeenCalled()
+      warnSpy.mockRestore()
+    })
+
+    it('applies the pinned cache-read rate for a candidate with a cache tier (glm-5.2)', () => {
+      const p = MODEL_PRICING['openrouter/z-ai/glm-5.2']
+      expect(p).toEqual({ inputPer1M: 0.91, cachePer1M: 0.169, outputPer1M: 2.86 })
+      const usage = { inputTokens: 1000, cacheReadTokens: 400, outputTokens: 200 }
+      const expected =
+        600 * 0.91 / 1_000_000 + 400 * 0.169 / 1_000_000 + 200 * 2.86 / 1_000_000
+      expect(estimateTokenCost(usage, 'openrouter/z-ai/glm-5.2')).toBeCloseTo(expected, 10)
+    })
+  })
+
   describe('MODEL_PRICING miss', () => {
     beforeEach(() => {
       vi.spyOn(console, 'warn').mockImplementation(() => {})

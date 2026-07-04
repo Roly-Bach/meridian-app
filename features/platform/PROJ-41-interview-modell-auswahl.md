@@ -1,13 +1,13 @@
 # PROJ-41: Interview-Modell-Auswahl (OSS-Screening + EU-Prod-Route)
 
-## Status: Architected
+## Status: In Progress
 **Type:** Revision
 **Domain:** Platform
 **Extends:** PROJ-9
 **Appetite:** L
 **Bugs:** —
 **Created:** 2026-07-02
-**Last Updated:** 2026-07-04 (Architektur + Kandidaten-Satz revidiert: 7 Modelle, getiertes Screening, Provider-Wahl nach Screening)
+**Last Updated:** 2026-07-04 (Stage-1-Code gebaut, keys-frei: openrouter-Provider, MODEL_PRICING der 7 Modelle, GUARD_JUDGE_MODEL + Familie-Assert)
 
 ## Dependencies
 - Requires: PROJ-40 (Eval-Instrument-Validierung + Versuchsplan) — Stufe 1 + Stufe 2 PASS sind hartes Gate vor Stage 1 Screening (ADR-020 §7 Gating, Versuchsplan Kriterium F)
@@ -62,9 +62,9 @@ Quelle) und werden beim Stage-1-Bau direkt aus OpenRouter gepinnt, nicht aus die
 
 ### Stage 1 — Screening via OpenRouter (getiert)
 
-- [ ] `openrouter`-Provider in `llm-provider.ts` verfügbar (eval-only, Format `openrouter/<vendor>/<modell>`)
-- [ ] `OPENROUTER_API_KEY` in `.env.local.example` dokumentiert (eval-only, kein Prod-Env)
-- [ ] Reproduzierbarkeit: OpenRouter je Kandidat auf ein festes Backend gepinnt (Routing-Präferenz), sonst untergräbt Backend-Varianz Seed 42
+- [x] `openrouter`-Provider in `llm-provider.ts` verfügbar (eval-only, Format `openrouter/<vendor>/<modell>`) — 2026-07-04, OpenAI-kompatibel via `.chat()`, Test in `llm-provider.test.ts`
+- [x] `OPENROUTER_API_KEY` in `.env.local.example` dokumentiert (eval-only, kein Prod-Env) — 2026-07-04, mit Pin-Hinweis + „nie auf Vercel"
+- [ ] Reproduzierbarkeit: OpenRouter je Kandidat auf ein festes Backend gepinnt (Routing-Präferenz), sonst untergräbt Backend-Varianz Seed 42 — Run-Konfig, vor Stage-1-Ausführung zu fixieren (Anleitung in `.env.local.example`)
 - [ ] **Pass A (Vorfilter):** alle 7 × 1 Persona × 2 Läufe (Seed 42, pglite) → Shortlist Top 2–3 nach Gate-Pass + Diskriminatoren
 - [ ] **Pass B (voll):** Shortlist + Referenz × 3 Personas × 3 Läufe, Versuchsplan strikt (Seed 42, `--store pglite`, MAX_TURNS=35)
 - [ ] Aggregate-Reports je Kandidat × Persona vorhanden (`docs/evals/` Artefakte)
@@ -89,17 +89,17 @@ Der Prod-Inference-Provider wird erst gewählt, wenn der Finalist feststeht — 
 
 ### Provider-Infra
 
-- [ ] `llm-provider.ts`: `openrouter` (eval-only) ergänzt; der in Stage 1.5 gewählte Prod-Provider verfügbar. `nebius`/`fireworks` existieren bereits (PROJ-9) und sind Provider-Kandidaten, keine Vorfestlegung.
-- [ ] Fehler bei fehlendem API-Key: hard fail mit klarer Fehlermeldung, kein stiller Fallback auf Fallback-Modell
-- [ ] Key des gewählten Prod-Providers in `.env.local.example` dokumentiert (Prod-Env)
-- [ ] `MODEL_PRICING`-Einträge für alle 7 Screening-Modelle (OpenRouter, gepinnte reale Preise) + den Finalisten auf dem gewählten Prod-Provider ergänzt (ADR-020 D4: $/Token je vollem `provider/model`-String)
+- [x] `llm-provider.ts`: `openrouter` (eval-only) ergänzt — 2026-07-04. Der in Stage 1.5 gewählte Prod-Provider folgt dort; `nebius`/`fireworks` existieren bereits (PROJ-9).
+- [x] Fehler bei fehlendem API-Key: kein stiller Fallback auf ein anderes Modell — `resolveModel` konstruiert den Client, der Call schlägt hart mit Auth-Fehler des Provider-SDK fehl; unbekannter Provider wirft mit klarer Meldung (Test vorhanden)
+- [ ] Key des gewählten Prod-Providers in `.env.local.example` dokumentiert (Prod-Env) — pending Stage 1.5 (Provider noch offen)
+- [~] `MODEL_PRICING`-Einträge: **7/7 Screening-Modelle** (OpenRouter, gepinnte reale Preise) ergänzt 2026-07-04 (Katalog-Stand OpenRouter, `input_cache_read`/prompt/completion); Finalist-Eintrag auf Prod-Provider folgt Stage 2 (ADR-020 D4)
 
 ### D2 — Prod-Guard EU-Judge (ADR-020)
 
-- [ ] `talkerGroundingGuard.ts` `crossVendorJudgeModel` nicht mehr hardcoded Gemini/Anthropic, sondern via `GUARD_JUDGE_MODEL`-Env konfigurierbar
-- [ ] Default für EU-Route: `<gewählter-Provider>/<andere-familie-als-talker>` (nie gleiche Modellfamilie; konkreter Wert erst nach Provider-Wahl in Stage 1.5)
-- [ ] Constraint dokumentiert und per Assert geprüft: Guard-Judge-Familie ≠ Talker-Familie
-- [ ] `GUARD_JUDGE_MODEL` in `.env.local.example` dokumentiert
+- [x] `talkerGroundingGuard.ts` nicht mehr hardcoded Gemini/Anthropic, sondern via `GUARD_JUDGE_MODEL`-Env konfigurierbar (`resolveGuardJudgeModel`) — 2026-07-04; Cross-Vendor-Default bleibt als Dev/Eval-Fallback
+- [ ] Default für EU-Route: `<gewählter-Provider>/<andere-familie-als-talker>` — Mechanismus fertig, konkreter EU-Wert erst nach Provider-Wahl in Stage 1.5
+- [x] Constraint dokumentiert und per Assert geprüft: Guard-Judge-Familie ≠ Talker-Familie — `modelFamily` + `assertGuardFamilyDiffersFromTalker`, hard fail außerhalb des Judge-try/catch (nicht als no-violation geschluckt); Tests vorhanden
+- [x] `GUARD_JUDGE_MODEL` in `.env.local.example` dokumentiert — 2026-07-04
 
 ### Extraction/Enrichment (keine Screening-Läufe)
 
@@ -258,6 +258,51 @@ Stage 2 — Prod-Verifikation (gewählter Provider)
 - **Externe Blocker:** Stage 1 braucht `OPENROUTER_API_KEY`, Stage 2 den Key des gewählten Providers —
   beide aktuell nicht gesetzt. Der Code (Provider, Pricing, Guard) ist ohne Keys baubar; die Läufe nicht.
 - **Kein Eingriff in Extraktion/Anreicherung außer Env** — die bleiben auf Gemini (async, keine EU-Pflicht).
+
+## Implementation Notes
+
+### Stage-1-Code (keys-frei) — 2026-07-04
+
+Der komplette code-baubare Teil von Stage 1 + D2 steht; die eigentlichen Läufe bleiben blockiert bis
+`OPENROUTER_API_KEY` gesetzt ist. Kein DB-Schema, kein UI, reines Infra/Konfig.
+
+**Geänderte Dateien:**
+- `src/lib/llm-provider.ts` — `openrouter`-Provider (eval-only), OpenAI-kompatibler Endpoint
+  `https://openrouter.ai/api/v1` via `.chat()` (gleiche `.chat()`-Regel wie nebius/fireworks, sonst
+  träfe der Call OpenAIs Responses-API). Modell-String `openrouter/<vendor>/<modell>` → id nach dem
+  ersten Slash = OpenRouters eigener Slug. Fehlermeldung um openrouter erweitert. +1 Test.
+- `src/services/__evals__/interview/scorers/costSummary.ts` — `MODEL_PRICING` um die 7 Screening-Modelle
+  ergänzt, reale Preise aus dem OpenRouter-Katalog gepinnt (Stand 2026-07-04, prompt/`input_cache_read`/
+  completion → $/1M):
+  | Key | in | cache | out |
+  |---|---|---|---|
+  | openrouter/z-ai/glm-5.2 | 0.91 | 0.169 | 2.86 |
+  | openrouter/minimax/minimax-m3 | 0.30 | 0.06 | 1.20 |
+  | openrouter/deepseek/deepseek-v4-pro | 0.435 | 0.003625 | 0.87 |
+  | openrouter/moonshotai/kimi-k2.6 | 0.66 | 0.14 | 3.41 |
+  | openrouter/xiaomi/mimo-v2.5-pro | 0.435 | 0.0036 | 0.87 |
+  | openrouter/deepseek/deepseek-v4-flash | 0.09 | 0.018 | 0.18 |
+  | openrouter/xiaomi/mimo-v2.5 | 0.105 | 0.105¹ | 0.28 |
+
+  ¹ mimo-v2.5 hat keinen Cache-Read-Tarif → Cache zum Input-Preis. Keys = voller geloggter Modell-String
+  (inkl. `openrouter/`-Präfix), damit `estimateTokenCost` nicht auf 0 fällt. +2 Tests.
+- `src/services/talkerGroundingGuard.ts` — `crossVendorJudgeModel` → `resolveGuardJudgeModel`
+  (liest `GUARD_JUDGE_MODEL`, sonst Cross-Vendor-Default). Neu: `modelFamily()` (normalisiert
+  Provider-/Aggregator-Präfixe auf die Vendor-Familie) + `assertGuardFamilyDiffersFromTalker()`
+  (wirft bei gleicher Familie). Assert liegt **vor** dem Judge-try/catch und vor dem Empty-History-
+  Return — ein Konfig-Fehler failt das Interview hart, wird nicht als no-violation geschluckt. +8 Tests.
+- `.env.local.example` — `OPENROUTER_API_KEY` (eval-only, „nie auf Vercel" + Pin-Hinweis) und
+  `GUARD_JUDGE_MODEL` (Familie ≠ Talker) dokumentiert; Provider-Liste im Kommentar erweitert.
+
+**Verifikation:** `tsc --noEmit` grün; volle Unit-Suite 858 passed / 1 skipped / 0 failed.
+
+**Design-Notiz `modelFamily`:** heuristische Substring-Tabelle (claude/gemini/deepseek/glm/minimax/
+kimi/mimo/qwen/llama/mistral/gpt) mit strukturellem Fallback auf das Vendor-Segment. Bewusst eher
+zu grob gruppierend als zu fein — die Kosten eines falschen „gleiche Familie" ist nur ein vom Operator
+behebbarer Konfig-Fehler, ein falsches „verschieden" würde ein Modell sich selbst bewerten lassen.
+
+**Noch offen (externe Blocker):** `OPENROUTER_API_KEY` (Stage 1), Prod-Provider-Key (Stage 2, Provider
+erst in Stage 1.5 gewählt). Alle Läufe (Pass A/B, Provider-Recherche, Verifikation) hängen daran.
 
 ## QA Test Results
 _To be added by /qa_

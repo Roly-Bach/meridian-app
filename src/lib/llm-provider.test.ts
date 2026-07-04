@@ -68,6 +68,17 @@ describe('resolveModel', () => {
     expect(mockOpenAIChat).toHaveBeenCalledWith('kimi-k2.6')
   })
 
+  // PROJ-41: OpenRouter is an eval-only aggregator. The id after the first slash keeps
+  // OpenRouter's own vendor/model slug (two more segments), routed via .chat().
+  it('routes openrouter/<vendor>/<model-id> to createOpenAI with the OpenRouter base URL via .chat()', () => {
+    resolveModel('openrouter/z-ai/glm-5.2')
+    expect(mockCreateOpenAI).toHaveBeenCalledWith({
+      apiKey: process.env.OPENROUTER_API_KEY,
+      baseURL: 'https://openrouter.ai/api/v1',
+    })
+    expect(mockOpenAIChat).toHaveBeenCalledWith('z-ai/glm-5.2')
+  })
+
   it('treats a bare model name without provider prefix as legacy Anthropic', () => {
     resolveModel('claude-haiku-4-5')
     expect(createAnthropic).toHaveBeenCalledWith({ apiKey: process.env.ANTHROPIC_API_KEY })
