@@ -1,0 +1,241 @@
+{
+  "evalRunId": "01650ed5-c6ad-4be9-9d1e-7bba99468638",
+  "interviewId": "0fb2c2d5-aeea-48f9-9d2b-b8a54c3c0b10",
+  "model": "openrouter/z-ai/glm-5.2",
+  "persona": "buchhalter",
+  "testerModel": "google/gemini-3.1-flash-lite",
+  "disclosureMode": "withhold_numbers_only",
+  "status": "completed",
+  "turns": [
+    {
+      "turnNumber": 1,
+      "userInput": "Ich fange damit an, meine Tätigkeit als Buchhalter in der Finanzbuchhaltung zu beschreiben, bei der mein Fokus primär auf der sorgfältigen Rechnungsprüfung sowie der Durchführung des monatlichen Abschlusses liegt. Mein Arbeitstag ist dabei stark von der Kontrolle eingehender Dokumente geprägt, bei denen ich sicherstelle, dass sämtliche Stammdaten und Leistungszeiträume in SAP FI korrekt erfasst sind. Dabei treffe ich regelmäßig auf manuelle Hürden, wenn etwa ein Bestellbezug fehlt oder Sonderfälle eine aufwendige Nachpflege in Excel erforderlich machen.",
+      "agentText": "Du sprichst von der Rechnungsprüfung als einem deiner Hauptbereiche. Lass uns dort einsteigen: Wenn eine Eingangsrechnung bei dir landet — was ist der erste Schritt, den du konkret durchführst?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 2,
+      "userInput": "Beim Eingang einer Rechnung per E-Mail prüfe ich zunächst akribisch die korrekte Zuordnung des Lieferanten, den ausgewiesenen Betrag sowie den zugrunde liegenden Leistungszeitraum. Sollte ein Bestellbezug nicht unmittelbar ersichtlich sein, muss ich die Auftraggeber in mehreren Systemen recherchieren, bevor ich die Buchung in SAP FI vornehmen kann. Bei Überschreitung der internen Freigabegrenze leite ich das Dokument zudem für eine zusätzliche Genehmigung weiter, bevor die finale Archivierung in DocuWare erfolgt.",
+      "agentText": "Du hast den Ablauf von Rechnungseingang bis Archivierung skizziert. Wie viele Eingangsrechnungen bearbeitest du durchschnittlich pro Monat?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 3,
+      "userInput": "Im Rahmen meiner monatlichen Aufgaben bearbeite ich im Durchschnitt zwischen 80 und 100 Eingangsrechnungen. Dieses Volumen erfordert eine präzise Einhaltung der beschriebenen Prüf- und Freigabeschritte, um eine korrekte Verbuchung in SAP FI und die anschließende Archivierung in DocuWare zu gewährleisten.",
+      "agentText": "80 bis 100 Rechnungen pro Monat — wie lange sitzt du durchschnittlich an einer einzelnen Rechnung, von der Prüfung bis zur Archivierung?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 4,
+      "userInput": "Für eine konkrete Dauer einzelner Belege kann ich Ihnen keinen pauschalen Wert nennen, da der Zeitaufwand stark variiert. Während Standardvorgänge zügig bearbeitet werden, führt das manuelle Recherchieren fehlender Bestellbezüge in den drei verschiedenen Systemen regelmäßig zu zeitlichen Verzögerungen. Sobald eine Rechnung zudem aufgrund ihres hohen Betrages eine zusätzliche Freigabe erfordert, verlängert sich der Prozess bis zur finalen Archivierung in DocuWare entsprechend.",
+      "agentText": "Eher 10Minuten für eine Standardrechnung oder eher 30 Minuten?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 5,
+      "userInput": "Diese Zeitspanne lässt sich nicht pauschal festlegen, da der Prozess bei fehlendem Bestellbezug deutlich zeitintensiver ausfällt als bei standardisierten Vorgängen. Während einfache Rechnungen in SAP FI zügig verbucht werden, nimmt die manuelle Recherche in den drei Systemen sowie bei hohen Beträgen die zusätzliche Freigabe eine deutlich längere Zeit in Anspruch. Die Dauer variiert somit individuell je nach Vollständigkeit der eingereichten Unterlagen.",
+      "agentText": "Notieren wir das als variabel. Wie oft kommt es pro Monat vor, dass du bei einer Rechnung den Bestellbezug in den drei Systemen manuell recherchieren musst?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 6,
+      "userInput": "Diese manuelle Recherche ist ein wiederkehrender Arbeitsaufwand, der bei einem Teil der monatlichen Rechnungen anfällt, sofern der Bestellbezug nicht direkt vorliegt. Da ich jede Rechnung einzeln auf ihre Vollständigkeit prüfe, lässt sich keine feste Zahl für die Häufigkeit dieser aufwendigen Nachforschungen nennen, da sie direkt mit der Qualität der eingehenden Unterlagen korreliert. Es ist jedoch ein fortlaufender Prozess, der meine wöchentliche Kapazität in spürbarem Maße bindet.",
+      "agentText": "Eher bei jeder vierten Rechnung oder eher bei jeder zweiten?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 7,
+      "userInput": "Für eine präzise statistische Einschätzung fehlt mir eine exakte Strichliste, da die Qualität der Eingangsrechnungen je nach Lieferant und Abteilung stark schwankt. Grundsätzlich ist dieser Recherchevorgang jedoch ein fester Bestandteil meiner Arbeit, der meine wöchentliche Kapazität um etwa eine Stunde reduziert. Ich betrachte dies als manuellen Aufwand, der immer dann notwendig wird, wenn die grundlegenden Angaben in der Rechnung fehlen.",
+      "agentText": "Du hast vorhin gesagt, du kannst keine feste Zahl nennen — jetzt sprichst du von einem festen Bestandteil. Meinst du damit, die Häufigkeit variiert, aber die Aufgabe selbst fällt regelmäßig an?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 8,
+      "userInput": "Genau so ist es zu verstehen: Die Aufgabe fällt regelmäßig an, jedoch schwankt die Anzahl der betroffenen Rechnungen von Monat zu Monat. Es handelt sich um einen festen Bestandteil meines Tätigkeitsfeldes, da ich als Buchhalter sicherstellen muss, dass jede Rechnung ordnungsgemäß zugeordnet wird, auch wenn die Informationen nicht vollständig geliefert werden. Die Recherche bleibt damit eine wiederkehrende, wenn auch unvorhersehbare Herausforderung in meinem Arbeitsalltag.",
+      "agentText": "Klar, die Aufgabe ist regelmäßig, das Volumen schwankt. Du hast am Anfang auch den monatlichen Abschluss als zweiten Schwerpunkt genannt — was ist dort dein erster konkreter Schritt?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 9,
+      "userInput": "Für den Abschluss bereite ich mich zunächst auf die Erstellung des Monatsabschlusses vor, indem ich alle noch offenen Posten in SAP FI gründlich abgleiche. In diesem Schritt verbuche ich zudem die notwendigen Rückstellungen und bereite die Daten für die Übermittlung an das Controlling vor. Dabei muss ich stets die Sonderfälle berücksichtigen, die aufgrund von Unstimmigkeiten eine manuelle Nachpflege in Excel-Listen erfordern.",
+      "agentText": "Beim Monatsabschluss startest du also mit dem Abgleich offener Posten, Rückstellungen und der Datenvorbereitung fürs Controlling. Wie lange dauert dieser erste Schritt durchschnittlich?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 10,
+      "userInput": "Für den Abschluss plane ich insgesamt einen Zeitraum von zwei bis drei Tagen ein, um die verschiedenen Schritte gewissenhaft abzuarbeiten. Da dieser Prozess aufgrund des hohen Arbeitsanfalls unter erheblichem Zeitdruck steht, verschmelzen die Tätigkeiten – vom Abgleich der offenen Posten bis hin zur Übermittlung an das Controlling – zu einem intensiven Block. Die Dauer der einzelnen Teilschritte lässt sich dabei schwer isolieren, da sie untrennbar mit der gesamten Konsolidierung im SAP FI verknüpft sind.",
+      "agentText": "Lassen wir das so stehen. Wie oft im Jahr kommt es vor, dass du bei diesem Abschluss-Schritt auf Sonderfälle stößt, die eine manuelle Nachpflege in Excel erfordern?",
+      "phase": "process_loop",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 11,
+      "userInput": "Für den Abschluss sind diese Sonderfälle leider keine Seltenheit, sondern treten bei einem Teil der Rechnungen jeden Monat auf. Da etwa fünf Prozent der Rechnungen Unstimmigkeiten bei Kostenstellen, Steuersätzen oder Beträgen aufweisen, erfordert dies regelmäßig meine manuelle Intervention in Excel-Listen. Es ist somit ein monatlich wiederkehrender Vorgang, der mich während der intensiven Abschlussphase kontinuierlich begleitet.",
+      "agentText": "Etwa fünf Prozent der Rechnungen mit Unstimmigkeiten bei Kostenstellen, Steuersätzen oder Beträgen — das ist konkret. Nachdem du die Daten an das Controlling übermittelt hast: Was ist der nächste Schritt im Monatsabschluss?",
+      "phase": "walkthrough_step",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 12,
+      "userInput": "Im Anschluss an die Datenübermittlung liegt mein Fokus auf der finalen Konsolidierung im SAP FI, um den Monatsabschluss buchhalterisch abzuschließen. Dabei müssen sämtliche noch offenen Korrekturen aus den Excel-Listen in das System eingepflegt werden, um ein valides Ergebnis sicherzustellen. Dies ist der entscheidende Moment, in dem alle Teilbereiche zusammengeführt werden, bevor die Zahlen endgültig im System festgeschrieben werden.",
+      "agentText": "Die manuelle Übertragung der Korrekturen aus Excel in SAP FI — wie viele Posten sind das typischerweise, die du da per Hand nachpflegst?",
+      "phase": "walkthrough_step",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 13,
+      "userInput": "Die exakte Anzahl der manuell nachzupflegenden Posten unterliegt jeden Monat Schwankungen, abhängig von der Fehlerquote der eingegangenen Belege. Da sich die Unstimmigkeiten auf etwa fünf Prozent des monatlichen Rechnungsaufkommens belaufen, bewege ich mich in diesem Rahmen bei der manuellen Übertragung. Es ist für mich ein fortlaufender Prozess, bei dem ich jeden betroffenen Datensatz einzeln aus der Excel-Liste in SAP FI überführe, um die buchhalterische Korrektheit sicherzustellen.",
+      "agentText": "Nach der finalen Festschreibung im System — ist der Monatsabschluss damit abgeschlossen oder folgen noch weitere Schritte?",
+      "phase": "walkthrough_step",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 14,
+      "userInput": "Nach der finalen Festschreibung in SAP FI ist der buchhalterische Teil des Monatsabschlusses grundsätzlich beendet, da die Zahlen damit für die weitere Verwendung im Unternehmen fixiert sind. Dennoch ist meine Arbeit damit nicht vollständig getan, da ich im Anschluss die Unterlagen für eine revisionssichere Dokumentation in DocuWare ablege. Erst mit dieser Archivierung ist der Prozess für mich offiziell abgeschlossen und das Monatsergebnis vollständig dokumentiert.",
+      "agentText": "Mit der Archivierung in DocuWare ist der Monatsabschluss also abgeschlossen. Neben der Rechnungsprüfung und dem Monatsabschluss — gibt es weitere wiederkehrende Prozesse, die einen nennenswerten Teil deiner Arbeitszeit ausmachen?",
+      "phase": "walkthrough_step",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 15,
+      "userInput": "Neben den bereits erwähnten Schwerpunkten nimmt der monatliche Mahnlauf eine zentrale Rolle in meiner Tätigkeit ein. Dieser Prozess ist äußerst zeitintensiv und erfordert eine sorgfältige Überwachung der offenen Forderungen, um die Liquidität unseres Unternehmens sicherzustellen. Obwohl wir diesen Punkt in unserem bisherigen Austausch noch nicht explizit vertieft haben, bindet die Bearbeitung der Mahnstufen und der dazugehörige Schriftverkehr mit den Debitoren regelmäßig einen nennenswerten Teil meiner monatlichen Kapazitäten.",
+      "agentText": "Der monatliche Mahnlauf — was ist dort dein erster konkreter Schritt?",
+      "phase": "slot_completion",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 16,
+      "userInput": "Wenn ich mit dem monatlichen Mahnlauf beginne, verschaffe ich mir zunächst einen detaillierten Überblick über alle überfälligen Forderungen im System. Ich analysiere dabei, welche Kunden die Zahlungsziele überschritten haben, um den entsprechenden Mahnstatus für jeden Vorgang zu bestimmen. Dies bildet die notwendige Basis, bevor ich die Mahnschreiben generiere und den weiteren Schriftverkehr mit den jeweiligen Debitoren einleite.",
+      "agentText": "Wie viele überfällige Forderungen sind das typischerweise, die du beim Mahnlauf bearbeitest?",
+      "phase": "slot_completion",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 17,
+      "userInput": "Für eine genaue Anzahl der überfälligen Forderungen im Rahmen des Mahnlaufs kann ich Ihnen keine spezifische Zahl nennen, da das Volumen der Debitoren mit Zahlungsverzug monatlich stark schwankt. Grundsätzlich ist dieser Prozess jedoch so gestaltet, dass ich zunächst sämtliche offenen Posten im System analysiere, um die betroffenen Kunden präzise zu identifizieren. Aufgrund der Komplexität und des hohen Zeitaufwands bei der Bearbeitung der Mahnstufen ist dies eine Aufgabe, die mich regelmäßig für einen nennenswerten Teil meiner monatlichen Kapazitäten bindet.",
+      "agentText": "Wir haben die wesentlichen Prozesse — Rechnungsprüfung, Monatsabschluss und Mahnlauf — durchgearbeitet. Wenn dir noch etwas einfällt, das wir übersehen haben, kannst du dich jederzeit melden. Vielen Dank für deine Zeit, Andreas.",
+      "phase": "coverage_check",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 18,
+      "userInput": "Sehr gerne geschehen, ich danke Ihnen ebenfalls für den konstruktiven Austausch. Sollten sich im weiteren Verlauf des Projekts zusätzliche Rückfragen zu diesen komplexen Abläufen in SAP FI oder DocuWare ergeben, stehe ich Ihnen für eine vertiefende Analyse jederzeit zur Verfügung. Es war mir wichtig, die manuellen Hürden und die zeitlichen Belastungen in unseren Kernprozessen einmal transparent darzustellen. Auf Wiedersehen.",
+      "agentText": "Alles klar, Andreas — vielen Dank und einen guten weiteren Arbeitstag.",
+      "phase": "coverage_check",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 19,
+      "userInput": "Ich bedanke mich ebenfalls bei Ihnen für das offene Gespräch und wünsche Ihnen noch einen produktiven Tag. Es freut mich, dass wir die Herausforderungen in meinem Arbeitsalltag so strukturiert beleuchten konnten. Auf Wiedersehen und bis zum nächsten Mal.",
+      "agentText": "Auf Wiedersehen, Andreas — war ein gutes Gespräch.",
+      "phase": "coverage_check",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 20,
+      "userInput": "Auf Wiedersehen, es war mir ebenfalls eine Freude, Ihnen diese Einblicke in meine tägliche Arbeit in der Finanzbuchhaltung zu geben. Ich hoffe, dass meine Ausführungen zu unseren Prozessen in SAP FI und DocuWare für Ihre Analyse hilfreich sind. Einen angenehmen Arbeitstag noch.",
+      "agentText": "Bis zum nächsten Mal, Andreas — einen angenehmen Arbeitstag noch.",
+      "phase": "coverage_check",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 21,
+      "userInput": "Vielen Dank, das wünsche ich Ihnen ebenfalls. Ich bin zuversichtlich, dass meine Erläuterungen zu den Prozessen in SAP FI und DocuWare zu einer fundierten Analyse beitragen werden. Auf Wiedersehen und bis bald.",
+      "agentText": "Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?",
+      "phase": "wrap_up",
+      "toolCalls": []
+    }
+  ],
+  "finalStepTracker": [],
+  "scores": {
+    "slotCoverage": 0,
+    "dedupSlotCoverage": 0,
+    "slotCoveragePreClarification": 0,
+    "dedupSlotCoveragePreClarification": 0,
+    "clarificationCoverageDelta": 0,
+    "potenzialCoverage": 0,
+    "dedupPotenzialCoverage": 0,
+    "dependencyCapture": 0,
+    "slotsPerTurn": 0,
+    "turnsToCompletion": 21,
+    "phaseAdherence": 1,
+    "phaseProgression": 1,
+    "anchoringViolations": 0,
+    "anchoringViolationRate": 0,
+    "toolCallPlausibility": 1,
+    "dialogNaturalness": 1,
+    "dialogNaturalnessRationale": "Die Texte sind exzellent formuliert. Sie wirken durchgehend natürlich, kommen ohne generische Floskeln aus und führen den Gesprächspartner präzise durch das Interview. Die Du-Form wird konsequent und professionell eingehalten. Die Übergänge zwischen den Fragen sind logisch und der Abschluss ist höflich sowie individuell gestaltet. Es gibt keine Stilbrüche oder abrupten Themenwechsel.",
+    "completionCorrectness": true,
+    "stepRegistrationCoverage": 0,
+    "schemaConformanceRate": 1,
+    "hallucinationRate": 0,
+    "confidenceTriggerRate": null,
+    "depth_score": null,
+    "depth_distribution": null,
+    "talkerGroundingViolations": 0
+  },
+  "cost": {
+    "interviewEngine": {
+      "talker": {
+        "calls": 25,
+        "inputTokens": 87266,
+        "cacheReadTokens": 8224,
+        "outputTokens": 8389,
+        "estimatedCostUsd": 0.0973
+      },
+      "grounding_guard": {
+        "calls": 25,
+        "inputTokens": 66846,
+        "cacheReadTokens": 0,
+        "outputTokens": 700,
+        "estimatedCostUsd": 0.0178
+      },
+      "analyst_online": {
+        "calls": 3,
+        "inputTokens": 25420,
+        "cacheReadTokens": 0,
+        "outputTokens": 2975,
+        "estimatedCostUsd": 0.0316
+      }
+    },
+    "testEngine": {
+      "tester": {
+        "calls": 21,
+        "inputTokens": 54829,
+        "cacheReadTokens": 0,
+        "outputTokens": 1996,
+        "estimatedCostUsd": 0.0167
+      }
+    },
+    "evalEngine": {
+      "judge_talker_grounding": {
+        "calls": 1,
+        "inputTokens": 3260,
+        "cacheReadTokens": 0,
+        "outputTokens": 9,
+        "estimatedCostUsd": 0.0008
+      },
+      "judge_dialog_naturalness": {
+        "calls": 1,
+        "inputTokens": 467,
+        "cacheReadTokens": 0,
+        "outputTokens": 102,
+        "estimatedCostUsd": 0.0003
+      }
+    },
+    "totalInputTokens": 238088,
+    "totalCacheReadTokens": 8224,
+    "totalOutputTokens": 14171,
+    "totalEstimatedCostUsd": 0.1645
+  },
+  "generatedAt": "2026-07-07T05:07:21.337Z"
+}

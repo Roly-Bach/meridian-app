@@ -70,12 +70,17 @@ describe('resolveModel', () => {
 
   // PROJ-41: OpenRouter is an eval-only aggregator. The id after the first slash keeps
   // OpenRouter's own vendor/model slug (two more segments), routed via .chat().
-  it('routes openrouter/<vendor>/<model-id> to createOpenAI with the OpenRouter base URL via .chat()', () => {
+  it('routes openrouter/<vendor>/<model-id> to createOpenAI with the OpenRouter base URL + HTTP/1.1 fetch via .chat()', () => {
     resolveModel('openrouter/z-ai/glm-5.2')
-    expect(mockCreateOpenAI).toHaveBeenCalledWith({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      baseURL: 'https://openrouter.ai/api/v1',
-    })
+    // PROJ-41: openrouter gets a custom fetch (forces HTTP/1.1 to dodge H2 stalls) — the
+    // other providers do not, so assert the shape includes a fetch fn here specifically.
+    expect(mockCreateOpenAI).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: 'https://openrouter.ai/api/v1',
+        fetch: expect.any(Function),
+      }),
+    )
     expect(mockOpenAIChat).toHaveBeenCalledWith('z-ai/glm-5.2')
   })
 

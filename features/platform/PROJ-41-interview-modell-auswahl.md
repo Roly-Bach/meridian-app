@@ -65,11 +65,11 @@ Quelle) und werden beim Stage-1-Bau direkt aus OpenRouter gepinnt, nicht aus die
 - [x] `openrouter`-Provider in `llm-provider.ts` verfügbar (eval-only, Format `openrouter/<vendor>/<modell>`) — 2026-07-04, OpenAI-kompatibel via `.chat()`, Test in `llm-provider.test.ts`
 - [x] `OPENROUTER_API_KEY` in `.env.local.example` dokumentiert (eval-only, kein Prod-Env) — 2026-07-04, mit Pin-Hinweis + „nie auf Vercel"
 - [ ] Reproduzierbarkeit: OpenRouter je Kandidat auf ein festes Backend gepinnt (Routing-Präferenz), sonst untergräbt Backend-Varianz Seed 42 — Run-Konfig, vor Stage-1-Ausführung zu fixieren (Anleitung in `.env.local.example`)
-- [ ] **Pass A (Vorfilter):** alle 7 × 1 Persona × 2 Läufe (Seed 42, pglite) → Shortlist Top 2–3 nach Gate-Pass + Diskriminatoren
-- [ ] **Pass B (voll):** Shortlist + Referenz × 3 Personas × 3 Läufe, Versuchsplan strikt (Seed 42, `--store pglite`, MAX_TURNS=35)
-- [ ] Aggregate-Reports je Kandidat × Persona vorhanden (`docs/evals/` Artefakte)
-- [ ] Finalist per Entscheidungsregel §7 (Gate-Pass + Nicht-Unterlegenheit + Kosten, Ranking über mehrere Kennzahlen) + eingefalteter Sonnet-Tester-Spot-Check (PROJ-40 Stufe 2) dokumentiert
-- [ ] Entscheidungs-Dokument schriftlich: Kandidat, Gate-Ergebnis, Kosten-Vergleich ($/Run nach Bucket), Begründung
+- [x] **Pass A (Vorfilter):** alle 7 × buchhalter × 2 Läufe (Seed 42, pglite) ausgeführt 2026-07-06/07 → Shortlist **deepseek-v4-pro + minimax-m3**. Befund: 4 von 7 auf OpenRouter nicht messbar (HTTP/2- bzw. Socket-Instabilität, DeepInfra-Backend), keine Qualitätsfrage.
+- [ ] **Pass B (voll):** Shortlist + Referenz × 3 Personas × 3 Läufe — **offen**. Vor Start zu klären: OpenRouter-Instabilität trifft auch die Finalisten (je 1/2 Läufe verloren) → ggf. Pass B direkt auf der Prod-Route (Stage 1.5) statt OpenRouter.
+- [x] Aggregate-Reports vorhanden (`docs/evals/interview/2026-07-06/` + `2026-07-07/`): deepseek-v4-pro, minimax-m3, deepseek-v4-flash sauber; glm-5.2 infra-degradiert
+- [ ] Finalist per Entscheidungsregel §7 + eingefalteter Sonnet-Tester-Spot-Check — Pass-A-Shortlist steht, finaler Einzel-Finalist + Spot-Check nach Pass B
+- [x] Entscheidungs-Dokument geschrieben: [PROJ-41-stage1-screening-entscheidung.md](../../docs/evals/PROJ-41-stage1-screening-entscheidung.md) (Kandidaten, Gate, Kosten/Bucket, Substrat-Befund, Begründung)
 
 ### Stage 1.5 — Inference-Provider-Recherche (nach Screening, vor Verifikation)
 
@@ -301,8 +301,27 @@ kimi/mimo/qwen/llama/mistral/gpt) mit strukturellem Fallback auf das Vendor-Segm
 zu grob gruppierend als zu fein — die Kosten eines falschen „gleiche Familie" ist nur ein vom Operator
 behebbarer Konfig-Fehler, ein falsches „verschieden" würde ein Modell sich selbst bewerten lassen.
 
-**Noch offen (externe Blocker):** `OPENROUTER_API_KEY` (Stage 1), Prod-Provider-Key (Stage 2, Provider
-erst in Stage 1.5 gewählt). Alle Läufe (Pass A/B, Provider-Recherche, Verifikation) hängen daran.
+**Noch offen (externe Blocker):** Prod-Provider-Key (Stage 2, Provider erst in Stage 1.5 gewählt).
+
+### Stage-1 Pass A ausgeführt + H1-Fix — 2026-07-06/07
+
+`OPENROUTER_API_KEY` gesetzt, Pass A gelaufen (alle 7 × buchhalter × 2, Seed 42, pglite). Ergebnis +
+Entscheidung: [PROJ-41-stage1-screening-entscheidung.md](../../docs/evals/PROJ-41-stage1-screening-entscheidung.md).
+
+- **Shortlist: deepseek-v4-pro + minimax-m3** (beide Gate-PASS, dedup 0.89, dialog/stepReg 1.0,
+  halluc/grounding 0, ~$0.11/Lauf, EU-Provider-fähig). deepseek-v4-flash marginal (ein Lauf <0.75 +
+  Altdaten-Kontamination), nicht in Pass B.
+- **Substrat-Befund:** 4 von 7 (glm-5.2, kimi-k2.6, mimo-v2.5/pro) auf OpenRouter nicht messbar —
+  Verbindungsabbrüche (HTTP/2 `stream timeout`/`ECONNRESET`, nach H1-Fix `SocketError: other side
+  closed`), DeepInfra-Backend kappt für diese Reasoning-Modelle die Verbindung. Nutzer-Entscheidung
+  2026-07-07: mit den 2 Finalisten weiter, kein Backend-Pinning der flaky Modelle.
+- **H1-Fix in llm-provider.ts** (openrouter-Zweig): `new Agent({ allowH2: false })` als undici-Dispatcher
+  + `Accept-Encoding: identity` (custom Dispatcher umgeht sonst fetch-Auto-Dekompression → „Invalid JSON
+  response"). Wandelt Hard-Crash → überlebbarer Socket-Fehler; löst die Backend-Instabilität nicht,
+  bleibt als Härtung (eval-only). +1 Test (openrouter erhält custom fetch).
+- **Kaveat für Pass B:** selbst die Finalisten verloren je 1 von 2 Läufen an Socket-Fehler
+  (`run_count=1`). Pass B auf OpenRouter unzuverlässig → Erwägung, Pass B direkt auf der Prod-Route
+  (Stage 1.5) zu fahren.
 
 ## QA Test Results
 _To be added by /qa_
