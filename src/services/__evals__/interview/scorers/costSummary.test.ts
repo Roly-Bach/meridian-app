@@ -215,5 +215,33 @@ describe('computeCostSummary', () => {
     expect(summary.evalEngine).toEqual({})
     expect(summary.totalInputTokens).toBe(0)
     expect(summary.totalEstimatedCostUsd).toBe(0)
+    expect(summary.pricing).toEqual({})
+  })
+
+  describe('pricing table', () => {
+    it('records the official per-1M rates for every distinct model seen, once each', () => {
+      const records: TokenUsageRecord[] = [
+        { component: 'analyst', model: 'google/gemini-3.5-flash', inputTokens: 1000, outputTokens: 150 },
+        { component: 'talker', model: 'google/gemini-3.1-flash-lite', inputTokens: 500, outputTokens: 100 },
+        { component: 'quick_extract', model: 'google/gemini-3.1-flash-lite', inputTokens: 300, outputTokens: 50 },
+      ]
+      const summary = computeCostSummary(records)
+
+      expect(Object.keys(summary.pricing).sort()).toEqual(['google/gemini-3.1-flash-lite', 'google/gemini-3.5-flash'])
+      expect(summary.pricing['google/gemini-3.5-flash']).toEqual(MODEL_PRICING['google/gemini-3.5-flash'])
+      expect(summary.pricing['google/gemini-3.1-flash-lite']).toEqual(MODEL_PRICING['google/gemini-3.1-flash-lite'])
+    })
+
+    it('records null (not a silent omission) for a model with no MODEL_PRICING entry', () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const unknownModel = `unknown/pricing-table-gap-${Date.now()}`
+      const records: TokenUsageRecord[] = [
+        { component: 'tester', model: unknownModel, inputTokens: 100, outputTokens: 50 },
+      ]
+      const summary = computeCostSummary(records)
+
+      expect(summary.pricing[unknownModel]).toBeNull()
+      vi.restoreAllMocks()
+    })
   })
 })

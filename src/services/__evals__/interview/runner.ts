@@ -369,8 +369,22 @@ function buildCostTable(cost?: CostSummary): string {
       `| **Zwischensumme** | **${sectionTotal.calls}** | **${fmt(sectionTotal.inputTokens)}** | **${fmt(sectionTotal.cacheReadTokens)}** | **${fmtPct(sectionTotal.cacheReadTokens, sectionTotal.inputTokens)}** | **${fmt(sectionTotal.outputTokens)}** | **${fmtCost(sectionTotal.estimatedCostUsd)}** |`,
     ] : []
 
+  const pricingRows = Object.entries(cost.pricing).map(([model, p]) =>
+    p
+      ? `| ${model} | $${p.inputPer1M.toFixed(4)} | $${p.cachePer1M.toFixed(4)} | $${p.outputPer1M.toFixed(4)} |`
+      : `| ${model} | — | — | — (keine MODEL_PRICING-Angabe, Kosten als 0 gemeldet) |`
+  )
+  const pricingSection = pricingRows.length > 0 ? [
+    '',
+    '### Modell-Preise (USD / 1M Tokens)',
+    '| Modell | Input | Cache Read | Output |',
+    '|---|---|---|---|',
+    ...pricingRows,
+  ] : []
+
   const ieSection = [
     '## Token-Kosten',
+    ...pricingSection,
     ...section('Interview-Engine', ieRows, ieTotal),
   ]
   const teSection = section('Test-Engine', teRows, teTotal)

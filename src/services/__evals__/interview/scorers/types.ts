@@ -104,6 +104,11 @@ export interface CostSummary {
   totalCacheReadTokens: number
   totalOutputTokens: number
   totalEstimatedCostUsd: number
+  /** Official per-1M-token list prices for every model that produced usage records in this
+   * run — lets a transcript reader verify the cost math against the actual rate used, without
+   * cross-referencing MODEL_PRICING in source. null = no MODEL_PRICING entry (cost for that
+   * model was reported as 0, see estimateTokenCost's unknown-model handling). */
+  pricing: Record<string, { inputPer1M: number; cachePer1M: number; outputPer1M: number } | null>
 }
 
 export interface ScorerInput {

@@ -61,6 +61,7 @@ export function estimateTokenCost(usage: { inputTokens: number; cacheReadTokens?
 
 export function computeCostSummary(records: TokenUsageRecord[]): CostSummary {
   const byComp: Record<string, ComponentCostSummary> = {}
+  const pricing: CostSummary['pricing'] = {}
 
   for (const r of records) {
     const key = r.component
@@ -73,6 +74,10 @@ export function computeCostSummary(records: TokenUsageRecord[]): CostSummary {
     c.cacheReadTokens += r.cacheReadTokens ?? 0
     c.outputTokens += r.outputTokens
     c.estimatedCostUsd += estimateTokenCost(r, r.model)
+
+    if (!(r.model in pricing)) {
+      pricing[r.model] = MODEL_PRICING[r.model] ?? null
+    }
   }
 
   // Round costs to 4 decimal places
@@ -106,5 +111,6 @@ export function computeCostSummary(records: TokenUsageRecord[]): CostSummary {
     totalCacheReadTokens,
     totalOutputTokens,
     totalEstimatedCostUsd: Math.round(totalEstimatedCostUsd * 10000) / 10000,
+    pricing,
   }
 }

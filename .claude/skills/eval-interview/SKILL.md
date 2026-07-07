@@ -52,10 +52,20 @@ Thinking-Budgets (hardcoded in Services, nicht via env — Orchestrator ist rule
 - Talker:  `TALKER_THINKING_BUDGET`  (aus `interviewTalker.ts` — aktuell 512)
 - Analyst: `ANALYST_THINKING_BUDGET` (aus `interviewAnalyst.ts` — aktuell 2048)
 
-Zeige die Liste dem Nutzer und frage via `AskUserQuestion`:
-- Frage: „Passt die Modell-Konfiguration?"
+Führe danach aus:
+
+```bash
+npm run eval:pricing-check
+```
+
+Das Script löst dieselben Fallback-Ketten wie der Runner auf (inkl. `INTERVIEW_QUICK_EXTRACT_MODEL`, `GUARD_JUDGE_MODEL` und die Cross-Vendor-Judges — Komponenten, die in der obigen Env-Var-Liste nicht auftauchen, aber eigene `MODEL_PRICING`-Einträge brauchen) und zeigt pro Komponente den offiziellen Preis (Input/Cache Read/Output je 1M Tokens) aus `MODEL_PRICING` (`costSummary.ts`). Zeige die Ausgabe dem Nutzer zusammen mit der Modell-Konfiguration — das macht sichtbar, ob die hinterlegten Preise noch aktuell sind, bevor ein Lauf startet.
+
+Meldet das Script „⚠ KEINE MODEL_PRICING-ANGABE" für ein Modell: dem Nutzer explizit mitteilen, dass der Kostenbeitrag dieses Modells im Report als $0 gemeldet würde, und fragen ob trotzdem gestartet werden soll oder `MODEL_PRICING` zuerst ergänzt wird.
+
+Zeige die Liste (Modell-Konfiguration + Pricing-Check-Ausgabe) dem Nutzer und frage via `AskUserQuestion`:
+- Frage: „Passt die Modell-Konfiguration (inkl. Preise)?"
 - Option A: „Ja, Eval starten"
-- Option B: „Nein, ich passe .env.local zuerst an"
+- Option B: „Nein, ich passe .env.local / MODEL_PRICING zuerst an"
 
 Bei Option B: Ablauf beenden. Kein Runner-Start.
 
