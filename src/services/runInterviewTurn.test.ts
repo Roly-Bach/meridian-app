@@ -329,7 +329,7 @@ describe('runInterviewTurn', () => {
     expect(runAnalystOnline).toHaveBeenCalledTimes(1)
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: expect.objectContaining({ phase: 'wrap_up' }),
+        context: expect.objectContaining({ phase: 'wrap_up', isCompletionFarewell: true }),
         briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
       })
     )

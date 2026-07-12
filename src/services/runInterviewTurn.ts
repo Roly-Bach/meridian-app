@@ -288,6 +288,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         maxDurationMinutes: interview.max_duration_minutes ?? 30,
         stepTracker,
         usedFillerPhrases,
+        isCompletionFarewell: true,
       },
       history,
       briefing: farewellBriefing,

@@ -35,6 +35,14 @@ export interface InterviewContext {
   lastUserTurn?: string
   /** Last 4 user messages — used for laddering streak detection (E3.4). */
   recentUserTurns?: string[]
+  /**
+   * KI-19: set only by the scripted completion/farewell call in runInterviewTurn.ts
+   * (checkLifecycle already decided shouldComplete=true, DB status is already
+   * 'completed'). Suppresses the unconditional wrap_up PFLICHT-ask-the-question-first
+   * methodology text so the farewell turn actually says goodbye instead of re-asking
+   * the wrap-up probe or a new question.
+   */
+  isCompletionFarewell?: boolean
 }
 
 export interface TurnMessage {

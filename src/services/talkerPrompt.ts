@@ -40,6 +40,7 @@ Turn 1 (Opener): Kontext + offene Einstiegsfrage. NUR wenn history keine assista
 Wenn bereits eine Begrüßung in history vorhanden ist: KEIN erneutes "Hallo", KEIN erneutes Intro — direkt zur nächsten Frage.
 Abschluss-Turn: kurze Verabschiedung.
 Erkläre nie den Zweck von Fragen oder dass du etwas notierst. Nenne nie explizit dass du einen Schritt, Slot oder Wert "erfasst", "registrierst" oder "aufnimmst" — z.B. "Ich erfasse diesen Schritt als...", "Ich nehme das als Abschluss auf" oder ähnliche Formulierungen sind VERBOTEN.
+Gib NIEMALS Tool-Namen, Funktions-/Parameter-Syntax oder eckige Klammern wie "[...]" als Teil deiner Antwort aus — auch nicht in der Form "[ruft X(...) auf]" oder ähnlich. Tool-Aufrufe sind ausschließlich strukturierte Calls, nie sichtbarer Text. Deine Antwort besteht NUR aus dem Reaktionssatz und der Frage — kein Klammer-Präfix, kein Pseudo-Code davor.
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
 Verweise NIE auf Zahlen oder Werte als Persona-Zitate, wenn die Persona sie nicht wörtlich so genannt hat. Intern abgeleitete oder berechnete Werte (z.B. Minutenumrechnungen aus "2-3 Tage") dürfen nicht als Mitarbeiter-Aussage formuliert werden. Falsch: "Du hast vorhin 1200 Minuten erwähnt." Richtig: "Du hast von 2-3 Tagen gesprochen" oder neue Frage stellen.
 Spannen NICHT mehr konkretisieren wenn Wert bereits erfasst ist (✓ im Tracker). Nur bei echtem null.
@@ -186,7 +187,7 @@ function formatExtractionsLog(log: RawExtraction[]): string {
 // Iteration 1 (ADR-011 D7): Max. 5 Zeilen pro Phase, taktisches Briefing.
 // Injected per-turn in buildDynamicContext so static prompt stays cacheable.
 
-function buildPhaseMethodology(phase: Phase, hasExploringSteps = false): string {
+function buildPhaseMethodology(phase: Phase, hasExploringSteps = false, isCompletionFarewell = false): string {
   if (phase === 'intro') {
     return `## Methodik: intro
 Erkläre kurz den Gesprächszweck (Prozesswissen dokumentieren, vertraulich behandelt) und stelle eine offene Einstiegsfrage.
@@ -253,6 +254,20 @@ Stelle keine weiteren Fragen — die Abschlussfragen erscheinen im Interface.`
   }
 
   // wrap_up
+  // KI-19 (2026-07-11): the scripted completion/farewell call also passes phase='wrap_up'
+  // (runInterviewTurn.ts, after checkLifecycle already decided shouldComplete=true and DB
+  // status is already 'completed') — without this branch it inherited the SAME unconditional
+  // PFLICHT-ask-the-wrap-up-question-first instruction below, which routinely beat the softer
+  // advisory farewellBriefing.suggested_question ("Verabschiede dich kurz und herzlich") and
+  // made the model re-ask the wrap-up probe (or a new unrelated question) as its last visible
+  // message instead of actually saying goodbye — confirmed on 36/82 historical
+  // gemini-3.1-flash-lite transcripts (44%), not an OSS-model-specific issue.
+  if (isCompletionFarewell) {
+    return `## Methodik: wrap_up (Abschluss)
+Die Wrap-up-Frage wurde bereits gestellt und beantwortet — das Interview ist inhaltlich abgeschlossen.
+Verabschiede dich jetzt kurz und herzlich. Stelle KEINE weitere Frage — auch nicht die Wrap-up-Frage
+erneut und keine neue Anschlussfrage. Deine Antwort besteht ausschließlich aus der Verabschiedung.`
+  }
   return `## Methodik: wrap_up
 PFLICHT: Stelle als allererste Antwort in dieser Phase exakt diese Frage — keine Verabschiedung davor:
 "Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?"
@@ -264,6 +279,15 @@ Ist-Fokus (E3.7): Die abschließende Frage zielt auf noch nicht genannte Ist-Pro
 }
 
 // ─── Canonical Example (Iteration 1: 6 examples → 1) ─────────────────────────
+// KI-20 (2026-07-11): dieses Beispiel zeigte zuvor die Tool-Signatur als Klammer-
+// Pseudo-Code ("AGENT: [ruft update_walkthrough_data(...) auf]") — Modelle über
+// mehrere Vendor-Grenzen hinweg (Google, MiniMax) ahmten diese Notation gelegentlich
+// wörtlich als sichtbaren Antworttext nach statt einen strukturierten Tool-Call zu
+// machen (in 11 von 14 betroffenen historischen Transkripten war es sogar die
+// Demo-Baseline gemini-3.1-flash-lite, nicht nur OSS-Modelle). Gleiche Fehlerklasse
+// wie KI-16 (Quote-Artefakt aus einem illustrativen Prompt-Beispiel). Fix: keine
+// Klammer/Parameter-Syntax mehr im Beispieltext — nur Prosa-Beschreibung, klar als
+// "lautlos, nie als Text" markiert.
 const WALKTHROUGH_EXAMPLES = `
 <EXAMPLE phase="walkthrough_step">
   USER: "Zuerst schaue ich in Salesforce ob der Kunde bekannt ist. Dann öffne ich meine Excel-Liste
@@ -271,14 +295,14 @@ const WALKTHROUGH_EXAMPLES = `
          manchmal nicht welche Version aktuell ist. Und dann frage ich beim Innendienst nach
          den Konditionen. Das dauert manchmal einen halben Tag. Am Ende baue ich das Angebot in
          Salesforce zusammen und setze einen Reminder zum Nachfassen."
-  AGENT: [ruft sofort update_walkthrough_data(
-    step_title="Angebotserstellung",
-    process_steps=["Salesforce-Check (Bestandskunde?)", "Excel-Liste prüfen", "PDF-Katalog prüfen", "Konditionen beim Innendienst anfragen", "Angebot in Salesforce aufbauen", "Nachfass-Reminder setzen"],
-    friction_points=["PDF-Katalog: Version unklar", "Konditionen-Anfrage beim Innendienst dauert bis zu einen halben Tag"],
-    friction_tools=["Salesforce", "Excel-Liste", "PDF-Katalog"]
-  ) auf]
-  AGENT TEXT: "Der Katalog-Versions-Aspekt klingt fehlerträchtig — passiert es, dass du mit veralteten Preisen arbeitest?"
+  INTERNER TOOL-CALL (lautlos, NIEMALS als Text ausgeben): update_walkthrough_data aufrufen mit
+    Schritt-Titel Angebotserstellung; Ablauf-Schritten Salesforce-Check (Bestandskunde?), Excel-Liste
+    prüfen, PDF-Katalog prüfen, Konditionen beim Innendienst anfragen, Angebot in Salesforce aufbauen,
+    Nachfass-Reminder setzen; Reibungspunkten PDF-Katalog Version unklar und Konditionen-Anfrage beim
+    Innendienst dauert bis zu einen halben Tag; genutzten Systemen Salesforce, Excel-Liste, PDF-Katalog.
+  EINZIGE SICHTBARE ANTWORT: "Der Katalog-Versions-Aspekt klingt fehlerträchtig — passiert es, dass du mit veralteten Preisen arbeitest?"
   // update_walkthrough_data SOFORT wenn Mitarbeiter Ablauf beschreibt — alle Schritte in einem Call.
+  // Der Tool-Call selbst erscheint NIE im sichtbaren Antworttext — nur die Frage danach ist die Antwort.
   // Keine Slot-Fragen (Frequenz, Dauer) während walkthrough_step.
 </EXAMPLE>`
 
@@ -386,7 +410,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 
   // Phase methodology injected per-turn (not in static prompt)
   const hasExploringSteps = ctx.stepTracker.some(s => s.status === 'exploring')
-  const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, hasExploringSteps)}\n</methodology>`
+  const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, hasExploringSteps, ctx.isCompletionFarewell)}\n</methodology>`
 
   // E3.6 — Profile-adaptive framing: inject only when role is known
   const profileFraming = ctx.employeeRole
