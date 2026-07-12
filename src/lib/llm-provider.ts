@@ -26,6 +26,25 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 // (anthropic/google/nebius/fireworks) never allocate it. Node's global fetch (undici) honors a
 // per-request `dispatcher`, so we only need the Agent, not a full fetch replacement.
 let openrouterAgent: Agent | undefined
+
+// PROJ-41 Pass B: OpenRouter routes a given model string to different backends across runs/requests
+// (confirmed via its /models/.../endpoints API — several backends per model, live uptime varies).
+// That backend variance undermines Seed 42 reproducibility and was never pinned per the spec's own
+// still-open reproducibility requirement (versuchsplan-modell-benchmarking.md §5). Set
+// OPENROUTER_PROVIDER_ORDER (comma-separated OpenRouter provider slugs, e.g. "deepseek") before an
+// eval run to pin every request for that process to one named backend with no fallback — same
+// mechanism OpenRouter itself exposes via the `provider` request-body field, injected here since the
+// AI SDK's OpenAI-compatible client has no first-class option for it.
+function pinnedProviderOrder(): string[] | undefined {
+  const raw = process.env.OPENROUTER_PROVIDER_ORDER
+  if (!raw) return undefined
+  const order = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return order.length > 0 ? order : undefined
+}
+
 function openrouterFetch(): typeof fetch {
   openrouterAgent ??= new Agent({ allowH2: false, connect: { timeout: 30_000 } })
   return ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
@@ -34,7 +53,16 @@ function openrouterFetch(): typeof fetch {
     // Force identity encoding so the response is plain JSON; transfer size is irrelevant for eval.
     const headers = new Headers(init?.headers)
     headers.set('accept-encoding', 'identity')
-    return fetch(input, { ...init, headers, dispatcher: openrouterAgent } as RequestInit)
+
+    let body = init?.body
+    const providerOrder = pinnedProviderOrder()
+    if (providerOrder && typeof body === 'string') {
+      const payload = JSON.parse(body) as Record<string, unknown>
+      payload.provider = { order: providerOrder, allow_fallbacks: false }
+      body = JSON.stringify(payload)
+    }
+
+    return fetch(input, { ...init, headers, body, dispatcher: openrouterAgent } as RequestInit)
   }) as typeof fetch
 }
 

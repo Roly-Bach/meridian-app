@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { mockAnthropic, mockGoogle, mockOpenAIChat, mockCreateOpenAI } = vi.hoisted(() => ({
   mockAnthropic: vi.fn().mockReturnValue('anthropic-model'),
@@ -82,6 +82,63 @@ describe('resolveModel', () => {
       }),
     )
     expect(mockOpenAIChat).toHaveBeenCalledWith('z-ai/glm-5.2')
+  })
+
+  // PROJ-41 Pass B: OPENROUTER_PROVIDER_ORDER pins every request to one named backend (no fallback)
+  // so a screening run isn't silently routed to a different endpoint than the last one.
+  describe('OPENROUTER_PROVIDER_ORDER', () => {
+    const originalEnv = process.env.OPENROUTER_PROVIDER_ORDER
+    const originalFetch = global.fetch
+
+    afterEach(() => {
+      process.env.OPENROUTER_PROVIDER_ORDER = originalEnv
+      global.fetch = originalFetch
+    })
+
+    it('injects a provider.order + allow_fallbacks:false into the request body when set', async () => {
+      process.env.OPENROUTER_PROVIDER_ORDER = 'deepseek'
+      const fetchSpy = vi.fn().mockResolvedValue(new Response('{}'))
+      global.fetch = fetchSpy as unknown as typeof fetch
+
+      resolveModel('openrouter/deepseek/deepseek-v4-pro')
+      const customFetch = mockCreateOpenAI.mock.calls[0][0].fetch as typeof fetch
+      await customFetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'deepseek/deepseek-v4-pro', messages: [] }),
+      })
+
+      const sentBody = JSON.parse(fetchSpy.mock.calls[0][1].body as string)
+      expect(sentBody.provider).toEqual({ order: ['deepseek'], allow_fallbacks: false })
+    })
+
+    it('supports a comma-separated list and trims whitespace', async () => {
+      process.env.OPENROUTER_PROVIDER_ORDER = ' deepseek , baidu '
+      const fetchSpy = vi.fn().mockResolvedValue(new Response('{}'))
+      global.fetch = fetchSpy as unknown as typeof fetch
+
+      resolveModel('openrouter/deepseek/deepseek-v4-pro')
+      const customFetch = mockCreateOpenAI.mock.calls[0][0].fetch as typeof fetch
+      await customFetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'deepseek/deepseek-v4-pro', messages: [] }),
+      })
+
+      const sentBody = JSON.parse(fetchSpy.mock.calls[0][1].body as string)
+      expect(sentBody.provider.order).toEqual(['deepseek', 'baidu'])
+    })
+
+    it('leaves the body untouched when unset', async () => {
+      delete process.env.OPENROUTER_PROVIDER_ORDER
+      const fetchSpy = vi.fn().mockResolvedValue(new Response('{}'))
+      global.fetch = fetchSpy as unknown as typeof fetch
+
+      resolveModel('openrouter/deepseek/deepseek-v4-pro')
+      const customFetch = mockCreateOpenAI.mock.calls[0][0].fetch as typeof fetch
+      const originalBody = JSON.stringify({ model: 'deepseek/deepseek-v4-pro', messages: [] })
+      await customFetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', body: originalBody })
+
+      expect(fetchSpy.mock.calls[0][1].body).toBe(originalBody)
+    })
   })
 
   it('treats a bare model name without provider prefix as legacy Anthropic', () => {

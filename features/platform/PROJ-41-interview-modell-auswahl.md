@@ -1,13 +1,24 @@
 # PROJ-41: Interview-Modell-Auswahl (OSS-Screening + EU-Prod-Route)
 
-## Status: In Progress
+## Status: Blocked
 **Type:** Revision
 **Domain:** Platform
 **Extends:** PROJ-9
 **Appetite:** L
 **Bugs:** —
 **Created:** 2026-07-02
-**Last Updated:** 2026-07-04 (Stage-1-Code gebaut, keys-frei: openrouter-Provider, MODEL_PRICING der 7 Modelle, GUARD_JUDGE_MODEL + Familie-Assert)
+**Last Updated:** 2026-07-11 (pausiert für Demo-Vorbereitung)
+
+**Blocked seit 2026-07-11:** Pilot-Demo mit Kunde + wissenschaftlicher Betreuerin in 2 Wochen. Nutzer-
+Entscheidung: PROJ-41 komplett pausieren, Demo läuft auf der aktuellen Baseline `gemini-3.1-flash-lite`
+(kein Modellwechsel vor der Demo). Priorität liegt auf Bug-Triage + Codebase-Dokumentation + Freeze
+(siehe Roadmap `docs/evals/PROJ-41-passB-lite-buchhalter-pinned.md` Kontext sowie die während der
+qualitativen Transkript-Analyse gefundenen KI-18/19/20/21 in `features/INDEX.md`). Stand bei Pause:
+Stage 1.5 Provider-Recherche abgeschlossen (`docs/evals/PROJ-41-stage1.5-provider-recherche.md`),
+Pass-B-lite-Vergleich deepseek-v4-pro vs. minimax-m3 abgeschlossen (`docs/evals/PROJ-41-passB-lite-
+buchhalter-pinned.md`, deepseek-v4-pro klar vorn). Offene EU-Compliance-Diskussion (ADR-020 D1) bewusst
+nicht Teil der Pause-Entscheidung — separat vertagt. **Wiederaufnahme:** nach Freeze (Meilenstein 6 der
+Demo-Vorbereitungs-Roadmap), frühestens nach der Pilot-Demo.
 
 ## Dependencies
 - Requires: PROJ-40 (Eval-Instrument-Validierung + Versuchsplan) — Stufe 1 + Stufe 2 PASS sind hartes Gate vor Stage 1 Screening (ADR-020 §7 Gating, Versuchsplan Kriterium F)
@@ -75,9 +86,11 @@ Quelle) und werden beim Stage-1-Bau direkt aus OpenRouter gepinnt, nicht aus die
 
 Der Prod-Inference-Provider wird erst gewählt, wenn der Finalist feststeht — nicht vorab auf Nebius festgelegt.
 
-- [ ] Für den Finalisten geeignete Inference-Provider recherchiert auf: EU-Datenresidenz (ADR-020 D1), Modell-Abdeckung (hostet er den Finalisten?), Kosten $/1M, Latenz/TTFT, Reife/SLA
-- [ ] Kandidaten-Provider verglichen — Nebius ist EINE Option (EU-stark, aber vermutlich teurer + dünnere Abdeckung); Fireworks, DeepInfra o.a. als Alternativen
-- [ ] Provider-Wahl dokumentiert mit Begründung (EU-Fit vs. Kosten vs. Abdeckung vs. Latenz)
+**Vorgezogen (Nutzer-Entscheidung 2026-07-07, vor Pass B statt danach — Details im Handoff):** für beide Pass-A-Shortlist-Kandidaten recherchiert, nicht nur für einen Finalisten. Ergebnis: [PROJ-41-stage1.5-provider-recherche.md](../../docs/evals/PROJ-41-stage1.5-provider-recherche.md).
+
+- [x] Für beide Shortlist-Kandidaten geeignete Inference-Provider recherchiert auf: EU-Datenresidenz (ADR-020 D1), Modell-Abdeckung, Kosten $/1M, Reife/SLA (Nebius, Fireworks, Together, DeepInfra, Novita, GMI Cloud) — 2026-07-07
+- [x] Kandidaten-Provider verglichen — **Befund: EU-Fit ist asymmetrisch.** `deepseek-v4-pro` hat mit Nebius eine saubere EU-native Option ($1.75/$3.50). `minimax-m3` hat aktuell **keinen** EU-nativen Provider — Nebius hostet es nicht (nur `minimax-m2.5`), und Fireworks' Frankfurt-Region ist laut eigener Doku ein Enterprise-Feature, nicht auf dem Standard-/Serverless-Zugang verfügbar (Korrektur der PROJ-9-Annahme „Fireworks = explizite EU Data Residency", die nicht zwischen Serverless und Enterprise unterschied)
+- [x] Provider-Wahl dokumentiert mit Begründung — `deepseek-v4-pro` → Nebius (`nebius/deepseek-ai/deepseek-v4-pro`, bereits in `llm-provider.ts` verkabelt). `minimax-m3` hat nach heutigem Stand **keinen** EU-konformen Prod-Pfad — kann laut Edge-Case-Regel dieser Spec nicht Prod-Modell werden, unabhängig vom Pass-B-Ausgang
 
 ### Stage 2 — Prod-Verifikation auf gewähltem Backend
 
@@ -322,6 +335,30 @@ Entscheidung: [PROJ-41-stage1-screening-entscheidung.md](../../docs/evals/PROJ-4
 - **Kaveat für Pass B:** selbst die Finalisten verloren je 1 von 2 Läufen an Socket-Fehler
   (`run_count=1`). Pass B auf OpenRouter unzuverlässig → Erwägung, Pass B direkt auf der Prod-Route
   (Stage 1.5) zu fahren.
+
+### Stage 1.5 Provider-Recherche — 2026-07-07
+
+Vorgezogen vor Pass B (Nutzer-Entscheidung, s. Handoff-Memory). Recherchiert für beide Pass-A-Shortlist-
+Kandidaten statt nur für einen Finalisten. Vollständiges Ergebnis:
+[PROJ-41-stage1.5-provider-recherche.md](../../docs/evals/PROJ-41-stage1.5-provider-recherche.md).
+
+- **Befund: EU-Fit ist asymmetrisch zwischen den zwei Finalisten.** `deepseek-v4-pro` hat mit Nebius
+  eine saubere EU-native Option (`nebius/deepseek-ai/deepseek-v4-pro`, $1.75/$3.50, bereits in
+  `llm-provider.ts` verkabelt, kein Code nötig). `minimax-m3` hat **keinen** EU-nativen Provider —
+  Nebius hostet es nicht (nur das andere Modell `minimax-m2.5`), und Fireworks' beworbene
+  Frankfurt-Region ist laut eigener Doku ein Enterprise-Deployment-Feature, nicht auf dem
+  Standard-/Serverless-Zugang verfügbar, den ein Solo-Developer-Setup nutzen würde.
+- **Korrektur an PROJ-9:** die dortige Mai-2026-Einstufung „Fireworks = explizite EU Data Residency"
+  unterschied nicht zwischen Serverless- und Enterprise-Zugang. Für Serverless (das, was `llm-provider.ts`
+  tatsächlich aufruft) ist Fireworks' EU-Geschichte schwächer als angenommen.
+- **Konsequenz:** `minimax-m3` kann nach der in dieser Spec bereits festgeschriebenen Edge-Case-Regel
+  („kein Provider hostet den Finalisten EU-konform" → nächster Kandidat) unabhängig vom Pass-B-Ausgang
+  nicht Prod-Modell werden. Offene Frage an den Nutzer: Pass B nur für `deepseek-v4-pro` + Referenz auf
+  Nebius fahren, oder `minimax-m3` zusätzlich auf einem Nicht-EU-Provider messen (reine Dokumentation,
+  kein Prod-Pfad).
+- Reale Prod-Preise liegen für `deepseek-v4-pro` bei allen verglichenen Providern 3–4× über dem
+  Stage-1-OpenRouter-Screening-Preis (dort DeepSeeks eigener Direktpreis $0.44/$0.87 durchgereicht);
+  `minimax-m3` bleibt konstant bei $0.30/$1.20 über alle Provider.
 
 ## QA Test Results
 _To be added by /qa_
