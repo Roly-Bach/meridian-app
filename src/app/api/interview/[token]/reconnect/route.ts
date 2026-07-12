@@ -95,6 +95,22 @@ export async function POST(
     { role: 'assistant' as const, content: t.agent_response },
   ])
 
+  // KI-22 (2026-07-11): turns are persisted as atomic (user_input, agent_response) pairs
+  // (store.insertTurn writes both together, only after the agent has responded), so
+  // `history`'s last entry here is always 'assistant' — the agent is still waiting on a
+  // reply to its own last question. Previously this always went through the LLM anyway
+  // with a synthetic "Ich bin wieder da, können wir weitermachen?" nudge — the model's
+  // natural response was to re-pose the still-open question, which rendered as a
+  // near-verbatim duplicate of the already-visible last chat bubble (reproduced live,
+  // manual UI test 2026-07-07 — "Du hast vorhin 180 Rechnungen..." shown twice in a row).
+  // The pending question is already fully visible in the rendered history, so no LLM
+  // call is needed for the common case: skip it entirely (also saves a cost+latency hit
+  // on every page reload, since the frontend fires /reconnect on every mount).
+  const lastMessage = history[history.length - 1]
+  if (lastMessage?.role === 'assistant') {
+    return new Response('Willkommen zurück — lass uns da weitermachen, wo wir aufgehört haben.')
+  }
+
   const stream = await createInterviewStream({
     context: {
       interviewId: interview.id,

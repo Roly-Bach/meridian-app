@@ -172,25 +172,41 @@ export async function checkGroundingViolation(
     .map((t) => `${t.role === 'user' ? 'Mitarbeiter' : 'Agent'}: "${t.content}"`)
     .join('\n')
 
-  try {
-    const model = resolveModel(judgeModel)
-    const result = await generateText({
-      model,
-      system: GUARD_SYSTEM,
-      prompt: `Bisheriger Verlauf:\n${transcript}\n\nZU PRÜFENDE Agent-Antwort:\n"${candidateText}"`,
-      maxOutputTokens: 500,
-      temperature: 0,
-    })
-    onTokenUsage?.({
-      component: 'grounding_guard',
-      model: judgeModel,
-      inputTokens: result.usage?.inputTokens ?? 0,
-      cacheReadTokens: (result.usage?.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
-      outputTokens: result.usage?.outputTokens ?? 0,
-    })
-    return parseGuardResponse(result.text)
-  } catch (err) {
-    console.warn('[talkerGroundingGuard] judge call failed, treating as no violation:', err)
-    return { violation: false }
+  // Reliability (2026-07-11): a manual UI session reproduced the exact "180 Rechnungen"
+  // fabrication (Zahl/Wert-Fabrikation, KI-18) live in prod. Re-running checkGroundingViolation
+  // against the identical transcript afterward correctly flagged it — the judge prompt itself
+  // is sound. The likely cause is a transient judge-call failure silently degrading to
+  // "no violation" on the FIRST (and only) attempt below, with no retry — same failure class
+  // as KI-11 (`withRetry` in supabaseTurnStore.ts), just never applied to this call site.
+  // Bounded retries close that gap without changing the guard's detection logic.
+  const retries = 1
+  const delayMs = 300
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const model = resolveModel(judgeModel)
+      const result = await generateText({
+        model,
+        system: GUARD_SYSTEM,
+        prompt: `Bisheriger Verlauf:\n${transcript}\n\nZU PRÜFENDE Agent-Antwort:\n"${candidateText}"`,
+        maxOutputTokens: 500,
+        temperature: 0,
+      })
+      onTokenUsage?.({
+        component: 'grounding_guard',
+        model: judgeModel,
+        inputTokens: result.usage?.inputTokens ?? 0,
+        cacheReadTokens: (result.usage?.inputTokenDetails as Record<string, unknown> | undefined)?.cacheReadTokens as number | undefined,
+        outputTokens: result.usage?.outputTokens ?? 0,
+      })
+      return parseGuardResponse(result.text)
+    } catch (err) {
+      lastErr = err
+      if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
+    }
   }
+  // console.error (not warn): a judge failure here means this turn shipped with ZERO grounding
+  // protection — indistinguishable from a real "no violation" pass unless logged loudly.
+  console.error(`[talkerGroundingGuard] judge call failed after ${retries + 1} attempts, shipping WITHOUT grounding check:`, lastErr)
+  return { violation: false }
 }

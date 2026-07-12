@@ -180,7 +180,12 @@ describe('POST /api/interview/[token]/reconnect', () => {
     expect(json.error).toBe('Interview is already completed')
   })
 
-  it('streams adaptive greeting for active interview with prior turns', async () => {
+  // KI-22 (2026-07-11): turns are always persisted as atomic (user_input, agent_response)
+  // pairs, so the reconnected history's last entry is always 'assistant' — this is the
+  // ONLY case that occurs in practice. The route now short-circuits to a static
+  // re-engagement line instead of calling the LLM (previously reproduced a visible
+  // duplicate: the model re-posed the still-open question near-verbatim).
+  it('returns a static re-engagement line WITHOUT calling the LLM when the agent is still awaiting a reply', async () => {
     const interview = {
       id: 'iv-active',
       employee_name: 'Hans',
@@ -221,8 +226,10 @@ describe('POST /api/interview/[token]/reconnect', () => {
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
 
     expect(res.status).toBe(200)
-    expect(createInterviewStream).toHaveBeenCalledWith(
-      expect.objectContaining({ isReconnect: true })
-    )
+    expect(createInterviewStream).not.toHaveBeenCalled()
+    const text = await res.text()
+    expect(text.length).toBeGreaterThan(0)
+    // Must NOT repeat the still-open question verbatim — that was the duplicate-bubble bug.
+    expect(text).not.toBe(turns[0].agent_response)
   })
 })

@@ -119,13 +119,53 @@ describe('checkGroundingViolation', () => {
     expect(result.claim).toContain('unmöglich')
   })
 
-  it('Judge-Call schlägt fehl → false statt throw', async () => {
+  it('Judge-Call schlägt bei ALLEN Versuchen fehl → false statt throw, console.error statt warn', async () => {
     const mockGenerateText = vi.mocked(generateText)
-    mockGenerateText.mockRejectedValueOnce(new Error('API down'))
+    mockGenerateText.mockClear()
+    mockGenerateText
+      .mockRejectedValueOnce(new Error('API down'))
+      .mockRejectedValueOnce(new Error('API down'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const priorTurns: TurnMessage[] = [{ role: 'user', content: 'a' }]
     const result = await checkGroundingViolation('b', priorTurns, 'google/gemini-3.1-flash-lite')
     expect(result.violation).toBe(false)
+    // 1 retry = 2 attempts total (KI-18 2026-07-11: a single unretried failure shipped
+    // an unguarded fabrication in a live manual session — "180 Rechnungen pro Monat",
+    // never mentioned by the employee, re-checking the identical transcript afterward
+    // with a working judge call correctly flagged it).
+    expect(mockGenerateText).toHaveBeenCalledTimes(2)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('judge call failed after 2 attempts, shipping WITHOUT grounding check'),
+      expect.anything(),
+    )
+    errorSpy.mockRestore()
+  })
+
+  it('Judge-Call schlägt beim ersten Versuch fehl, gelingt beim Retry → Verletzung wird trotzdem erkannt', async () => {
+    // KI-18 2026-07-11 regression: reproduces the exact "180 Rechnungen" fabrication.
+    // A transient first-attempt failure must not silently ship an unguarded response
+    // when a retry would have caught it.
+    const mockGenerateText = vi.mocked(generateText)
+    mockGenerateText.mockClear()
+    mockGenerateText
+      .mockRejectedValueOnce(new Error('transient network blip'))
+      .mockResolvedValueOnce({
+        text: '{"violation": true, "claim": "Du hast vorhin 180 Rechnungen pro Monat erwähnt", "reason": "Mitarbeiter nannte nie 180/Monat, nur 8-10/Tag"}',
+      } as Awaited<ReturnType<typeof generateText>>)
+
+    const priorTurns: TurnMessage[] = [
+      { role: 'user', content: 'Ich arbeite in der Buchhaltung und beschäftige mich hauptsächlich mit der Rechnungsprüfung' },
+      { role: 'assistant', content: 'Wie viele Rechnungen bearbeitest du ungefähr in einem typischen Monat?' },
+      { role: 'user', content: 'poah das ist ziemlich schwer abzuschätzen. Ich würde sagen so 8-10 pro tag' },
+    ]
+    const candidateText =
+      'Du hast vorhin 180 Rechnungen pro Monat erwähnt — jetzt sprichst du von 8 bis 10 pro Tag. Worin liegt der Unterschied?'
+
+    const result = await checkGroundingViolation(candidateText, priorTurns, 'google/gemini-3.1-flash-lite')
+    expect(result.violation).toBe(true)
+    expect(result.claim).toContain('180')
+    expect(mockGenerateText).toHaveBeenCalledTimes(2)
   })
 })
 
