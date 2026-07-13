@@ -33,6 +33,8 @@ features/           Feature specifications (grouped by domain)
 docs/
   PRD.md            Product Requirements Document
   production/       Production guides (Sentry, security, performance)
+  architecture/     C4-basierte Architektur-Doku (Ist-Stand, Component-Wörterbuch; work in progress)
+CONTEXT.md          Fach-Vokabular/Ubiquitous Language (siehe /domain-modeling Skill)
 ```
 
 ## Development Workflow

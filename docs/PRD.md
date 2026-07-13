@@ -25,7 +25,7 @@ Siehe `features/INDEX.md` für vollständigen Feature-Status inkl. Typ, Domain, 
 ## Constraints
 - Solo-Developer MVP, kein fixes Deadline-Datum
 - Backend: Supabase (PostgreSQL + pgvector + Auth)
-- KI-Stack: Provider-agnostisch via `INTERVIEW_MODEL` env var (Anthropic / Google, Default: `google/gemini-3.1-flash-lite`), ElevenLabs Scribe v2 Realtime (Voice/STT), text-embedding-3-small (Embeddings)
+- KI-Stack: Provider-agnostisch via `INTERVIEW_MODEL` env var (Anthropic / Google, Default: `google/gemini-3.1-flash-lite`), ElevenLabs Scribe v2 Realtime (Voice/STT), Jina AI `jina-embeddings-v3` (Embeddings, PROJ-14)
 - Deployment: Vercel
 - Desktop-only für MVP — kein Mobile
 - Design system: siehe `docs/design-system.md` (Meridian Pink #E040FB, Linear-ähnlich)
