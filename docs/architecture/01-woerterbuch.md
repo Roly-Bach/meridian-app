@@ -4,6 +4,8 @@
 
 **Component** (C4-Begriff, Level 3) ≠ **Cluster** (Fachbegriff, `process_clusters`, siehe `CONTEXT.md`) — bewusst getrennt gehalten, siehe dortige Kollisions-Notiz.
 
+**Component** ≠ **Modul**: Component ist eine feste, im Doku-Baum verzeichnete Gruppierung von Dateien (z.B. "Interview-Engine" = 15 bestimmte Dateien, siehe unten) — die Zerlegungsebene dieses Wörterbuchs. **Modul** ist ein feinerer, technologieunabhängiger Begriff (nach Ousterhout, *A Philosophy of Software Design*, Grundlage von `/codebase-design`): eine Verantwortungseinheit mit einer Schnittstelle, die Implementierungskomplexität dahinter verbirgt. Ein Modul kann eine einzelne Funktion sein (`buildTools()`), eine einzelne Datei (`conversationSignals.ts`) oder mehrere Dateien in einem Ordner — die physische Form ist zweitrangig, entscheidend ist die Schnittstellen-/Verantwortungsgrenze. Jede Component besteht aus einem oder mehreren Modulen; ein "gutes" Component muss nicht 1:1 einem Modul entsprechen (siehe `interviewAgent.ts` in der Interview-Engine: eine Datei, aber zwei unabhängige Module — `buildTools()` und `createInterviewStream()`). Verwendet in [`00-methodik-component-deep-dives.md`](00-methodik-component-deep-dives.md) Abschnitt 7.1 jeder Component-Deep-Dive.
+
 ---
 
 ## Interview (Gruppierung, kein eigenständiges Component)
