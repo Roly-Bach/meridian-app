@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
 import type { ClarificationCard, AnalystBriefing } from '@/services/interviewTypes'
 
@@ -15,7 +16,7 @@ type TurnRow = Database['public']['Tables']['turns']['Row']
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
@@ -43,11 +44,16 @@ export async function GET(
     )
   }
 
+  // ── Rate limiting ───────────────────────────────────────────────────────────
+  const ip = extractIP(req)
+  const rateLimitResponse = await checkTokenEndpointLimits(token, ip)
+  if (rateLimitResponse) return rateLimitResponse
+
   const { data: rawState } = await supabase
     .from('interview_state')
     .select('phase, timer_minutes, topics_covered, topics_open, opener_text')
     .eq('interview_id', interview.id)
-    .single()
+    .maybeSingle()
 
   const { data: rawTurns } = await supabase
     .from('turns')

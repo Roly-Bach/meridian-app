@@ -2,12 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockAdminFrom } = vi.hoisted(() => ({
+const { mockAdminFrom, mockCheckTokenEndpointLimits } = vi.hoisted(() => ({
   mockAdminFrom: vi.fn(),
+  mockCheckTokenEndpointLimits: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
+}))
+
+vi.mock('@/lib/ratelimit', () => ({
+  checkTokenEndpointLimits: mockCheckTokenEndpointLimits,
+  extractIP: vi.fn().mockReturnValue('1.2.3.4'),
 }))
 
 import { GET } from './route'
@@ -90,7 +96,7 @@ describe('GET /api/interview/[token]', () => {
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: state, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: state, error: null }),
       })
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
