@@ -2,18 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD, SOFT_THRESHOLD } from './stepIdentity'
 import type { StepEntry } from './interviewSemantic'
 
-// We need to mock cosineSim to control scores without real embeddings
-vi.mock('./processClustering', () => ({
-  cosineSim: vi.fn(),
-}))
-
-// Mock generateEmbedding for generateMissingEmbeddings tests
+// We need to mock cosineSim (score control) and generateEmbedding (generateMissingEmbeddings tests)
+// — both now live in ./embeddings (#21, 2026-07-14; cosineSim moved from processClustering.ts)
 vi.mock('./embeddings', () => ({
+  cosineSim: vi.fn(),
   generateEmbedding: vi.fn(),
 }))
 
-import { cosineSim } from './processClustering'
-import { generateEmbedding } from './embeddings'
+import { cosineSim, generateEmbedding } from './embeddings'
 const mockCosineSim = vi.mocked(cosineSim)
 const mockGenerateEmbedding = vi.mocked(generateEmbedding)
 

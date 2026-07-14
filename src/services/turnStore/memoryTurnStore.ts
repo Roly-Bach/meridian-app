@@ -8,8 +8,7 @@
  */
 
 import type { Json } from '@/lib/database.types'
-import type { StepEntry } from '@/services/interviewSemantic'
-import type { RawExtraction } from '@/services/extraction'
+import type { StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { AnalystBriefing } from '@/services/interviewTypes'
 import { createTurnStore, type TurnStore, type TurnStoreBackend } from './port'
 import type { KnowledgeObjectInsert, TurnSnapshot } from './intents'
@@ -49,6 +48,7 @@ export class MemoryBackend implements TurnStoreBackend {
       topicsCovered: clone(this.state.topicsCovered),
       topicsOpen: clone(this.state.topicsOpen),
       extractionsLog: clone(this.state.extractionsLog),
+      usedFillerPhrases: clone(this.state.nextBriefing?.usedFillerPhrases ?? []),
     }
   }
 

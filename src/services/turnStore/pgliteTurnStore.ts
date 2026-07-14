@@ -21,9 +21,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { vector } from '@electric-sql/pglite/vector'
-import { normalizeStepEntry, type StepEntry } from '@/services/interviewSemantic'
+import { normalizeStepEntry, type StepEntry, type RawExtraction } from '@/services/interviewSemantic'
 import type { Json } from '@/lib/database.types'
-import type { RawExtraction } from '@/services/extraction'
 import type { AnalystBriefing } from '@/services/interviewTypes'
 import {
   createInterviewStore,
@@ -108,23 +107,31 @@ class PGliteBackend implements InterviewStoreBackend {
   constructor(private readonly db: PGlite) {}
 
   async loadSnapshot(interviewId: string): Promise<TurnSnapshot> {
-    const res = await this.db.query<{
-      step_tracker: unknown
-      topics_covered: string[] | null
-      topics_open: string[] | null
-      extractions_log: unknown
-    }>(
-      `SELECT step_tracker, topics_covered, topics_open, extractions_log
-       FROM interview_state WHERE interview_id = $1`,
-      [interviewId],
-    )
+    const [res, briefingRes] = await Promise.all([
+      this.db.query<{
+        step_tracker: unknown
+        topics_covered: string[] | null
+        topics_open: string[] | null
+        extractions_log: unknown
+      }>(
+        `SELECT step_tracker, topics_covered, topics_open, extractions_log
+         FROM interview_state WHERE interview_id = $1`,
+        [interviewId],
+      ),
+      this.db.query<{ next_briefing: unknown }>(
+        `SELECT next_briefing FROM interviews WHERE id = $1`,
+        [interviewId],
+      ),
+    ])
     const row = res.rows[0]
     const rawTracker = (row?.step_tracker as unknown[] | null) ?? []
+    const nextBriefing = briefingRes.rows[0]?.next_briefing as { usedFillerPhrases?: string[] } | null
     return {
       stepTracker: rawTracker.map((raw, i) => normalizeStepEntry(raw, i + 1)),
       topicsCovered: row?.topics_covered ?? [],
       topicsOpen: row?.topics_open ?? [],
       extractionsLog: (row?.extractions_log as RawExtraction[] | null) ?? [],
+      usedFillerPhrases: nextBriefing?.usedFillerPhrases ?? [],
     }
   }
 

@@ -44,7 +44,8 @@ vi.mock('ai', () => ({
   generateText: vi.fn(),
 }))
 
-vi.mock('./embeddings', () => ({
+vi.mock('./embeddings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./embeddings')>()),
   generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
 }))
 
@@ -52,9 +53,7 @@ import { extractAndEmbed, levenshtein, deduplicateKnowledgeObjects } from './ext
 import { generateText } from 'ai'
 import { generateEmbedding } from './embeddings'
 
-const MOCK_TRANSCRIPT = [
-  { user_input: 'Ich verarbeite täglich Rechnungen in SAP.', agent_response: 'Wie lange dauert das?' },
-]
+const MOCK_USER_INPUT = 'Ich verarbeite täglich Rechnungen in SAP.'
 
 // ─── extractAndEmbed ──────────────────────────────────────────────────────────
 
@@ -64,24 +63,24 @@ describe('extractAndEmbed', () => {
     mockInsert.mockResolvedValue({ error: null })
   })
 
-  it('returns early for empty transcript', async () => {
+  it('returns early for empty userInput', async () => {
     await extractAndEmbed({
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: [],
+      userInput: '',
     })
     expect(generateText).not.toHaveBeenCalled()
   })
 
-  it('calls LLM with system prompt and transcript', async () => {
+  it('calls LLM with system prompt and userInput', async () => {
     vi.mocked(generateText).mockResolvedValue({ text: '[]' } as never)
 
     await extractAndEmbed({
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(generateText).toHaveBeenCalledOnce()
@@ -110,7 +109,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     // process_step is no longer in ALLOWED_TYPES — only tool inserted
@@ -132,7 +131,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).not.toHaveBeenCalled()
@@ -147,7 +146,7 @@ describe('extractAndEmbed', () => {
         interviewId: 'iv-1',
         workspaceId: 'ws-1',
         turnId: 'turn-1',
-        transcript: MOCK_TRANSCRIPT,
+        userInput: MOCK_USER_INPUT,
       })
     ).resolves.toEqual([])
 
@@ -167,7 +166,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(errorSpy).toHaveBeenCalledWith(
@@ -190,7 +189,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).toHaveBeenCalledTimes(1)
@@ -210,7 +209,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).toHaveBeenCalledTimes(1)
@@ -236,7 +235,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).toHaveBeenCalledTimes(2)
@@ -256,7 +255,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).toHaveBeenCalledTimes(1)
@@ -274,7 +273,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).not.toHaveBeenCalled()
@@ -293,7 +292,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).not.toHaveBeenCalled()
@@ -312,7 +311,7 @@ describe('extractAndEmbed', () => {
       interviewId: 'iv-1',
       workspaceId: 'ws-1',
       turnId: 'turn-1',
-      transcript: MOCK_TRANSCRIPT,
+      userInput: MOCK_USER_INPUT,
     })
 
     expect(mockInsert).toHaveBeenCalledTimes(1)

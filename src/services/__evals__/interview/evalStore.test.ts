@@ -73,7 +73,7 @@ describe('PGlite EvalStore adapter (Stufe 2, hermetic)', () => {
     expect(evalStore.turnPorts!.store).toBe(evalStore.store)
     // DB-free: extraction + post-completion pipeline are no-ops, not scored.
     await expect(
-      evalStore.turnPorts!.extractAndEmbed({ interviewId, workspaceId, turnId: 't', transcript: [] }),
+      evalStore.turnPorts!.extractAndEmbed({ interviewId, workspaceId, turnId: 't', userInput: '' }),
     ).resolves.toEqual([])
     await expect(
       evalStore.turnPorts!.onCompleted({ interviewId, workspaceId }),

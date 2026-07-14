@@ -366,6 +366,33 @@ describe('produce_briefing', () => {
     expect(out.result.reason).toBe('briefing_already_produced')
     expect(out.patches).toHaveLength(0)
   })
+
+  // #18 (2026-07-14): AnalystBriefingSchema has no usedFillerPhrases field, so the
+  // LLM-produced `intent.briefing` never carries it. Before the fix, the patch below
+  // wrote `intent.briefing` verbatim — silently wiping whatever interviewTalker.ts's
+  // own read-merge-write had persisted into interviews.next_briefing.usedFillerPhrases.
+  it('preserves usedFillerPhrases from the snapshot even though the briefing carries none', () => {
+    const snapshot = makeSnapshot([], { usedFillerPhrases: ['Vielen Dank', 'Interessant'] })
+    const out = applyIntent(snapshot, { kind: 'produce_briefing', briefing: { next_focus: 'X', suggested_question: 'Q?' } }, CTX)
+    expect(out.result.status).toBe('accepted')
+    expect(out.patches).toEqual([{
+      kind: 'interview',
+      fields: {
+        next_briefing: { next_focus: 'X', suggested_question: 'Q?', usedFillerPhrases: ['Vielen Dank', 'Interessant'] },
+        analyst_status: 'done',
+      },
+      onlyIfNotDone: true,
+    }])
+  })
+
+  it('does not add an empty usedFillerPhrases key when the snapshot has none', () => {
+    const out = applyIntent(makeSnapshot([]), { kind: 'produce_briefing', briefing: { next_focus: 'X', suggested_question: 'Q?' } }, CTX)
+    expect(out.patches).toEqual([{
+      kind: 'interview',
+      fields: { next_briefing: { next_focus: 'X', suggested_question: 'Q?' }, analyst_status: 'done' },
+      onlyIfNotDone: true,
+    }])
+  })
 })
 
 // ─── backfill_data_sources ───────────────────────────────────────────────────

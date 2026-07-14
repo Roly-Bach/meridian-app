@@ -13,8 +13,7 @@
  * steps so the cache converges over the first few turns of a new interview session.
  */
 
-import { cosineSim } from './processClustering'
-import { generateEmbedding } from './embeddings'
+import { cosineSim, generateEmbedding } from './embeddings'
 import type { StepEntry } from './interviewSemantic'
 
 export const HARD_THRESHOLD = 0.84

@@ -1,14 +1,7 @@
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
 import type { TurnMessage } from './interviewTypes'
-
-type OnTokenUsage = (r: {
-  component: string
-  model: string
-  inputTokens: number
-  cacheReadTokens?: number
-  outputTokens: number
-}) => void
+import { buildTraceMetadata, type TraceCtx, type OnTokenUsage } from './_telemetry'
 
 /**
  * KI-18 — live per-turn grounding guard for the Talker's natural-language callbacks.
@@ -157,7 +150,7 @@ export async function checkGroundingViolation(
   candidateText: string,
   priorTurns: TurnMessage[],
   talkerModelString: string,
-  _traceCtx?: unknown,
+  traceCtx?: TraceCtx,
   onTokenUsage?: OnTokenUsage,
 ): Promise<GroundingGuardResult> {
   // Resolve + validate the judge model on every call, BEFORE the empty-history early return and
@@ -191,6 +184,11 @@ export async function checkGroundingViolation(
         prompt: `Bisheriger Verlauf:\n${transcript}\n\nZU PRÜFENDE Agent-Antwort:\n"${candidateText}"`,
         maxOutputTokens: 500,
         temperature: 0,
+        experimental_telemetry: buildTraceMetadata('talkerGroundingGuard.judge', {
+          model: judgeModel,
+          component: 'grounding_guard',
+          ...traceCtx,
+        }),
       })
       onTokenUsage?.({
         component: 'grounding_guard',

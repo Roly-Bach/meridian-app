@@ -1,5 +1,14 @@
 // Shared telemetry context passed to every LLM-call site.
 // Services spread their own fields (interviewId, model) then merge traceCtx on top.
+
+export type OnTokenUsage = (r: {
+  component: string
+  model: string
+  inputTokens: number
+  cacheReadTokens?: number
+  outputTokens: number
+}) => void
+
 export interface TraceCtx {
   interviewId?: string
   evalRunId?: string

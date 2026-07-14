@@ -11,8 +11,7 @@ vi.mock('@/lib/supabase-admin', () => ({ getSupabaseAdmin: vi.fn() }))
 // assert the tool's LLM-facing result + the resulting snapshot/committed state.
 import { buildTools } from './interviewAgent'
 import { createMemoryTurnStore } from './turnStore/memoryTurnStore'
-import type { StepEntry } from './interviewSemantic'
-import type { RawExtraction } from './extraction'
+import type { StepEntry, RawExtraction } from './interviewSemantic'
 
 function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
   return {

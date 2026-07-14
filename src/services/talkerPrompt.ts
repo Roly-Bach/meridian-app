@@ -20,9 +20,9 @@ import type {
   TaziteSlotArray,
   TaziteSlotName,
   PotenzialSlotName,
+  RawExtraction,
 } from './interviewSemantic'
 import type { InterviewContext, AnalystBriefing } from './interviewTypes'
-import type { RawExtraction } from './extraction'
 
 // ─── Talker Static Prompt ─────────────────────────────────────────────────────
 // Iteration 1 (ADR-011 D7). Single source of truth for conversation-behavior

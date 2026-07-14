@@ -20,16 +20,8 @@ import { generateText, stepCountIs } from 'ai'
 import { buildTools } from './interviewAgent'
 import { POTENZIAL_SLOT_NAMES, type PotenzialSlotName, type StepEntry } from './interviewSemantic'
 import { findStepById, findStepFuzzy } from './turnStore/applyIntent'
-import { buildTraceMetadata, type TraceCtx } from './_telemetry'
+import { buildTraceMetadata, type TraceCtx, type OnTokenUsage } from './_telemetry'
 import type { TurnStore } from './turnStore/port'
-
-type OnTokenUsage = (r: {
-  component: string
-  model: string
-  inputTokens: number
-  cacheReadTokens?: number
-  outputTokens: number
-}) => void
 
 export interface QuickExtractOptions {
   interviewId: string

@@ -21,6 +21,7 @@ import {
   normalizeStepEntry,
   type Phase,
   type StepEntry,
+  type RawExtraction,
 } from '@/services/interviewSemantic'
 import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
 import {
@@ -38,22 +39,16 @@ import {
   type AnalystRunResult,
 } from '@/services/interviewAnalyst'
 import { runQuickExtract } from '@/services/interviewQuickExtract'
-import { type RawExtraction } from '@/services/extraction'
 import type { InterviewStore } from '@/services/turnStore/port'
+import type { OnTokenUsage } from '@/services/_telemetry'
 
 // ─── Ports ─────────────────────────────────────────────────────────────────────
 
-export interface ExtractAndEmbedArgs {
+interface ExtractAndEmbedArgs {
   interviewId: string
   workspaceId: string
   turnId: string
-  /**
-   * Built fresh every turn from the FULL turn history (see call site below) — but
-   * extraction.ts's buildExtractionPrompt only ever reads transcript[transcript.length-1].
-   * The rest is constructed and discarded on every single call, growing O(n) with
-   * interview length. See docs/architecture/00-vorgeschlagene-anpassungen.md #17.
-   */
-  transcript: Array<{ user_input: string; agent_response: string }>
+  userInput: string
 }
 
 export interface RunTurnPorts {
@@ -112,19 +107,9 @@ export interface TurnStream {
   text: PromiseLike<string>
 }
 
-/**
- * chat/route.ts (prod) never supplies this — only the eval runner does, for
- * per-run cost aggregation. Not dead: it's the Ports pattern working as intended
- * (one optional field, unused by one of two callers), not overhead like the
- * ExtractAndEmbedArgs.transcript case above.
- */
-type OnTokenUsage = (r: {
-  component: string
-  model: string
-  inputTokens: number
-  cacheReadTokens?: number
-  outputTokens: number
-}) => void
+// chat/route.ts (prod) never supplies OnTokenUsage — only the eval runner does, for
+// per-run cost aggregation. Not dead: it's the Ports pattern working as intended
+// (one optional field, unused by one of two callers).
 
 export interface RunTurnInput {
   interviewId: string
@@ -208,13 +193,14 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   const analystStatus = interview.analyst_status ?? 'idle'
   let analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
 
-  // Suspected bug, not yet runtime-verified (docs/architecture/00-vorgeschlagene-anpassungen.md #18):
-  // the Talker persists usedFillerPhrases into next_briefing via a careful read-merge-write
-  // (interviewTalker.ts:312-336), but the Analyst's produce_briefing tool commits next_briefing
-  // as a full object replace on every call with substantial state change (AnalystBriefingSchema
-  // has no usedFillerPhrases field, so it can never carry it forward). If the Analyst's commit
-  // lands after the Talker's write for the same turn, this array is silently wiped and the
-  // fallback below fires again — likely making SEED_FILLERS the common case, not a turn-1 edge case.
+  // #18 (fixed 2026-07-14): the Talker persists usedFillerPhrases into next_briefing via
+  // a read-merge-write (interviewTalker.ts:312-336), but AnalystBriefingSchema has no
+  // usedFillerPhrases field, so a produce_briefing tool call never carries it forward.
+  // applyProduceBriefing (turnStore/applyIntent.ts) now merges the value from the
+  // session's loaded snapshot back into the patch, so the Analyst's commit no longer
+  // wipes it. Residual: a same-turn race with the Talker's own write is narrowed (the
+  // snapshot is loaded once per pass) but not fully eliminated — see the TurnSnapshot
+  // comment in turnStore/intents.ts.
   const persistedFillers = analystBriefing?.usedFillerPhrases ?? []
   const usedFillerPhrases: string[] = persistedFillers.length === 0
     ? SEED_FILLERS
@@ -286,7 +272,15 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       analystBriefing = preCompletionAnalystResult.briefing
       lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
     } catch (err) {
-      console.error('[runInterviewTurn] pre-completion analyst recheck failed, trusting original lifecycle decision:', err)
+      // #8 (2026-07-14): previously fell through and trusted the stale (pre-recheck)
+      // lifecycle decision — if that decision was shouldComplete=true, a transient
+      // failure here (network blip, rate limit) could complete the interview on
+      // state that never saw this turn's userInput at all (the exact class of bug
+      // this recheck exists to prevent, see KI-12 above). Veto completion instead:
+      // the turn proceeds normally below, and background() runs the Analyst as a
+      // natural retry on the next pass — no interview is silently lost, only delayed.
+      console.error('[runInterviewTurn] pre-completion analyst recheck failed, vetoing completion this turn:', err)
+      lifecycle = { shouldComplete: false, reason: null }
     }
   }
 
@@ -493,15 +487,11 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       }
 
       if (newTurn?.id) {
-        const transcript = [
-          ...existingTurns.map((t) => ({ user_input: t.user_input, agent_response: t.agent_response })),
-          { user_input: userInput, agent_response: agentText },
-        ]
         p.extractAndEmbed({
           interviewId,
           workspaceId: interview.workspace_id,
           turnId: newTurn.id,
-          transcript,
+          userInput,
         })
           .then(async (newExtractions) => {
             if (newExtractions.length > 0) {

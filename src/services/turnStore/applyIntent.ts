@@ -26,11 +26,11 @@ import {
   type EinflussKante,
   type PotenzialSlotName,
   type TaziteSlotName,
+  type RawExtraction,
 } from '@/services/interviewSemantic'
 import { canOverwrite, type WriteSource } from '@/services/slotConflictResolver'
 import type { SlotWriteEvent } from '@/services/slotWriteTrail'
 import type { Json } from '@/lib/database.types'
-import type { RawExtraction } from '@/services/extraction'
 import type {
   ApplyContext,
   ApplyOutcome,
@@ -417,12 +417,18 @@ function applyProduceBriefing(snapshot: TurnSnapshot, intent: ProduceBriefingInt
   if (snapshot.briefingProduced) {
     return noWrite(snapshot, 'skipped', 'briefing_already_produced')
   }
+  // #18: AnalystBriefingSchema (the LLM tool-call schema) has no usedFillerPhrases
+  // field, so intent.briefing never carries it — merge back what the snapshot had
+  // at load time so this commit doesn't wipe interviewTalker.ts's own persisted value.
+  const briefing = snapshot.usedFillerPhrases?.length
+    ? { ...intent.briefing, usedFillerPhrases: snapshot.usedFillerPhrases }
+    : intent.briefing
   return {
     snapshot: { ...snapshot, briefingProduced: true },
     patches: [
       {
         kind: 'interview',
-        fields: { next_briefing: intent.briefing, analyst_status: 'done' },
+        fields: { next_briefing: briefing, analyst_status: 'done' },
         onlyIfNotDone: true,
       },
     ],

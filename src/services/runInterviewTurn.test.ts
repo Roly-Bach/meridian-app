@@ -428,6 +428,35 @@ describe('runInterviewTurn', () => {
     expect(result.meta.reason).toBe('soft_confirm')
   })
 
+  // T13 (#8): the synchronous pre-completion recheck itself fails (network blip, rate
+  // limit) — must veto completion rather than trust the stale soft_confirm decision,
+  // since that decision was made on state that never saw this turn's userInput.
+  it('T13 (#8): recheck failure vetoes completion — turn proceeds normally, no farewell stream', async () => {
+    vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'soft_confirm' })
+    vi.mocked(runAnalystOnline).mockRejectedValueOnce(new Error('Netzwerkfehler'))
+
+    setupSupabaseMocks({})
+
+    const result = await runInterviewTurn({
+      interviewId: INTERVIEW_ID,
+      userInput: 'Das war eigentlich alles.',
+      timerMinutes: 15,
+    })
+
+    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
+    expect(result.meta.completed).toBe(false)
+    expect(createTalkerStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.not.objectContaining({ isCompletionFarewell: true }),
+      })
+    )
+    expect(createTalkerStream).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
+      })
+    )
+  })
+
   // T5: Wrap-up injection → stream has WRAP_UP_QUESTION_TEXT, no createTalkerStream for normal turn
   it('T5: wrap-up injection — stream returns WRAP_UP_QUESTION_TEXT text', async () => {
     vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'wrap_up' as never, phaseJustEntered: 'wrap_up' as never })

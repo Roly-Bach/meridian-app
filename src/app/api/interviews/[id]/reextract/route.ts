@@ -68,20 +68,14 @@ export async function POST(
   }
 
   // ── Re-run extraction for each turn ─────────────────────────────────────────
-  // Build cumulative transcript up to each turn and re-extract
   let extractionCount = 0
   for (let i = 0; i < turns.length; i++) {
-    const transcript = turns.slice(0, i + 1).map(t => ({
-      user_input: t.user_input,
-      agent_response: t.agent_response,
-    }))
-
     try {
       await extractAndEmbed({
         interviewId,
         workspaceId: interview.workspace_id,
         turnId: turns[i].id,
-        transcript,
+        userInput: turns[i].user_input,
       })
       extractionCount++
     } catch (err) {

@@ -3,11 +3,10 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 import { createInterviewStream } from '@/services/interviewAgent'
-import type { Phase, StepEntry } from '@/services/interviewSemantic'
+import type { Phase, StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { TurnMessage } from '@/services/interviewTypes'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
-import type { RawExtraction } from '@/services/extraction'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
 type StateRow = Database['public']['Tables']['interview_state']['Row']
@@ -77,6 +76,8 @@ export async function POST(
   const existingTurns = (rawTurns as TurnRow[]) ?? []
   const stepTracker: StepEntry[] = (state?.step_tracker as StepEntry[] | null) ?? []
 
+  // Voraussetzung für die role==='assistant'-Prämisse des KI-22-Fixes weiter unten:
+  // erst ab hier ist garantiert existingTurns.length > 0.
   if (existingTurns.length === 0) {
     return NextResponse.json(
       { error: 'Kein bisheriges Gespräch — bitte /start für den ersten Aufruf verwenden.' },
@@ -98,7 +99,8 @@ export async function POST(
   // KI-22 (2026-07-11): turns are persisted as atomic (user_input, agent_response) pairs
   // (store.insertTurn writes both together, only after the agent has responded), so
   // `history`'s last entry here is always 'assistant' — the agent is still waiting on a
-  // reply to its own last question. Previously this always went through the LLM anyway
+  // reply to its own last question. (Relies on the 409-guard above: existingTurns.length > 0
+  // is what makes `history` non-empty here.) Previously this always went through the LLM anyway
   // with a synthetic "Ich bin wieder da, können wir weitermachen?" nudge — the model's
   // natural response was to re-pose the still-open question, which rendered as a
   // near-verbatim duplicate of the already-visible last chat bubble (reproduced live,

@@ -9,8 +9,7 @@
  */
 
 import type { MissingSlot } from './interviewSemantic'
-import type { Phase, StepEntry } from './interviewSemantic'
-import type { RawExtraction } from './extraction'
+import type { Phase, StepEntry, RawExtraction } from './interviewSemantic'
 
 export interface InterviewContext {
   interviewId: string

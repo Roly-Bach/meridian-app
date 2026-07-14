@@ -1,7 +1,7 @@
 import { resolveModel } from '@/lib/llm-provider'
 import { generateText, stepCountIs, tool } from 'ai'
 import { z } from 'zod'
-import { buildTraceMetadata, type TraceCtx } from './_telemetry'
+import { buildTraceMetadata, type TraceCtx, type OnTokenUsage } from './_telemetry'
 import { buildTools } from './interviewAgent'
 import {
   MANDATORY_SLOTS,
@@ -33,14 +33,6 @@ import type { TurnSnapshot } from './turnStore/intents'
 // in register_step + anti-fragmentation rules in the system prompt below.
 // (At budget=0 fragmentation was worse: 12 steps registered for 2 real processes.)
 export const ANALYST_THINKING_BUDGET = 2048
-
-type OnTokenUsage = (r: {
-  component: string
-  model: string
-  inputTokens: number
-  cacheReadTokens?: number
-  outputTokens: number
-}) => void
 
 export interface AnalystRunOptions {
   context: InterviewContext

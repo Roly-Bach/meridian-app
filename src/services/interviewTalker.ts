@@ -1,6 +1,6 @@
 import { resolveModel } from '@/lib/llm-provider'
 import { generateText } from 'ai'
-import { buildTraceMetadata, type TraceCtx } from './_telemetry'
+import { buildTraceMetadata, type TraceCtx, type OnTokenUsage } from './_telemetry'
 import { buildDynamicContext, STATIC_PROMPT } from './talkerPrompt'
 import { extractNumericTokens } from './conversationSignals'
 import { checkGroundingViolation } from './talkerGroundingGuard'
@@ -22,14 +22,6 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 // thinkingBudget: 512 (not 0) — Flash 3.5 produces empty responses on complex
 // multi-topic inputs when fully suppressed (B-QA-1, 2026-06-01).
 export const TALKER_THINKING_BUDGET = 512
-
-type OnTokenUsage = (r: {
-  component: string
-  model: string
-  inputTokens: number
-  cacheReadTokens?: number
-  outputTokens: number
-}) => void
 
 export interface TalkerStreamOptions {
   context: InterviewContext

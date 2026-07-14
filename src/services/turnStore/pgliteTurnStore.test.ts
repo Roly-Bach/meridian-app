@@ -120,4 +120,33 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
     )
     expect(ko.rows[0].n).toBe(1)
   })
+
+  // #18 (2026-07-14): end-to-end against the real loadSnapshot SQL — a produce_briefing
+  // commit must not wipe usedFillerPhrases interviewTalker.ts had already persisted.
+  it('preserves usedFillerPhrases across a produce_briefing commit', async () => {
+    await handle.db.query(
+      `UPDATE interviews SET next_briefing = $2::jsonb WHERE id = $1`,
+      [IV, JSON.stringify({ usedFillerPhrases: ['Vielen Dank', 'Interessant'] })],
+    )
+
+    const session = await handle.store.openTurn(IV, WS)
+    expect(session.snapshot().usedFillerPhrases).toEqual(['Vielen Dank', 'Interessant'])
+
+    const res = session.stage({
+      kind: 'produce_briefing',
+      briefing: { next_focus: 'Nächster Schritt', suggested_question: 'Wie geht es weiter?' },
+    })
+    expect(res.status).toBe('accepted')
+    await session.commit()
+
+    const persisted = await handle.db.query<{ next_briefing: unknown }>(
+      `SELECT next_briefing FROM interviews WHERE id = $1`,
+      [IV],
+    )
+    expect(persisted.rows[0].next_briefing).toMatchObject({
+      next_focus: 'Nächster Schritt',
+      suggested_question: 'Wie geht es weiter?',
+      usedFillerPhrases: ['Vielen Dank', 'Interessant'],
+    })
+  })
 })

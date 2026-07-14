@@ -3,11 +3,10 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 import { createInterviewStream } from '@/services/interviewAgent'
-import type { Phase, StepEntry } from '@/services/interviewSemantic'
+import type { Phase, StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { TurnMessage } from '@/services/interviewTypes'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
-import type { RawExtraction } from '@/services/extraction'
 
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
 type StateRow = Database['public']['Tables']['interview_state']['Row']

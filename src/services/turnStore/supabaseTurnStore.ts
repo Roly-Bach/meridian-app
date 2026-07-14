@@ -12,9 +12,8 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { normalizeStepEntry, type StepEntry } from '@/services/interviewSemantic'
+import { normalizeStepEntry, type StepEntry, type RawExtraction } from '@/services/interviewSemantic'
 import type { Json } from '@/lib/database.types'
-import type { RawExtraction } from '@/services/extraction'
 import type { AnalystBriefing } from '@/services/interviewTypes'
 import {
   createTurnStore,
@@ -59,17 +58,26 @@ class SupabaseBackend implements InterviewStoreBackend {
   }
 
   async loadSnapshot(interviewId: string): Promise<TurnSnapshot> {
-    const { data } = await this.db
-      .from('interview_state')
-      .select('step_tracker, topics_covered, topics_open, extractions_log')
-      .eq('interview_id', interviewId)
-      .maybeSingle()
+    const [{ data }, { data: interviewRow }] = await Promise.all([
+      this.db
+        .from('interview_state')
+        .select('step_tracker, topics_covered, topics_open, extractions_log')
+        .eq('interview_id', interviewId)
+        .maybeSingle(),
+      this.db
+        .from('interviews')
+        .select('next_briefing')
+        .eq('id', interviewId)
+        .maybeSingle(),
+    ])
     const rawTracker = (data?.step_tracker as unknown[] | null) ?? []
+    const nextBriefing = interviewRow?.next_briefing as { usedFillerPhrases?: string[] } | null
     return {
       stepTracker: rawTracker.map((raw, i) => normalizeStepEntry(raw, i + 1)),
       topicsCovered: (data?.topics_covered as string[] | null) ?? [],
       topicsOpen: (data?.topics_open as string[] | null) ?? [],
       extractionsLog: (data?.extractions_log as RawExtraction[] | null) ?? [],
+      usedFillerPhrases: nextBriefing?.usedFillerPhrases ?? [],
     }
   }
 

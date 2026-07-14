@@ -62,17 +62,13 @@ async function main() {
 
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i]
-    const transcript = turns.slice(0, i + 1).map(t => ({
-      user_input: t.user_input,
-      agent_response: t.agent_response,
-    }))
 
     process.stdout.write(`  Turn ${turn.turn_number}: ${turn.user_input.slice(0, 50)}... `)
     await extractAndEmbed({
       interviewId,
       workspaceId: interview.workspace_id,
       turnId: turn.id,
-      transcript,
+      userInput: turn.user_input,
     })
     console.log('✓')
   }

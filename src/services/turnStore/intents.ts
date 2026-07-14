@@ -13,13 +13,13 @@
  */
 
 import type { Json } from '@/lib/database.types'
-import type { RawExtraction } from '@/services/extraction'
 import type {
   StepEntry,
   GovernanceSlot,
   NichtBefundTyp,
   PotenzialSlotName,
   TaziteSlotName,
+  RawExtraction,
 } from '@/services/interviewSemantic'
 import type { WriteSource } from '@/services/slotConflictResolver'
 import type { AnalystBriefing } from '@/services/interviewTypes'
@@ -46,6 +46,18 @@ export interface TurnSnapshot {
    * column; defaults to false on load.
    */
   briefingProduced?: boolean
+  /**
+   * #18 (2026-07-14): interviews.next_briefing.usedFillerPhrases as it existed
+   * at snapshot load time. AnalystBriefingSchema (the LLM tool-call schema) has
+   * no usedFillerPhrases field, so a produce_briefing intent's `briefing` never
+   * carries it — applyProduceBriefing merges this snapshot value back in so the
+   * Analyst's commit doesn't silently overwrite what interviewTalker.ts's
+   * separate read-merge-write persisted. Loaded once per session; not re-read
+   * mid-pass (no tool mutates it), so a same-turn race with the Talker's own
+   * write is only narrowed, not eliminated — acceptable per the plan (no
+   * store-level merge, no DB migration).
+   */
+  usedFillerPhrases?: string[]
 }
 
 // ─── Knowledge-object insert (link_bottleneck second target) ──────────────────

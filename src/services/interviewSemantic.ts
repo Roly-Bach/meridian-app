@@ -626,3 +626,19 @@ export function computeWalkthroughSlotTarget(stepTracker: StepEntry[]): MissingS
 
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge-extraction shared types (moved from extraction.ts — #20, 2026-07-14)
+// Referenced by InterviewContext.extractionsLog; kept here (not in extraction.ts,
+// which is Prozessbasis) so Interview-Engine consumers (talkerPrompt.ts,
+// runInterviewTurn.ts, start/reconnect routes, turnStore) don't import from
+// Prozessbasis merely for this type. extraction.ts imports both back.
+// ---------------------------------------------------------------------------
+
+export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool'
+
+export interface RawExtraction {
+  type: KnowledgeObjectType
+  content: Record<string, unknown>
+  source_quote: string
+}

@@ -1,21 +1,11 @@
 import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
+import { cosineSim } from './embeddings'
 
 const SIMILARITY_THRESHOLD = parseFloat(
   process.env.CLUSTER_SIMILARITY_THRESHOLD ?? '0.78'
 )
-
-export function cosineSim(a: number[], b: number[]): number {
-  let dot = 0, normA = 0, normB = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    normA += a[i] * a[i]
-    normB += b[i] * b[i]
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB)
-  return denom === 0 ? 0 : dot / denom
-}
 
 function computeCentroid(embeddings: number[][]): number[] {
   const dim = embeddings[0].length

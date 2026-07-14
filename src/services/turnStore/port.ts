@@ -25,8 +25,7 @@ import type {
 } from './intents'
 import { emitSlotWrite } from '@/services/slotWriteTrail'
 import type { Json } from '@/lib/database.types'
-import type { StepEntry } from '@/services/interviewSemantic'
-import type { RawExtraction } from '@/services/extraction'
+import type { StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { AnalystBriefing } from '@/services/interviewTypes'
 
 export interface TurnSession {

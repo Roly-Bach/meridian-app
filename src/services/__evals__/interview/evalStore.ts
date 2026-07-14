@@ -16,9 +16,8 @@
  */
 
 import { randomUUID } from 'crypto'
-import type { Phase, StepEntry } from '@/services/interviewSemantic'
+import type { Phase, StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
-import type { RawExtraction } from '@/services/extraction'
 import type { InterviewStore } from '@/services/turnStore/port'
 import type { RunTurnPorts } from '@/services/runInterviewTurn'
 import type { Database, Json } from '@/lib/database.types'

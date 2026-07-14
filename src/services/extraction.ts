@@ -1,24 +1,11 @@
 import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { generateEmbedding } from './embeddings'
+import { generateEmbedding, cosineSim } from './embeddings'
 import { resolveModel } from '@/lib/llm-provider'
-import { cosineSim } from './processClustering'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
-
-export type KnowledgeObjectType = 'process_step' | 'pain_point' | 'tool'
+import type { KnowledgeObjectType, RawExtraction } from './interviewSemantic'
 
 const ALLOWED_TYPES: readonly KnowledgeObjectType[] = ['pain_point', 'tool']
-
-export interface RawExtraction {
-  type: KnowledgeObjectType
-  content: Record<string, unknown>
-  source_quote: string
-}
-
-export interface TurnTranscript {
-  user_input: string
-  agent_response: string
-}
 
 const EXTRACTION_SYSTEM_PROMPT = `Du bist ein Extraktions-Agent für Meridian. Deine Aufgabe: Extrahiere strukturiertes Wissen aus Interview-Transkripten.
 
@@ -46,25 +33,24 @@ Ausgabeformat:
   }
 ]`
 
-function buildExtractionPrompt(transcript: TurnTranscript[]): string {
-  const lastTurn = transcript[transcript.length - 1]
-  return `Mitarbeiter: ${lastTurn.user_input}`
+function buildExtractionPrompt(userInput: string): string {
+  return `Mitarbeiter: ${userInput}`
 }
 
 export async function extractAndEmbed({
   interviewId,
   workspaceId,
   turnId,
-  transcript,
+  userInput,
   traceCtx,
 }: {
   interviewId: string
   workspaceId: string
   turnId: string
-  transcript: TurnTranscript[]
+  userInput: string
   traceCtx?: TraceCtx
 }): Promise<RawExtraction[]> {
-  if (transcript.length === 0) return []
+  if (!userInput) return []
 
   const supabase = getSupabaseAdmin()
 
@@ -73,7 +59,7 @@ export async function extractAndEmbed({
   const extractionParams = {
     model: resolveModel(process.env.EXTRACTION_MODEL),
     system: EXTRACTION_SYSTEM_PROMPT,
-    prompt: buildExtractionPrompt(transcript),
+    prompt: buildExtractionPrompt(userInput),
     maxOutputTokens: 2000,
     experimental_telemetry: buildTraceMetadata('extraction.extractAndEmbed', {
       interviewId,
@@ -99,7 +85,7 @@ export async function extractAndEmbed({
     try {
       const { text: retryText } = await generateText({
         ...extractionParams,
-        prompt: buildExtractionPrompt(transcript) + '\n\nWICHTIG: Antworte NUR mit dem JSON-Array. Beginne direkt mit [',
+        prompt: buildExtractionPrompt(userInput) + '\n\nWICHTIG: Antworte NUR mit dem JSON-Array. Beginne direkt mit [',
       })
       extractions = parseExtractionText(retryText)
       console.log('[extraction] retry succeeded')
