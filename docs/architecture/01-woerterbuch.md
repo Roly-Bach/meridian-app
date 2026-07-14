@@ -20,7 +20,9 @@
 
 ## Prozessbasis
 
-`services/{extraction,processEnrichment,processClustering,embeddings,schemaValidator,substepGenerator}.ts`, `schemas/prozessschritt-schema.json`, `lib/processStepsAggregation.ts`, `components/ProcessStepsTable.tsx`, `app/api/{interview/[token]/clarification,interviews/[id]/reextract,knowledge/search,process-steps/*}`, `app/dashboard/process-steps/page.tsx`
+`services/{extraction,processEnrichment,processClustering,schemaValidator,substepGenerator}.ts`, `schemas/prozessschritt-schema.json`, `lib/processStepsAggregation.ts`, `components/ProcessStepsTable.tsx`, `app/api/{interview/[token]/clarification,interviews/[id]/reextract,knowledge/search,process-steps/*}`, `app/dashboard/process-steps/page.tsx`
+
+`services/embeddings.ts` **umklassifiziert 2026-07-14** aus dieser Liste heraus — jetzt Crosscutting Concept, siehe unten (Cleanup-Tranche #21).
 
 `schemaValidator.ts` hier statt bei Synthetischer Evaluation einsortiert, obwohl aktuell nur der Eval-Scorer `schemaConformanceRate.ts` es importiert (siehe Diskussion) — Zuordnung nach Schema-Besitz, nicht nach aktuellem Aufrufer.
 
@@ -42,7 +44,9 @@ Eigener Unterabschnitt **Shell** (technisches Grundgerüst, gehört fachlich zu 
 
 `services/_telemetry.ts` — Langfuse-Tracing-Wiring, importiert von Modulen aus praktisch allen Components (Interview-Engine, Prozessbasis, Use-Case-Engine). Gehört in den arc42-Crosscutting-Abschnitt des Doku-Baums, nicht zwanghaft einem einzelnen Component zugeordnet.
 
-`services/interviewSemantic.ts` — geteilte Typen/Konstanten/Utilities (`POTENZIAL_SLOT_NAMES`, `TAZITE_SLOT_NAMES`, `tokenJaccardNorm`, Normalisierungs-Helfer). **Umklassifiziert 2026-07-13**, vorher fälschlich unter Interview-Engine geführt: 35 Importeure quer durch Interview-Engine, Interview-State, Prozessbasis (`processEnrichment.ts`, `schemaValidator.ts`) und ~15 Eval-Scorer (siehe `03-komponenten-uebersicht.md` Fund 2) — verhält sich wie ein zweites Crosscutting Concept, nicht wie Interview-Engine-eigener Code.
+`services/interviewSemantic.ts` — geteilte Typen/Konstanten/Utilities (`POTENZIAL_SLOT_NAMES`, `TAZITE_SLOT_NAMES`, `tokenJaccardNorm`, Normalisierungs-Helfer). **Umklassifiziert 2026-07-13**, vorher fälschlich unter Interview-Engine geführt: 35 Importeure quer durch Interview-Engine, Interview-State, Prozessbasis (`processEnrichment.ts`, `schemaValidator.ts`) und ~15 Eval-Scorer (siehe `03-komponenten-uebersicht.md` Fund 2) — verhält sich wie ein zweites Crosscutting Concept, nicht wie Interview-Engine-eigener Code. Trägt seit 2026-07-14 zusätzlich `RawExtraction`/`KnowledgeObjectType` (verschoben aus `extraction.ts`, Cleanup-Tranche #20) — beide waren bereits vorher zentral in `InterviewContext.extractionsLog` verbaut und erzeugten dadurch 4 unnötige Interview-Engine→Prozessbasis-Dateikanten.
+
+`services/embeddings.ts` — **umklassifiziert 2026-07-14** (Cleanup-Tranche #21), vorher fälschlich unter Prozessbasis geführt: `generateEmbedding` wurde bereits vorher vendor-neutral von Interview-Engine (`interviewAgent.ts`, `stepIdentity.ts` — reines Live-Dedup innerhalb eines laufenden Interviews) UND Prozessbasis (`processClustering.ts`, workspace-weites Cluster-Matching) importiert, ohne fachlichen Bezug zu Prozessbasis' eigentlicher Aufgabe. `cosineSim` (vorher in `processClustering.ts` dupliziert) wohnt jetzt ebenfalls hier, direkt neben der Embedding-API, auf der es operiert — reine Vektor-Mathe ohne Prozessbasis-Bezug. Reduziert die Interview-Engine→Prozessbasis-Dateikanten um 3 (zusammen mit #20: 7 von ursprünglich 10 eliminiert, siehe `03-komponenten-uebersicht.md`).
 
 ## Offene Mikro-Zuordnungen (niedrige Konfidenz, noch nicht entschieden)
 
