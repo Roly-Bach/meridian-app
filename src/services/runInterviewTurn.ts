@@ -47,6 +47,12 @@ export interface ExtractAndEmbedArgs {
   interviewId: string
   workspaceId: string
   turnId: string
+  /**
+   * Built fresh every turn from the FULL turn history (see call site below) — but
+   * extraction.ts's buildExtractionPrompt only ever reads transcript[transcript.length-1].
+   * The rest is constructed and discarded on every single call, growing O(n) with
+   * interview length. See docs/architecture/00-vorgeschlagene-anpassungen.md #17.
+   */
   transcript: Array<{ user_input: string; agent_response: string }>
 }
 
@@ -62,6 +68,14 @@ export interface RunTurnPorts {
 /**
  * Default prod ports — lazy-imported so the eval (tsx) path never pulls the
  * Supabase store or the embedding/clustering pipeline unless it is actually used.
+ *
+ * Only ever invoked when the caller passes no `ports` — in practice that's just
+ * `chat/route.ts`. The eval runner always injects its own ports (evalStore.ts),
+ * so this function (and everything it dynamically imports) never runs there.
+ * The dynamic import() enforces this at the module-loading level too: a static
+ * top-level import would pull supabaseTurnStore.ts (which declares itself
+ * "Never imported by the eval (tsx) path") into the eval process's module graph
+ * merely by importing this file, regardless of whether this function is called.
  */
 async function defaultProdPorts(): Promise<RunTurnPorts> {
   const [{ createSupabaseInterviewStore }, extraction, enrichment, clustering] = await Promise.all([
@@ -98,6 +112,12 @@ export interface TurnStream {
   text: PromiseLike<string>
 }
 
+/**
+ * chat/route.ts (prod) never supplies this — only the eval runner does, for
+ * per-run cost aggregation. Not dead: it's the Ports pattern working as intended
+ * (one optional field, unused by one of two callers), not overhead like the
+ * ExtractAndEmbedArgs.transcript case above.
+ */
 type OnTokenUsage = (r: {
   component: string
   model: string
@@ -126,6 +146,7 @@ export interface TurnMeta {
 export interface TurnResult {
   stream: TurnStream
   background: () => Promise<AnalystRunResult | null>
+  /** Only consumed by the eval runner (turnResult.meta.phase/.completed) — chat/route.ts ignores it. */
   meta: TurnMeta
 }
 
@@ -187,6 +208,13 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   const analystStatus = interview.analyst_status ?? 'idle'
   let analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
 
+  // Suspected bug, not yet runtime-verified (docs/architecture/00-vorgeschlagene-anpassungen.md #18):
+  // the Talker persists usedFillerPhrases into next_briefing via a careful read-merge-write
+  // (interviewTalker.ts:312-336), but the Analyst's produce_briefing tool commits next_briefing
+  // as a full object replace on every call with substantial state change (AnalystBriefingSchema
+  // has no usedFillerPhrases field, so it can never carry it forward). If the Analyst's commit
+  // lands after the Talker's write for the same turn, this array is silently wiped and the
+  // fallback below fires again — likely making SEED_FILLERS the common case, not a turn-1 edge case.
   const persistedFillers = analystBriefing?.usedFillerPhrases ?? []
   const usedFillerPhrases: string[] = persistedFillers.length === 0
     ? SEED_FILLERS
@@ -304,6 +332,9 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       onTokenUsage: input.onTokenUsage,
     })
 
+    // This closure and the "Background analyst closure" further below (normal path)
+    // independently check the same preCompletionAnalystResult dedup condition —
+    // same logic twice instead of a shared helper (docs/architecture/00-vorgeschlagene-anpassungen.md #15).
     const background = async (): Promise<AnalystRunResult | null> => {
       if (preCompletionAnalystResult) {
         // Already ran synchronously above during the soft_confirm recheck —
