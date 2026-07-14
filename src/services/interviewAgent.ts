@@ -41,27 +41,6 @@ function normalizeStepTitleForDedup(title: string): string {
     .trim()
 }
 
-// Fuzzy step title lookup for record_slot / update_walkthrough_data.
-// Exact match first; falls back to best tokenJaccardNorm ≥ 0.4.
-// Returns index in tracker, or -1 if not found.
-function findStepFuzzy(tracker: StepEntry[], stepTitle: string): number {
-  const normalized = stepTitle.trim().toLowerCase()
-  const exact = tracker.findIndex((s) => s.title.trim().toLowerCase() === normalized)
-  if (exact !== -1) return exact
-  let bestScore = 0
-  let bestIdx = -1
-  for (let i = 0; i < tracker.length; i++) {
-    const score = tokenJaccardNorm(tracker[i].title, stepTitle)
-    if (score > bestScore) { bestScore = score; bestIdx = i }
-  }
-  return bestScore >= 0.4 ? bestIdx : -1
-}
-
-// Stable-ID lookup (PROJ-27/BL-E1.4). Used when record_slot supplies step_id.
-function findStepById(tracker: StepEntry[], stepId: string): number {
-  return tracker.findIndex((s) => s.id === stepId)
-}
-
 /**
  * Deterministically expand a verbatim span (e.g. "100", "5 Minuten") to the
  * enclosing sentence(s) in the source text. Used by record_slot to derive a

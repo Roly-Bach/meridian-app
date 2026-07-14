@@ -128,6 +128,24 @@ describe('decideNextPhase — walkthrough_step', () => {
   })
 })
 
+// #9 (2026-07-14): assertPhaseInvariants was demoted to a monitoring-only console.warn —
+// its return value no longer forces a transition. This pins that the removal is behavior-
+// neutral: in the invariant's own trigger window (historyLength >= coverageCheckEscapeHL - 4),
+// the pre-existing HL escape valves already force slot_completion regardless, for any step
+// count >= 2 (coverageCheckEscapeHL - 4 > walkthroughEscapeHL always holds in that range).
+describe('decideNextPhase — #9 assertPhaseInvariants demoted to monitoring-only', () => {
+  it('still forces slot_completion in the invariant window even with under-started steps (HL escape valves fire independently)', () => {
+    const budget = computeTurnBudget(30, 2)
+    // Two steps still 'exploring' → startedSteps=0 < expectedMin — the old invariant would
+    // have flagged a violation here. HL escape valves must still push the phase forward.
+    const tracker = [makeStep('A', 'exploring'), makeStep('B', 'exploring')]
+    const historyLength = budget.coverageCheckEscapeHL - 4 // exactly the invariant's trigger threshold
+    expect(
+      decideNextPhase(baseCtx({ phase: 'walkthrough_step', stepTracker: tracker, historyLength }), null),
+    ).toBe('slot_completion')
+  })
+})
+
 // ─── slot_completion transitions ─────────────────────────────────────────────
 
 describe('decideNextPhase — slot_completion', () => {

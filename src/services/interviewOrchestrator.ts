@@ -1,4 +1,4 @@
-import { computeMissingMandatorySlots, MANDATORY_SLOTS, POTENZIAL_SLOT_NAMES, groupSemanticSteps, type Phase, type StepEntry } from './interviewSemantic'
+import { POTENZIAL_SLOT_NAMES, groupSemanticSteps, type Phase, type StepEntry } from './interviewSemantic'
 import type { AnalystBriefing } from './interviewTypes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -104,11 +104,6 @@ function walkthroughHasContent(tracker: StepEntry[]): boolean {
   )
 }
 
-function allStepsDone(tracker: StepEntry[]): boolean {
-  if (tracker.length === 0) return false
-  return !tracker.some((s) => s.status === 'exploring' || s.status === 'walkthrough')
-}
-
 // Groups semantically equivalent steps and checks whether the union of potenzial
 // slots per group is complete. Uses groupSemanticSteps (single source of truth).
 function semanticAllStepsDone(tracker: StepEntry[]): boolean {
@@ -127,10 +122,6 @@ function hasUnexploredFocusTopic(topicsOpen: string[], tracker: StepEntry[]): bo
     const t = topic.trim().toLowerCase()
     return !registeredTitles.some((rt) => rt.includes(t) || t.includes(rt))
   })
-}
-
-function allMandatorySlotsFilled(tracker: StepEntry[]): boolean {
-  return tracker.length > 0 && computeMissingMandatorySlots(tracker).length === 0
 }
 
 // KI-15: a step is "unstarted" when it carries zero extracted content — neither potenzial
@@ -188,14 +179,36 @@ export function shouldInjectWrapUpQuestion(
   return history[history.length - 1].role === 'user'
 }
 
+/**
+ * True iff the deterministic wrap-up question has been asked AND the user has
+ * since replied — i.e. a completion/clarification decision is owed this turn.
+ * Shared by decideNextPhase's wrap_up case and checkLifecycle's Trigger B (#16,
+ * 2026-07-14 — was duplicated verbatim in both places). Each caller still
+ * branches separately on analystSuggestion.clarification_cards afterwards,
+ * since they return different result types (ExtendedPhase vs. LifecycleDecision).
+ */
+export function wrapUpAnswerReceived(
+  history: { role: 'user' | 'assistant'; content: string }[],
+): boolean {
+  return (
+    wrapUpQuestionAlreadyAsked(history) &&
+    history.length > 0 &&
+    history[history.length - 1].role === 'user'
+  )
+}
+
 // ─── Phase Invariants ─────────────────────────────────────────────────────────
 
 /**
- * Asserts phase invariants at the start of each phase decision.
- * Violations are logged as warnings — no throw. Returns true if a violation
- * was detected (caller may use this to force-transition).
+ * Monitoring only (#9, 2026-07-14): logs a warning when farewell is approaching
+ * but steps remain under-started. Does NOT force a transition — in every budget
+ * configuration the invariant's own window (historyLength >= coverageCheckEscapeHL - 4)
+ * lies after walkthroughEscapeHL, so the walkthrough_step case's own escape valve (the
+ * `historyLength >= budget.walkthroughEscapeHL` check below) and the KI-15 unstarted-step
+ * guard already push the phase forward before this window is ever reached. Kept as an
+ * early-warning signal for regressions in that escape-valve ordering.
  */
-function assertPhaseInvariants(historyLength: number, startedSteps: number, totalTopics: number, budget: TurnBudget): boolean {
+function assertPhaseInvariants(historyLength: number, startedSteps: number, totalTopics: number, budget: TurnBudget): void {
   if (historyLength >= budget.coverageCheckEscapeHL - 4) {
     const expectedMin = Math.max(totalTopics - 1, 1)
     if (startedSteps < expectedMin) {
@@ -205,10 +218,8 @@ function assertPhaseInvariants(historyLength: number, startedSteps: number, tota
         expectedMin,
         totalTopics,
       })
-      return true
     }
   }
-  return false
 }
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
@@ -230,7 +241,7 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
   const totalTopics = ctx.stepTracker.length
   const budget = computeTurnBudget(ctx.maxDurationMinutes, totalTopics)
   const startedSteps = ctx.stepTracker.filter(s => s.status !== 'exploring').length
-  const invariantViolated = assertPhaseInvariants(ctx.historyLength, startedSteps, totalTopics, budget)
+  assertPhaseInvariants(ctx.historyLength, startedSteps, totalTopics, budget)
 
   switch (ctx.phase) {
     case 'intro':
@@ -255,9 +266,6 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       const turnsUsed = estimateTurnsUsedOnCurrentStep(ctx.historyLength, completedSteps, budget)
       const stepBudgetHL = computeStepBudget(ctx.historyLength, completedSteps, Math.max(totalTopics, 1), budget)
       if (turnsUsed >= stepBudgetHL) return 'slot_completion'
-
-      // Invariant violation: farewell approaching, force forward regardless of step state
-      if (invariantViolated) return 'slot_completion'
 
       // Walkthrough content threshold reached → move to slot_completion
       if (walkthroughHasContent(ctx.stepTracker)) return 'slot_completion'
@@ -302,11 +310,9 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       }
 
       // Trigger B: deterministic check — the orchestrator-injected wrap-up
-      // question must be present in history. wrap_up_question_asked flag from
-      // Analyst is no longer trusted (was fragile; Analyst could lie or forget).
-      const questionAsked = wrapUpQuestionAlreadyAsked(ctx.history)
-
-      if (questionAsked && ctx.history.length > 0 && ctx.history[ctx.history.length - 1].role === 'user') {
+      // question must be present in history and answered. wrap_up_question_asked
+      // flag from Analyst is no longer trusted (was fragile; Analyst could lie or forget).
+      if (wrapUpAnswerReceived(ctx.history)) {
         // Amendment A: if Analyst produced clarification_cards → clarification phase
         const cards = analystSuggestion?.clarification_cards
         if (cards && cards.length > 0) return 'clarification'
@@ -413,9 +419,7 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
       return { shouldComplete: false, reason: null }
     }
 
-    const questionAsked = wrapUpQuestionAlreadyAsked(ctx.history)
-
-    if (questionAsked && ctx.history.length > 0 && ctx.history[ctx.history.length - 1].role === 'user') {
+    if (wrapUpAnswerReceived(ctx.history)) {
       // Don't complete if Analyst generated clarification_cards — go to clarification phase instead
       const cards = analystSuggestion?.clarification_cards
       if (!cards || cards.length === 0) {
