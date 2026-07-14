@@ -16,8 +16,9 @@ vi.mock('@/lib/llm-provider', () => ({
   resolveModel: vi.fn().mockReturnValue('mock-model'),
 }))
 
-import { generateText } from 'ai'
+import { generateText, asSchema } from 'ai'
 import { runQuickExtract, isAlreadyFilledPotenzialSlot } from './interviewQuickExtract'
+import { buildTools } from './interviewAgent'
 import { createMemoryTurnStore } from './turnStore/memoryTurnStore'
 import type { StepEntry } from './interviewSemantic'
 
@@ -181,5 +182,35 @@ describe('runQuickExtract record_slot guard (KI-17)', () => {
     })
 
     expect(result?.[0]?.potenzial.frequency_per_month?.value).toBe(12)
+  })
+})
+
+// ─── record_slot execute-signature compatibility (#12, 2026-07-14) ────────────
+// interviewQuickExtract.ts's execute override casts its hand-written arg type to the
+// base tool's execute `as any` (no structural check from the compiler). This test
+// pins the override's arg shape (step_id?, step_title, slot, is_correction?, plus
+// the base fields it forwards) against interviewAgent.ts's real record_slot.inputSchema
+// (Zod) — it goes red if a future change to the base schema drops/renames a field the
+// override or the priority-guard (isAlreadyFilledPotenzialSlot) relies on.
+
+describe('record_slot execute-signature compatibility (#12)', () => {
+  it('the quick-extract override payload shape validates against the real record_slot.inputSchema', async () => {
+    const stepTracker = [makeStep()]
+    const { store } = createMemoryTurnStore({ stepTracker })
+    const session = await store.openTurn('iv-1', 'ws-1')
+    const knowledgeTools = buildTools(session, 'irrelevant user input', { source: 'quick' })
+
+    const representativePayload = {
+      step_id: 'S001',
+      step_title: 'Rechnungseingang buchen',
+      slot: 'frequency_per_month',
+      value: 42,
+      evidence_span: '42 Vorgänge',
+      source_turn: 1,
+      is_correction: false,
+    }
+
+    const result = await asSchema(knowledgeTools.record_slot.inputSchema).validate!(representativePayload)
+    expect(result.success).toBe(true)
   })
 })
