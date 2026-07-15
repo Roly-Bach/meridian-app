@@ -20,7 +20,6 @@ import type {
   TaziteSlotArray,
   TaziteSlotName,
   PotenzialSlotName,
-  RawExtraction,
 } from './interviewSemantic'
 import type { InterviewContext, AnalystBriefing } from './interviewTypes'
 
@@ -72,7 +71,7 @@ Frage stattdessen: Was passiert in diesem Schritt? Wie lange dauert es? Wie oft?
 </verboten>
 
 <no_repeat>
-HARTE REGEL: Werte unter "Bereits erfasst" oder mit ✓ im Schritt-Tracker / READ_ONLY_STATE dürfen NICHT erneut erfragt werden.
+HARTE REGEL: Werte mit ✓ im Schritt-Tracker / READ_ONLY_STATE dürfen NICHT erneut erfragt werden.
 Wenn du auf einen bekannten Wert eingehen willst, beziehe dich darauf statt nachzufragen ("Du hast vorhin ~100 Rechnungen/Monat genannt — ...").
 Vor jeder Frage prüfen: Steht der Wert schon im Tracker? Wenn ja → andere Frage stellen oder Phase abschließen.
 </no_repeat>
@@ -114,6 +113,23 @@ function formatStepTracker(steps: StepEntry[]): string {
 
   return steps.map((step) => {
     const title = sanitizeForPrompt(step.title)
+    const idPrefix = step.id ? `${step.id} ` : ''
+
+    const walkthrough: string[] = []
+    if (step.process_steps?.length) walkthrough.push(`  process_steps: ${step.process_steps.join(' → ')}`)
+    if (step.friction_points?.length) walkthrough.push(`  friction_points: ${step.friction_points.join(', ')}`)
+    if (step.friction_tools?.length) walkthrough.push(`  friction_tools: ${step.friction_tools.join(', ')}`)
+    if (step.pain_point_primary) walkthrough.push(`  pain_point_primary: "${step.pain_point_primary}"`)
+
+    // WP3 (2026-07-14 design round): for 'done' steps the full 10-line slot checklist is
+    // dead weight — governance/dependencies are captured opportunistically by the Analyst,
+    // never actively re-asked by the Talker, and <no_repeat> already forbids re-asking a
+    // filled slot regardless. Keep only the conversational context (process_steps/friction*)
+    // that's still useful for follow-up questions about OTHER steps. walkthrough/exploring
+    // steps keep the full checklist — there it's the actual steering signal for open slots.
+    if (step.status === 'done') {
+      return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge}) — alle Pflichtslots erfasst${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
+    }
 
     // Fix 4 (ADR-015): mask raw slot values — show status only to prevent anchoring.
     function fmtPotenzial(sv: SlotValue | null, label: string): string {
@@ -156,31 +172,8 @@ function formatStepTracker(steps: StepEntry[]): string {
       return `  abhaengigkeiten: ✓ ${total} Kante(n) (depends_on: ${dep.depends_on.length}, influences: ${dep.influences.length})`
     })()
 
-    const walkthrough: string[] = []
-    if (step.process_steps?.length) walkthrough.push(`  process_steps: ${step.process_steps.join(' → ')}`)
-    if (step.friction_points?.length) walkthrough.push(`  friction_points: ${step.friction_points.join(', ')}`)
-    if (step.friction_tools?.length) walkthrough.push(`  friction_tools: ${step.friction_tools.join(', ')}`)
-    if (step.pain_point_primary) walkthrough.push(`  pain_point_primary: "${step.pain_point_primary}"`)
-
-    const idPrefix = step.id ? `${step.id} ` : ''
     return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${govLine}\n${depLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
   }).join('\n\n')
-}
-
-function formatExtractionsLog(log: RawExtraction[]): string {
-  if (log.length === 0) return '- Noch nichts extrahiert.'
-
-  const lines: string[] = []
-  for (const item of log) {
-    if (item.type === 'pain_point') {
-      const c = item.content as Record<string, unknown>
-      lines.push(`- [pain_point] "${c.description}"`)
-    } else if (item.type === 'tool') {
-      const c = item.content as Record<string, unknown>
-      lines.push(`- [tool] "${c.name}"`)
-    }
-  }
-  return lines.join('\n')
 }
 
 // ─── Phase Methodology Sections ───────────────────────────────────────────────
@@ -310,30 +303,6 @@ const WALKTHROUGH_EXAMPLES = `
 // Called by interviewTalker.ts (Iteration 3) with the Analyst briefing, and by
 // interviewAgent.createInterviewStream.
 
-// Fix 4 (ADR-015): semantic masking — Talker sees ONLY status labels, not
-// raw values. Prevents two failure modes observed in eval 2026-06-03:
-//   1. Anchoring ("halten wir 100 Rechnungen pro Monat fest")
-//   2. Self-calculation ("100 × 5min = 7.5 min average")
-// Raw values stay in the Analyst context where they are needed for extraction.
-function formatFilledSlotsSnapshot(steps: StepEntry[]): string {
-  const lines: string[] = []
-  for (const step of steps) {
-    const filledLabels: string[] = []
-    // Potenzial
-    for (const [slot, sv] of Object.entries(step.potenzial) as [string, SlotValue | null][]) {
-      if (sv !== null && sv.value !== null && sv.value !== undefined) filledLabels.push(slot)
-    }
-    // Tazite
-    for (const [slot, sv] of Object.entries(step.slots) as [string, TaziteSlot | TaziteSlotArray | null][]) {
-      if (sv != null && (sv.value != null || sv.nicht_befund_typ != null)) filledLabels.push(slot)
-    }
-    if (filledLabels.length > 0) {
-      lines.push(`- "${sanitizeForPrompt(step.title)}": ${filledLabels.map(s => `${s} ✓`).join(', ')}`)
-    }
-  }
-  return lines.join('\n')
-}
-
 export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBriefing | null): string {
   const focusLine = ctx.focusTopics
     ? `Fokusthemen (NUR interne Steuerung — im Opener niemals namentlich nennen): ${ctx.focusTopics}`
@@ -353,6 +322,23 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     ctx.maxDurationMinutes <= 10
       ? '\n- Kurzmodus aktiv: Halte Übergänge zwischen Phasen kurz und komm zügig zum Abschluss.'
       : ''
+
+  // WP1 (2026-07-14): the scripted completion/farewell call (runInterviewTurn.ts, after
+  // checkLifecycle already decided shouldComplete=true) needs nothing but a header + the
+  // farewell methodology text — no step tracker, no briefing, no signal sections. Sending
+  // the full dynamic block also created a live contradiction: ambiguitySection could demand
+  // a PFLICHT follow-up question in the same turn the methodology said "KEINE weitere Frage"
+  // (measured on interview 1f5d350d turn 31, 2026-07-11 batch). Short-circuiting here removes
+  // both the token cost (~1562 → ~200-250) and the contradiction at once.
+  if (ctx.isCompletionFarewell) {
+    const farewellMethodology = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, false, true)}\n</methodology>`
+    return `## Interview-Kontext
+- Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
+- Abteilung: ${ctx.department}
+- Phase: ${ctx.phase}
+- Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${shortModeHint}
+${farewellMethodology}`
+  }
 
   const coverageCheckSection = (ctx.phase === 'coverage_check' || ctx.phase === 'slot_completion') && ctx.missingSlotsForCoverageCheck && ctx.missingSlotsForCoverageCheck.length > 0
     ? `\n## Fehlende Pflicht-Slots (${ctx.phase})\n${ctx.missingSlotsForCoverageCheck.map(m => `- Schritt "${m.step_title}" → ${m.slot}`).join('\n')}\nFrage diese Werte gezielt und natürlich nach, bevor du zur nächsten Phase übergehst.`
@@ -417,16 +403,6 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
     ? `\n- Profil-Framing: Sprachtiefe und Fachbegriffe an "${ctx.employeeRole}" (${ctx.department}) anpassen. Fachfremde Rollen → alltagsnahe Sprache; Fach-/IT-Rollen → Domänen-Terminologie spiegeln.`
     : ''
 
-  // Kompakter Lookup für bereits erfasste Slots — in allen Phasen außer walkthrough_step
-  // (dort gibt es bereits den READ_ONLY_STATE Block).
-  let alreadyKnownSection = ''
-  if (ctx.phase !== 'walkthrough_step') {
-    const snapshot = formatFilledSlotsSnapshot(ctx.stepTracker)
-    if (snapshot.length > 0) {
-      alreadyKnownSection = `\n## Bereits erfasste Werte (NICHT erneut fragen)\n${snapshot}`
-    }
-  }
-
   // Conversation signals — single entry point (PROJ-35 / ADR-017).
   const s = analyzeConversationSignals(ctx, briefing)
 
@@ -487,7 +463,5 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 - ${focusLine}
 - Phase: ${ctx.phase}
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}${profileFraming}
-
-## Extrahierte Wissensobjekte
-${formatExtractionsLog(ctx.extractionsLog)}${coverageCheckSection}${methodologySection}${stepTrackerSection}${alreadyKnownSection}${fewShotSection}${briefingSection}${fillerAvoidance}${questionStemSection}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
+${coverageCheckSection}${methodologySection}${stepTrackerSection}${fewShotSection}${briefingSection}${fillerAvoidance}${questionStemSection}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
 }

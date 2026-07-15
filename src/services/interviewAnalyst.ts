@@ -83,7 +83,7 @@ const ONLINE_MODE_PREFIX = `ONLINE-MODUS — strikte Regeln:
 
 `
 
-function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' | 'default' = 'default'): string {
+export function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' | 'default' = 'default'): string {
   const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
   const activeStepLine = activeStep
     ? `Aktiv im Walkthrough: "${activeStep.title}" (${activeStep.id ?? 'no-id'}, Status: ${activeStep.status})`
@@ -97,8 +97,7 @@ function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' | 'defau
 
   return `${modePrefix}Du bist Interview-Analyst für ein laufendes Mitarbeiter-Interview. Deine Aufgabe: strukturierte Wissens-Extraktion nach jedem Mitarbeiter-Turn.
 
-Schritt-IDs (nutze step_id in record_slot statt step_title):
-${stepIdList}
+Nutze step_id in record_slot statt step_title — die aktuellen Schritt-IDs stehen im Abschnitt "Aktueller Kontext" am Ende dieses Prompts.
 
 Sprache des Interviews: Deutsch.
 
@@ -215,6 +214,9 @@ Richtig: "Wie viele Stunden wendest du pro Monat dafür auf?"
 - Fokusthemen: ${ctx.focusTopics ?? 'keine spezifischen'}
 - Step-Tracker: ${ctx.stepTracker.length} Steps registriert (Hard Cap: 5 — keinen neuen register_step wenn bereits 5 existieren)
 - ${activeStepLine}
+
+Schritt-IDs (nutze step_id in record_slot statt step_title):
+${stepIdList}
 `
 }
 
