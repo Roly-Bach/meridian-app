@@ -191,7 +191,6 @@ describe('decideNextPhase — closing', () => {
       { role: 'user' as const, content: 'Nein.' },
     ]
     const analystSuggestion = {
-      wrap_up_question_asked: true,
       clarification_cards: [{ process_step_id: 'uuid-1', step_title: 'Rechnungsprüfung', question: 'Wie oft?', options: ['Täglich', 'Wöchentlich', 'Andere'], slot_key: 'frequency' }],
     }
     expect(decideNextPhase(baseCtx({ phase: 'closing', history, historyLength: 2 }), analystSuggestion)).toBe('clarification')
@@ -202,13 +201,12 @@ describe('decideNextPhase — closing', () => {
     expect(decideNextPhase(baseCtx({ phase: 'closing', historyLength: 10, stepTracker: [lateStep] }), null)).toBe('explore')
   })
 
-  it('stays in closing when only the Analyst flag is set but the deterministic probe is not in history', () => {
+  it('stays in closing when the last assistant turn is not the deterministic probe text', () => {
     const history = [
       { role: 'assistant' as const, content: 'Irgendwas anderes noch?' },
       { role: 'user' as const, content: 'Nein.' },
     ]
-    const analystSuggestion = { wrap_up_question_asked: true }
-    expect(decideNextPhase(baseCtx({ phase: 'closing', history, historyLength: 2 }), analystSuggestion)).toBe('closing')
+    expect(decideNextPhase(baseCtx({ phase: 'closing', history, historyLength: 2 }), null)).toBe('closing')
   })
 })
 
@@ -259,7 +257,6 @@ describe('checkLifecycle', () => {
       { role: 'user' as const, content: 'Nein.' },
     ]
     const analystSuggestion = {
-      wrap_up_question_asked: true,
       clarification_cards: [{ process_step_id: 'x', step_title: 'Test', question: 'Wie oft?', options: ['A', 'B'], slot_key: 'frequency' }],
     }
     const result = checkLifecycle(baseCtx({ phase: 'closing', history, historyLength: 2 }), analystSuggestion)

@@ -33,13 +33,9 @@ import { randomUUID } from 'crypto'
 import { generateText } from 'ai'
 import { resolveModel } from '@/lib/llm-provider'
 import { initLangfuse, flushLangfuse } from '@/lib/langfuse'
-import type { Phase, StepEntry } from '@/services/interviewSemantic'
-import type { TurnMessage, ClarificationCard } from '@/services/interviewTypes'
+import type { StepEntry } from '@/services/interviewSemantic'
+import type { ClarificationCard } from '@/services/interviewTypes'
 import { createTalkerStream, TALKER_THINKING_BUDGET } from '@/services/interviewTalker'
-import {
-  decideNextPhase,
-  type OrchestratorContext,
-} from '@/services/interviewOrchestrator'
 import { ANALYST_THINKING_BUDGET, type AnalystToolCallRecord } from '@/services/interviewAnalyst'
 import { runInterviewTurn } from '@/services/runInterviewTurn'
 import { type TraceCtx } from '@/services/_telemetry'
@@ -824,50 +820,21 @@ async function runInterview(
     console.log(`\n[${persona.identity.name}]: ${personaResponse}`)
     conversationHistory.push({ role: 'user', content: personaResponse })
 
-    const [dbState, dbHistory, analystBriefing] = await Promise.all([
-      evalStore.loadState(interviewId),
-      evalStore.loadHistory(interviewId),
-      evalStore.loadAnalystBriefing(interviewId),
-    ])
+    const dbHistory = await evalStore.loadHistory(interviewId)
 
     // Simulate elapsed time: eval runs in seconds so real timerMinutes stays ~0.
     // Proportional to turn count so time-based urgency and hard-stop fire correctly.
     const simulatedTimerMinutes = Math.floor((turn / MAX_TURNS) * 30)
 
-    const agentHistory: TurnMessage[] = [...dbHistory, { role: 'user', content: personaResponse }]
-
-    const orchCtx: OrchestratorContext = {
-      phase: dbState.phase,
-      stepTracker: dbState.stepTracker,
-      topicsOpen: dbState.topicsOpen,
-      topicsCovered: dbState.topicsCovered,
-      timerMinutes: simulatedTimerMinutes,
-      maxDurationMinutes: 30,
-      historyLength: agentHistory.length,
-      history: agentHistory,
-    }
-
-    // PROJ-23: Clarification phase — eval-specific handling stays in runner.
-    const nextPhaseDecision = decideNextPhase(orchCtx, analystBriefing)
-    const phaseForClarificationCheck: Phase =
-      nextPhaseDecision === 'completed' ? 'closing' : (nextPhaseDecision as Phase)
-
-    if (phaseForClarificationCheck === 'clarification') {
-      const cards = analystBriefing?.clarification_cards ?? []
-      console.log(`\n[eval] Clarification phase: ${cards.length} cards — submitting synthetic answers`)
-      // L9: snapshot tracker BEFORE synthetic answers land — used by scorer to
-      // measure how much coverage the clarification phase contributes.
-      preClarificationSnapshot = JSON.parse(JSON.stringify(dbState.stepTracker)) as StepEntry[]
-      const syntheticAnswers = buildSyntheticClarificationAnswers(cards)
-      for (const a of syntheticAnswers) {
-        console.log(`  [card] ${a.slot_key} → ${JSON.stringify(a.answer)}`)
-      }
-      await evalStore.executeClarificationCompletion(interviewId, workspaceId, syntheticAnswers)
-      console.log('[eval] Clarification complete → interview completed')
-      break
-    }
-
-    // Delegate full turn logic to runInterviewTurn (PROJ-33 / ADR-016).
+    // BUG-5 (PROJ-42 QA, 2026-07-16): this loop used to precompute the phase
+    // decision itself and, on 'clarification', jump straight to
+    // executeClarificationCompletion — bypassing runInterviewTurn entirely, so
+    // the closing→clarification transition turn (which now carries the Talker
+    // farewell, see talkerPrompt.ts's clarification methodology) never ran in
+    // eval. That made the bug undetectable by eval transcripts even after the
+    // production fix shipped. Let this turn run through runInterviewTurn like
+    // any other turn; the clarification branch below (post-turn) takes over
+    // once the phase it just wrote is 'clarification'.
     // Supabase: turnPorts=undefined → defaultProdPorts (byte-intact). PGlite:
     // no-op ports → DB-free (PROJ-34 / ADR-018 §C).
     const turnResult = await runInterviewTurn({
@@ -904,6 +871,28 @@ async function runInterview(
       phase: turnResult.meta.phase,
       toolCalls: analystToolCalls,
     })
+
+    // PROJ-23/PROJ-42: Clarification phase — eval-specific handling stays in
+    // runner (production hands this off to the ClarificationView frontend +
+    // POST /clarification route instead of another chat turn). Cards are read
+    // fresh, post-turn/post-Analyst, so the synthetic answers match what a
+    // real user would actually see on screen at this point.
+    if (turnResult.meta.phase === 'clarification') {
+      const freshBriefing = await evalStore.loadAnalystBriefing(interviewId)
+      const cards = freshBriefing?.clarification_cards ?? []
+      console.log(`\n[eval] Clarification phase: ${cards.length} cards — submitting synthetic answers`)
+      // L9: snapshot tracker right before synthetic answers land — used by the
+      // scorer to measure how much coverage the clarification phase contributes.
+      const preClarState = await evalStore.loadState(interviewId)
+      preClarificationSnapshot = JSON.parse(JSON.stringify(preClarState.stepTracker)) as StepEntry[]
+      const syntheticAnswers = buildSyntheticClarificationAnswers(cards)
+      for (const a of syntheticAnswers) {
+        console.log(`  [card] ${a.slot_key} → ${JSON.stringify(a.answer)}`)
+      }
+      await evalStore.executeClarificationCompletion(interviewId, workspaceId, syntheticAnswers)
+      console.log('[eval] Clarification complete → interview completed')
+      break
+    }
 
     if (turnResult.meta.completed) {
       console.log('\n[eval] Interview completed.')

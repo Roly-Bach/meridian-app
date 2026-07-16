@@ -216,12 +216,19 @@ Ein neu genannter Prozessschritt wurde entdeckt. Stelle 1–2 gezielte Fragen da
 Kein vollständiger Walkthrough nötig — kurze direkte Fragen, max. 2 Turns.
 Danach kurz verabschieden.`
     }
+    // BUG-5 (PROJ-42 QA, 2026-07-16): this turn is the closing→clarification
+    // transition (cards are pending, no step still exploring) — previously a
+    // bare "hier sind Abschlussfragen" announcement with no farewell anywhere
+    // in the interview, violating the AC's "jede Beendigung läuft über eine
+    // formulierte, kohärente Verabschiedung". Fold a real farewell into this
+    // single Talker turn instead of a separate call — matches the AC order
+    // (Verabschiedung → Cards → completed) without a second LLM round-trip.
     return `## Methodik: clarification
-Sage genau einmal: "Danke! Ich habe noch ein paar kurze Abschlussfragen für dich."
-Stelle keine weiteren Fragen — die Abschlussfragen erscheinen im Interface.`
+Das inhaltliche Gespräch ist abgeschlossen. Verabschiede dich jetzt kurz und herzlich (z.B. Dank für die Zeit) UND weise im selben Antworttext darauf hin, dass gleich noch ein paar kurze Abschlussfragen im Interface erscheinen.
+Stelle im Chat KEINE weitere Frage — die Abschlussfragen erscheinen im Interface, nicht im Chat.`
   }
 
-  // wrap_up
+  // closing
   // KI-19 (2026-07-11): the scripted completion/farewell call also passes phase='closing'
   // (runInterviewTurn.ts, after checkLifecycle already decided shouldComplete=true and DB
   // status is already 'completed') — without this branch it inherited the SAME unconditional
@@ -282,16 +289,6 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   const focusLine = ctx.focusTopics
     ? `Fokusthemen (NUR interne Steuerung — im Opener niemals namentlich nennen): ${ctx.focusTopics}`
     : 'Keine spezifischen Fokusthemen — führe eine offene Prozessexploration durch.'
-
-  const warnAt = ctx.maxDurationMinutes - 5
-  const hardAt = ctx.maxDurationMinutes
-
-  const timingWarning =
-    ctx.timerMinutes >= hardAt
-      ? `\n⚠️ KRITISCH: ${hardAt} Minuten erreicht. Leite die Verabschiedung ein.`
-      : ctx.timerMinutes >= warnAt
-      ? `\n⚠️ HINWEIS: ${warnAt} Minuten erreicht. Leite aktiv in die wrap_up-Phase über.`
-      : ''
 
   const shortModeHint =
     ctx.maxDurationMinutes <= 10
@@ -435,6 +432,6 @@ ${farewellMethodology}`
 - Abteilung: ${ctx.department}
 - ${focusLine}
 - Phase: ${ctx.phase}
-- Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${timingWarning}${shortModeHint}${profileFraming}
+- Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${shortModeHint}${profileFraming}
 ${coverageCheckSection}${methodologySection}${stepTrackerSection}${fewShotSection}${briefingSection}${fillerAvoidance}${questionStemSection}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
 }

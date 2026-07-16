@@ -37,9 +37,9 @@ export interface InterviewContext {
   /**
    * KI-19: set only by the scripted completion/farewell call in runInterviewTurn.ts
    * (checkLifecycle already decided shouldComplete=true, DB status is already
-   * 'completed'). Suppresses the unconditional wrap_up PFLICHT-ask-the-question-first
+   * 'completed'). Suppresses the unconditional closing PFLICHT-ask-the-question-first
    * methodology text so the farewell turn actually says goodbye instead of re-asking
-   * the wrap-up probe or a new question.
+   * the closing probe or a new question.
    */
   isCompletionFarewell?: boolean
 }
@@ -63,7 +63,6 @@ export interface ClarificationCard {
 export interface AnalystBriefing {
   next_focus?: string
   suggested_question?: string
-  wrap_up_question_asked?: boolean
   clarification_cards?: ClarificationCard[]
   /** Accumulated opening phrases the Talker has used — stored in next_briefing for cross-turn tracking */
   usedFillerPhrases?: string[]

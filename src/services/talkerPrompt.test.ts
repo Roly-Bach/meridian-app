@@ -79,6 +79,27 @@ describe('talkerPrompt — KI-19 farewell methodology regression', () => {
   })
 })
 
+// ─── BUG-5 regression: clarification-transition turn must include a real farewell ──
+// Root cause (PROJ-42 QA, 2026-07-16): the closing→clarification transition turn
+// (cards pending, no step still exploring) previously only announced the upcoming
+// cards ("Danke! Ich habe noch ein paar kurze Abschlussfragen für dich.") with no
+// farewell anywhere — clarification/route.ts completes the interview via a raw SQL
+// write with no Talker call at all, so this transition turn is the ONLY place a
+// farewell can appear before status='completed'.
+
+describe('talkerPrompt — BUG-5 clarification-transition farewell regression', () => {
+  it('clarification methodology (no exploring step) instructs a real farewell, not just a card announcement', () => {
+    const ctx = buildDynamicContext(baseContext({ phase: 'clarification' }))
+    expect(ctx).toMatch(/Verabschiede dich jetzt kurz und herzlich/)
+    expect(ctx).toMatch(/Abschlussfragen im Interface/)
+  })
+
+  it('clarification methodology forbids further chat questions after the farewell', () => {
+    const ctx = buildDynamicContext(baseContext({ phase: 'clarification' }))
+    expect(ctx).toMatch(/KEINE weitere Frage/)
+  })
+})
+
 // ─── WP1 regression: farewell turn suppresses the entire dynamic block ───────────
 // Root cause (2026-07-14 design round, plan curried-plotting-narwhal): sending the full
 // dynamic block on the scripted farewell turn cost ~1562 tokens for a turn that only says

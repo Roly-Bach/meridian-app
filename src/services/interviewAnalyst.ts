@@ -117,7 +117,6 @@ const AnalystBriefingSchema = z.object({
     'MUST be an open question. MUST NOT contain specific numbers, time values, system names, ' +
     'or any data point the employee has not yet stated in this conversation.'
   ),
-  wrap_up_question_asked: z.boolean().optional().describe('true if the Talker asked the closing catch-all probe in this turn'),
   clarification_cards: z.array(ClarificationCardSchema).max(8).optional().describe('Only generate when phase=closing and mandatory slots are empty'),
   step_advance_ready: z.boolean().optional().describe(
     'PROJ-42 Advance-Signal: true iff the CURRENTLY ACTIVE process step has been ' +
