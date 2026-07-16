@@ -58,7 +58,7 @@
 | PROJ-39 | Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth) | Revision | Interview Engine | PROJ-31 | Deployed | [spec](interview-engine/PROJ-39-eval-judge-parsing-haertung.md) | P1 | S | 0:0:1 |
 | PROJ-40 | Eval-Instrument-Validierung + Versuchsplan | Revision | Interview Engine | PROJ-31 | In Review | [spec](interview-engine/PROJ-40-eval-instrument-validierung-versuchsplan.md) | P1 | L | — |
 | PROJ-41 | Interview-Modell-Auswahl (OSS-Screening + EU-Prod-Route) | Revision | Platform | PROJ-9 | Blocked | [spec](platform/PROJ-41-interview-modell-auswahl.md) | P1 | L | — |
-| PROJ-42 | Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard) | Revision | Interview Engine | PROJ-22 | In Progress | [spec](interview-engine/PROJ-42-interview-grenzfall-robustheit.md) | P0 | M | — |
+| PROJ-42 | Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-42-interview-grenzfall-robustheit.md) | P0 | M | 0:4:1 |
 | PROJ-43 | Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards) | Revision | Interview Engine | PROJ-29 | Roadmap | — | P1 | L | — |
 | PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P1 | L | — |
 | PROJ-45 | Schema-Erweiterung AI-Wert-Faktoren (Textverarbeitung u.a.) | Revision | Wissensbank | PROJ-25 | Roadmap | — | P1 | L | — |
