@@ -128,6 +128,20 @@ PROJ-37 (Static-Prompt-Drift Talker vs. Greeting/Reconnect) wurde 2026-06-19 bei
 entdeckt: `STATIC_PROMPT` (interviewTalker) und `buildStaticPrompt()` (interviewAgent → createInterviewStream)
 sind inhaltlich auseinandergelaufen. Out of Scope für PROJ-35 (reine Verschiebung, keine Prompt-Konsolidierung).
 
+### Etappe 4 (Grenzfall-Robustheit, ab 2026-07-15)
+PROJ-42 (Wrap-up + Rollen-Guard) und PROJ-43 (Elicitation-Reorientierung) aus der
+Refactoring-Grundsatzentscheidung 2026-07-15 (realer Tim-Durchlauf). PROJ-42s BUG-2/3/5 sind
+2026-07-16 gefixt und live verifiziert; dabei ein neuer Bug (BUG-6, doppelte Verabschiedung)
+gefunden, der dieselbe Ein-Turn-Zustandsverzögerung wie BUG-1/BUG-4 als Root Cause hat.
+
+**Reihenfolge 2026-07-16 umgekehrt:** PROJ-44 (Pipeline-Simplifikation: Analyst synchron vor
+Talker, Quick-Extract raus) wird jetzt VOR PROJ-43 spezifiziert und gebaut, nicht danach wie
+ursprünglich geplant — die Analyst-vor-Talker-Umstellung löst den gemeinsamen Root Cause von
+BUG-1/BUG-4/BUG-6 strukturell (siehe Diskussion in der PROJ-42-Spec). Löst NICHT automatisch:
+BUG-1s Advance-Signal-Kalibrierung (`step_advance_ready` darf laut Prompt zu großzügig triggern)
+und die Clarification-Cards-Erzeugungs-Zuverlässigkeit — beide bleiben eigenständig zu diagnostizieren.
+PROJ-42 bleibt bis zur PROJ-44-Umsetzung In Review. Nächster Schritt: `/write-spec PROJ-44` + `/grilling`.
+
 ## Architecture Notes
 
 ### Service-Layer-Constraint (gilt ab PROJ-4)
