@@ -7,8 +7,8 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn(),
 }))
 
-import { buildAnalystSystemPrompt } from './interviewAnalyst'
-import type { InterviewContext } from './interviewTypes'
+import { buildAnalystSystemPrompt, computeNextBriefing } from './interviewAnalyst'
+import type { InterviewContext, AnalystBriefing } from './interviewTypes'
 
 function baseContext(overrides: Partial<InterviewContext> = {}): InterviewContext {
   return {
@@ -18,7 +18,7 @@ function baseContext(overrides: Partial<InterviewContext> = {}): InterviewContex
     employeeRole: null,
     department: 'IT',
     focusTopics: null,
-    phase: 'walkthrough_step',
+    phase: 'explore',
     timerMinutes: 0,
     topicsCovered: [],
     topicsOpen: [],
@@ -114,5 +114,68 @@ describe('interviewAnalyst — WP5 system-prompt prefix stability', () => {
   it('online mode prefix is still applied before the stable block (mode is constant per call-site, not per-turn)', () => {
     const prompt = buildAnalystSystemPrompt(baseContext({ stepTracker: [] }), 'online')
     expect(prompt).toMatch(/^ONLINE-MODUS/)
+  })
+})
+
+// ─── PROJ-42: computeNextBriefing — deterministic No-New-Extraction-Zähler ───────
+// This is the code-computed (not LLM-guessed) bridging logic behind the safety-net
+// counter interviewOrchestrator.ts reads to escalate Explore → Closing when a
+// conversation stalls. Extracted as a pure function so the bridging semantics are
+// testable without mocking generateText/turnStore.
+
+const emptyBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
+
+describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
+  it('resets the streak to 0 when a knowledge tool was called this pass', () => {
+    const result = computeNextBriefing(
+      { next_focus: 'X', suggested_question: 'Y' },
+      true,
+      [{ toolName: 'record_slot', args: {} }],
+      { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
+    )
+    expect(result.noNewExtractionStreak).toBe(0)
+  })
+
+  it('increments the streak when no knowledge tool was called this pass', () => {
+    const result = computeNextBriefing(
+      emptyBriefing,
+      true,
+      [{ toolName: 'update_topics', args: {} }], // bookkeeping only — not an extraction tool
+      { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
+    )
+    expect(result.noNewExtractionStreak).toBe(3)
+  })
+
+  it('starts the streak at 1 when there is no previous briefing', () => {
+    const result = computeNextBriefing(emptyBriefing, true, [], null)
+    expect(result.noNewExtractionStreak).toBe(1)
+  })
+
+  it('keeps the model-authored next_focus/suggested_question when produce_briefing was called', () => {
+    const result = computeNextBriefing(
+      { next_focus: 'neuer Fokus', suggested_question: 'Neue Frage?' },
+      true,
+      [{ toolName: 'record_slot', args: {} }],
+      { next_focus: 'alt', suggested_question: 'Alte Frage?' },
+    )
+    expect(result.next_focus).toBe('neuer Fokus')
+    expect(result.suggested_question).toBe('Neue Frage?')
+  })
+
+  it('carries the previous briefing forward unchanged (besides the streak) when produce_briefing was NOT called', () => {
+    // The analyst prompt's own instruction: skip produce_briefing on a turn with
+    // no substantial change — "das vorherige next_briefing bleibt gültig".
+    const previous: AnalystBriefing = { next_focus: 'alt', suggested_question: 'Alte Frage?', clarification_cards: [] }
+    const result = computeNextBriefing(emptyBriefing, false, [], previous)
+    expect(result.next_focus).toBe('alt')
+    expect(result.suggested_question).toBe('Alte Frage?')
+    expect(result.noNewExtractionStreak).toBe(1)
+  })
+
+  it('falls back to an empty briefing (not a crash) when produce_briefing was not called and there is no previous briefing', () => {
+    const result = computeNextBriefing(emptyBriefing, false, [], null)
+    expect(result.next_focus).toBe('')
+    expect(result.suggested_question).toBe('')
+    expect(result.noNewExtractionStreak).toBe(1)
   })
 })

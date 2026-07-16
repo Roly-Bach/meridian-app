@@ -2,14 +2,15 @@ import type { TurnRecord } from './types'
 import type { Phase } from '@/services/interviewSemantic'
 
 /**
- * In walkthrough_step phase the agent should NOT re-ask known slot values.
+ * PROJ-42: walkthrough_step collapsed into 'explore' — the agent should NOT
+ * re-ask known slot values during explore.
  *
- * Diagnostic signal — measures explicit slot-fishing in walkthrough.
+ * Diagnostic signal — measures explicit slot-fishing during explore.
  * A turn is flagged only when BOTH conditions hold:
  * 1. Agent text matches a direct slot pattern (direct quantity/duration question)
- * 2. The SAME pattern fires in a prior walkthrough_step turn (re-asking, not first-time exploration)
+ * 2. The SAME pattern fires in a prior explore turn (re-asking, not first-time exploration)
  *
- * First-time slot questions during walkthrough are normal exploratory behavior and are NOT penalized.
+ * First-time slot questions during explore are normal exploratory behavior and are NOT penalized.
  * This prevents false positives like "Wie viele Rechnungen kommen rein?" (Turn 3, first exploration)
  * from being counted as violations when the value was not yet known.
  *
@@ -27,7 +28,7 @@ const DIRECT_SLOT_PATTERNS = [
 ]
 
 export function scorePhaseAdherence(turns: TurnRecord[]): number {
-  const walkthroughTurns = turns.filter(t => t.phase === 'walkthrough_step')
+  const walkthroughTurns = turns.filter(t => t.phase === 'explore')
   if (walkthroughTurns.length === 0) return 1.0
 
   // Track which patterns have already fired at least once — only penalize repeats.
@@ -53,28 +54,25 @@ export function scorePhaseAdherence(turns: TurnRecord[]): number {
   return conforming / walkthroughTurns.length
 }
 
-const PHASE_ORDER: Phase[] = ['intro', 'process_loop', 'walkthrough_step', 'slot_completion', 'coverage_check', 'wrap_up']
+const PHASE_ORDER: Phase[] = ['intro', 'explore', 'closing']
 
 /**
  * Measures how far the interview progressed through its phase lifecycle.
- * Replaces phaseAdherence as primary quality signal — phase_adherence=1.0 is trivially
- * achieved when stuck in slot_completion; phaseProgression catches this.
+ * Replaces phaseAdherence as primary quality signal.
  *
- * 0.0  stayed in intro/process_loop only
- * 0.33 reached walkthrough_step
- * 0.5  reached slot_completion
- * 0.67 reached coverage_check
- * 0.83 reached wrap_up
- * 1.0  reached wrap_up AND interview completed
+ * PROJ-42: the six-phase ladder collapsed into three (intro/explore/closing) —
+ * granularity intentionally coarser than before (that granularity was the bug,
+ * see interviewOrchestrator.ts header comment / KI-23).
+ *
+ * 0.0  stayed in intro/explore only, no closing reached
+ * 0.5  reached closing
+ * 1.0  reached closing AND interview completed
  */
 export function scorePhaseProgression(turns: TurnRecord[], interviewCompleted: boolean): number {
   const phases = new Set(turns.map(t => t.phase))
   const steps = [
-    phases.has('walkthrough_step'),
-    phases.has('slot_completion'),
-    phases.has('coverage_check'),
-    phases.has('wrap_up'),
-    phases.has('wrap_up') && interviewCompleted,
+    phases.has('closing'),
+    phases.has('closing') && interviewCompleted,
   ]
   const reached = steps.filter(Boolean).length
   return reached === 0 ? 0 : reached / steps.length

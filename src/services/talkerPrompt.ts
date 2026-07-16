@@ -12,6 +12,7 @@
 
 import { analyzeConversationSignals } from './conversationSignals'
 import { computeWalkthroughSlotTarget } from './interviewSemantic'
+import { CLOSING_PROBE_TEXT } from './interviewOrchestrator'
 import type {
   Phase,
   SlotValue,
@@ -31,7 +32,7 @@ export const STATIC_PROMPT = `Du bist KI-Interviewer. Erhebe implizites Prozessw
 Führe das Gespräch auf Deutsch — sachlich, direkt, präzise.
 Sprich den Mitarbeiter mit Du an.
 
-Phasenmodell: intro → process_loop → walkthrough_step → slot_completion → coverage_check → wrap_up
+Phasenmodell: intro → explore → closing
 
 <turn_format>
 Ab Turn 2: Maximal ein kurzer Reaktionssatz (optional), dann eine direkte Frage — sonst nichts.
@@ -186,50 +187,24 @@ function buildPhaseMethodology(phase: Phase, hasExploringSteps = false, isComple
 Erkläre kurz den Gesprächszweck (Prozesswissen dokumentieren, vertraulich behandelt) und stelle eine offene Einstiegsfrage.
 Frage nach Hauptaufgaben und typischem Arbeitstag — Fokusthemen im ersten Turn nicht namentlich nennen.
 Ton: wertschätzend, das Wissen des Mitarbeiters steht im Mittelpunkt.
-Nach 1–2 Austauschen zur process_loop übergehen.`
+Nach 1–2 Austauschen zu explore übergehen.`
   }
 
-  if (phase === 'process_loop') {
-    return `## Methodik: process_loop
-Ziel: Einen konkreten Prozessschritt identifizieren und mit register_step registrieren.
-Wenn ein Frequenz- oder Komplexitäts-Anker vorhanden ist, diesen Schritt wählen und mit einem Satz begründen.
-Gibt es im Schritt-Tracker einen Schritt mit Status 'exploring' oder 'walkthrough'? Erst diesen vollständig abschließen.
-Ausnahmen und Sonderfälle sind keine eigenständigen Prozesse — sie gehören als friction_point zu einem bestehenden Schritt.
-Sobald ein Schritt vollständig erfasst ist (alle Pflicht-Slots gefüllt oder Persona gibt keine weiteren Details): aktiv nach weiteren wiederkehrenden Aufgaben fragen — z.B. 'Welche andere regelmäßige Aufgabe nimmt bei dir viel Zeit ein?' — NICHT erst in der wrap_up-Phase. Breite vor Tiefe: lieber 3 Prozesse mit guten Basics als 1 Prozess übertief.`
-  }
+  // PROJ-42: process_loop + walkthrough_step + slot_completion collapsed into
+  // one phase — Entdeckung (neue Prozesse finden) und Vertiefung (aktiven
+  // Schritt ausbauen) laufen nebeneinander statt in sequenziellen Blöcken.
+  if (phase === 'explore') {
+    return `## Methodik: explore
+Zwei Aktivitäten laufen nebeneinander, nicht nacheinander: Entdeckung und Vertiefung.
 
-  if (phase === 'walkthrough_step') {
-    return `## Methodik: walkthrough_step
-Ziel: Ablauf und Reibungspunkte erfassen — eine Frage pro Turn, vorwärts durch die Schritte.
-Signalwörter ("zuerst", "dann", "danach", "als nächstes"): sofort update_walkthrough_data mit process_steps aufrufen.
-Spontan genannte Werte (Häufigkeit, Dauer, Systeme): record_slot bzw. update_walkthrough_data aufrufen — keine direkten Slot-Fragen stellen.
-Reibungspunkte und zugehörige Tools via update_walkthrough_data; Pain Points mit Ortsbezug via link_bottleneck.
-Abschluss: wenn Ablauf natürlich endet oder alle Leitfragen gestellt wurden, zu slot_completion übergehen.
-Turn-Budget: Nach 3 Walkthrough-Turns auf demselben Schritt zu slot_completion übergehen — Tiefe ist nicht das Ziel, Breite schon. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — diese sind nicht slot-relevant.
-Kontextregel: Beschreibt die aktuelle Mitarbeiter-Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt aufrufen. Andere Prozesse nicht mit Slots befüllen — register_step + Erkundung im nächsten Turn.
-Anker-Pflicht (E3.3): Jede Nachfrage referenziert ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns des Mitarbeiters. Verneinungen ("nutzen wir kein SAP", "passiert nie") sind kein Anker — nicht erneut als Nachfrage-Grundlage nutzen.
-Maieutik (E3.5): Keine inhaltlichen Vorschläge in Fragen ("Was wäre, wenn du Tool X hättest?", "Könnte man das automatisieren?"). Keine Leading-Questions ("Wäre das wie X?"). Frage offen — lass den Mitarbeiter die Antwort selbst entwickeln.
-Ist-Fokus (E3.7): Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen ("Was würdest du ändern?", "Wenn du X optimieren könntest..."). Beschreibt der Mitarbeiter spontan eine Verbesserungsidee: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?") — nicht weiter To-be vertiefen.`
-  }
+Entdeckung: Gibt es einen weiteren wiederkehrenden Vorgang, der noch nicht registriert ist? Anker (Frequenz/Komplexität) vorhanden → diesen wählen, kurz begründen. Ist der aktive Schritt ausreichend erfasst (Ablauf, Treiber, Kontext — nicht zwingend jeder optionale Slot) → aktiv nach der nächsten wiederkehrenden Aufgabe fragen, z.B. "Welche andere regelmäßige Aufgabe nimmt bei dir viel Zeit ein?". Breite vor Tiefe: lieber mehrere Prozesse mit guten Basics als einer übertief. Ausnahmen/Sonderfälle sind kein eigener Prozess — friction_point am bestehenden Schritt.
 
-  if (phase === 'slot_completion') {
-    return `## Methodik: slot_completion
-Ziel: Verbleibende Pflichtslots nachfragen — Potenzial (frequency_per_month, duration_minutes) und tazite O2–O5 (entscheidungslogik, inputs, outputs, hilfsmittel).
-Optional: error_rate_percent, media_breaks wenn Prozess fehlerträchtig oder systemintensiv wirkt.
-Max. 2–3 fehlende Slots pro Turn — natürlicher Gesprächsfluss, kein Listenformat, keine Ankündigung.
-Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → unsicher belegt, kurze Bestätigung einholen (max. 1–2 Versuche pro Slot). confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen.
-entscheidungslogik: "Folgt dieser Prozess bei dir immer dem gleichen Schema, oder entscheidest du von Fall zu Fall?" Wenn unklar: NICHT nochmals fragen — Clarification Card erledigt das am Ende.
-governance: record_governance aufrufen wenn Mitarbeiter Rolle oder OE nennt — auch fragmentarisch.
-abhaengigkeiten: record_dependency aufrufen wenn Mitarbeiter nennt, welcher Schritt einen anderen voraussetzt oder beeinflusst.
-Anker-Pflicht (E3.3): Slot-Fragen knüpfen an das an, was der Mitarbeiter bereits genannt hat. Verneinungen ("nutzen wir kein X") nicht als Anker einer Folgefrage nutzen.
-Ist-Fokus (E3.7): Keine Verbesserungsfragen. Bei spontanen To-be-Nennungen: Ist-Engpass dahinter erfassen ("Was ist heute der Engpass, der das nötig macht?").`
-  }
+Vertiefung (aktiver Schritt, Status exploring/walkthrough): Ablauf und Reibungspunkte erfassen — eine Frage pro Turn. Signalwörter ("zuerst", "dann", "danach", "als nächstes") → sofort update_walkthrough_data mit process_steps. Spontan genannte Werte (Häufigkeit, Dauer, Systeme) → record_slot bzw. update_walkthrough_data, keine direkten Slot-Fragen. Verbleibende Pflichtslots natürlich nachfragen — max. 2–3 pro Turn, kein Listenformat, keine Ankündigung. Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → kurze Bestätigung (max. 1–2 Versuche), dann weiter. confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen. governance: record_governance wenn Rolle/OE genannt wird. abhaengigkeiten: record_dependency wenn ein Schritt einen anderen voraussetzt oder beeinflusst. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — nicht slot-relevant.
+Kontextregel: Beschreibt die Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt — andere Prozesse per register_step registrieren, Erkundung im nächsten Turn.
 
-  if (phase === 'coverage_check') {
-    return `## Methodik: coverage_check
-Ziel: Fehlende Pflichtslots aller registrierten Schritte nachfüllen.
-Natürlicher Gesprächsfluss — kein Übergangskommentar, kein "lass mich kurz prüfen".
-Neu genannte Prozesse direkt aufnehmen und explorieren.`
+Anker-Pflicht (E3.3): Jede Nachfrage referenziert ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns. Verneinungen ("nutzen wir kein X", "passiert nie") sind kein Anker.
+Maieutik (E3.5): Keine inhaltlichen Vorschläge ("Was wäre, wenn du Tool X hättest?"), keine Leading-Questions ("Wäre das wie X?"). Frage offen.
+Ist-Fokus (E3.7): Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen. Bei spontaner To-be-Nennung: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?").`
   }
 
   if (phase === 'clarification') {
@@ -247,23 +222,23 @@ Stelle keine weiteren Fragen — die Abschlussfragen erscheinen im Interface.`
   }
 
   // wrap_up
-  // KI-19 (2026-07-11): the scripted completion/farewell call also passes phase='wrap_up'
+  // KI-19 (2026-07-11): the scripted completion/farewell call also passes phase='closing'
   // (runInterviewTurn.ts, after checkLifecycle already decided shouldComplete=true and DB
   // status is already 'completed') — without this branch it inherited the SAME unconditional
-  // PFLICHT-ask-the-wrap-up-question-first instruction below, which routinely beat the softer
+  // PFLICHT-ask-the-closing-probe-first instruction below, which routinely beat the softer
   // advisory farewellBriefing.suggested_question ("Verabschiede dich kurz und herzlich") and
-  // made the model re-ask the wrap-up probe (or a new unrelated question) as its last visible
+  // made the model re-ask the probe (or a new unrelated question) as its last visible
   // message instead of actually saying goodbye — confirmed on 36/82 historical
   // gemini-3.1-flash-lite transcripts (44%), not an OSS-model-specific issue.
   if (isCompletionFarewell) {
-    return `## Methodik: wrap_up (Abschluss)
-Die Wrap-up-Frage wurde bereits gestellt und beantwortet — das Interview ist inhaltlich abgeschlossen.
-Verabschiede dich jetzt kurz und herzlich. Stelle KEINE weitere Frage — auch nicht die Wrap-up-Frage
+    return `## Methodik: closing (Abschluss)
+Die Abschluss-Sonde wurde bereits gestellt und beantwortet — das Interview ist inhaltlich abgeschlossen.
+Verabschiede dich jetzt kurz und herzlich. Stelle KEINE weitere Frage — auch nicht die Sonde
 erneut und keine neue Anschlussfrage. Deine Antwort besteht ausschließlich aus der Verabschiedung.`
   }
-  return `## Methodik: wrap_up
+  return `## Methodik: closing
 PFLICHT: Stelle als allererste Antwort in dieser Phase exakt diese Frage — keine Verabschiedung davor:
-"Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute nicht erwähnt haben?"
+"${CLOSING_PROBE_TEXT}"
 Verabschiede dich NICHT ohne diese Frage gestellt zu haben.
 Nach der Antwort:
 - Neuer Prozess → register_step aufrufen, explorieren — kein Abschluss.
@@ -282,7 +257,7 @@ Ist-Fokus (E3.7): Die abschließende Frage zielt auf noch nicht genannte Ist-Pro
 // Klammer/Parameter-Syntax mehr im Beispieltext — nur Prosa-Beschreibung, klar als
 // "lautlos, nie als Text" markiert.
 const WALKTHROUGH_EXAMPLES = `
-<EXAMPLE phase="walkthrough_step">
+<EXAMPLE phase="explore">
   USER: "Zuerst schaue ich in Salesforce ob der Kunde bekannt ist. Dann öffne ich meine Excel-Liste
          weil im Salesforce nicht alles drin ist. Danach prüfe ich den PDF-Katalog — ich weiß
          manchmal nicht welche Version aktuell ist. Und dann frage ich beim Innendienst nach
@@ -296,7 +271,7 @@ const WALKTHROUGH_EXAMPLES = `
   EINZIGE SICHTBARE ANTWORT: "Der Katalog-Versions-Aspekt klingt fehlerträchtig — passiert es, dass du mit veralteten Preisen arbeitest?"
   // update_walkthrough_data SOFORT wenn Mitarbeiter Ablauf beschreibt — alle Schritte in einem Call.
   // Der Tool-Call selbst erscheint NIE im sichtbaren Antworttext — nur die Frage danach ist die Antwort.
-  // Keine Slot-Fragen (Frequenz, Dauer) während walkthrough_step.
+  // Keine Slot-Fragen (Frequenz, Dauer) während der Ablauf-Vertiefung.
 </EXAMPLE>`
 
 // ─── Dynamic Context Builder ──────────────────────────────────────────────────
@@ -340,18 +315,16 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 ${farewellMethodology}`
   }
 
-  const coverageCheckSection = (ctx.phase === 'coverage_check' || ctx.phase === 'slot_completion') && ctx.missingSlotsForCoverageCheck && ctx.missingSlotsForCoverageCheck.length > 0
-    ? `\n## Fehlende Pflicht-Slots (${ctx.phase})\n${ctx.missingSlotsForCoverageCheck.map(m => `- Schritt "${m.step_title}" → ${m.slot}`).join('\n')}\nFrage diese Werte gezielt und natürlich nach, bevor du zur nächsten Phase übergehst.`
-    : ctx.phase === 'coverage_check'
-    ? '\n## Coverage vollständig\nAlle Pflicht-Slots gefüllt. Wechsle direkt zu wrap_up.'
-    : ctx.phase === 'slot_completion' && ctx.missingSlotsForCoverageCheck !== undefined
-    ? '\n## Slot-Completion vollständig\nAlle bisher registrierten Schritte haben vollständige Pflicht-Slots. Zur nächsten Phase übergehen.'
+  const coverageCheckSection = ctx.phase === 'closing' && ctx.missingSlotsForCoverageCheck && ctx.missingSlotsForCoverageCheck.length > 0
+    ? `\n## Fehlende Pflicht-Slots (${ctx.phase})\n${ctx.missingSlotsForCoverageCheck.map(m => `- Schritt "${m.step_title}" → ${m.slot}`).join('\n')}\nFrage diese Werte gezielt und natürlich nach, falls im Gespräch noch Raum dafür ist.`
+    : ctx.phase === 'closing' && ctx.missingSlotsForCoverageCheck !== undefined
+    ? '\n## Coverage vollständig\nAlle Pflicht-Slots gefüllt.'
     : ''
 
-  // D1 — READ_ONLY_STATE: In walkthrough_step only show filled slots to avoid
+  // D1 — READ_ONLY_STATE: In explore only show filled slots to avoid
   // Observable-Goal pull on empty fields. In all other phases show the full tracker.
   let stepTrackerSection: string
-  if (ctx.phase === 'walkthrough_step') {
+  if (ctx.phase === 'explore') {
     const filledLines = ctx.stepTracker.flatMap((step) => {
       // Fix 4 (ADR-015): mask raw slot values — only show that the slot is filled.
       const filledPotenzial = (Object.entries(step.potenzial) as [string, SlotValue | null][])
@@ -391,8 +364,8 @@ ${farewellMethodology}`
     stepTrackerSection = `\n## Schritt-Tracker (aktueller Slot-Filling-Stand)\n${formatStepTracker(ctx.stepTracker)}`
   }
 
-  // Few-shot examples only in walkthrough_step
-  const fewShotSection = ctx.phase === 'walkthrough_step' ? WALKTHROUGH_EXAMPLES : ''
+  // Few-shot examples only in explore
+  const fewShotSection = ctx.phase === 'explore' ? WALKTHROUGH_EXAMPLES : ''
 
   // Phase methodology injected per-turn (not in static prompt)
   const hasExploringSteps = ctx.stepTracker.some(s => s.status === 'exploring')

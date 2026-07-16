@@ -9,13 +9,17 @@
  * that touch Supabase, the AI SDK, or Next.js server modules.
  */
 
+/**
+ * PROJ-42: collapsed from six phases (intro/process_loop/walkthrough_step/
+ * slot_completion/coverage_check/wrap_up/clarification) to three plus the
+ * unchanged clarification step. 'explore' covers both process discovery and
+ * process deepening as one continuous activity (see interviewOrchestrator.ts);
+ * 'closing' covers what was wrap_up (catch-all probe → farewell → cards).
+ */
 export type Phase =
   | 'intro'
-  | 'process_loop'
-  | 'walkthrough_step'
-  | 'slot_completion'
-  | 'coverage_check'
-  | 'wrap_up'
+  | 'explore'
+  | 'closing'
   | 'clarification'
 
 export interface SlotValue {
@@ -581,7 +585,7 @@ export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingS
   return missing
 }
 
-// L1 — Slot-Targeting für walkthrough_step Phase.
+// L1 — Slot-Targeting für die explore Phase (PROJ-42: vormals walkthrough_step).
 // Wählt deterministisch genau EINEN missing slot für den aktuell aktiven
 // Step (walkthrough > exploring). Zwei-Pass-Priorität (PROJ-28/BL-E2.2):
 //   Pass 1: echte Lücken (null-Slots) — potenzial zuerst, dann tazite

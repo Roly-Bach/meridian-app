@@ -16,7 +16,7 @@ const makeStep = (potenzial: Partial<StepEntry['potenzial']> = {}, slots: Partia
   slots: { entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null, ...slots },
 })
 
-const turn = (n: number): TurnRecord => ({ turnNumber: n, userInput: 'x', agentText: 'y', phase: 'walkthrough_step', toolCalls: [] })
+const turn = (n: number): TurnRecord => ({ turnNumber: n, userInput: 'x', agentText: 'y', phase: 'explore', toolCalls: [] })
 
 describe('scoreConversationalEfficiency', () => {
   it('counts filled potenzial + tazite slots and divides by turns', () => {

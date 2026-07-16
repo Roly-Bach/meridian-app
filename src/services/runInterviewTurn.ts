@@ -27,10 +27,11 @@ import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
 import {
   decideNextPhaseWithMeta,
   checkLifecycle,
-  shouldInjectWrapUpQuestion,
-  WRAP_UP_QUESTION_TEXT,
+  shouldInjectClosingProbe,
+  CLOSING_PROBE_TEXT,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
+import { checkRoleGuard, buildOffTopicRedirect } from '@/services/roleGuard'
 import { createTalkerStream } from '@/services/interviewTalker'
 import {
   runAnalystOnline,
@@ -143,8 +144,8 @@ const SEED_FILLERS = [
   'Interessant', 'Gut,', 'Alles klar',
 ]
 
-/** Shim for the wrap-up question — returns a TurnStream without an LLM call. */
-function makeWrapUpStream(text: string): TurnStream {
+/** Shim for a deterministic, non-LLM turn (closing probe / off-topic redirect). */
+function makeStaticStream(text: string): TurnStream {
   return {
     toTextStreamResponse: () => new Response(text, {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -189,6 +190,35 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   }
   history.push({ role: 'user', content: userInput })
 
+  // ── Role Guard (PROJ-42 / KI-24) ────────────────────────────────────────────
+  // Earliest gate — structurally analogous to the lifecycle.shouldComplete
+  // early-return further below, but runs before it (phase-agnostic, per spec:
+  // fires even during 'closing'). Class off_topic ends the turn here: quick-
+  // extract, the Talker call and the background Analyst planning are all
+  // skipped for this turn, and the stored interview state (phase, stepTracker,
+  // topics) is left completely unchanged.
+  const talkerModelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
+  const roleGuard = await checkRoleGuard(userInput, history, talkerModelString, traceCtx, input.onTokenUsage)
+  if (roleGuard.classification === 'off_topic') {
+    const redirectText = buildOffTopicRedirect(history)
+    await store.insertTurn({
+      interviewId,
+      turnNumber: nextTurnNumber,
+      userInput,
+      agentResponse: redirectText,
+    })
+    return {
+      stream: makeStaticStream(redirectText),
+      background: async () => null,
+      meta: {
+        phase: currentPhase,
+        completed: false,
+        reason: null,
+        stepTracker,
+      },
+    }
+  }
+
   // ── Analyst briefing from previous turn ────────────────────────────────────
   const analystStatus = interview.analyst_status ?? 'idle'
   let analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
@@ -230,18 +260,9 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   // — the topic then never gets explored, just whatever this one pass can grab.
   // Run the online analyst synchronously once before trusting soft_confirm, so a
   // freshly-registered step can veto premature completion.
-  //
-  // 'farewell_pending_analyst' (eval 2026-06-25 run1 follow-up): the farewell-loop escape
-  // valve in checkLifecycle detected two consecutive goodbyes but had no analystBriefing to
-  // check for pending clarification_cards, so it couldn't decide and would otherwise leave the
-  // turn to run normally — letting the farewell loop continue instead of completing. Same fix
-  // applies: force the analyst pass, then re-decide with real data.
   let preCompletionAnalystResult: AnalystRunResult | null = null
 
-  if (
-    (lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') ||
-    lifecycle.reason === 'farewell_pending_analyst'
-  ) {
+  if (lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') {
     try {
       preCompletionAnalystResult = await runAnalystOnline({
         context: {
@@ -251,7 +272,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
           employeeRole: interview.employee_role,
           department: interview.department,
           focusTopics: interview.focus_topics,
-          phase: 'wrap_up' as Phase,
+          phase: 'closing' as Phase,
           timerMinutes,
           topicsCovered: (state?.topics_covered as string[] | null) ?? [],
           topicsOpen: (state?.topics_open as string[] | null) ?? [],
@@ -261,6 +282,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         },
         history,
         currentUserInput: userInput,
+        previousBriefing: analystBriefing,
         traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
         store,
         onTokenUsage: input.onTokenUsage,
@@ -302,7 +324,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         employeeRole: interview.employee_role,
         department: interview.department,
         focusTopics: interview.focus_topics,
-        phase: 'wrap_up' as Phase,
+        phase: 'closing' as Phase,
         timerMinutes,
         topicsCovered: (state?.topics_covered as string[] | null) ?? [],
         topicsOpen: (state?.topics_open as string[] | null) ?? [],
@@ -351,7 +373,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
             employeeRole: interview.employee_role,
             department: interview.department,
             focusTopics: interview.focus_topics,
-            phase: 'wrap_up' as Phase,
+            phase: 'closing' as Phase,
             timerMinutes,
             topicsCovered: (state?.topics_covered as string[] | null) ?? [],
             topicsOpen: (state?.topics_open as string[] | null) ?? [],
@@ -361,6 +383,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
           },
           history,
           currentUserInput: userInput,
+          previousBriefing: analystBriefing,
           traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
           store,
           onTokenUsage: input.onTokenUsage,
@@ -376,9 +399,8 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       stream: farewellStream,
       background,
       meta: {
-        phase: 'wrap_up' as Phase,
+        phase: 'closing' as Phase,
         completed: true,
-        // 'farewell_pending_analyst' never reaches this branch: it always carries shouldComplete=false.
         reason: lifecycle.reason as 'hard_stop' | 'soft_confirm',
         stepTracker,
       },
@@ -387,15 +409,15 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
   // ── Phase decision ──────────────────────────────────────────────────────────
   const { phase: nextPhaseDecision, phaseJustEntered } = decideNextPhaseWithMeta(orchestratorCtx, analystBriefing)
-  const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
+  const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'closing' : (nextPhaseDecision as Phase)
 
   if (orchestratedPhase !== currentPhase) {
     await store.updatePhase(interviewId, orchestratedPhase)
   }
 
-  // ── Wrap-up question injection ──────────────────────────────────────────────
-  if (shouldInjectWrapUpQuestion(orchestratedPhase, history)) {
-    const agentText = WRAP_UP_QUESTION_TEXT
+  // ── Closing probe injection ─────────────────────────────────────────────────
+  if (shouldInjectClosingProbe(orchestratedPhase, history)) {
+    const agentText = CLOSING_PROBE_TEXT
     await store.insertTurn({
       interviewId,
       turnNumber: nextTurnNumber,
@@ -404,10 +426,10 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     })
 
     return {
-      stream: makeWrapUpStream(agentText),
+      stream: makeStaticStream(agentText),
       background: async () => null,
       meta: {
-        phase: 'wrap_up' as Phase,
+        phase: 'closing' as Phase,
         completed: false,
         reason: null,
         stepTracker,
@@ -433,8 +455,11 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   }
 
   // ── Missing slots ───────────────────────────────────────────────────────────
+  // PROJ-42: coverage_check/slot_completion no longer exist as phases — the
+  // equivalent "surface remaining gaps" moment is 'closing', right before
+  // Clarification Cards take over the rest (unchanged PROJ-23 mechanism).
   const missingSlotsForCoverageCheck =
-    orchestratedPhase === 'coverage_check' || orchestratedPhase === 'slot_completion'
+    orchestratedPhase === 'closing'
       ? computeMissingMandatorySlots(freshStepTracker)
       : undefined
 
@@ -545,6 +570,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
           history: analystHistory,
           previousUserInput: prevUserInput,
           currentUserInput: userInput,
+          previousBriefing: analystBriefing,
           traceCtx: resolvedTraceCtx,
           store,
           onTokenUsage: input.onTokenUsage,
@@ -556,13 +582,15 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         context: sharedContext,
         history: analystHistory,
         currentUserInput: userInput,
+        previousBriefing: analystBriefing,
         traceCtx: resolvedTraceCtx,
         store,
         onTokenUsage: input.onTokenUsage,
       })
 
-      const shouldRunCatchup =
-        phaseJustEntered === 'coverage_check' || phaseJustEntered === 'wrap_up'
+      // PROJ-42: coverage_check/wrap_up collapsed into 'closing' — catchup runs
+      // once on entry into Closing (same trigger point as before, new name).
+      const shouldRunCatchup = phaseJustEntered === 'closing'
       if (shouldRunCatchup) {
         const postOnlineTracker = (await store.loadStepTracker(interviewId) as unknown[])
           .map((raw, i) => normalizeStepEntry(raw, i + 1))

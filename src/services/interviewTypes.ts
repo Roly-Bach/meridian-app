@@ -67,4 +67,19 @@ export interface AnalystBriefing {
   clarification_cards?: ClarificationCard[]
   /** Accumulated opening phrases the Talker has used — stored in next_briefing for cross-turn tracking */
   usedFillerPhrases?: string[]
+  /**
+   * PROJ-42 Advance-Signal: "ist der aktuelle Prozessschritt für jetzt ausreichend
+   * erhoben" — LLM-authored content judgment (Analyst, via AnalystBriefingSchema),
+   * read by decideNextPhase to progress Explore without relying on turn-count
+   * thresholds. snake_case to match the zod tool-call schema field verbatim
+   * (same convention as next_focus/suggested_question/clarification_cards).
+   */
+  step_advance_ready?: boolean
+  /**
+   * PROJ-42 No-New-Extraction-Zähler: deterministically computed in code (NOT by
+   * the LLM) from whether the analyst pass made any knowledge-tool calls this
+   * turn. Threaded through the same next_briefing bridge as usedFillerPhrases.
+   * Safety-net escalation to 'closing' when this reaches the configured limit.
+   */
+  noNewExtractionStreak?: number
 }

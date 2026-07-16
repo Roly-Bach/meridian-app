@@ -34,12 +34,64 @@ import type { TurnSnapshot } from './turnStore/intents'
 // (At budget=0 fragmentation was worse: 12 steps registered for 2 real processes.)
 export const ANALYST_THINKING_BUDGET = 2048
 
+/**
+ * PROJ-42: tool names that count as "new extraction" for the deterministic
+ * No-New-Extraction-Zähler (interviewOrchestrator.ts). Deliberately excludes
+ * update_topics (bookkeeping, not new knowledge) and produce_briefing itself.
+ */
+const EXTRACTION_TOOL_NAMES = new Set([
+  'register_step',
+  'record_slot',
+  'record_governance',
+  'record_dependency',
+  'update_walkthrough_data',
+  'link_bottleneck',
+])
+
+/**
+ * Pure, deterministic (no LLM involved) — computes the next produce_briefing
+ * payload for this pass. Extracted from runAnalystCore so the bridging logic
+ * (streak reset/increment + carry-forward-when-not-called) is independently
+ * unit-testable without mocking generateText/turnStore.
+ *
+ * - hadExtraction=true (any knowledge tool called this pass) → streak resets to 0.
+ * - modelCalledBriefing=true → the LLM's own next_focus/suggested_question/
+ *   clarification_cards win, streak is merged in.
+ * - modelCalledBriefing=false → the analyst prompt's own "skip on a boring turn"
+ *   instruction was followed: carry the PREVIOUS briefing forward unchanged
+ *   ("das vorherige next_briefing bleibt gültig") — only the streak advances,
+ *   so the safety-net counter still sees every turn, including the ones judged
+ *   non-substantial.
+ */
+export function computeNextBriefing(
+  capturedBriefing: AnalystBriefing,
+  modelCalledBriefing: boolean,
+  toolCalls: AnalystToolCallRecord[],
+  previousBriefing: AnalystBriefing | null | undefined,
+): AnalystBriefing {
+  const hadExtraction = toolCalls.some(tc => EXTRACTION_TOOL_NAMES.has(tc.toolName))
+  const prevStreak = previousBriefing?.noNewExtractionStreak ?? 0
+  const noNewExtractionStreak = hadExtraction ? 0 : prevStreak + 1
+
+  return modelCalledBriefing
+    ? { ...capturedBriefing, noNewExtractionStreak }
+    : { ...(previousBriefing ?? { next_focus: '', suggested_question: '' }), noNewExtractionStreak }
+}
+
 export interface AnalystRunOptions {
   context: InterviewContext
   /** History up to and including the current user turn (WITHOUT Talker's response for this turn) */
   history: TurnMessage[]
   /** The raw user input for the current turn — enables evidence_quote contamination guard */
   currentUserInput?: string
+  /**
+   * PROJ-42: the briefing as persisted from the PREVIOUS turn (interviews.next_briefing).
+   * Used to (a) carry next_focus/suggested_question/clarification_cards forward
+   * unchanged when this pass makes no substantial change (the analyst prompt's
+   * own "don't call produce_briefing on a boring turn" instruction), and (b) as
+   * the base for the deterministic noNewExtractionStreak computed in code below.
+   */
+  previousBriefing?: AnalystBriefing | null
   traceCtx?: TraceCtx
   /** TurnStore for the analyst's staged writes. Defaults to the prod Supabase store.
    *  Pass an InterviewStore to enable setAnalystStatus on the error path. */
@@ -65,8 +117,16 @@ const AnalystBriefingSchema = z.object({
     'MUST be an open question. MUST NOT contain specific numbers, time values, system names, ' +
     'or any data point the employee has not yet stated in this conversation.'
   ),
-  wrap_up_question_asked: z.boolean().optional().describe('true if the Talker asked the closing wrap-up question in this turn'),
-  clarification_cards: z.array(ClarificationCardSchema).max(8).optional().describe('Only generate when phase=wrap_up and mandatory slots are empty'),
+  wrap_up_question_asked: z.boolean().optional().describe('true if the Talker asked the closing catch-all probe in this turn'),
+  clarification_cards: z.array(ClarificationCardSchema).max(8).optional().describe('Only generate when phase=closing and mandatory slots are empty'),
+  step_advance_ready: z.boolean().optional().describe(
+    'PROJ-42 Advance-Signal: true iff the CURRENTLY ACTIVE process step has been ' +
+    'sufficiently explored for now (driver/context/tazite detail gathered, not ' +
+    'necessarily every optional slot filled) — signals the orchestrator that this ' +
+    'step no longer needs dedicated depth and Explore can move on (to the next ' +
+    'topic, or to Closing if none remain). Do NOT set true merely because a turn ' +
+    'passed — only when the active step itself is judged sufficiently covered.'
+  ),
 })
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
@@ -127,8 +187,8 @@ EIGENSTÄNDIGKEITS-TEST: Hat ein als Sub-Aktivität geframtes Vorgehen eine eige
 STUFE 2 — SLOT-EXTRAKTION (immer, jede Phase):
 Hat der Mitarbeiter in diesem Turn einen Slot-Wert EXPLIZIT genannt (Zahl, System, Ja/Nein)?
   → record_slot SOFORT, unabhängig von Phase und aktivem Schritt.
-  → NIEMALS warten bis slot_completion. Jeder genannte Wert wird in dem Turn erfasst, in dem er genannt wird.
-  → Gilt auch während walkthrough_step, process_loop, coverage_check, wrap_up.
+  → NIEMALS warten. Jeder genannte Wert wird in dem Turn erfasst, in dem er genannt wird.
+  → Gilt in jeder Phase — explore, closing, clarification.
   → Spannen ("80 bis 100") → als estimate mit qualifier erfassen (siehe record_slot-Regeln unten).
 
 STUFE 3 — WALKTHROUGH-DATEN (ergänzend zu Stufe 2):
@@ -136,11 +196,15 @@ Ein Schritt ist aktiv im Walkthrough UND kein neuer Schritt in Stufe 1?
   → update_walkthrough_data für Prozessschritte, Reibungspunkte, Systeme.
   → produce_briefing.next_focus = aktiver Schritt-Titel.
 
-STUFE 4 — BACKFILL-BRIEFING (nur in slot_completion / coverage_check):
-Alle noch-null Pflicht-Slots für ALLE registrierten Schritte in produce_briefing adressieren.
-  → produce_briefing.next_focus = fehlender Slot + Schritt-Titel.
+STUFE 4 — ADVANCE-SIGNAL (PROJ-42, jeden Turn mit aktivem Schritt prüfen):
+Ist der AKTUELL AKTIVE Schritt (walkthrough oder exploring) für jetzt ausreichend erhoben —
+Ablauf, Treiber, taziter Kontext vorhanden, auch wenn nicht jeder optionale Slot gefüllt ist?
+  → produce_briefing.step_advance_ready = true setzen.
+Noch spürbar unerforscht (kaum Ablauf/Kontext bekannt)? → step_advance_ready weglassen oder false.
+Dies ist der PRIMÄRE Treiber für den Phasenübergang Explore → Closing — nicht Turn-Anzahl.
+Setze es NICHT nur weil ein Turn vergangen ist — nur wenn der Schritt selbst ausreichend abgedeckt wirkt.
 
-STUFE 4 — WRAP_UP: Clarification Cards für verbleibende Slot-Lücken
+STUFE 5 — CLARIFICATION CARDS (ab Phase=closing): Für verbleibende Slot-Lücken
 
 **register_step** — ANTI-FRAGMENTATION PFLICHT VOR JEDEM AUFRUF: Lies den Schritt-Tracker. Gibt es einen Schritt mit demselben Hauptbegriff oder Prozessgegenstand? Wenn ja → record_slot mit dem EXAKTEN bestehenden Titel.
 Faustregel: Ein Mitarbeiter mit 2–3 Hauptaufgaben hat 2–5 Steps im Tracker. Mehr als 6 Steps = Fragmentation.
@@ -177,14 +241,14 @@ den zurückgegebenen matched_title als step_title verwenden.
 **update_topics**: Mit aktualisierten covered/open Listen aufrufen.
 
 **produce_briefing**: Als LETZTEN Tool-Call aufrufen — exakt EINMAL pro Turn, NIEMALS mehrfach.
-produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER Phasenwechsel zu coverage_check/wrap_up. Wenn der Turn keine neue extrahierbare Information enthielt (reine Rückfrage, Smalltalk, Wiederholung, Persona weicht aus) → produce_briefing NICHT aufrufen; das vorherige next_briefing bleibt gültig.
+produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER step_advance_ready wechselt auf true. Wenn der Turn keine neue extrahierbare Information enthielt (reine Rückfrage, Smalltalk, Wiederholung, Persona weicht aus) → produce_briefing NICHT aufrufen; das vorherige next_focus/suggested_question bleibt gültig (der No-New-Extraction-Zähler wird unabhängig davon deterministisch im Code weitergeführt).
 Wenn du produce_briefing bereits einmal aufgerufen hast: Tool-Sequenz sofort beenden — kein weiterer produce_briefing-Call unter keinen Umständen.
 
-## Clarification Cards (ab Phase=coverage_check oder wrap_up)
-PFLICHT: Sobald Phase coverage_check oder wrap_up erreicht ist, durchsuche ALLE registrierten
+## Clarification Cards (ab Phase=closing)
+PFLICHT: Sobald Phase closing erreicht ist, durchsuche ALLE registrierten
 Schritte im step_tracker systematisch auf null-Pflicht-Slots. Cards landen in next_briefing
-und werden vom Orchestrator erst bei wrap_up-Abschluss in die Clarification-Phase aktiviert —
-mid-interview generierte Cards sind also sicher und werden bei späteren Turns aktualisiert.
+und werden vom Orchestrator erst beim Abschluss der Closing-Sequenz in die Clarification-Phase
+aktiviert — mid-interview generierte Cards sind also sicher und werden bei späteren Turns aktualisiert.
 Dies ist unabhängig davon was im aktuellen Turn besprochen wurde — historische Lücken aus
 früheren Turns MÜSSEN hier erfasst werden.
 
@@ -225,15 +289,13 @@ ${stepIdList}
 function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
   // 2026-06-08 fix — phase guard dropped. Analyst runs in `after()` parallel to Talker,
   // so ctx.phase here is the PREVIOUS phase (set before Talker). When orchestrator
-  // transitions to wrap_up at iter N+1, analyst at iter N still sees phase=coverage_check
-  // and the old guard "phase !== 'wrap_up'" suppressed cards. Cards never landed in DB.
+  // transitions to closing at iter N+1, analyst at iter N still sees the old phase
+  // and a "phase !== 'closing'" guard would suppress cards. Cards never landed in DB.
   //
-  // Safe to drop because orchestrator double-gates clarification routing:
-  //   - decideNextPhase wrap_up: only routes to clarification when wrap_up_question_asked
-  //     AND last message is user response (line 286–291)
-  //   - checkLifecycle farewell-detect / soft-confirm: cards block completion only when
-  //     analyst already ran, never premature
-  // Mid-interview cards therefore never trigger clarification phase prematurely.
+  // Safe to drop because orchestrator double-gates clarification routing
+  // (interviewOrchestrator.ts decideNextPhase 'closing' case + checkLifecycle
+  // Trigger B): cards only route to the clarification phase once the closing
+  // probe has actually been asked and answered — never prematurely.
   //
   // Tracker must have at least one step — empty trackers can't have missing slots.
   if (ctx.stepTracker.length === 0) return false
@@ -454,10 +516,15 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
     allowedTools: opts.allowedTools,
   })
 
+  // PROJ-42: staging moved out of this tool's execute (see post-generateText
+  // block below) — the deterministic noNewExtractionStreak needs the FULL set
+  // of tool calls made this pass, which isn't known until generateText returns.
+  let modelCalledBriefing = false
   const produceBriefingTool = tool({
     description: 'Generates the briefing for the next Talker turn. Call LAST, after all knowledge tools. Called exactly once.',
     inputSchema: AnalystBriefingSchema,
     execute: async (briefing) => {
+      modelCalledBriefing = true
       capturedBriefing = briefing as AnalystBriefing
 
       // Only include clarification_cards if conditions are met (guard against unnecessary cards)
@@ -465,10 +532,6 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
       if (!shouldHaveCards) {
         capturedBriefing = { ...capturedBriefing, clarification_cards: undefined }
       }
-
-      // PROJ-34: stage the interviews write (next_briefing + analyst_status='done').
-      // onlyIfNotDone preserves the PROJ-27/BL-E1.5 .neq('analyst_status','done') guard.
-      session.stage({ kind: 'produce_briefing', briefing: capturedBriefing })
       return { success: true }
     },
   })
@@ -532,6 +595,14 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
     throw err
   }
 
+  // PROJ-42: deterministic (code-computed, not LLM-guessed) noNewExtractionStreak,
+  // always staged exactly once here regardless of whether the model called
+  // produce_briefing this pass — see computeNextBriefing for the bridging logic.
+  capturedBriefing = computeNextBriefing(capturedBriefing, modelCalledBriefing, capturedToolCalls, opts.previousBriefing)
+  // PROJ-34: stage the interviews write (next_briefing + analyst_status='done').
+  // onlyIfNotDone preserves the PROJ-27/BL-E1.5 .neq('analyst_status','done') guard.
+  session.stage({ kind: 'produce_briefing', briefing: capturedBriefing })
+
   // Post-processing: deterministic data_sources backfill, staged through the same
   // session so it runs through stage's conflict logic + trail emission (ADR-018 §C).
   try {
@@ -560,7 +631,7 @@ export async function runAnalystOnline(opts: AnalystRunOptions): Promise<Analyst
 }
 
 /**
- * Catchup analyst — triggered on phase entry of coverage_check or wrap_up.
+ * Catchup analyst — triggered on phase entry into 'closing' (PROJ-42).
  * Scans the full conversation history for missed slot values.
  * Only record_slot and produce_briefing are available (no register_step, no update_walkthrough_data).
  * Every record_slot call MUST include evidence_quote + source_turn.

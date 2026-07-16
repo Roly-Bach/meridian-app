@@ -285,14 +285,14 @@ describe('scoreSlotDepth — Prompt-Inhalt: getStepTurns-Grenzen', () => {
         turnNumber: 1,
         userInput: 'USERINPUT_SCHRITT_A',
         agentText: 'AGENTTEXT_SCHRITT_A',
-        phase: 'walkthrough_step',
+        phase: 'explore',
         toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Rechnungsprüfung', slot: 'entscheidungslogik' } }],
       },
       {
         turnNumber: 2,
         userInput: 'USERINPUT_SCHRITT_B',
         agentText: 'AGENTTEXT_SCHRITT_B',
-        phase: 'walkthrough_step',
+        phase: 'explore',
         toolCalls: [{ toolName: 'record_slot', args: { step_title: 'Monatsabschluss', slot: 'entscheidungslogik' } }],
       },
     ]

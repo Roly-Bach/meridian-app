@@ -49,12 +49,21 @@ vi.mock('@/services/processClustering', () => ({
   clusterProcessSteps: vi.fn().mockResolvedValue(undefined),
 }))
 
+// PROJ-42: role guard fully mocked — its own behavior (prefilter/judge/redirect) is
+// unit-tested in roleGuard.test.ts. Default 'checked: false' (no prefilter hit) keeps
+// every pre-existing DB-call-sequence assumption below unaffected; the off-topic path
+// gets its own dedicated tests further down, overriding the mock per-test.
+vi.mock('@/services/roleGuard', () => ({
+  checkRoleGuard: vi.fn().mockResolvedValue({ checked: false }),
+  buildOffTopicRedirect: vi.fn().mockReturnValue('Dazu kann ich als Interviewer leider nichts beitragen — bleiben wir beim Prozessgespräch. Wo waren wir stehengeblieben?'),
+}))
+
 import { runInterviewTurn } from './runInterviewTurn'
 import { createTalkerStream } from '@/services/interviewTalker'
 import {
   checkLifecycle,
   decideNextPhaseWithMeta,
-  WRAP_UP_QUESTION_TEXT,
+  CLOSING_PROBE_TEXT,
 } from '@/services/interviewOrchestrator'
 import {
   runAnalystOnline,
@@ -62,6 +71,7 @@ import {
   runAnalystFailureRetry,
 } from '@/services/interviewAnalyst'
 import { runQuickExtract } from '@/services/interviewQuickExtract'
+import { checkRoleGuard } from '@/services/roleGuard'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -211,6 +221,7 @@ describe('runInterviewTurn', () => {
     // Default: normal turn — return current phase 'intro' to avoid DB phase-update call
     vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: false, reason: null })
     vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'intro' as never, phaseJustEntered: null })
+    vi.mocked(checkRoleGuard).mockResolvedValue({ checked: false })
   })
 
   // T1: Normal turn — meta.completed === false, createTalkerStream called
@@ -229,14 +240,18 @@ describe('runInterviewTurn', () => {
     expect(result.stream).toBeDefined()
   })
 
-  // T2: missingSlotsForCoverageCheck computed when phase is 'coverage_check'
-  it('T2: computes missingSlotsForCoverageCheck for coverage_check phase', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'coverage_check' as never, phaseJustEntered: 'coverage_check' as never })
+  // T2: missingSlotsForCoverageCheck computed when phase is 'closing'
+  it('T2: computes missingSlotsForCoverageCheck for closing phase', async () => {
+    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'closing' as never, phaseJustEntered: 'closing' as never })
 
     const step = makeStepEntry('Rechnungsprüfung', 'walkthrough')
-    // phase transitions from 'intro' (stateRow default) to 'coverage_check' — include phase update mock
+    // The closing probe must already be in history — otherwise shouldInjectClosingProbe
+    // fires first and short-circuits the turn before it ever reaches createTalkerStream.
+    const priorTurn = { turn_number: 1, user_input: 'Ich glaube das war alles.', agent_response: CLOSING_PROBE_TEXT, created_at: new Date().toISOString() }
+    // phase transitions from 'intro' (stateRow default) to 'closing' — include phase update mock
     setupSupabaseMocks({
       stateRow: makeStateRow('intro', [step]),
+      turnsData: [priorTurn],
       includePhaseUpdate: true,
     })
 
@@ -249,7 +264,7 @@ describe('runInterviewTurn', () => {
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
-          phase: 'coverage_check',
+          phase: 'closing',
           missingSlotsForCoverageCheck: expect.arrayContaining([
             expect.objectContaining({ step_title: 'Rechnungsprüfung' }),
           ]),
@@ -258,16 +273,12 @@ describe('runInterviewTurn', () => {
     )
   })
 
-  // T3: missingSlotsForCoverageCheck computed when phase is 'slot_completion'
-  it('T3: computes missingSlotsForCoverageCheck for slot_completion phase', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'slot_completion' as never, phaseJustEntered: null })
+  // T2b: missingSlotsForCoverageCheck is undefined outside closing
+  it('T2b: does NOT compute missingSlotsForCoverageCheck during explore', async () => {
+    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'explore' as never, phaseJustEntered: null })
 
     const step = makeStepEntry('Monatsabschluss', 'walkthrough')
-    // phase transitions from 'intro' to 'slot_completion' — include phase update mock
-    setupSupabaseMocks({
-      stateRow: makeStateRow('intro', [step]),
-      includePhaseUpdate: true,
-    })
+    setupSupabaseMocks({ stateRow: makeStateRow('explore', [step]) })
 
     await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -278,10 +289,8 @@ describe('runInterviewTurn', () => {
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
-          phase: 'slot_completion',
-          missingSlotsForCoverageCheck: expect.arrayContaining([
-            expect.objectContaining({ step_title: 'Monatsabschluss' }),
-          ]),
+          phase: 'explore',
+          missingSlotsForCoverageCheck: undefined,
         }),
       })
     )
@@ -329,7 +338,7 @@ describe('runInterviewTurn', () => {
     expect(runAnalystOnline).toHaveBeenCalledTimes(1)
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: expect.objectContaining({ phase: 'wrap_up', isCompletionFarewell: true }),
+        context: expect.objectContaining({ phase: 'closing', isCompletionFarewell: true }),
         briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
       })
     )
@@ -354,7 +363,7 @@ describe('runInterviewTurn', () => {
     const stateFetch = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('wrap_up', []), error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('closing', []), error: null }),
     }
     const turnsFetch = {
       select: vi.fn().mockReturnThis(),
@@ -383,49 +392,6 @@ describe('runInterviewTurn', () => {
         }),
       })
     )
-  })
-
-  // T12: farewell-loop escape valve fired with no analystBriefing yet (eval 2026-06-25 run1 —
-  // without this, the turn fell through and ran normally with nothing left to ask, and the
-  // Talker degenerated into echoing the user's goodbye verbatim). The synchronous analyst pass
-  // must run, and once it has, the recheck finds no pending clarification_cards → completes.
-  it('T12: farewell_pending_analyst forces a synchronous analyst pass, then completes', async () => {
-    vi.mocked(checkLifecycle)
-      .mockReturnValueOnce({ shouldComplete: false, reason: 'farewell_pending_analyst' })
-      .mockReturnValueOnce({ shouldComplete: true, reason: 'soft_confirm' })
-
-    mockAdminFrom.mockReset()
-    const interviewFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
-    }
-    const stateFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow(), error: null }),
-    }
-    const turnsFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: [], error: null }),
-    }
-    const updateMock = {
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }
-    ;[interviewFetch, stateFetch, turnsFetch, makeStepTrackerLoadMock([]), updateMock]
-      .forEach((m) => mockAdminFrom.mockReturnValueOnce(m))
-
-    const result = await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Dir auch, bis bald.',
-      timerMinutes: 20,
-    })
-
-    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
-    expect(result.meta.completed).toBe(true)
-    expect(result.meta.reason).toBe('soft_confirm')
   })
 
   // T13 (#8): the synchronous pre-completion recheck itself fails (network blip, rate
@@ -457,18 +423,13 @@ describe('runInterviewTurn', () => {
     )
   })
 
-  // T5: Wrap-up injection → stream has WRAP_UP_QUESTION_TEXT, no createTalkerStream for normal turn
-  it('T5: wrap-up injection — stream returns WRAP_UP_QUESTION_TEXT text', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'wrap_up' as never, phaseJustEntered: 'wrap_up' as never })
+  // T5: Closing-probe injection → stream returns CLOSING_PROBE_TEXT, no createTalkerStream
+  it('T5: closing-probe injection — stream returns CLOSING_PROBE_TEXT text', async () => {
+    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'closing' as never, phaseJustEntered: 'closing' as never })
 
-    // Inject shouldInjectWrapUpQuestion to return true by providing history
-    // that has user as last message and wrap_up not yet asked.
-    // The orchestrator mock already resolves wrap_up phase; the real
-    // shouldInjectWrapUpQuestion runs from the actual import.
-
-    // For shouldInjectWrapUpQuestion to return true:
-    // - orchestratedPhase === 'wrap_up'  ✓ (from mock)
-    // - no WRAP_UP_QUESTION_TEXT in history ✓ (empty turns)
+    // For shouldInjectClosingProbe to return true:
+    // - orchestratedPhase === 'closing'  ✓ (from mock)
+    // - no CLOSING_PROBE_TEXT in history ✓ (empty turns)
     // - last message is user ✓ (we add user_input to history)
 
     const turnInsert = {
@@ -488,7 +449,7 @@ describe('runInterviewTurn', () => {
     mockAdminFrom.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('coverage_check'), error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('explore'), error: null }),
     })
     // turns fetch — empty so history ends with user message
     mockAdminFrom.mockReturnValueOnce({
@@ -496,12 +457,12 @@ describe('runInterviewTurn', () => {
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: [], error: null }),
     })
-    // Phase update (coverage_check → wrap_up)
+    // Phase update (explore → closing)
     mockAdminFrom.mockReturnValueOnce({
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({ data: null, error: null }),
     })
-    // Turn insert for wrap-up question
+    // Turn insert for closing probe
     mockAdminFrom.mockReturnValueOnce(turnInsert)
 
     const result = await runInterviewTurn({
@@ -510,10 +471,10 @@ describe('runInterviewTurn', () => {
       timerMinutes: 25,
     })
 
-    expect(result.meta.phase).toBe('wrap_up')
+    expect(result.meta.phase).toBe('closing')
     expect(result.meta.completed).toBe(false)
     const text = await result.stream.text
-    expect(text).toBe(WRAP_UP_QUESTION_TEXT)
+    expect(text).toBe(CLOSING_PROBE_TEXT)
     expect(createTalkerStream).not.toHaveBeenCalled()
   })
 
@@ -543,11 +504,14 @@ describe('runInterviewTurn', () => {
     )
   })
 
-  // T7: background() calls runAnalystCatchup when phaseJustEntered === 'coverage_check'
-  it('T7: background() calls runAnalystCatchup when phaseJustEntered is coverage_check', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'coverage_check' as never, phaseJustEntered: 'coverage_check' as never })
+  // T7: background() calls runAnalystCatchup when phaseJustEntered === 'closing'
+  it('T7: background() calls runAnalystCatchup when phaseJustEntered is closing', async () => {
+    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'closing' as never, phaseJustEntered: 'closing' as never })
 
-    setupSupabaseMocks({ includePhaseUpdate: true })
+    // The closing probe must already be in history — otherwise shouldInjectClosingProbe
+    // fires first and short-circuits the turn before background() ever gets built.
+    const priorTurn = { turn_number: 1, user_input: 'Ich glaube das war alles.', agent_response: CLOSING_PROBE_TEXT, created_at: new Date().toISOString() }
+    setupSupabaseMocks({ turnsData: [priorTurn], includePhaseUpdate: true })
 
     const result = await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -627,9 +591,9 @@ describe('runInterviewTurn', () => {
 
   it('T9b: runQuickExtract called when stepTracker has entries', async () => {
     const step = makeStepEntry()
-    // Mock decideNextPhaseWithMeta to return walkthrough_step (matching state) — no phase-update
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValueOnce({ phase: 'walkthrough_step' as never, phaseJustEntered: null })
-    setupSupabaseMocks({ stateRow: makeStateRow('walkthrough_step', [step]) })
+    // Mock decideNextPhaseWithMeta to return explore (matching state) — no phase-update
+    vi.mocked(decideNextPhaseWithMeta).mockReturnValueOnce({ phase: 'explore' as never, phaseJustEntered: null })
+    setupSupabaseMocks({ stateRow: makeStateRow('explore', [step]) })
 
     await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -638,5 +602,64 @@ describe('runInterviewTurn', () => {
     })
 
     expect(runQuickExtract).toHaveBeenCalled()
+  })
+
+  // ─── Role Guard (PROJ-42 / KI-24) ───────────────────────────────────────────
+
+  describe('Role Guard early-return', () => {
+    it('T14: off_topic classification ends the turn — no quick-extract, no Talker call, no background analyst', async () => {
+      vi.mocked(checkRoleGuard).mockResolvedValue({ checked: true, classification: 'off_topic' })
+
+      const turnInsert = {
+        from: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: 'turn-redirect' }, error: null }),
+      }
+      mockAdminFrom.mockReset()
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
+      })
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('explore', [makeStepEntry()]), error: null }),
+      })
+      mockAdminFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })
+      mockAdminFrom.mockReturnValueOnce(turnInsert)
+
+      const result = await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Was kostet eigentlich ein neuer VW Golf?',
+        timerMinutes: 5,
+      })
+
+      expect(result.meta.completed).toBe(false)
+      expect(createTalkerStream).not.toHaveBeenCalled()
+      expect(runQuickExtract).not.toHaveBeenCalled()
+      const bg = await result.background()
+      expect(bg).toBeNull()
+      expect(runAnalystOnline).not.toHaveBeenCalled()
+    })
+
+    it('T15: meta classification (or no prefilter hit) runs the turn normally', async () => {
+      vi.mocked(checkRoleGuard).mockResolvedValue({ checked: true, classification: 'meta' })
+      setupSupabaseMocks({})
+
+      const result = await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Und die wäre?',
+        timerMinutes: 5,
+      })
+
+      expect(createTalkerStream).toHaveBeenCalled()
+      expect(result.meta.completed).toBe(false)
+    })
   })
 })

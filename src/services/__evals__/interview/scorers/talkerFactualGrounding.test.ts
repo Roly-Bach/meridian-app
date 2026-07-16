@@ -79,8 +79,8 @@ describe('scoreTalkerFactualGrounding', () => {
     ]))
 
     const turns: TurnRecord[] = [
-      { turnNumber: 5, userInput: 'Der Monatsabschluss dauert zwei bis drei Tage.', agentText: 'Wie lange dauert der Monatsabschluss?', phase: 'walkthrough_step', toolCalls: [] },
-      { turnNumber: 13, userInput: 'Da muss ein Missverständnis vorliegen, ich habe keine Minutenzahl genannt.', agentText: 'Du hast vorhin 1200 Minuten erwähnt — jetzt sagst du 5. Was ist der Unterschied?', phase: 'walkthrough_step', toolCalls: [] },
+      { turnNumber: 5, userInput: 'Der Monatsabschluss dauert zwei bis drei Tage.', agentText: 'Wie lange dauert der Monatsabschluss?', phase: 'explore', toolCalls: [] },
+      { turnNumber: 13, userInput: 'Da muss ein Missverständnis vorliegen, ich habe keine Minutenzahl genannt.', agentText: 'Du hast vorhin 1200 Minuten erwähnt — jetzt sagst du 5. Was ist der Unterschied?', phase: 'explore', toolCalls: [] },
     ]
     const result = await scoreTalkerFactualGrounding(turns, 'google/gemini-3.5-flash')
     expect(result.violations).toBe(1)

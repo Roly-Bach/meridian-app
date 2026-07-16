@@ -44,7 +44,7 @@ const makeTurn = (userInput: string, turnNumber = 1): TurnRecord => ({
   turnNumber,
   userInput,
   agentText: '',
-  phase: 'walkthrough_step',
+  phase: 'explore',
   toolCalls: [],
 })
 

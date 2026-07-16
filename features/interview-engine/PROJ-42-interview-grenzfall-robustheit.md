@@ -1,13 +1,13 @@
 # PROJ-42: Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard)
 
-## Status: Planned
+## Status: In Progress
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** M (½–1 Tag)
 **Bugs:** —
 **Created:** 2026-07-15
-**Last Updated:** 2026-07-15
+**Last Updated:** 2026-07-16
 
 ## Context
 
@@ -193,6 +193,26 @@ Das ersetzt die heutige Kette von sechs Einzelphasen (`intro → process_loop �
 
 - **Keine neuen npm-Pakete.** Der zusätzliche Guard-Prüfungsaufruf nutzt dieselbe bereits vorhandene Anbindung an die Sprachmodelle, die auch der restliche Interview-Agent verwendet.
 - **Eine Datenbank-Änderung** (Anpassung der erlaubten Werte für den Interview-Fortschritt + Umschlüsselung bestehender Zeilen). Das ist laut Projekt-Regeln freigabepflichtig — die genaue Änderung wird zur Freigabe vorgelegt, bevor sie angewendet wird, nicht im Rahmen dieses Architektur-Schritts.
+
+## Implementation Notes (Backend, 2026-07-16)
+
+**DB-Migration angewendet** (`supabase/migrations/20260716000000_proj42_collapse_phase_model.sql`, freigegeben durch Nutzer vor Ausführung): `interview_state_phase_check`-Constraint auf `intro | explore | closing | clarification` verengt; alle 13 bestehenden Zeilen umgeschlüsselt (`process_loop/walkthrough_step/slot_completion/coverage_check` → `explore`, `wrap_up` → `closing`). Verifiziert nach Anwendung: 6× `intro`, 9× `explore`, 41× `closing`, keine Zeile verloren. `src/lib/database.types.ts` (handgepflegt, kein Codegen-Diff) entsprechend angepasst.
+
+**Phasen-Kollaps** (`interviewSemantic.ts`, `interviewOrchestrator.ts`): `Phase` auf `'intro' | 'explore' | 'closing' | 'clarification'` reduziert. `decideNextPhase`/`checkLifecycle` komplett neu geschrieben — turn-count-Eskalationsleiter (`computeTurnBudget`) und regex-basierte `FAREWELL_MARKERS`-Erkennung vollständig entfernt (kein Fallback, kein Doppel-Support). Neue Signale:
+- **Advance-Signal** (`AnalystBriefing.step_advance_ready`, LLM-authored, snake_case passend zum Zod-Tool-Schema): Analyst-Urteil "aktiver Schritt jetzt ausreichend erhoben".
+- **No-New-Extraction-Zähler** (`AnalystBriefing.noNewExtractionStreak`, camelCase, deterministisch code-berechnet — NIE vom Modell gesetzt): in `interviewAnalyst.ts` per `computeNextBriefing()` (pure, eigenständig unit-getestet) aus den tatsächlichen Tool-Calls des Passes abgeleitet, threaded über den next_briefing-JSON-Bridge (analog `usedFillerPhrases`). Default-Limit K=3, override via `NO_NEW_EXTRACTION_LIMIT` env var.
+- **Wall-Clock-Soft-Anker** bei 80 % von `maxDurationMinutes`, mit gedeckelter Kulanzfrist (`min(3 Min, Restzeit bis 100 %)`) für einen gerade aktiv explorierten Schritt — Kulanzfrist ist durch den harten 100 %-Stop natürlich begrenzt.
+- Closing-Sequenz: `CLOSING_PROBE_TEXT`/`shouldInjectClosingProbe`/`closingProbeAnswerReceived` (Nachfolger von `WRAP_UP_QUESTION_TEXT` u.a., wortgleicher Text). Neu entdeckter Prozess während Closing → erstklassig zurück zu `explore` (kein 2-Turn-Clarification-Cap mehr).
+
+**Rollen-Guard** (`src/services/roleGuard.ts`, neu): deterministischer Prefilter (`?` oder Fragewort/Bitte am Satzanfang) + Judge-Call (Cross-Vendor via bestehendem `resolveGuardJudgeModel`/`assertGuardFamilyDiffersFromTalker` aus `talkerGroundingGuard.ts`, wiederverwendet statt dupliziert) klassifiziert `meta` vs. `off_topic`. Klasse `off_topic` → fester, deterministischer Redirect-Text (kein Talker-Call), verankert auf die letzte Assistant-Nachricht. Gehookt in `runInterviewTurn.ts` als frühester Gate direkt nach Turn-Historie-Aufbau, vor Quick-Extract/Talker/Analyst. Judge-Fail-Safe: 1 Retry, danach Passthrough zu `meta` mit `console.error` (analog KI-18 sechster Fix-Versuch).
+
+**Prompt-Updates:** `talkerPrompt.ts` STATIC_PROMPT-Phasenzeile + `buildPhaseMethodology` auf 3 Phasen konsolidiert (`explore` bündelt vormals `process_loop`+`walkthrough_step`+`slot_completion` in einem kompakteren Block, bewusst nicht additiv verlängert — KI-18-Prompt-Dichte-Risiko im Blick). `interviewAnalyst.ts` System-Prompt STUFE 0-5 aktualisiert inkl. neuer STUFE 4 (Advance-Signal-Anweisung).
+
+**Abweichung von der Tech-Design-Beschreibung:** Die Tech-Design-Sektion B erwähnt nur EIN neues Signal ("Ja/Nein-Signal"); der No-New-Extraction-Zähler wurde zusätzlich über denselben next_briefing-Bridge-Mechanismus geführt (kein neues DB-Feld, konsistent mit der Vorgabe "kein neues Datenbankfeld"), da eine rein LLM-gesteuerte Zählung dem Determinismus-Anspruch der AC widersprochen hätte.
+
+**Tests:** 898/899 Unit-Tests grün (1 Skip vorbestehend), `tsc --noEmit` sauber. Neue/aktualisierte Dateien: `interviewOrchestrator.test.ts` (komplett neu geschrieben), `interviewOrchestrator.tim-regression.test.ts` (neu — reproduziert Tims reale Turn-Sequenz aus Supabase-Interview `09c2052c-ad69-40fc-bb38-d934ece47fc6` inkl. echter Zeitstempel/Timer-Werte/finalem step_tracker, verifiziert deterministisches `shouldComplete=true`), `roleGuard.test.ts` (neu — inkl. Tims Turns 11/16/17 als Fixtures), `runInterviewTurn.test.ts`, `talkerPrompt.test.ts`, `interviewAnalyst.test.ts`, `phaseAdherence.ts`-Scorer, `runner.ts` (Eval-Harness) aktualisiert.
+
+**Noch offen (nicht Backend-Scope, siehe general.md Interview-Engine-Eval-Gate):** `/eval:interview`-Lauf + manueller adversarialer Interview-Durchlauf vor Status-Übergang zu Approved — beides Aufgabe von `/qa`.
 
 ## QA Test Results
 _To be added by /qa_

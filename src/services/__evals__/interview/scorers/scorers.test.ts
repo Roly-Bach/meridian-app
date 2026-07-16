@@ -54,7 +54,7 @@ const makeTurn = (
   turnNumber: 1,
   userInput: 'Ich bearbeite etwa 80 bis 100 Rechnungen pro Monat.',
   agentText: 'Kannst du den Ablauf beschreiben?',
-  phase: 'walkthrough_step',
+  phase: 'explore',
   toolCalls: [],
   ...overrides,
 })
@@ -112,19 +112,19 @@ describe('scoreSlotCoverage', () => {
 
 describe('scorePhaseAdherence', () => {
   it('returns 1.0 when no walkthrough turns', () => {
-    const turns = [makeTurn({ phase: 'intro' }), makeTurn({ phase: 'slot_completion' })]
+    const turns = [makeTurn({ phase: 'intro' }), makeTurn({ phase: 'closing' })]
     expect(scorePhaseAdherence(turns)).toBe(1.0)
   })
 
   it('marks turn conforming when agent asks open process question', () => {
-    const turns = [makeTurn({ phase: 'walkthrough_step', agentText: 'Kannst du den Ablauf beschreiben?' })]
+    const turns = [makeTurn({ phase: 'explore', agentText: 'Kannst du den Ablauf beschreiben?' })]
     expect(scorePhaseAdherence(turns)).toBe(1.0)
   })
 
   it('first-time slot question in walkthrough is conforming (not re-asking)', () => {
     // New semantics: first occurrence of a slot question is exploratory → not a violation.
     const turns = [
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert dieser Schritt typischerweise?' }),
+      makeTurn({ phase: 'explore', agentText: 'Wie lange dauert dieser Schritt typischerweise?' }),
     ]
     expect(scorePhaseAdherence(turns)).toBe(1.0)
   })
@@ -132,8 +132,8 @@ describe('scorePhaseAdherence', () => {
   it('re-asking same slot type twice in walkthrough is a violation', () => {
     // Second occurrence of the same pattern = re-asking a known slot → violation.
     const turns = [
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert dieser Schritt typischerweise?' }),
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert das normalerweise?' }),
+      makeTurn({ phase: 'explore', agentText: 'Wie lange dauert dieser Schritt typischerweise?' }),
+      makeTurn({ phase: 'explore', agentText: 'Wie lange dauert das normalerweise?' }),
     ]
     // Turn 1: first occurrence → conforming. Turn 2: repeat → violating. 1/2 = 0.5
     expect(scorePhaseAdherence(turns)).toBe(0.5)
@@ -141,9 +141,9 @@ describe('scorePhaseAdherence', () => {
 
   it('calculates mixed conformity correctly — only counts re-asks as violations', () => {
     const turns = [
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Erzähl mir wie das abläuft.' }),
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Wie lange dauert das typischerweise?' }),
-      makeTurn({ phase: 'walkthrough_step', agentText: 'Was passiert danach?' }),
+      makeTurn({ phase: 'explore', agentText: 'Erzähl mir wie das abläuft.' }),
+      makeTurn({ phase: 'explore', agentText: 'Wie lange dauert das typischerweise?' }),
+      makeTurn({ phase: 'explore', agentText: 'Was passiert danach?' }),
     ]
     // All 3 turns conforming: no repeated slot patterns → 3/3 = 1.0
     expect(scorePhaseAdherence(turns)).toBe(1.0)

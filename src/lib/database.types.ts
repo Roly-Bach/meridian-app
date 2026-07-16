@@ -113,7 +113,7 @@ export interface Database {
       interview_state: {
         Row: {
           interview_id: string
-          phase: 'intro' | 'process_loop' | 'walkthrough_step' | 'slot_completion' | 'coverage_check' | 'wrap_up' | 'clarification'
+          phase: 'intro' | 'explore' | 'closing' | 'clarification'
           timer_minutes: number
           topics_covered: string[]
           topics_open: string[]
@@ -124,7 +124,7 @@ export interface Database {
         }
         Insert: {
           interview_id: string
-          phase?: 'intro' | 'process_loop' | 'walkthrough_step' | 'slot_completion' | 'coverage_check' | 'wrap_up' | 'clarification'
+          phase?: 'intro' | 'explore' | 'closing' | 'clarification'
           timer_minutes?: number
           topics_covered?: string[]
           topics_open?: string[]
@@ -135,7 +135,7 @@ export interface Database {
         }
         Update: {
           interview_id?: string
-          phase?: 'intro' | 'process_loop' | 'walkthrough_step' | 'slot_completion' | 'coverage_check' | 'wrap_up' | 'clarification'
+          phase?: 'intro' | 'explore' | 'closing' | 'clarification'
           timer_minutes?: number
           topics_covered?: string[]
           topics_open?: string[]

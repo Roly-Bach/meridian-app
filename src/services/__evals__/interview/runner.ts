@@ -850,7 +850,7 @@ async function runInterview(
     // PROJ-23: Clarification phase — eval-specific handling stays in runner.
     const nextPhaseDecision = decideNextPhase(orchCtx, analystBriefing)
     const phaseForClarificationCheck: Phase =
-      nextPhaseDecision === 'completed' ? 'wrap_up' : (nextPhaseDecision as Phase)
+      nextPhaseDecision === 'completed' ? 'closing' : (nextPhaseDecision as Phase)
 
     if (phaseForClarificationCheck === 'clarification') {
       const cards = analystBriefing?.clarification_cards ?? []

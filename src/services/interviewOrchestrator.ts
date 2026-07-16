@@ -1,4 +1,4 @@
-import { POTENZIAL_SLOT_NAMES, groupSemanticSteps, type Phase, type StepEntry } from './interviewSemantic'
+import { type Phase, type StepEntry } from './interviewSemantic'
 import type { AnalystBriefing } from './interviewTypes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,100 +19,37 @@ export interface OrchestratorContext {
 
 export interface LifecycleDecision {
   shouldComplete: boolean
-  reason: 'hard_stop' | 'soft_confirm' | 'farewell_pending_analyst' | null
+  reason: 'hard_stop' | 'soft_confirm' | null
 }
 
 /**
- * TurnBudgetAllocator (Pt6): derive all HL escape thresholds from maxDurationMinutes.
- *
- * Previously the thresholds were hardcoded for 30-minute interviews:
- *   PROCESS_LOOP_ESCAPE_HL=20 (40% of 50), WALKTHROUGH=28 (56%), SLOT_COMPLETION=32 (64%),
- *   COVERAGE_CHECK_BASE=40 (80%), MAX_TURNS=50.
- * These ratios are correct but break for non-30-min interviews (15 min, 45 min etc.)
- *
- * Now: totalBudgetHL = maxDurationMinutes × 2 - 10 (buffer for first/last turns).
- * For 30 min: 50 — matches old constants exactly. All escape valves scale proportionally.
- *
- * stepCount extends the coverage/wrap budget: each extra step beyond baseline=2
- * buys 6 HL (≈3 turns) for fair walkthrough coverage. Cap: +10 turns.
+ * PROJ-42 (KI-23 fix): the previous turn-count escalation ladder
+ * (computeTurnBudget: 40/56/64/80% thresholds across six phases) was
+ * content-blind and the root cause of the Tim bug — it escalated after ~9
+ * turns regardless of how much had actually been covered. Replaced by two
+ * signals within a single 'explore' phase:
+ *   1. Content-driven: the Analyst's stepAdvanceReady signal + open-topics check.
+ *   2. Safety nets: a deterministic no-new-extraction streak counter (content-
+ *      aware but code-computed, not LLM-guessed) and a wall-clock soft anchor
+ *      at ~80% of the interview's time budget (protects the interviewee's
+ *      agreed time, not conversation quality — that's the streak counter's job).
+ * "Whichever comes first" between full coverage and the soft anchor decides
+ * the move to 'closing'.
  */
-export interface TurnBudget {
-  processLoopEscapeHL: number
-  walkthroughEscapeHL: number
-  slotCompletionEscapeHL: number
-  coverageCheckEscapeHL: number
-  maxTurnsHL: number
-}
+const SOFT_ANCHOR_RATIO = 0.8
+const MAX_GRACE_MINUTES = 3
+const DEFAULT_NO_NEW_EXTRACTION_LIMIT = 3
 
-export function computeTurnBudget(maxDurationMinutes: number, stepCount = 2): TurnBudget {
-  const total = Math.max(maxDurationMinutes * 2 - 10, 20) // floor at 20 HL for very short interviews
-  const baselineSteps = 2
-  const extraSteps = Math.max(0, stepCount - baselineSteps)
-  const stepBonus = Math.min(extraSteps * 6, 20) // cap at +10 turns
-  const coverageHL = Math.round(total * 0.80) + stepBonus
-  return {
-    processLoopEscapeHL:    Math.round(total * 0.40),
-    walkthroughEscapeHL:    Math.round(total * 0.56),
-    slotCompletionEscapeHL: Math.round(total * 0.64),
-    coverageCheckEscapeHL:  coverageHL,
-    maxTurnsHL:             coverageHL + 10,
-  }
-}
-
-/**
- * Computes how many HL the current walkthrough step may consume before forced push.
- */
-function computeStepBudget(historyLength: number, completedSteps: number, totalTopics: number, budget: TurnBudget): number {
-  const reserveHL = 10
-  const remainingBudgetHL = budget.maxTurnsHL - historyLength - reserveHL
-  const remainingSteps = Math.max(totalTopics - completedSteps, 1)
-  const budgetHL = Math.floor(remainingBudgetHL / remainingSteps)
-  const MIN_HL_PER_STEP = 6
-  return Math.max(budgetHL, MIN_HL_PER_STEP)
-}
-
-/**
- * Estimates HL spent on the current walkthrough step.
- */
-function estimateTurnsUsedOnCurrentStep(historyLength: number, completedSteps: number, budget: TurnBudget): number {
-  const walkthroughHL = Math.max(0, historyLength - budget.processLoopEscapeHL)
-  const totalSteps = completedSteps + 1
-  return Math.floor(walkthroughHL / totalSteps)
+/** Eval-tunable via NO_NEW_EXTRACTION_LIMIT env var (AC: "Startwert K=3, eval-tunbar"). */
+function noNewExtractionLimit(): number {
+  const env = Number(process.env.NO_NEW_EXTRACTION_LIMIT)
+  return Number.isFinite(env) && env > 0 ? env : DEFAULT_NO_NEW_EXTRACTION_LIMIT
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function hasStepInStatus(tracker: StepEntry[], status: 'exploring' | 'walkthrough' | 'done'): boolean {
   return tracker.some((s) => s.status === status)
-}
-
-function walkthroughHasContent(tracker: StepEntry[]): boolean {
-  return tracker.some(
-    (s) =>
-      s.status === 'walkthrough' &&
-      (
-        // Classic path: 3+ walkthrough data items from update_walkthrough_data
-        (s.process_steps?.length ?? 0) + (s.friction_points?.length ?? 0) + (s.pain_point_primary ? 1 : 0) >= 3
-        // Fallback A: at least 1 slot already filled via record_slot —
-        // avoids deadlock when Analyst extracts slots directly without calling update_walkthrough_data first.
-        // Fix-3 reverted: threshold back to "any slot" (>= 1) to prevent depth-first starvation.
-        || Object.values(s.potenzial).some(v => v !== null)
-        || Object.values(s.slots).some(v => v !== null)
-        // Fallback B: 2+ process_steps (orthogonally correct, kept from Fix-3)
-        || (s.process_steps?.length ?? 0) >= 2
-      ),
-  )
-}
-
-// Groups semantically equivalent steps and checks whether the union of potenzial
-// slots per group is complete. Uses groupSemanticSteps (single source of truth).
-function semanticAllStepsDone(tracker: StepEntry[]): boolean {
-  if (tracker.length === 0) return false
-  return groupSemanticSteps(tracker).every(group =>
-    POTENZIAL_SLOT_NAMES.every(slot =>
-      group.some(s => s.potenzial[slot] !== null)
-    )
-  )
 }
 
 function hasUnexploredFocusTopic(topicsOpen: string[], tracker: StepEntry[]): boolean {
@@ -124,102 +61,59 @@ function hasUnexploredFocusTopic(topicsOpen: string[], tracker: StepEntry[]): bo
   })
 }
 
-// KI-15: a step is "unstarted" when it carries zero extracted content — neither potenzial
-// nor tazite slots, nor any walkthrough data. Distinguishes a genuinely new process (just
-// register_step'd this turn, e.g. surfaced by the wrap-up "anything we missed?" probe) from
-// a step that's merely incomplete after real walkthrough progress (Pt8's clarification path).
-function isUnstartedStep(step: StepEntry): boolean {
-  const potenzialEmpty = Object.values(step.potenzial).every((v) => v === null)
-  const slotsEmpty = Object.values(step.slots).every((v) => v === null)
-  const noWalkthroughData = (step.process_steps?.length ?? 0) === 0 && (step.friction_points?.length ?? 0) === 0
-  return potenzialEmpty && slotsEmpty && noWalkthroughData
-}
-
-function hasUnstartedExploringStep(tracker: StepEntry[]): boolean {
-  return tracker.some((s) => s.status === 'exploring' && isUnstartedStep(s))
-}
-
 /**
- * Deterministic wrap-up closing question. Injected verbatim by the orchestrator
- * when the interview transitions into wrap_up — replaces LLM-generated wording.
- * Constant exported so callers (route handler, eval runner) can write it as the
- * agent_response of the question-turn without invoking the Talker.
+ * Deterministic catch-all closing probe. Injected verbatim by the orchestrator
+ * when the interview transitions into 'closing' — successor to the pre-PROJ-42
+ * WRAP_UP_QUESTION_TEXT, same mechanism: replaces LLM-generated wording so
+ * callers (route handler, eval runner) can write it as the agent_response of
+ * the question-turn without invoking the Talker.
  */
-export const WRAP_UP_QUESTION_TEXT =
+export const CLOSING_PROBE_TEXT =
   'Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute noch nicht erwähnt haben?'
 
 /**
- * True iff the deterministic wrap-up question has been written to history.
- * Replaces the previous regex heuristic that scanned for paraphrases.
+ * True iff the deterministic closing probe has been written to history.
  * Match is exact (substring containment) on the constant above.
  */
-export function wrapUpQuestionAlreadyAsked(
+export function closingProbeAlreadyAsked(
   history: { role: 'user' | 'assistant'; content: string }[],
 ): boolean {
-  const marker = WRAP_UP_QUESTION_TEXT.slice(0, 60) // tolerate trailing decoration
+  const marker = CLOSING_PROBE_TEXT.slice(0, 60) // tolerate trailing decoration
   return history.some((t) => t.role === 'assistant' && t.content.includes(marker))
 }
 
 /**
- * Decision whether the next turn should be a deterministic wrap-up question
+ * Decision whether the next turn should be a deterministic closing-probe
  * injection (no Talker call) or a normal Talker stream.
  *
- * Returns 'inject_question' iff:
- *   - the resolved next phase is 'wrap_up'
- *   - the deterministic question has NOT yet been written to history
+ * Returns true iff:
+ *   - the resolved next phase is 'closing'
+ *   - the deterministic probe has NOT yet been written to history
  *   - the most recent message in history is a user message (we owe a response)
  */
-export function shouldInjectWrapUpQuestion(
+export function shouldInjectClosingProbe(
   nextPhase: ExtendedPhase,
   history: { role: 'user' | 'assistant'; content: string }[],
 ): boolean {
-  if (nextPhase !== 'wrap_up') return false
-  if (wrapUpQuestionAlreadyAsked(history)) return false
+  if (nextPhase !== 'closing') return false
+  if (closingProbeAlreadyAsked(history)) return false
   if (history.length === 0) return false
   return history[history.length - 1].role === 'user'
 }
 
 /**
- * True iff the deterministic wrap-up question has been asked AND the user has
+ * True iff the deterministic closing probe has been asked AND the user has
  * since replied — i.e. a completion/clarification decision is owed this turn.
- * Shared by decideNextPhase's wrap_up case and checkLifecycle's Trigger B (#16,
- * 2026-07-14 — was duplicated verbatim in both places). Each caller still
- * branches separately on analystSuggestion.clarification_cards afterwards,
- * since they return different result types (ExtendedPhase vs. LifecycleDecision).
+ * Shared by decideNextPhase's 'closing' case and checkLifecycle's Trigger B.
  */
-export function wrapUpAnswerReceived(
+export function closingProbeAnswerReceived(
   history: { role: 'user' | 'assistant'; content: string }[],
 ): boolean {
   return (
-    wrapUpQuestionAlreadyAsked(history) &&
+    closingProbeAlreadyAsked(history) &&
     history.length > 0 &&
     history[history.length - 1].role === 'user'
   )
-}
-
-// ─── Phase Invariants ─────────────────────────────────────────────────────────
-
-/**
- * Monitoring only (#9, 2026-07-14): logs a warning when farewell is approaching
- * but steps remain under-started. Does NOT force a transition — in every budget
- * configuration the invariant's own window (historyLength >= coverageCheckEscapeHL - 4)
- * lies after walkthroughEscapeHL, so the walkthrough_step case's own escape valve (the
- * `historyLength >= budget.walkthroughEscapeHL` check below) and the KI-15 unstarted-step
- * guard already push the phase forward before this window is ever reached. Kept as an
- * early-warning signal for regressions in that escape-valve ordering.
- */
-function assertPhaseInvariants(historyLength: number, startedSteps: number, totalTopics: number, budget: TurnBudget): void {
-  if (historyLength >= budget.coverageCheckEscapeHL - 4) {
-    const expectedMin = Math.max(totalTopics - 1, 1)
-    if (startedSteps < expectedMin) {
-      console.warn('[INVARIANT_VIOLATION] farewell approaching, steps under-started', {
-        historyLength,
-        startedSteps,
-        expectedMin,
-        totalTopics,
-      })
-    }
-  }
 }
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
@@ -228,101 +122,74 @@ function assertPhaseInvariants(historyLength: number, startedSteps: number, tota
  * Deterministically decides the phase for the upcoming Talker turn.
  * Reads the state that was left by the PREVIOUS turn's Analyst/tools.
  * The phase returned is the phase that should be WRITTEN to interview_state before the Talker runs.
- *
- * analystSuggestion is null in Iteration 2; populated by interviewAnalyst.ts in Iteration 3.
  */
 export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): ExtendedPhase {
-  // Hard-Stop: write wrap_up phase (not 'completed' — 'completed' is interviews.status)
+  // Hard-Stop: unconditional, phase-agnostic, last resort. Writes 'closing' phase
+  // (not 'completed' — 'completed' is interviews.status, decided by checkLifecycle).
   if (ctx.timerMinutes >= ctx.maxDurationMinutes) {
-    return 'wrap_up'
+    return 'closing'
   }
-
-  // Compute all HL escape thresholds from maxDurationMinutes (Pt6 TurnBudgetAllocator)
-  const totalTopics = ctx.stepTracker.length
-  const budget = computeTurnBudget(ctx.maxDurationMinutes, totalTopics)
-  const startedSteps = ctx.stepTracker.filter(s => s.status !== 'exploring').length
-  assertPhaseInvariants(ctx.historyLength, startedSteps, totalTopics, budget)
 
   switch (ctx.phase) {
     case 'intro':
       // Advance after first agent response (≥2 messages) — intro is a single greeting turn.
-      // Previous threshold of ≥4 caused Flash 3.5 to re-greet on Turn 1 because the phase
-      // stayed 'intro' while the methodology still said "Erkläre Gesprächszweck".
-      return ctx.historyLength >= 2 ? 'process_loop' : 'intro'
+      return ctx.historyLength >= 2 ? 'explore' : 'intro'
 
-    case 'process_loop':
-      // Analyst writes exploring→walkthrough in same run, so Orchestrator reads walkthrough next turn.
-      // Advance on either status — exploring = just registered, walkthrough = Analyst already progressed it.
-      if (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')) {
-        return 'walkthrough_step'
+    case 'explore': {
+      const hasActiveStep = hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')
+
+      // Wall-clock soft anchor (~80% of budget): "whichever comes first" between
+      // content coverage and the anchor. Deliberately content-blind (that's the
+      // no-new-extraction counter's job below) — protects the interviewee's
+      // agreed time budget, not conversation quality.
+      const softAnchorMinutes = ctx.maxDurationMinutes * SOFT_ANCHOR_RATIO
+      if (ctx.timerMinutes >= softAnchorMinutes) {
+        // A step freshly/actively being explored gets a short, capped grace
+        // window for a natural close before Closing is forced — never an
+        // abrupt mid-topic pivot. The window is naturally bounded by the hard
+        // stop above (never runs past 100% of the budget).
+        const graceMinutes = Math.min(MAX_GRACE_MINUTES, ctx.maxDurationMinutes - softAnchorMinutes)
+        const graceExpired = ctx.timerMinutes >= softAnchorMinutes + graceMinutes
+        if (hasActiveStep && !graceExpired) return 'explore'
+        return 'closing'
       }
-      if (ctx.historyLength >= budget.processLoopEscapeHL) return 'walkthrough_step'
-      return 'process_loop'
 
-    case 'walkthrough_step': {
-      // Per-step turn budget: force push to slot_completion before walkthroughHasContent or escape.
-      // Prevents depth-first starvation (B7): if agent drills one step too long, push forward.
-      const completedSteps = ctx.stepTracker.filter(s => s.status === 'done').length
-      const turnsUsed = estimateTurnsUsedOnCurrentStep(ctx.historyLength, completedSteps, budget)
-      const stepBudgetHL = computeStepBudget(ctx.historyLength, completedSteps, Math.max(totalTopics, 1), budget)
-      if (turnsUsed >= stepBudgetHL) return 'slot_completion'
+      // Safety net: content-blind escalation after K consecutive turns with zero
+      // new extraction — catches disengaged/unproductive conversations without
+      // reproducing the old pure turn-count ladder (KI-23).
+      const noNewExtractionStreak = analystSuggestion?.noNewExtractionStreak ?? 0
+      if (noNewExtractionStreak >= noNewExtractionLimit()) return 'closing'
 
-      // Walkthrough content threshold reached → move to slot_completion
-      if (walkthroughHasContent(ctx.stepTracker)) return 'slot_completion'
-      // No active steps remaining → also move to slot_completion
-      if (!hasStepInStatus(ctx.stepTracker, 'exploring') && !hasStepInStatus(ctx.stepTracker, 'walkthrough') && ctx.stepTracker.length > 0) {
-        return 'slot_completion'
+      // Primary driver — content-based advance: the active process is judged
+      // sufficiently explored (Analyst signal) AND no open topic/finding
+      // remains → Closing. Advance-signal alone (an open topic remains) keeps
+      // Explore running; the Talker methodology actively asks about the next
+      // recurring task (breadth-first, unchanged principle).
+      const stepAdvanceReady = analystSuggestion?.step_advance_ready === true
+      if (stepAdvanceReady && !hasUnexploredFocusTopic(ctx.topicsOpen, ctx.stepTracker)) {
+        return 'closing'
       }
-      if (ctx.historyLength >= budget.walkthroughEscapeHL) return 'slot_completion'
-      return 'walkthrough_step'
+
+      return 'explore'
     }
 
-    case 'slot_completion': {
-      if (!semanticAllStepsDone(ctx.stepTracker)) {
-        if (ctx.historyLength >= budget.slotCompletionEscapeHL) return 'coverage_check'
-        return 'slot_completion'
-      }
-      if (hasUnexploredFocusTopic(ctx.topicsOpen, ctx.stepTracker)) return 'process_loop'
-      return 'coverage_check'
-    }
+    case 'closing': {
+      // A newly-discovered process during Closing is first-class — back to
+      // Explore in full (no more 2-turn clarification-only cap for late finds).
+      if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'explore'
 
-    case 'coverage_check':
-      if (semanticAllStepsDone(ctx.stepTracker)) return 'wrap_up'
-      if (ctx.historyLength >= budget.coverageCheckEscapeHL) return 'wrap_up'
-      return 'coverage_check'
-
-    case 'wrap_up': {
-      // Skip push-back once escape valve has already fired — committed to wrap_up.
-      // Without this guard, the push-back defeats the coverage_check escape valve:
-      // wrap_up → walkthrough_step → slot_completion → coverage_check → wrap_up → ∞
-      const escapeAlreadyFired = ctx.historyLength >= budget.coverageCheckEscapeHL
-      // Only push back if there are genuinely uncovered semantic groups (not just fragmented duplicates)
-      if (!escapeAlreadyFired && !semanticAllStepsDone(ctx.stepTracker)) {
-        // Late-discovered topics (exploring at wrap_up) go to clarification, not full
-        // walkthrough reentry — avoids disruptive phase regression mid-farewell (Pt8).
-        // Holds even for a brand-new, zero-content step: the Analyst generates a SlotCard
-        // per empty mandatory slot regardless of whether any other content was extracted
-        // yet (interviewAnalyst.ts "Prüfschema pro Schritt"), so clarification can fill it
-        // in across turns — the bug was checkLifecycle completing before that had a chance
-        // to happen (KI-15), not this routing choice.
-        if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'clarification'
-        if (hasStepInStatus(ctx.stepTracker, 'walkthrough')) return 'slot_completion'
-      }
-
-      // Trigger B: deterministic check — the orchestrator-injected wrap-up
-      // question must be present in history and answered. wrap_up_question_asked
-      // flag from Analyst is no longer trusted (was fragile; Analyst could lie or forget).
-      if (wrapUpAnswerReceived(ctx.history)) {
-        // Amendment A: if Analyst produced clarification_cards → clarification phase
+      // Deterministic in STATE: the catch-all probe must be present in history
+      // and answered before a completion/clarification decision is owed.
+      if (closingProbeAnswerReceived(ctx.history)) {
         const cards = analystSuggestion?.clarification_cards
         if (cards && cards.length > 0) return 'clarification'
         return 'completed'
       }
-      return 'wrap_up'
+      return 'closing'
     }
 
     case 'clarification':
-      // Stays until all clarification answers written (checked by route handler via DB)
+      // Stays until all clarification answers written (checked by route handler via DB).
       return 'clarification'
 
     default:
@@ -341,8 +208,8 @@ export interface PhaseDecisionMeta {
 
 /**
  * Wrapper around decideNextPhase that also signals when a phase transition
- * happened. Used by the route handler to trigger analyst_catchup on
- * coverage_check / wrap_up entry.
+ * happened. Used by the route handler to trigger analyst_catchup on entry
+ * into 'closing'.
  */
 export function decideNextPhaseWithMeta(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): PhaseDecisionMeta {
   const phase = decideNextPhase(ctx, analystSuggestion)
@@ -354,73 +221,29 @@ export function decideNextPhaseWithMeta(ctx: OrchestratorContext, analystSuggest
 
 /**
  * Decides whether the interview should be completed this turn.
- * Returns shouldComplete=true for both Hard-Stop (timer) and Soft-Confirm (wrap-up heuristic).
+ * Returns shouldComplete=true for both Hard-Stop (timer) and Soft-Confirm (closing-sequence convergence).
+ *
+ * PROJ-42: the previous phase-agnostic farewell-loop escape valve (regex
+ * FAREWELL_MARKERS string matching over the last two assistant turns) is
+ * removed entirely — termination is now deterministic in state (the closing
+ * probe + its answer), not guessed from text heuristics (KI-23).
  */
 export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): LifecycleDecision {
-  // Trigger A: Hard-Stop
+  // Trigger A: Hard-Stop — unconditional, last resort. Still produces a
+  // coherent, LLM-formulated farewell (runInterviewTurn.ts's
+  // isCompletionFarewell path) — never a raw abort or system message.
   if (ctx.timerMinutes >= ctx.maxDurationMinutes) {
     return { shouldComplete: true, reason: 'hard_stop' }
   }
 
-  // Farewell-loop escape valve — phase-agnostic. Fires when the agent is stuck in a goodbye
-  // loop regardless of phase. Necessary because a step discovered at wrap_up can push the phase
-  // back to walkthrough_step/slot_completion; if that step stays walkthrough, the wrap_up-gated
-  // path below is never reached and the farewell loop runs until MAX_TURNS.
-  // Must check BEFORE the active-step guard.
-  {
-    const allAssistant = ctx.history.filter((t) => t.role === 'assistant')
-    const lastTwo = allAssistant.slice(-2)
-    const FAREWELL_MARKERS = ['vielen dank', 'auf wiedersehen', 'bis zum nächsten', 'wünsche dir', 'verabschied']
-    if (
-      lastTwo.length >= 2 &&
-      ctx.history.length > 0 &&
-      ctx.history[ctx.history.length - 1].role === 'user' &&
-      lastTwo.every((t) => FAREWELL_MARKERS.some((m) => t.content.toLowerCase().includes(m)))
-    ) {
-      // PROJ-23: Don't complete when Analyst has clarification_cards pending — route to clarification instead.
-      const cards = analystSuggestion?.clarification_cards
-      if (analystSuggestion !== null) {
-        // KI-15: narrow guard — only blocks on a genuinely UNSTARTED exploring step (just
-        // register_step'd this turn, zero filled slots), e.g. surfaced by the wrap-up
-        // "anything we missed?" probe. Deliberately narrower than Trigger B's guard: B6
-        // (test 'completes even when Mahnprozess is walkthrough') already established that
-        // an incomplete-but-started walkthrough step must NOT block this escape valve — the
-        // user is clearly trying to leave and the Analyst found no clarification need. An
-        // unstarted step is different: it has had zero chance to be explored at all and would
-        // otherwise just inflate the dedup-coverage denominator with empty fields. Bounded by
-        // the same turn budget as the wrap_up escape valve so a late mention can't stretch the
-        // interview indefinitely once the budget is exhausted.
-        const budget = computeTurnBudget(ctx.maxDurationMinutes, ctx.stepTracker.length)
-        const budgetExhausted = ctx.historyLength >= budget.coverageCheckEscapeHL
-        if (!budgetExhausted && hasUnstartedExploringStep(ctx.stepTracker)) {
-          return { shouldComplete: false, reason: null }
-        }
-        if (!cards || cards.length === 0) {
-          return { shouldComplete: true, reason: 'soft_confirm' }
-        }
-      } else {
-        // analystSuggestion=null means the analyst hasn't produced a briefing yet — relying on
-        // decideNextPhase to advance to wrap_up so the analyst runs assumes phase progression is
-        // still happening. During a farewell loop it isn't (that's the whole problem this valve
-        // exists for), so without this branch the turn falls through and runs normally — the
-        // Talker then has nothing real to ask and can degenerate (observed: verbatim echo of the
-        // user's goodbye, eval 2026-06-25 run1, turn 29). Signal the caller to force a synchronous
-        // analyst pass instead of silently continuing the loop.
-        return { shouldComplete: false, reason: 'farewell_pending_analyst' }
-      }
-    }
-  }
-
-  // Trigger B: Soft-Confirm (wrap_up question asked + user has responded)
-  if (ctx.phase === 'wrap_up') {
-    // Don't complete if genuinely new (uncovered) steps exist — but fragmented duplicates are fine
-    if (!semanticAllStepsDone(ctx.stepTracker) &&
-        (hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough'))) {
+  // Trigger B: Soft-Confirm — the Closing sequence converged: catch-all probe
+  // asked + answered, no newly-discovered process, no pending clarification cards.
+  if (ctx.phase === 'closing') {
+    if (hasStepInStatus(ctx.stepTracker, 'exploring')) {
+      // Routed back to Explore by decideNextPhase — don't complete out from under it.
       return { shouldComplete: false, reason: null }
     }
-
-    if (wrapUpAnswerReceived(ctx.history)) {
-      // Don't complete if Analyst generated clarification_cards — go to clarification phase instead
+    if (closingProbeAnswerReceived(ctx.history)) {
       const cards = analystSuggestion?.clarification_cards
       if (!cards || cards.length === 0) {
         return { shouldComplete: true, reason: 'soft_confirm' }

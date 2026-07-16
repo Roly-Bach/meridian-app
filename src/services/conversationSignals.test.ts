@@ -45,7 +45,7 @@ function makeCtx(overrides: Partial<InterviewContext> = {}): InterviewContext {
     employeeRole: null,
     department: 'Test',
     focusTopics: null,
-    phase: 'walkthrough_step',
+    phase: 'explore',
     timerMinutes: 0,
     topicsCovered: [],
     topicsOpen: [],
