@@ -60,12 +60,13 @@
 | PROJ-41 | Interview-Modell-Auswahl (OSS-Screening + EU-Prod-Route) | Revision | Platform | PROJ-9 | Blocked | [spec](platform/PROJ-41-interview-modell-auswahl.md) | P1 | L | — |
 | PROJ-42 | Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-42-interview-grenzfall-robustheit.md) | P0 | M | 0:4:1 |
 | PROJ-43 | Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards) | Revision | Interview Engine | PROJ-29 | Roadmap | — | P1 | L | — |
-| PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P1 | L | — |
+| PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | Architected | [spec](interview-engine/PROJ-44-pipeline-simplifikation.md) | P1 | L | — |
 | PROJ-45 | Schema-Erweiterung AI-Wert-Faktoren (Textverarbeitung u.a.) | Revision | Wissensbank | PROJ-25 | Roadmap | — | P1 | L | — |
+| PROJ-46 | Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P1 | L | — |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-46
+## Next Available ID: PROJ-47
 
 ## Known Issues
 
@@ -134,13 +135,30 @@ Refactoring-Grundsatzentscheidung 2026-07-15 (realer Tim-Durchlauf). PROJ-42s BU
 2026-07-16 gefixt und live verifiziert; dabei ein neuer Bug (BUG-6, doppelte Verabschiedung)
 gefunden, der dieselbe Ein-Turn-Zustandsverzögerung wie BUG-1/BUG-4 als Root Cause hat.
 
-**Reihenfolge 2026-07-16 umgekehrt:** PROJ-44 (Pipeline-Simplifikation: Analyst synchron vor
-Talker, Quick-Extract raus) wird jetzt VOR PROJ-43 spezifiziert und gebaut, nicht danach wie
-ursprünglich geplant — die Analyst-vor-Talker-Umstellung löst den gemeinsamen Root Cause von
-BUG-1/BUG-4/BUG-6 strukturell (siehe Diskussion in der PROJ-42-Spec). Löst NICHT automatisch:
-BUG-1s Advance-Signal-Kalibrierung (`step_advance_ready` darf laut Prompt zu großzügig triggern)
-und die Clarification-Cards-Erzeugungs-Zuverlässigkeit — beide bleiben eigenständig zu diagnostizieren.
-PROJ-42 bleibt bis zur PROJ-44-Umsetzung In Review. Nächster Schritt: `/write-spec PROJ-44` + `/grilling`.
+**Reihenfolge 2026-07-16 umgekehrt + PROJ-44 spezifiziert:** PROJ-44 (Pipeline-Simplifikation:
+Analyst synchron vor Talker, Quick-Extract raus, Legacy-Pfad weg) wird VOR PROJ-43 gebaut.
+2026-07-16 nach `/write-spec` + `/grilling` spezifiziert (Planned,
+[spec](interview-engine/PROJ-44-pipeline-simplifikation.md)). Schnitt-Entscheidung: **Option 1**
+(schmaler Timing-Flip + Streichungen, sauber eval-attribuierbar) statt alle Änderungen in einem.
+PROJ-44 behebt strukturell **BUG-1-Staleness + BUG-6** (beide Lag-Artefakte). NICHT in PROJ-44:
+**BUG-4** (Methodik-Block-Gedächtnis, kein reines Lag-Artefakt) und die Judgment-Signal-Migration
+ins Analyst-Briefing → neues Folge-Feature **PROJ-46** (Talker-Briefing-Konsolidierung, Requires
+PROJ-44, auch: Audit der statischen Text-Ausgaben). BUG-1-Kalibrierung (`step_advance_ready` zu
+großzügig) + Clarification-Cards-Zuverlässigkeit bleiben in PROJ-44s Eval-Gate-Verantwortung
+(measure-first). Die drei heutigen Analyst-Einstiegspunkte werden dabei zu einem Deep-Module-Einstieg
+konsolidiert. PROJ-42 bleibt bis PROJ-46 In Review (BUG-4 offen).
+
+**PROJ-44 architektiert 2026-07-16** (`/architecture` + `/grilling`, Status Architected,
+[ADR-021](../docs/adr/ADR-021-analyst-synchron-vor-talker-timing-amendment.md) Timing-Amendment zu
+ADR-011 D2, überholt ADR-019s Proposed-Freshness-Signal). Kern-Entscheidungen: **ein** `runAnalyst`-
+Aufruf/Turn, Modus aus `ctx.phase` (`closing`-Modus = intern zwei fokussierte Sub-Pässe Backfill+Online,
+Trigger `phase==='closing'` ohne Marker); `runAnalyst` gibt `{ briefing, toolCalls, stepTracker }` zurück
+(ersetzt „reload"); `background()` → `after(finalize)` = extractAndEmbed+onCompleted (schließt fire-and-
+forget-Lücke), Analyst-Ergebnis via `meta.analyst`; synchroner Analyst in voller Konfig (Korrektheit vor
+Latenz, „Analysiere…"-Indikator); Fail-Safe vetoet `soft_confirm`, lässt `hard_stop` zu.
+`extractAndEmbed` bleibt per-Turn (post-Completion-Verlagerung = eigener Kandidat). Nächster Schritt:
+`/backend` (Bau) — Reihenfolge Rollen-Guard → runAnalyst → checkLifecycle → decideNextPhase →
+shouldInjectClosingProbe → Talker → after(finalize).
 
 ## Architecture Notes
 
