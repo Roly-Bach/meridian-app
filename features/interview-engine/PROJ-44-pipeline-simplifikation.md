@@ -690,6 +690,7 @@ Danach: ein Mess-Eval (buchhalter + it-support, gleiche Config/Seed) — erwarte
 |--------|-------------|------|
 | M-6 (Fokus-Lock nur advisory), M-7 (inhaltsblinder Abschluss-Farewell), L-1 (Übergänge vom Talker gestrichen), Briefing-trägt-Absicht-statt-Frage, verifizierter Anker (KI-18-Wurzel), Ziel-O-Feld ins Briefing, statische Sonde → Analyst-formuliert, „Analyst darf nicht terminieren" (voll) | **PROJ-46** (Talker-Briefing-Konsolidierung, Requires PROJ-44) | Der empirische Befund: Themen-Disziplin gehört an den Analyst (hält den Lock, liefert Übergänge), Formulierung an den Talker (die einzigen gelobten Fragen waren Talker-Erfindungen). Rollen schärfen statt Talker entfernen. |
 | L-2 (Forced-Choice trotz „variabel", suggestive „ausdrucken"-Frage), M-3-Rest (Elicitation-Sprünge über die Fokus-Wahl hinaus) | **PROJ-43** (Elicitation-Reorientierung) | KI-21/KI-25, Zahlen→Cards, Treiber/WHY statt Metrik-Nagging |
+| **Completion-Gate: fast jedes Interview muss vor dem Abschluss durch eine Card-Runde** (Nutzer-Vorgabe 2026-07-17) | **PROJ-43** (Elicitation-Reorientierung) | Folge der Zahlen→Cards-Verlagerung: quantitative Pflicht-Slots (frequency/duration/error_rate/media_breaks) werden per Design in Cards erfasst, bleiben im Gespräch fast immer leer → für leere Pflicht-Slots MÜSSEN Cards erzeugt werden, und ein Interview darf ohne durchlaufene Card-Runde nicht als `completed` gelten. PROJ-44 respektiert nur bereits erzeugte Cards (Trigger A); die Erzeugungs-/Gate-Garantie gehört hierher. |
 | M-2 (Rollen-Guard-Falschpositiv) | **PROJ-42** / KI-26 | Prefilter/Judge-Präzision, unverändert durch PROJ-44 |
 | Instrument-Frage des Eval-Gates (Nenner-Effekt, dependency_capture/Cards-Zugehörigkeit) | **PROJ-40** oder neues Feature | Messvalidität, thesis-relevant; NICHT in PROJ-44 |
 
@@ -712,7 +713,8 @@ Der Talker produziert die einzigen im Nutzer-Review positiv markierten Fragen (b
 resolveTurnLifecycle(ctx, briefing) → { phase: Phase, complete: boolean, reason: 'hard_stop'|'soft_confirm'|null }
 
   Trigger A — Hard-Stop (unconditional):
-     timer ≥ max            → { 'closing', complete:true,  'hard_stop' }
+     timer ≥ max, Cards vorhanden → { 'clarification', complete:false, null }   # Cards NIE überspringen
+     timer ≥ max, sonst           → { 'closing', complete:true,  'hard_stop' }
 
   Phasen-Transition (ehem. decideNextPhase, OHNE 'completed'-Rückgabe):
      intro                  → historyLength≥2 ? 'explore' : 'intro'
@@ -740,6 +742,10 @@ Kern des H-3-Fixes: die terminale Auswertung läuft gegen die **aufgelöste** Ph
 ### Fix 4 — Terminierungs-Invariante (minimal, in `resolveTurnLifecycle`)
 
 `complete:true` mit `reason:'soft_confirm'` ist strukturell nur erreichbar, wenn die aufgelöste Phase `closing` ist. `intro`/`explore`/`clarification` können nie weich abschließen — nur `hard_stop` (Trigger A) beendet phasen-agnostisch. Zustands-Geländer gegen einen künftigen Abschluss aus der Exploration. **Grenze:** stoppt **nicht** den vom Analyst in `suggested_question` geschriebenen Farewell-Text während `explore` (H-2 Schicht 1 voll → PROJ-46). Fix 4 ist die minimale Invariante, nicht die volle Lösung.
+
+### Hard-Stop überspringt anstehende Cards nicht (Nutzer-Korrektur 2026-07-17)
+
+Trigger A schließt heute unbedingt ab und verwirft dabei bereits erzeugte `clarification_cards`. Das ist ungewollt: die Cards fassen die quantitativen Pflicht-Slots (ROI-Signal). Fix in `resolveTurnLifecycle`: liegen Cards im Briefing, routet auch der Hard-Stop nach `clarification` (complete:false) statt abzuschließen. Der Talker macht über die bestehende `clarification`-Methodik ([talkerPrompt.ts:226](../../src/services/talkerPrompt.ts#L226), BUG-5) die Verabschiedung + Card-Ankündigung, die Clarification-Route schließt nach dem Ausfüllen ab (Timer blockt dort nicht). **Grenze (PROJ-44):** Trigger A erzwingt keine Card-*Erzeugung*, wenn noch keine existiert (Hard-Stop direkt aus `explore`). Die Regel „nach PROJ-43 muss fast jedes Interview vor dem Abschluss durch eine Card-Runde" ist ein Completion-Gate für **PROJ-43** (siehe Tabelle unten).
 
 ### Ballast aus `decideNextPhase`/`checkLifecycle` verschwindet vollständig (ADR-022 D3)
 

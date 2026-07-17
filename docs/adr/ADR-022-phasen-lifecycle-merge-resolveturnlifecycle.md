@@ -46,7 +46,9 @@ Ablauf:
 ```
 resolveTurnLifecycle(ctx, briefing):
   # Trigger A — Hard-Stop (unconditional, phasen-agnostisch, letzte Instanz)
-  if timer ≥ max:            → { phase:'closing', complete:true, reason:'hard_stop' }
+  if timer ≥ max:
+     clarification_cards vorhanden → { phase:'clarification', complete:false, reason:null }  # Cards NIE überspringen
+     sonst                         → { phase:'closing',        complete:true,  reason:'hard_stop' }
 
   # Phasen-Transition (ehem. decideNextPhase, OHNE den 'completed'-Rückgabewert)
   target =
@@ -68,7 +70,9 @@ resolveTurnLifecycle(ctx, briefing):
 
 Der Kern des H-3-Fixes: die terminale Auswertung läuft gegen `target` (die aufgelöste Phase), nicht gegen `ctx.phase` (den Vorturn-Wert). Damit schließt ein Late-Discovery-Reentry, der von `explore` nach `closing` aufgelöst wird und dessen Sonde bereits beantwortet ist, **im selben Turn** ab, statt einen Leerlauf-Turn später.
 
-Die Signalkaskade selbst (Soft-Anchor-Ratio, Streak-Limit, `hasUnexhaustedStep`, Reentry-Guard, `closingProbeAnswerReceived`) ist **unverändert** — nur ihre Zusammenführung in einen Aufruf und ihre Auswertung gegen die frische Phase sind neu.
+Die Signalkaskade selbst (Soft-Anchor-Ratio, Streak-Limit, `hasUnexhaustedStep`, Reentry-Guard, `closingProbeAnswerReceived`) ist **unverändert**. Neu sind nur ihre Zusammenführung in einen Aufruf und ihre Auswertung gegen die frische Phase.
+
+**Trigger A respektiert anstehende Cards (Hard-Stop überspringt sie nicht).** Liegen im Briefing bereits `clarification_cards`, routet auch der Hard-Stop nach `clarification` statt direkt abzuschließen. Der Talker gibt über die bestehende `clarification`-Methodik die Verabschiedung samt Card-Ankündigung ([talkerPrompt.ts:226](../../src/services/talkerPrompt.ts#L226), BUG-5), die Clarification-Route schließt nach dem Ausfüllen ab (der Timer blockt dort nicht mehr). Grund: die Cards fassen die quantitativen Pflicht-Slots (frequency/duration/error_rate/media_breaks = das ROI-Signal des Produkts); ein Zeitablauf darf sie nicht verwerfen. **Grenze:** Trigger A erzwingt keine Card-*Erzeugung*, wenn noch keine existiert (Hard-Stop direkt aus `explore` ohne je erreichtes `closing`). Die weitergehende Regel, dass nach PROJ-43 fast jedes Interview vor dem Abschluss durch eine Card-Runde muss, ist ein Completion-Gate für PROJ-43 (siehe Consequences).
 
 ### D2 — Terminierungs-Invariante (Fix 4, minimal)
 
@@ -101,7 +105,7 @@ Bleiben als Bausteine, die `resolveTurnLifecycle` aufruft: `hasStepInStatus`, `c
 - Vertragsänderung: `runInterviewTurn` und die betroffenen Unit-Tests werden auf den einen Aufruf umgestellt. Der Eval-Runner ist nicht betroffen (liest `meta.phase`/`meta.completed`, nicht die Orchestrator-Signatur direkt).
 - Die Reentry-Completion nutzt die bereits gestellte Sonde aus dem ersten Closing-Besuch, statt sie neu zu stellen. Das ist gewollt (vermeidet die wortgleiche Sonden-Wiederholung BUG-4) und liegt in PROJ-44s Scope; die inhaltliche Verfeinerung der Sonde nach Late Discovery bleibt PROJ-46 (BUG-4).
 
-**Nicht Teil dieser Entscheidung:** die restlichen H-2-Schichten außer der Invariante D2 (Analyst-Terminierungs-Hoheit → PROJ-46), M-6/M-7/L-1 (Talker-Prompt/Briefing → PROJ-46), das Eval-Gate-Instrument (Nenner-Effekt, `dependency_capture`/Cards-Zugehörigkeit → PROJ-40/neu).
+**Nicht Teil dieser Entscheidung:** die restlichen H-2-Schichten außer der Invariante D2 (Analyst-Terminierungs-Hoheit → PROJ-46), M-6/M-7/L-1 (Talker-Prompt/Briefing → PROJ-46), das Eval-Gate-Instrument (Nenner-Effekt, `dependency_capture`/Cards-Zugehörigkeit → PROJ-40/neu). Ebenfalls nicht hier: das **Completion-Gate „fast jedes Interview muss vor dem Abschluss durch eine Card-Runde"** als Folge der PROJ-43-Zahlen→Cards-Verlagerung. Trigger A respektiert in PROJ-44 nur bereits erzeugte Cards; die Garantie, dass für leere quantitative Pflicht-Slots überhaupt Cards entstehen (und ein Interview ohne sie nicht als abgeschlossen gilt), gehört zu **PROJ-43**.
 
 ---
 
