@@ -8,7 +8,7 @@
 **Bugs:** 2:5:2 (Runde 2 nach Nutzer-Transkript-Review: H-2 Farewell-Limbo, H-3 ctx.phase stale → BUG-6-AC widerlegt; M-2, M-4, M-5, M-6 Fokus-Lock nur advisory, M-7 Abschluss ignoriert Sonden-Antwort; L-1, L-2. H-1/M-1 live verifiziert behoben, M-3 nur gemildert.)
 **Created:** 2026-07-16
 **Last Updated:** 2026-07-17
-**ADR:** ADR-021 (Timing-Amendment zu ADR-011 D2) — Status: Accepted
+**ADR:** ADR-021 (Timing-Amendment zu ADR-011 D2) — Status: Accepted · ADR-022 (Phasen-/Lifecycle-Merge `resolveTurnLifecycle`, supersediert die BUG-6-Aussage von ADR-021) — Status: Proposed
 
 ## Context
 
@@ -695,6 +695,96 @@ Danach: ein Mess-Eval (buchhalter + it-support, gleiche Config/Seed) — erwarte
 
 ### Talker behalten — begründet
 Der Talker produziert die einzigen im Nutzer-Review positiv markierten Fragen (buchhalter Turn 5/8), und zwar **gegen** den generischen Zahlen-Vorschlag des Analysten. Entfernen würde diese Stärke wegwerfen und die dokumentierte Prompt-Dichte-Falle (KI-18) beim Merge in den Analyst-Prompt aufmachen. Der richtige Schnitt ist Rollen-Schärfung (PROJ-46), nicht Konsolidierung auf einen Agenten.
+
+## Tech Design — Remediation-Runde 2 (Merge + 3 Fixes)
+
+> Ergebnis aus `/architecture` (2026-07-17, Opus). Vertrag in **ADR-022** (`resolveTurnLifecycle`, supersediert die BUG-6-Aussage von ADR-021). Status bleibt **In Review** — dies ist ein Design-Nachtrag innerhalb des laufenden Remediation-Zyklus, kein Lifecycle-Rücksprung. Zwei Nutzer-Weichen (2026-07-17, AskUserQuestion): Notbremse resettet auf **irgendeine angewendete Write**; **neuer ADR-022** für die Vertragsänderung. Scope-Grundsatz unverändert eng (kein Talker-Prompt, ADR-021-Timing bleibt getragen).
+
+### Fix 1 — `decideNextPhase` + `checkLifecycle` → eine Funktion `resolveTurnLifecycle`
+
+**Warum mergen, nicht umsortieren (H-3 ist eine Doppelung).** Beide Funktionen implementieren dieselbe Entscheidung zweimal: den Hard-Stop-Timer ([interviewOrchestrator.ts:225](../../src/services/interviewOrchestrator.ts#L225) und [:345](../../src/services/interviewOrchestrator.ts#L345)) und die Closing-Konvergenz (Sonde beantwortet + kein `exploring`/neuer Schritt + keine Cards, [:280-288](../../src/services/interviewOrchestrator.ts#L280) und [:351-364](../../src/services/interviewOrchestrator.ts#L351)). `decideNextPhase` berechnete in buchhalter Turn 16 bereits `'completed'`, [runInterviewTurn.ts:440](../../src/services/runInterviewTurn.ts#L440) verwirft es (`=== 'completed' ? 'closing'`), und `checkLifecycle` leitet dieselbe Schlussfolgerung einen Turn später erneut her. Bloßes Umsortieren würde die Doppelung konservieren.
+
+**In einfachen Worten:** heute entscheiden zwei getrennte Prüfer pro Turn — einer wählt den nächsten Raum (Phase), der andere prüft, ob man das Gebäude verlassen darf (Abschluss). Der zweite schaut aber auf das Schild des Raums, in dem man **vorher** war (`ctx.phase` = Vorturn-Wert), nicht auf den, in den der erste gerade geschickt hat. Wird man endlich in die Ausgangshalle (`closing`) geschickt, sieht der zweite noch den alten Raum und sagt „noch nicht" — eine sinnlose Extrarunde (Turn 16, in der der Interviewer die dritte Verabschiedung improvisiert). Der Merge macht beides in **einem** Prüfer, der den gerade gewählten Raum sofort für die Abschlussfrage nutzt.
+
+**Neue Naht — ein Aufruf, eine Wahrheitsquelle:**
+
+```
+resolveTurnLifecycle(ctx, briefing) → { phase: Phase, complete: boolean, reason: 'hard_stop'|'soft_confirm'|null }
+
+  Trigger A — Hard-Stop (unconditional):
+     timer ≥ max            → { 'closing', complete:true,  'hard_stop' }
+
+  Phasen-Transition (ehem. decideNextPhase, OHNE 'completed'-Rückgabe):
+     intro                  → historyLength≥2 ? 'explore' : 'intro'
+     explore                → (Soft-Anchor / Streak / advance-ready && !hasUnexhaustedStep) ? 'closing' : 'explore'
+     closing (Reentry)      → hasStepInStatus('exploring') || newStepThisTurn → 'explore', sonst 'closing'
+     clarification          → 'clarification'
+
+  Terminale Auswertung — GENAU EINMAL, gegen die AUFGELÖSTE Phase 'closing':
+     wenn Ziel == 'closing':
+        closingProbeAnswerReceived + keine Cards  → { 'closing', complete:true,  'soft_confirm' }
+        closingProbeAnswerReceived + Cards        → { 'clarification', complete:false, null }
+        sonst (frischer Eintritt, Sonde offen)    → { 'closing', complete:false, null }   # Sonde downstream injiziert
+     sonst:
+        → { Ziel, complete:false, null }
+```
+
+Kern des H-3-Fixes: die terminale Auswertung läuft gegen die **aufgelöste** Phase, nicht gegen `ctx.phase`. Der Late-Discovery-Reentry:
+
+| Fall | `ctx.phase` | Transition | terminale Auswertung | Ergebnis |
+|------|-------------|-----------|----------------------|----------|
+| Frischer Closing-Eintritt | explore | → closing | Sonde nie gestellt | `closing`, complete:false → **Sonde injiziert** (wie heute) |
+| Sonde beantwortet | closing | bleibt closing | beantwortet, keine Cards | `closing`, **complete:true** (wie heute via Trigger B) |
+| **Reentry, Sonde schon beantwortet (buchhalter T16)** | explore | → closing | Sonde aus T9 beantwortet, kein neuer Schritt | `closing`, **complete:true — schließt in T16 statt T17 ab** |
+
+### Fix 4 — Terminierungs-Invariante (minimal, in `resolveTurnLifecycle`)
+
+`complete:true` mit `reason:'soft_confirm'` ist strukturell nur erreichbar, wenn die aufgelöste Phase `closing` ist. `intro`/`explore`/`clarification` können nie weich abschließen — nur `hard_stop` (Trigger A) beendet phasen-agnostisch. Zustands-Geländer gegen einen künftigen Abschluss aus der Exploration. **Grenze:** stoppt **nicht** den vom Analyst in `suggested_question` geschriebenen Farewell-Text während `explore` (H-2 Schicht 1 voll → PROJ-46). Fix 4 ist die minimale Invariante, nicht die volle Lösung.
+
+### Ballast aus `decideNextPhase`/`checkLifecycle` verschwindet vollständig (ADR-022 D3)
+
+Keine Kompatibilitäts-Wrapper.
+
+| Weg (gelöscht) | Bleibt (Bausteine, die `resolveTurnLifecycle` aufruft) |
+|---|---|
+| `decideNextPhase`, `decideNextPhaseWithMeta`, `checkLifecycle` (3 Exports) | `hasStepInStatus`, `closingProbeAnswerReceived`, `closingProbeAlreadyAsked`, `shouldInjectClosingProbe` |
+| Typen `ExtendedPhase`, `PhaseDecisionMeta`, `LifecycleDecision` | `hasUnexhaustedStep`, `computeFocusLock`, `updateODrought`, `hasNewStepThisTurn` + Konstanten |
+| `PhaseDecisionMeta.phaseJustEntered` (verifiziert tot — einziger Nicht-Test-Konsument destrukturiert nur `phase`; Catchup-Trigger seit ADR-021 obsolet) | — |
+| in `runInterviewTurn`: `=== 'completed' ? 'closing'`-Mapping + Zwei-Aufruf-Sequenz | ersetzt durch **einen** `resolveTurnLifecycle`-Aufruf |
+| `topicsOpen`/`topicsCovered` auf `OrchestratorContext` (Fix 3) | — |
+
+Doc-Kommentare mit dem alten Namen ([talkerPrompt.ts:233/300](../../src/services/talkerPrompt.ts#L233), [interviewTypes.ts:39](../../src/services/interviewTypes.ts#L39)) auf `resolveTurnLifecycle` umschreiben.
+
+### Fix 2 — `hadExtraction` auf angewendete Writes (Nutzer-Weiche: irgendeine Write)
+
+[`computeNextBriefing`](../../src/services/interviewAnalyst.ts#L74) zählt heute `toolCalls.some(EXTRACTION_TOOL_NAMES)` — **Versuche**. Der `evidence_span`-Guard ([interviewTools.ts:295](../../src/services/interviewTools.ts#L295)) lehnt 68 % ab (53 `record_slot`-Aufrufe vs. 17 Writes), jeder abgelehnte Versuch resettet `noNewExtractionStreak` → Notbremse unerreichbar.
+
+`AnalystToolCallRecord` trägt heute nur `{ toolName, args }`. Die Tools geben `{ success }` zurück, und `genResult.steps[].toolResults` tragen diesen Wert. **Design:** `AnalystToolCallRecord` um `applied: boolean` erweitern (an der [Capture-Stelle](../../src/services/interviewAnalyst.ts#L565) aus dem Tool-Result gelesen), dann `hadExtraction = toolCalls.some(tc => tc.applied && EXTRACTION_TOOL_NAMES.has(tc.toolName))`. Streak resettet bei **irgendeiner** akzeptierten Knowledge-Write (Slot/Governance/Dependency/neuer Schritt) — treu zum Zweck der Bremse (unproduktives Gespräch erkennen), nicht an den gelockten Schritt gekoppelt. `computeNextBriefing` bleibt reine Funktion.
+
+### Fix 3 — Remediation-Ballast entfernen (Abschnitt 6.7)
+
+| Ballast | Aktion |
+|---------|--------|
+| `update_topics`-Tool (14 Calls/17 Turns, kein Leser) | Tool aus [buildTools](../../src/services/interviewTools.ts#L72) + Prompt-Instruktion in `interviewAnalyst.ts` streichen; `update_topics`-Intent + `applyUpdateTopics` + Store-`updateTopics` werden producerlos → mit entfernen. **Keine DB-Migration:** `topics_open`/`topics_covered`-Spalten bleiben (bei Erstellung `[]`, nie gelesen). |
+| `topicsOpen`/`topicsCovered` auf `OrchestratorContext` | Tote Pflichtfelder — aus dem Typ + allen Aufrufern entfernen (mit Fix 1). |
+| `interviewAnalyst` → `interviewOrchestrator`-Kante | [`updateODrought`-Aufruf](../../src/services/interviewAnalyst.ts#L590) aus `runOnlinePass` nach `runInterviewTurn` ziehen (dort liegen `preTurnTracker` + Post-Analyst-Tracker schon vor). Kante verschwindet ersatzlos. |
+| `focusStepId` auf geteiltem `InterviewContext` | Vom [gemeinsamen Typ](../../src/services/interviewTypes.ts#L51) in ein analyst-eigenes Options-Objekt verschieben (nur der Analyst liest es). |
+
+### Neue Turn-Reihenfolge in `runInterviewTurn`
+
+Statt `checkLifecycle` ([:351](../../src/services/runInterviewTurn.ts#L351)) → Veto → `if shouldComplete` ([:391](../../src/services/runInterviewTurn.ts#L391)) → `decideNextPhaseWithMeta` ([:439](../../src/services/runInterviewTurn.ts#L439)) → Mapping: **ein** Aufruf `resolveTurnLifecycle(ctx, briefing)` → Fail-Safe-Veto auf `complete && reason==='soft_confirm'` bei Analyst-Fehler (unverändert, ADR-021 D4) → `if complete` Farewell-Pfad, sonst `updatePhase(phase)` + `shouldInjectClosingProbe`. `updateODrought` wird in diesen Block gezogen (Fix 3).
+
+### Tests
+
+- **BUG-6-Regression umgeschrieben:** prüft die **Phasen**frische statt der Briefing-Frische — ein Turn, der `closing` betritt und dessen Sonde bereits beantwortet ist, liefert im selben Turn `complete:true`. (Der Runde-1-Test prüfte nur die Briefing-Frische und deckte H-3 nicht ab.)
+- Fix 4: kein `soft_confirm` aus `explore`/`intro`/`clarification` (Invariante).
+- Fix 2: ein vom Guard abgelehnter `record_slot` resettet `noNewExtractionStreak` nicht mehr; ein akzeptierter schon.
+- Fix 3: `update_topics`-Tool + `topicsOpen`/`topicsCovered`-Plumbing entfernt, Suite grün ohne Ersatz.
+- `tsc --noEmit` + volle Unit-Suite grün.
+
+### Danach
+
+Ein Mess-Eval (buchhalter + it-support, gleiche Config/Seed) — erwartet: die vier Leerlauf-Turns weniger und eine dadurch veränderte Coverage-Zahl als Basis für die Gate-Entscheidung (Nutzer-Entscheidung 2, nicht in PROJ-44).
 
 ## Deployment
 _To be added by /deploy_
