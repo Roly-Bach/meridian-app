@@ -21,8 +21,8 @@ vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/interviewOrchestrator')>()
   return {
     ...actual,
-    checkLifecycle: vi.fn().mockReturnValue({ shouldComplete: false, reason: null }),
-    decideNextPhaseWithMeta: vi.fn().mockReturnValue({ phase: 'interview', phaseJustEntered: null }),
+    // ADR-022: decideNextPhaseWithMeta + checkLifecycle merged into one call.
+    resolveTurnLifecycle: vi.fn().mockReturnValue({ phase: 'intro', complete: false, reason: null }),
   }
 })
 
@@ -59,8 +59,7 @@ import type { StepEntry } from '@/services/interviewSemantic'
 import { runInterviewTurn } from './runInterviewTurn'
 import { createTalkerStream } from '@/services/interviewTalker'
 import {
-  checkLifecycle,
-  decideNextPhaseWithMeta,
+  resolveTurnLifecycle,
   CLOSING_PROBE_TEXT,
 } from '@/services/interviewOrchestrator'
 import { runAnalyst } from '@/services/interviewAnalyst'
@@ -210,8 +209,7 @@ describe('runInterviewTurn', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Default: normal turn — return current phase 'intro' to avoid DB phase-update call
-    vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: false, reason: null })
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'intro' as never, phaseJustEntered: null })
+    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'intro' as never, complete: false, reason: null })
     vi.mocked(checkRoleGuard).mockResolvedValue({ checked: false })
     vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [] })
   })
@@ -244,7 +242,7 @@ describe('runInterviewTurn', () => {
   // T2: missingSlotsForCoverageCheck computed when phase is 'closing', using the
   // ANALYST's fresh stepTracker (not the stale state-loaded one — quick-extract is gone).
   it('T2: computes missingSlotsForCoverageCheck for closing phase from the analyst result', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'closing' as never, phaseJustEntered: 'closing' as never })
+    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'closing' as never, complete: false, reason: null })
 
     const step = makeStepEntry('Rechnungsprüfung', 'walkthrough')
     vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [step] })
@@ -279,7 +277,7 @@ describe('runInterviewTurn', () => {
 
   // T2b: missingSlotsForCoverageCheck is undefined outside closing
   it('T2b: does NOT compute missingSlotsForCoverageCheck during explore', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'explore' as never, phaseJustEntered: null })
+    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'explore' as never, complete: false, reason: null })
 
     const step = makeStepEntry('Monatsabschluss', 'walkthrough')
     vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [step] })
@@ -303,7 +301,7 @@ describe('runInterviewTurn', () => {
 
   // T4: Lifecycle complete → meta.completed=true, farewell stream, no talkerStream
   it('T4: lifecycle complete returns meta.completed=true and farewell stream (analyst already ran synchronously)', async () => {
-    vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'soft_confirm' })
+    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'closing' as never, complete: true, reason: 'soft_confirm' })
     setupSupabaseMocks({ extraCalls: [
       { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }, // completeInterview
     ] })
@@ -354,7 +352,9 @@ describe('runInterviewTurn', () => {
 
     it('vetoes a soft_confirm completion when the analyst fails on every retry — turn proceeds normally instead', async () => {
       vi.mocked(runAnalyst).mockRejectedValue(new Error('persistent failure'))
-      vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'soft_confirm' })
+      // phase stays 'intro' (the beforeEach default) — isolates the veto assertion
+      // from phase-transition/closing-probe-injection mechanics, tested separately.
+      vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'intro' as never, complete: true, reason: 'soft_confirm' })
       setupSupabaseMocks({})
 
       const result = await runInterviewTurn({
@@ -381,7 +381,7 @@ describe('runInterviewTurn', () => {
 
     it('does NOT veto a hard_stop completion when the analyst fails — time-out is unconditional', async () => {
       vi.mocked(runAnalyst).mockRejectedValue(new Error('persistent failure'))
-      vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'hard_stop' })
+      vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'closing' as never, complete: true, reason: 'hard_stop' })
       setupSupabaseMocks({ extraCalls: [
         { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }, // completeInterview
       ] })
@@ -446,10 +446,10 @@ describe('runInterviewTurn', () => {
   // ─── BUG-1-Staleness / BUG-6 regression (PROJ-44/ADR-021 shared root cause) ─
 
   describe('BUG-1-Staleness / BUG-6 regression — orchestrator sees THIS turn, not the previous one', () => {
-    it('BUG-1: decideNextPhaseWithMeta receives the freshly-registered step from THIS turn\'s analyst pass, not the stale (empty) pre-turn tracker', async () => {
+    it('BUG-1: resolveTurnLifecycle receives the freshly-registered step from THIS turn\'s analyst pass, not the stale (empty) pre-turn tracker', async () => {
       // Phase stays 'explore' — isolates the stepTracker-freshness assertion from
       // the (separately tested) phase-transition/DB-update mechanics.
-      vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'explore' as never, phaseJustEntered: null })
+      vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'explore' as never, complete: false, reason: null })
       const freshlyDiscoveredStep = makeStepEntry('Gerade entdeckter Prozess', 'exploring')
       vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [freshlyDiscoveredStep] })
       // Pre-turn state has NO steps at all — if the orchestrator saw this stale
@@ -463,13 +463,17 @@ describe('runInterviewTurn', () => {
         timerMinutes: 10,
       })
 
-      expect(decideNextPhaseWithMeta).toHaveBeenCalledWith(
+      expect(resolveTurnLifecycle).toHaveBeenCalledWith(
         expect.objectContaining({ stepTracker: [freshlyDiscoveredStep] }),
         expect.anything(),
       )
     })
 
-    it('BUG-6: checkLifecycle receives THIS turn\'s fresh analyst briefing, not interview.next_briefing from before this turn ran', async () => {
+    it('BUG-6 (briefing freshness): resolveTurnLifecycle receives THIS turn\'s fresh analyst briefing, not interview.next_briefing from before this turn ran', async () => {
+      // Note: this covers briefing freshness only — the PHASE freshness half of
+      // BUG-6 (ADR-022/H-3: terminal evaluation against the RESOLVED phase, not
+      // ctx.phase) is unit-tested directly on resolveTurnLifecycle itself in
+      // interviewOrchestrator.test.ts, since resolveTurnLifecycle is mocked here.
       const staleBriefing = { next_focus: 'veraltet', suggested_question: 'Alte Frage?' }
       const freshBriefing = { next_focus: 'aktuell', suggested_question: 'Neue Frage?', clarification_cards: [] }
       vi.mocked(runAnalyst).mockResolvedValue({ briefing: freshBriefing, toolCalls: [], stepTracker: [] })
@@ -481,16 +485,16 @@ describe('runInterviewTurn', () => {
         timerMinutes: 5,
       })
 
-      // checkLifecycle must have seen the FRESH briefing this turn — never the
-      // stale interview.next_briefing snapshot from before the analyst ran.
-      expect(checkLifecycle).toHaveBeenCalledWith(expect.anything(), freshBriefing)
-      expect(checkLifecycle).not.toHaveBeenCalledWith(expect.anything(), staleBriefing)
+      // resolveTurnLifecycle must have seen the FRESH briefing this turn — never
+      // the stale interview.next_briefing snapshot from before the analyst ran.
+      expect(resolveTurnLifecycle).toHaveBeenCalledWith(expect.anything(), freshBriefing)
+      expect(resolveTurnLifecycle).not.toHaveBeenCalledWith(expect.anything(), staleBriefing)
     })
   })
 
   // T5: Closing-probe injection → stream returns CLOSING_PROBE_TEXT, no createTalkerStream
   it('T5: closing-probe injection — stream returns CLOSING_PROBE_TEXT text', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'closing' as never, phaseJustEntered: 'closing' as never })
+    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'closing' as never, complete: false, reason: null })
 
     // For shouldInjectClosingProbe to return true:
     // - orchestratedPhase === 'closing'  ✓ (from mock)

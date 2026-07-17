@@ -40,7 +40,6 @@ import type {
   RecordDependencyIntent,
   LinkBottleneckIntent,
   UpdateWalkthroughDataIntent,
-  UpdateTopicsIntent,
   RegisterStepIntent,
   ProduceBriefingIntent,
   BackfillDataSourcesIntent,
@@ -389,17 +388,6 @@ function applyUpdateWalkthrough(snapshot: TurnSnapshot, intent: UpdateWalkthroug
   }
 }
 
-// ─── update_topics ─────────────────────────────────────────────────────────────
-
-function applyUpdateTopics(snapshot: TurnSnapshot, intent: UpdateTopicsIntent): ApplyOutcome {
-  return {
-    snapshot: { ...snapshot, topicsCovered: intent.covered, topicsOpen: intent.open },
-    patches: [{ kind: 'topics', covered: intent.covered, open: intent.open }],
-    trail: [],
-    result: { status: 'accepted' },
-  }
-}
-
 // ─── register_step (full-array set; tool owns dedup/embedding decisions) ──────
 
 function applyRegisterStep(snapshot: TurnSnapshot, intent: RegisterStepIntent): ApplyOutcome {
@@ -472,8 +460,6 @@ export function applyIntent(snapshot: TurnSnapshot, intent: WriteIntent, ctx: Ap
       return applyLinkBottleneck(snapshot, intent, ctx)
     case 'update_walkthrough_data':
       return applyUpdateWalkthrough(snapshot, intent)
-    case 'update_topics':
-      return applyUpdateTopics(snapshot, intent)
     case 'register_step':
       return applyRegisterStep(snapshot, intent)
     case 'produce_briefing':

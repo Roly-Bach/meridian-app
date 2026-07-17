@@ -149,13 +149,6 @@ class PGliteBackend implements InterviewStoreBackend {
     )
   }
 
-  async setTopics(interviewId: string, covered: string[], open: string[]): Promise<void> {
-    await this.db.query(
-      `UPDATE interview_state SET topics_covered = $2::text[], topics_open = $3::text[], updated_at = now() WHERE interview_id = $1`,
-      [interviewId, covered, open],
-    )
-  }
-
   async setExtractionsLog(interviewId: string, log: RawExtraction[]): Promise<void> {
     await this.db.query(
       `UPDATE interview_state SET extractions_log = $2::jsonb, updated_at = now() WHERE interview_id = $1`,

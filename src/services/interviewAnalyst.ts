@@ -12,7 +12,6 @@ import {
   type StepEntry,
   type SlotName,
 } from './interviewSemantic'
-import { updateODrought } from './interviewOrchestrator'
 import type {
   InterviewContext,
   TurnMessage,
@@ -39,7 +38,7 @@ export const ANALYST_THINKING_BUDGET = 2048
 /**
  * PROJ-42: tool names that count as "new extraction" for the deterministic
  * No-New-Extraction-Zähler (interviewOrchestrator.ts). Deliberately excludes
- * update_topics (bookkeeping, not new knowledge) and produce_briefing itself.
+ * produce_briefing itself (bookkeeping, not new knowledge).
  */
 const EXTRACTION_TOOL_NAMES = new Set([
   'register_step',
@@ -56,7 +55,15 @@ const EXTRACTION_TOOL_NAMES = new Set([
  * + carry-forward-when-not-called) is independently unit-testable without
  * mocking generateText/turnStore.
  *
- * - hadExtraction=true (any knowledge tool called this pass) → streak resets to 0.
+ * - hadExtraction=true (any knowledge tool call ACTUALLY APPLIED this pass —
+ *   PROJ-44 Remediation Runde 2/H-2 Fix 2: a call the evidence_span/priority/
+ *   step-lookup guard rejected, or an idempotent no-op re-write of an already-
+ *   filled slot, does NOT count — only `tc.applied` does. Before this fix the
+ *   streak counted ATTEMPTS, not applied writes: a guard-rejected record_slot
+ *   (e.g. re-extracting an old value from a courtesy-phrase turn) reset the
+ *   streak just like a real write, making the safety net practically
+ *   unreachable — 53 record_slot attempts vs. 17 real writes in one QA sample) →
+ *   streak resets to 0.
  * - modelCalledBriefing=true → the LLM's own next_focus/suggested_question/
  *   clarification_cards win, streak is merged in.
  * - modelCalledBriefing=false → the analyst prompt's own "skip on a boring turn"
@@ -71,7 +78,7 @@ export function computeNextBriefing(
   toolCalls: AnalystToolCallRecord[],
   previousBriefing: AnalystBriefing | null | undefined,
 ): AnalystBriefing {
-  const hadExtraction = toolCalls.some(tc => EXTRACTION_TOOL_NAMES.has(tc.toolName))
+  const hadExtraction = toolCalls.some(tc => tc.applied && EXTRACTION_TOOL_NAMES.has(tc.toolName))
   const prevStreak = previousBriefing?.noNewExtractionStreak ?? 0
   const noNewExtractionStreak = hadExtraction ? 0 : prevStreak + 1
 
@@ -117,6 +124,16 @@ export interface AnalystRunOptions {
    * sub-pass updates before persisting it on the returned briefing.
    */
   focusLock: ODroughtState
+  /**
+   * PROJ-44 Remediation Runde 2 (Fix 3, ballast #2 — interviewAnalyst→
+   * interviewOrchestrator edge): the pure O-Drought update function, injected
+   * by the caller (runInterviewTurn.ts, which already imports it from
+   * interviewOrchestrator.ts) rather than statically imported here. Keeps the
+   * LLM layer (this module) from depending on the deterministic orchestration
+   * layer — same call, same timing (before this pass's produce_briefing is
+   * staged), only the import edge moves to the caller.
+   */
+  updateODrought: (lock: ODroughtState, beforeTracker: StepEntry[], afterTracker: StepEntry[]) => ODroughtState
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -162,7 +179,14 @@ const ONLINE_MODE_PREFIX = `ONLINE-MODUS — strikte Regeln:
 
 `
 
-export function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' | 'default' = 'default'): string {
+/**
+ * @param focusStepId PROJ-44 Remediation Runde 2 (Fix 3, ballast #3): the
+ * focus-locked step id, passed as its own parameter rather than a field on the
+ * shared InterviewContext (Talker + Analyst both use InterviewContext, but
+ * only the Analyst reads this) — an analyst-only concern kept off the
+ * cross-cutting type.
+ */
+export function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' | 'default' = 'default', focusStepId?: string | null): string {
   const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
   const activeStepLine = activeStep
     ? `Aktiv im Walkthrough: "${activeStep.title}" (${activeStep.id ?? 'no-id'}, Status: ${activeStep.status})`
@@ -171,7 +195,7 @@ export function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' |
   // PROJ-44 Remediation (M-3 Fokus-Lock): only present when the orchestrator locked a
   // step for this turn (computeFocusLock) — absent for the first turns / when nothing
   // is lockable, so this line never widens the STUFE-0-4 prefix's byte-identity (WP5).
-  const focusStep = ctx.focusStepId ? ctx.stepTracker.find(s => s.id === ctx.focusStepId) : undefined
+  const focusStep = focusStepId ? ctx.stepTracker.find(s => s.id === focusStepId) : undefined
   const focusLockLine = focusStep
     ? `\nFOKUS-LOCK (gesperrter aktiver Schritt): "${focusStep.title}" (${focusStep.id}). Richte next_focus und suggested_question PRIMÄR auf diesen Schritt, solange er qualitativ noch nicht ausreichend vertieft ist (O2–O6: Entscheidungslogik, tazite Cues, Ausnahmen, Inputs, Outputs, Hilfsmittel, Abhängigkeiten). Wechsle den Fokus NICHT eigenständig — das System sperrt/entsperrt automatisch, sobald dieser Schritt ausgeschöpft ist. Beiläufig genannte Werte anderer Schritte trotzdem opportunistisch erfassen (record_slot bleibt unabhängig vom Fokus).`
     : ''
@@ -206,7 +230,7 @@ Wenn dies der ERSTE Mitarbeiter-Turn ist (history.user-Turns.length === 1) UND d
 
 STUFE 1 — NEUE SCHRITTE (höchste Priorität):
 Beschreibt der Mitarbeiter in diesem Turn einen neuen, eigenständigen Prozess?
-  → register_step SOFORT, vor allen anderen Tool-Calls außer update_topics
+  → register_step SOFORT, vor allen anderen Tool-Calls
   → produce_briefing.next_focus = dieser neue Schritt
   → Kein Backfill-Briefing für andere Schritte in diesem Turn
 EIGENSTÄNDIGKEITS-TEST: Hat ein als Sub-Aktivität geframtes Vorgehen eine eigene Frequenz ODER eigene Dauer ODER einen eigenen Output/Auslöser der sich vom Eltern-Schritt unterscheidet → eigenständiger register_step, auch wenn die Persona es als Teil eines anderen Prozesses framt. Beispiel: 'Im Rahmen des Monatsabschlusses prüfe ich täglich Rechnungen' → Rechnungsprüfung hat eigene Frequenz (täglich vs. monatlich) → separater Step. Anti-Fragmentation bleibt: Sub-Aktivitäten ohne eigene Frequenz/Dauer/Output bleiben Sub-Prozesse.
@@ -264,8 +288,6 @@ den zurückgegebenen matched_title als step_title verwenden.
 **update_walkthrough_data**: Wenn Mitarbeiter Prozessschritte (Signalwörter: "zuerst", "dann", "danach"), Reibungspunkte oder Systeme beschreibt.
 
 **link_bottleneck**: Wenn Pain Point klar an einem registrierten Schritt verortet werden kann.
-
-**update_topics**: Mit aktualisierten covered/open Listen aufrufen.
 
 **produce_briefing**: Als LETZTEN Tool-Call aufrufen — exakt EINMAL pro Turn, NIEMALS mehrfach.
 produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER step_advance_ready wechselt auf true. Wenn der Turn keine neue extrahierbare Information enthielt (reine Rückfrage, Smalltalk, Wiederholung, Persona weicht aus) → produce_briefing NICHT aufrufen; das vorherige next_focus/suggested_question bleibt gültig (der No-New-Extraction-Zähler wird unabhängig davon deterministisch im Code weitergeführt).
@@ -344,6 +366,17 @@ function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; sl
 export interface AnalystToolCallRecord {
   toolName: string
   args: Record<string, unknown>
+  /**
+   * PROJ-44 Remediation Runde 2 (Fix 2/H-2): whether the tool's own execute()
+   * returned `success:true` — read straight off the AI SDK's per-step
+   * `toolResults[].output`, matched by toolCallId. Every knowledge tool in
+   * interviewTools.ts follows the same `{success:boolean, ...}` shape, so this
+   * is a uniform signal across register_step/record_slot/record_governance/
+   * record_dependency/update_walkthrough_data/link_bottleneck — a rejected
+   * evidence_span, a step-not-found lookup, or a blocked priority conflict all
+   * surface as `success:false` and therefore `applied:false` here.
+   */
+  applied: boolean
 }
 
 export interface AnalystRunResult {
@@ -491,6 +524,35 @@ interface OnlinePassOptions {
   focusLock: ODroughtState
   /** PROJ-44 Remediation (M-3): the tracker as loaded at turn start (pre-Analyst) — the baseline updateODrought diffs against. */
   preTurnTracker: StepEntry[]
+  /** PROJ-44 Remediation Runde 2 (Fix 3): injected O-Drought updater, forwarded from AnalystRunOptions — see its doc comment. */
+  updateODrought: (lock: ODroughtState, beforeTracker: StepEntry[], afterTracker: StepEntry[]) => ODroughtState
+}
+
+/**
+ * PROJ-44 Remediation Runde 2 (Fix 2): builds AnalystToolCallRecord[] from a
+ * generateText pass's steps, matching each tool call to its own result by
+ * toolCallId to derive `applied` — every knowledge tool in interviewTools.ts
+ * returns `{success: boolean, ...}`, so `output.success === true` is a uniform
+ * "did this call actually change anything" signal across all of them.
+ */
+function buildToolCallRecords(
+  steps: { toolCalls?: unknown[]; toolResults?: unknown[] }[],
+): AnalystToolCallRecord[] {
+  return steps.flatMap((step) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolCalls = (step.toolCalls ?? []) as any[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolResults = (step.toolResults ?? []) as any[]
+    return toolCalls.map((tc) => {
+      const result = toolResults.find((tr) => tr.toolCallId === tc.toolCallId)
+      const output = result?.output as { success?: boolean } | undefined
+      return {
+        toolName: tc.toolName as string,
+        args: (tc.input ?? tc.args ?? {}) as Record<string, unknown>,
+        applied: output?.success === true,
+      }
+    })
+  })
 }
 
 /**
@@ -505,7 +567,7 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
   const { interviewId } = opts.context
   const { session } = opts
 
-  const systemPrompt = buildAnalystSystemPrompt(opts.context, 'online')
+  const systemPrompt = buildAnalystSystemPrompt(opts.context, 'online', opts.focusLock.stepId)
   const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
 
   let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
@@ -562,13 +624,7 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
     }),
   })
 
-  capturedToolCalls = genResult.steps.flatMap(step =>
-    (step.toolCalls ?? []).map(tc => ({
-      toolName: tc.toolName,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      args: (tc as any).input ?? (tc as any).args ?? {},
-    }))
-  )
+  capturedToolCalls = buildToolCallRecords(genResult.steps)
   {
     const details = genResult.usage.inputTokenDetails as Record<string, unknown> | undefined
     opts.onTokenUsage?.({
@@ -587,7 +643,7 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
   // PROJ-44 Remediation (M-1/M-3): deterministic O-Drought streak update — did the
   // locked step gain a new O2–O6 field this pass? session.snapshot() here reflects
   // everything staged so far this pass (merge + backfill sub-pass + this online sub-pass).
-  capturedBriefing = { ...capturedBriefing, oDrought: updateODrought(opts.focusLock, opts.preTurnTracker, session.snapshot().stepTracker) }
+  capturedBriefing = { ...capturedBriefing, oDrought: opts.updateODrought(opts.focusLock, opts.preTurnTracker, session.snapshot().stepTracker) }
   // PROJ-34: stage the interviews write (next_briefing + analyst_status='done').
   // onlyIfNotDone preserves the PROJ-27/BL-E1.5 .neq('analyst_status','done') guard.
   session.stage({ kind: 'produce_briefing', briefing: capturedBriefing })
@@ -655,13 +711,7 @@ async function runBackfillPass(opts: BackfillPassOptions): Promise<{ toolCalls: 
     }),
   })
 
-  capturedToolCalls = genResult.steps.flatMap(step =>
-    (step.toolCalls ?? []).map(tc => ({
-      toolName: tc.toolName,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      args: (tc as any).input ?? (tc as any).args ?? {},
-    }))
-  )
+  capturedToolCalls = buildToolCallRecords(genResult.steps)
   {
     const details = genResult.usage.inputTokenDetails as Record<string, unknown> | undefined
     opts.onTokenUsage?.({
@@ -726,7 +776,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
     console.error('[analyst] computeMergedSteps failed (non-fatal):', err)
   }
 
-  const mergedContext: InterviewContext = { ...opts.context, stepTracker: session.snapshot().stepTracker, focusStepId: opts.focusLock.stepId }
+  const mergedContext: InterviewContext = { ...opts.context, stepTracker: session.snapshot().stepTracker }
 
   const allToolCalls: AnalystToolCallRecord[] = []
   let briefing: AnalystBriefing
@@ -759,6 +809,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
         onTokenUsage: opts.onTokenUsage,
         focusLock: opts.focusLock,
         preTurnTracker: preTurnTrackerForDrought,
+        updateODrought: opts.updateODrought,
       })
       allToolCalls.push(...online.toolCalls)
       briefing = online.briefing
@@ -772,6 +823,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
         traceCtx: opts.traceCtx,
         focusLock: opts.focusLock,
         preTurnTracker: preTurnTrackerForDrought,
+        updateODrought: opts.updateODrought,
         onTokenUsage: opts.onTokenUsage,
       })
       allToolCalls.push(...online.toolCalls)

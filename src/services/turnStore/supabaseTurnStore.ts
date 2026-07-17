@@ -98,13 +98,6 @@ class SupabaseBackend implements InterviewStoreBackend {
       .eq('interview_id', interviewId)
   }
 
-  async setTopics(interviewId: string, covered: string[], open: string[]): Promise<void> {
-    await this.db
-      .from('interview_state')
-      .update({ topics_covered: covered, topics_open: open, updated_at: new Date().toISOString() })
-      .eq('interview_id', interviewId)
-  }
-
   async setExtractionsLog(interviewId: string, log: RawExtraction[]): Promise<void> {
     await this.db
       .from('interview_state')

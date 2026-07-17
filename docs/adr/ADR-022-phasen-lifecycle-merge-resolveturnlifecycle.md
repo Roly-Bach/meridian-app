@@ -1,6 +1,6 @@
 # ADR-022: Phasen- und Lifecycle-Entscheidung zusammenlegen — `resolveTurnLifecycle`
 
-**Status:** Proposed (2026-07-17 — via `/architecture` PROJ-44; wird Accepted nach `/backend`)
+**Status:** Accepted (2026-07-17 — via `/architecture` PROJ-44, umgesetzt in `/backend`)
 **Author:** lyas53
 **Repository:** Roly-Bach/meridian-app
 **Auslöser:** PROJ-44 QA-Runde 2 (2026-07-17), Befund **H-3** (Nutzer-Transkript-Review): `checkLifecycle` liest weiterhin den Vorturn-Phasenwert und läuft vor `decideNextPhase`. Ein Turn, der `closing` betritt, kann konstruktionsbedingt nie im selben Turn abschließen — exakt der BUG-6-Mechanismus. Damit ist die als `[x]` markierte PROJ-44-AC „BUG-6 strukturell behoben" widerlegt.

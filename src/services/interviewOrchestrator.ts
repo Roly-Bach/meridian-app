@@ -3,13 +3,9 @@ import type { AnalystBriefing, ODroughtState } from './interviewTypes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ExtendedPhase = Phase | 'completed'
-
 export interface OrchestratorContext {
   phase: Phase
   stepTracker: StepEntry[]
-  topicsOpen: string[]
-  topicsCovered: string[]
   timerMinutes: number
   maxDurationMinutes: number
   /** Total number of messages in history including the current user turn */
@@ -33,8 +29,9 @@ export interface OrchestratorContext {
   oDrought: ODroughtState
 }
 
-export interface LifecycleDecision {
-  shouldComplete: boolean
+export interface TurnLifecycle {
+  phase: Phase
+  complete: boolean
   reason: 'hard_stop' | 'soft_confirm' | null
 }
 
@@ -185,7 +182,7 @@ export function closingProbeAlreadyAsked(
  *   - the most recent message in history is a user message (we owe a response)
  */
 export function shouldInjectClosingProbe(
-  nextPhase: ExtendedPhase,
+  nextPhase: Phase,
   history: { role: 'user' | 'assistant'; content: string }[],
 ): boolean {
   if (nextPhase !== 'closing') return false
@@ -197,7 +194,8 @@ export function shouldInjectClosingProbe(
 /**
  * True iff the deterministic closing probe has been asked AND the user has
  * since replied — i.e. a completion/clarification decision is owed this turn.
- * Shared by decideNextPhase's 'closing' case and checkLifecycle's Trigger B.
+ * Used by resolveTurnLifecycle's terminal evaluation (both the phase-transition
+ * and the completion verdict).
  */
 export function closingProbeAnswerReceived(
   history: { role: 'user' | 'assistant'; content: string }[],
@@ -212,20 +210,15 @@ export function closingProbeAnswerReceived(
 // ─── Core Functions ───────────────────────────────────────────────────────────
 
 /**
- * Deterministically decides the phase for the upcoming Talker turn.
- * PROJ-44/ADR-021: reads the state INCLUDING the current turn — the synchronous
- * Analyst (interviewAnalyst.ts's runAnalyst) has already run against this turn's
- * userInput by the time runInterviewTurn.ts calls this, so ctx.stepTracker and
- * analystSuggestion reflect this turn, not the end of the previous one.
- * The phase returned is the phase that should be WRITTEN to interview_state before the Talker runs.
+ * Phase-transition sub-step of resolveTurnLifecycle (ehem. decideNextPhase).
+ * Never returns a terminal verdict itself — the 'closing' case only decides
+ * whether this turn re-enters Explore (late-discovery reentry) or stays in
+ * Closing; whether staying in Closing also means completing THIS turn is
+ * decided once, by resolveTurnLifecycle, against this function's result
+ * (ADR-022 D1 — the fix for H-3/BUG-6: the old checkLifecycle evaluated
+ * against ctx.phase, the Vorturn value, instead of this resolved target).
  */
-export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): ExtendedPhase {
-  // Hard-Stop: unconditional, phase-agnostic, last resort. Writes 'closing' phase
-  // (not 'completed' — 'completed' is interviews.status, decided by checkLifecycle).
-  if (ctx.timerMinutes >= ctx.maxDurationMinutes) {
-    return 'closing'
-  }
-
+function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): Phase {
   switch (ctx.phase) {
     case 'intro':
       // Advance after first agent response (≥2 messages) — intro is a single greeting turn.
@@ -278,14 +271,6 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       // status-only check misses — a step registered THIS turn that the same
       // synchronous Analyst pass already slotted past 'exploring'.
       if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.newStepThisTurn) return 'explore'
-
-      // Deterministic in STATE: the catch-all probe must be present in history
-      // and answered before a completion/clarification decision is owed.
-      if (closingProbeAnswerReceived(ctx.history)) {
-        const cards = analystSuggestion?.clarification_cards
-        if (cards && cards.length > 0) return 'clarification'
-        return 'completed'
-      }
       return 'closing'
     }
 
@@ -298,70 +283,70 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
   }
 }
 
-export interface PhaseDecisionMeta {
-  phase: ExtendedPhase
-  /**
-   * The phase that was just entered this turn (i.e. the previous phase differed
-   * from the resolved phase). Null when the phase stays the same.
-   */
-  phaseJustEntered: Phase | null
-}
-
 /**
- * Wrapper around decideNextPhase that also signals when a phase transition
- * happened. Used by the route handler to trigger analyst_catchup on entry
- * into 'closing'.
- */
-export function decideNextPhaseWithMeta(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): PhaseDecisionMeta {
-  const phase = decideNextPhase(ctx, analystSuggestion)
-  const phaseJustEntered = (phase !== ctx.phase && phase !== 'completed')
-    ? (phase as Phase)
-    : null
-  return { phase, phaseJustEntered }
-}
-
-/**
- * Decides whether the interview should be completed this turn.
- * Returns shouldComplete=true for both Hard-Stop (timer) and Soft-Confirm (closing-sequence convergence).
+ * The interview turn's single lifecycle decision: which phase to write to
+ * interview_state, and whether the interview completes this turn — resolved
+ * once, against one fresh snapshot (ADR-022 D1, merging the former
+ * decideNextPhase + decideNextPhaseWithMeta + checkLifecycle).
+ *
+ * PROJ-44/ADR-021: reads state INCLUDING the current turn — the synchronous
+ * Analyst (interviewAnalyst.ts's runAnalyst) has already run against this
+ * turn's userInput by the time runInterviewTurn.ts calls this, so
+ * ctx.stepTracker and analystSuggestion reflect this turn, not the end of the
+ * previous one.
+ *
+ * ADR-022 (H-3/BUG-6 fix): the terminal (complete/reason) verdict is decided
+ * exactly once, against the RESOLVED phase from this turn's transition — not
+ * against ctx.phase (the Vorturn value the old two-function split used for
+ * checkLifecycle's Trigger B). A turn whose transition resolves explore→closing
+ * with the probe already answered (late-discovery reentry re-converging) can
+ * therefore complete in the SAME turn instead of one Leerlauf-turn later.
+ *
+ * D2 invariant: `complete:true` with reason:'soft_confirm' is only reachable
+ * when the resolved phase is 'closing' — intro/explore/clarification can never
+ * soft-confirm-complete. Only hard_stop (Trigger A) is phase-agnostic.
  *
  * PROJ-42: the previous phase-agnostic farewell-loop escape valve (regex
- * FAREWELL_MARKERS string matching over the last two assistant turns) is
- * removed entirely — termination is now deterministic in state (the closing
- * probe + its answer), not guessed from text heuristics (KI-23).
+ * FAREWELL_MARKERS string matching) is removed entirely — termination is
+ * deterministic in state (the closing probe + its answer), not guessed from
+ * text heuristics (KI-23).
  *
- * PROJ-44/ADR-021: like decideNextPhase, this now reads state INCLUDING the
- * current turn (the synchronous Analyst already ran). The pre-PROJ-44
- * soft_confirm staleness problem (KI-12) — completing on a snapshot that never
- * saw this turn's userInput — no longer needs the two-stage recheck that used
- * to live in runInterviewTurn.ts; the fresh state this function reads already
- * accounts for it. Fail-safe: runInterviewTurn.ts vetoes a soft_confirm result
- * when the synchronous Analyst call failed this turn (ADR-021 D4) — hard_stop
- * is unconditional and proceeds regardless.
+ * Fail-safe: runInterviewTurn.ts vetoes a soft_confirm result when the
+ * synchronous Analyst call failed this turn (ADR-021 D4) — hard_stop is
+ * unconditional and proceeds regardless.
  */
-export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): LifecycleDecision {
-  // Trigger A: Hard-Stop — unconditional, last resort. Still produces a
-  // coherent, LLM-formulated farewell (runInterviewTurn.ts's
+export function resolveTurnLifecycle(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): TurnLifecycle {
+  // Trigger A — Hard-Stop: unconditional, phase-agnostic, last resort. Still
+  // produces a coherent, LLM-formulated farewell (runInterviewTurn.ts's
   // isCompletionFarewell path) — never a raw abort or system message.
+  // ADR-022 (Nutzer-Korrektur): never skips already-generated clarification
+  // cards — they carry the quantitative ROI slots — so a pending-cards turn
+  // routes to 'clarification' instead of completing out from under them.
   if (ctx.timerMinutes >= ctx.maxDurationMinutes) {
-    return { shouldComplete: true, reason: 'hard_stop' }
+    const cards = analystSuggestion?.clarification_cards
+    if (cards && cards.length > 0) {
+      return { phase: 'clarification', complete: false, reason: null }
+    }
+    return { phase: 'closing', complete: true, reason: 'hard_stop' }
   }
 
-  // Trigger B: Soft-Confirm — the Closing sequence converged: catch-all probe
-  // asked + answered, no newly-discovered process, no pending clarification cards.
-  if (ctx.phase === 'closing') {
-    if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.newStepThisTurn) {
-      // Routed back to Explore by decideNextPhase — don't complete out from
-      // under it. PROJ-44 Remediation (H-1): newStepThisTurn covers the case
-      // the status-only check misses (see decideNextPhase's closing case).
-      return { shouldComplete: false, reason: null }
-    }
+  const target = resolvePhaseTransition(ctx, analystSuggestion)
+
+  // Terminal evaluation — GENAU EINMAL, against the resolved phase. A reentry
+  // out of Closing (target !== 'closing') falls through to the plain return
+  // below — no separate "don't complete out from under it" check needed, since
+  // a non-closing target can never complete (D2).
+  if (target === 'closing') {
     if (closingProbeAnswerReceived(ctx.history)) {
       const cards = analystSuggestion?.clarification_cards
-      if (!cards || cards.length === 0) {
-        return { shouldComplete: true, reason: 'soft_confirm' }
+      if (cards && cards.length > 0) {
+        return { phase: 'clarification', complete: false, reason: null }
       }
+      return { phase: 'closing', complete: true, reason: 'soft_confirm' }
     }
+    // Fresh entry into Closing, probe not yet answered — injected downstream.
+    return { phase: 'closing', complete: false, reason: null }
   }
 
-  return { shouldComplete: false, reason: null }
+  return { phase: target, complete: false, reason: null }
 }

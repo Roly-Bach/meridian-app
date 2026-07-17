@@ -126,21 +126,35 @@ describe('interviewAnalyst — WP5 system-prompt prefix stability', () => {
 const emptyBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
 
 describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
-  it('resets the streak to 0 when a knowledge tool was called this pass', () => {
+  it('resets the streak to 0 when a knowledge tool call was actually applied this pass', () => {
     const result = computeNextBriefing(
       { next_focus: 'X', suggested_question: 'Y' },
       true,
-      [{ toolName: 'record_slot', args: {} }],
+      [{ toolName: 'record_slot', args: {}, applied: true }],
       { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
     )
     expect(result.noNewExtractionStreak).toBe(0)
+  })
+
+  // PROJ-44 Remediation Runde 2 (Fix 2/H-2): a record_slot call the evidence_span/
+  // priority/step-lookup guard rejected (applied:false) must NOT reset the streak —
+  // this is the exact mechanism that made the safety net practically unreachable
+  // (53 record_slot attempts vs. 17 real writes in one QA sample).
+  it('does NOT reset the streak when the only knowledge tool call was rejected by the guard (applied:false)', () => {
+    const result = computeNextBriefing(
+      emptyBriefing,
+      true,
+      [{ toolName: 'record_slot', args: {}, applied: false }],
+      { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
+    )
+    expect(result.noNewExtractionStreak).toBe(3)
   })
 
   it('increments the streak when no knowledge tool was called this pass', () => {
     const result = computeNextBriefing(
       emptyBriefing,
       true,
-      [{ toolName: 'update_topics', args: {} }], // bookkeeping only — not an extraction tool
+      [{ toolName: 'produce_briefing', args: {}, applied: true }], // bookkeeping only — not an extraction tool
       { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
     )
     expect(result.noNewExtractionStreak).toBe(3)
@@ -155,7 +169,7 @@ describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
     const result = computeNextBriefing(
       { next_focus: 'neuer Fokus', suggested_question: 'Neue Frage?' },
       true,
-      [{ toolName: 'record_slot', args: {} }],
+      [{ toolName: 'record_slot', args: {}, applied: true }],
       { next_focus: 'alt', suggested_question: 'Alte Frage?' },
     )
     expect(result.next_focus).toBe('neuer Fokus')

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decideNextPhase, checkLifecycle, CLOSING_PROBE_TEXT, type OrchestratorContext } from './interviewOrchestrator'
+import { resolveTurnLifecycle, CLOSING_PROBE_TEXT, type OrchestratorContext } from './interviewOrchestrator'
 import type { StepEntry } from './interviewSemantic'
 import type { AnalystBriefing } from './interviewTypes'
 
@@ -81,8 +81,6 @@ function ctxAt(overrides: Partial<OrchestratorContext>): OrchestratorContext {
   return {
     phase: 'explore',
     stepTracker: [],
-    topicsOpen: [],
-    topicsCovered: [],
     timerMinutes: 0,
     maxDurationMinutes: MAX_DURATION_MINUTES,
     historyLength: 0,
@@ -120,7 +118,7 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
     const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 2, historyLength: history.length, history })
 
     // No advance signal, no streak exhaustion, well under the 80% soft anchor (8min) → stays explore.
-    expect(decideNextPhase(ctx, { noNewExtractionStreak: 0 })).toBe('explore')
+    expect(resolveTurnLifecycle(ctx, { noNewExtractionStreak: 0 }).phase).toBe('explore')
   })
 
   it('turn 9 (real elapsed ~3min): advances to closing once the Analyst judges the process sufficiently covered — content-driven, matches the real probe text', () => {
@@ -130,10 +128,10 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
     // off-topic turns 5-8) — both signals (Analyst step_advance_ready AND the
     // tracker-derived O-Drought) agree it's time to close, not step_advance_ready alone.
     const oDrought = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
-    const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 3, topicsOpen: [], historyLength: 16, oDrought })
+    const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 3, historyLength: 16, oDrought })
 
-    const next = decideNextPhase(ctx, { step_advance_ready: true })
-    expect(next).toBe('closing')
+    const next = resolveTurnLifecycle(ctx, { step_advance_ready: true })
+    expect(next.phase).toBe('closing')
     // The real turn-9 response happens to be exactly CLOSING_PROBE_TEXT — the old
     // system asked the same words, but as a symptom of turn-count escalation, not
     // content coverage. Pinning the constant confirms the new deterministic probe
@@ -159,19 +157,20 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
     ]
     const ctx = ctxAt({ phase: 'closing', stepTracker: tracker, timerMinutes: 3, history: historyAfterReveal, historyLength: 2 })
 
-    // Strom 1 AC: first-class Explore reentry (not 'clarification').
-    expect(decideNextPhase(ctx, null)).toBe('explore')
-    // And lifecycle must not complete out from under the freshly-discovered step,
-    // even though the probe was technically already asked+a user reply followed.
-    expect(checkLifecycle(ctx, null).shouldComplete).toBe(false)
+    // Strom 1 AC: first-class Explore reentry (not 'clarification'), and must
+    // not complete out from under the freshly-discovered step, even though the
+    // probe was technically already asked+a user reply followed.
+    const result = resolveTurnLifecycle(ctx, null)
+    expect(result.phase).toBe('explore')
+    expect(result.complete).toBe(false)
   })
 
-  it('reaches shouldComplete=true by the end of the reconstructed sequence — the actual KI-23 fix (prod interview remains status=active to this day)', () => {
+  it('reaches complete=true by the end of the reconstructed sequence — the actual KI-23 fix (prod interview remains status=active to this day)', () => {
     // Real turns 13/14 verbatim, including the EXACT string that broke the old
     // FAREWELL_MARKERS regex ("wünsche ich dir" — substring "wünsche dir" required,
     // never matched). The new mechanism does not use text heuristics at all, so this
     // string's presence is irrelevant to completion — proven by the fact that
-    // checkLifecycle never inspects assistant text for farewell language anymore.
+    // resolveTurnLifecycle never inspects assistant text for farewell language anymore.
     const history = [
       { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
       { role: 'user' as const, content: 'Meetings' },
@@ -186,15 +185,14 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
       phase: 'closing',
       stepTracker: REAL_FINAL_TRACKER, // real final tracker — neither step is 'done'
       timerMinutes: 4,
-      topicsOpen: [],
       history,
       historyLength: history.length,
     })
     const analystSuggestion: AnalystBriefing | null = null // no pending clarification cards in this scenario
 
-    expect(decideNextPhase(ctx, analystSuggestion)).toBe('completed')
-    const lifecycle = checkLifecycle(ctx, analystSuggestion)
-    expect(lifecycle.shouldComplete).toBe(true)
+    const lifecycle = resolveTurnLifecycle(ctx, analystSuggestion)
+    expect(lifecycle.phase).toBe('closing')
+    expect(lifecycle.complete).toBe(true)
     expect(lifecycle.reason).toBe('soft_confirm')
   })
 

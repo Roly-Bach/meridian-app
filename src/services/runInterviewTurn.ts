@@ -8,9 +8,10 @@
  * ADR-021 (Timing-Amendment): the Analyst (interviewAnalyst.ts's runAnalyst) now
  * runs synchronously, once per turn, BEFORE the phase/completion decision and
  * before the Talker — not after/parallel to the Talker as ADR-011 D2 had it.
- * `checkLifecycle`/`decideNextPhaseWithMeta`/`shouldInjectClosingProbe` therefore
- * read state INCLUDING the current turn, not "end of previous turn". The old
- * two-stage `soft_confirm` recheck (KI-12) and the pre-Talker Quick-Extract
+ * `resolveTurnLifecycle`/`shouldInjectClosingProbe` (ADR-022 merged the former
+ * `checkLifecycle`+`decideNextPhaseWithMeta` into one call) therefore read state
+ * INCLUDING the current turn, not "end of previous turn". The old two-stage
+ * `soft_confirm` recheck (KI-12) and the pre-Talker Quick-Extract
  * (interviewQuickExtract.ts) are gone — the single synchronous Analyst pass
  * subsumes both.
  *
@@ -35,11 +36,11 @@ import {
 } from '@/services/interviewSemantic'
 import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
 import {
-  decideNextPhaseWithMeta,
-  checkLifecycle,
+  resolveTurnLifecycle,
   shouldInjectClosingProbe,
   CLOSING_PROBE_TEXT,
   computeFocusLock,
+  updateODrought,
   hasNewStepThisTurn,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
@@ -292,6 +293,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         store,
         onTokenUsage: input.onTokenUsage,
         focusLock: focusLockThisTurn,
+        updateODrought,
       })
       break
     } catch (err) {
@@ -330,8 +332,6 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   const orchestratorCtx: OrchestratorContext = {
     phase: currentPhase,
     stepTracker,
-    topicsOpen: contextBase.topicsOpen,
-    topicsCovered: contextBase.topicsCovered,
     timerMinutes,
     maxDurationMinutes: contextBase.maxDurationMinutes,
     historyLength: history.length,
@@ -347,17 +347,17 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     oDrought: analystBriefing?.oDrought ?? focusLockThisTurn,
   }
 
-  // ── Lifecycle check ─────────────────────────────────────────────────────────
-  let lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
+  // ── Lifecycle check (ADR-022: one merged decision, resolveTurnLifecycle) ────
+  let lifecycle = resolveTurnLifecycle(orchestratorCtx, analystBriefing)
 
   // ADR-021 D4: a soft_confirm decision must not complete the interview on a
   // turn whose synchronous Analyst call failed terminally — that decision would
   // rest on the PREVIOUS turn's state, never having seen this turn's userInput
   // at all (the exact class of bug the old KI-12 recheck existed to prevent).
   // hard_stop is unconditional (time-out) and proceeds regardless.
-  if (analystFailedThisTurn && lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') {
+  if (analystFailedThisTurn && lifecycle.complete && lifecycle.reason === 'soft_confirm') {
     console.error('[runInterviewTurn] vetoing soft_confirm completion this turn — synchronous analyst failed (ADR-021 D4 fail-safe)')
-    lifecycle = { shouldComplete: false, reason: null }
+    lifecycle = { ...lifecycle, complete: false, reason: null }
   }
 
   // ── Shared post-response finalize (ADR-021 D5 — was background()) ──────────
@@ -388,7 +388,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     }
   }
 
-  if (lifecycle.shouldComplete) {
+  if (lifecycle.complete) {
     await store.completeInterview(interviewId)
 
     console.log('[runInterviewTurn] lifecycle complete:', lifecycle.reason)
@@ -401,7 +401,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     const farewellStream = await createTalkerStream({
       context: {
         ...contextBase,
-        phase: 'closing' as Phase,
+        phase: lifecycle.phase,
         timerMinutes,
         stepTracker,
         usedFillerPhrases,
@@ -426,7 +426,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       stream: farewellStream,
       finalize,
       meta: {
-        phase: 'closing' as Phase,
+        phase: lifecycle.phase,
         completed: true,
         reason: lifecycle.reason as 'hard_stop' | 'soft_confirm',
         stepTracker,
@@ -435,9 +435,8 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     }
   }
 
-  // ── Phase decision ──────────────────────────────────────────────────────────
-  const { phase: nextPhaseDecision } = decideNextPhaseWithMeta(orchestratorCtx, analystBriefing)
-  const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'closing' : (nextPhaseDecision as Phase)
+  // ── Phase decision (ADR-022: already resolved by resolveTurnLifecycle above) ─
+  const orchestratedPhase: Phase = lifecycle.phase
 
   if (orchestratedPhase !== currentPhase) {
     await store.updatePhase(interviewId, orchestratedPhase)

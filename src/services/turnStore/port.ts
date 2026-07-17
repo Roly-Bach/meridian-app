@@ -51,7 +51,6 @@ export interface TurnStoreBackend {
   patchStepField(interviewId: string, stepIndex: number, subPath: string[], value: Json): Promise<void>
   /** Full-array step_tracker update. */
   setStepTracker(interviewId: string, tracker: StepEntry[]): Promise<void>
-  setTopics(interviewId: string, covered: string[], open: string[]): Promise<void>
   setExtractionsLog(interviewId: string, log: RawExtraction[]): Promise<void>
   insertKnowledgeObject(row: KnowledgeObjectInsert): Promise<void>
   updateInterview(
@@ -99,9 +98,6 @@ class BackendTurnSession implements TurnSession {
           break
         case 'step_tracker':
           await this.backend.setStepTracker(this.interviewId, p.value)
-          break
-        case 'topics':
-          await this.backend.setTopics(this.interviewId, p.covered, p.open)
           break
         case 'extractions_log':
           await this.backend.setExtractionsLog(this.interviewId, p.value)

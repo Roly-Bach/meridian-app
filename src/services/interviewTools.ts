@@ -69,20 +69,6 @@ export function buildTools(
   const writeSource = (opts?.source ?? 'analyst') as WriteSource
 
   const allTools = {
-    update_topics: tool({
-      description: 'Aktualisiert die Liste der abgedeckten und offenen Themen nach einem Turn.',
-      inputSchema: z.object({
-        covered: z.array(z.string()),
-        open: z.array(z.string()),
-      }),
-      execute: async ({ covered, open }) => {
-        const res = session.stage({ kind: 'update_topics', covered, open })
-        return res.status === 'accepted'
-          ? { success: true }
-          : { success: false, error: 'update_topics not applied' }
-      },
-    }),
-
     register_step: tool({
       description: 'Legt einen neuen Prozessschritt im Slot-Tracker an. Einmalig pro Schritt aufrufen sobald der Schritt klar benannt ist. Setzt reihenfolge automatisch.',
       inputSchema: z.object({

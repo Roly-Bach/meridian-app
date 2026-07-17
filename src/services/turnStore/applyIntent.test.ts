@@ -338,17 +338,6 @@ describe('update_walkthrough_data', () => {
   })
 })
 
-// ─── update_topics ───────────────────────────────────────────────────────────
-
-describe('update_topics', () => {
-  it('sets covered/open', () => {
-    const out = applyIntent(makeSnapshot([]), { kind: 'update_topics', covered: ['a'], open: ['b'] }, CTX)
-    expect(out.snapshot.topicsCovered).toEqual(['a'])
-    expect(out.snapshot.topicsOpen).toEqual(['b'])
-    expect(out.patches).toEqual([{ kind: 'topics', covered: ['a'], open: ['b'] }])
-  })
-})
-
 // ─── link_bottleneck (two targets) ───────────────────────────────────────────
 
 describe('link_bottleneck', () => {

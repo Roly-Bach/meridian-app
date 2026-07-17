@@ -36,19 +36,12 @@ export interface InterviewContext {
   recentUserTurns?: string[]
   /**
    * KI-19: set only by the scripted completion/farewell call in runInterviewTurn.ts
-   * (checkLifecycle already decided shouldComplete=true, DB status is already
+   * (resolveTurnLifecycle already decided complete=true, DB status is already
    * 'completed'). Suppresses the unconditional closing PFLICHT-ask-the-question-first
    * methodology text so the farewell turn actually says goodbye instead of re-asking
    * the closing probe or a new question.
    */
   isCompletionFarewell?: boolean
-  /**
-   * PROJ-44 Remediation (M-3 Fokus-Lock): this turn's pre-computed focus-locked
-   * step id (interviewOrchestrator.ts's computeFocusLock), read by
-   * buildAnalystSystemPrompt to steer next_focus/suggested_question toward this
-   * step. Null/undefined = no lock (empty tracker / all steps exhausted).
-   */
-  focusStepId?: string | null
 }
 
 export interface TurnMessage {
@@ -76,7 +69,7 @@ export interface AnalystBriefing {
   /**
    * PROJ-42 Advance-Signal: "ist der aktuelle Prozessschritt für jetzt ausreichend
    * erhoben" — LLM-authored content judgment (Analyst, via AnalystBriefingSchema),
-   * read by decideNextPhase to progress Explore without relying on turn-count
+   * read by resolveTurnLifecycle to progress Explore without relying on turn-count
    * thresholds. snake_case to match the zod tool-call schema field verbatim
    * (same convention as next_focus/suggested_question/clarification_cards).
    */

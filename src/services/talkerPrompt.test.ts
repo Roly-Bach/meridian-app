@@ -57,7 +57,7 @@ describe('talkerPrompt — KI-20 tool-call leakage regression', () => {
 
 // ─── KI-19 regression: scripted farewell turn must not re-ask the closing probe ───
 // Root cause (2026-07-11): the completion/farewell call (runInterviewTurn.ts, after
-// checkLifecycle already decided shouldComplete=true) passed phase='closing' into
+// resolveTurnLifecycle already decided complete=true) passed phase='closing' into
 // createTalkerStream like any normal turn, so it inherited the unconditional PFLICHT
 // "ask the closing probe first" methodology text — which routinely beat the softer
 // advisory farewellBriefing and made the model re-ask a question instead of saying

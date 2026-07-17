@@ -67,11 +67,6 @@ export class MemoryBackend implements TurnStoreBackend {
     this.state.stepTracker = clone(tracker)
   }
 
-  async setTopics(_interviewId: string, covered: string[], open: string[]): Promise<void> {
-    this.state.topicsCovered = covered
-    this.state.topicsOpen = open
-  }
-
   async setExtractionsLog(_interviewId: string, log: RawExtraction[]): Promise<void> {
     this.state.extractionsLog = clone(log)
   }

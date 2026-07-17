@@ -84,7 +84,6 @@ export interface KnowledgeObjectInsert {
 export type FieldPatch =
   | { kind: 'step_field'; stepIndex: number; subPath: string[]; value: Json }
   | { kind: 'step_tracker'; value: StepEntry[] }
-  | { kind: 'topics'; covered: string[]; open: string[] }
   | { kind: 'extractions_log'; value: RawExtraction[] }
   | { kind: 'knowledge_object'; row: KnowledgeObjectInsert }
   | {
@@ -95,13 +94,6 @@ export type FieldPatch =
     }
 
 // ─── Write intents (one variant per writing surface) ──────────────────────────
-
-/** update_topics — set covered/open lists. No priority conflict. */
-export interface UpdateTopicsIntent {
-  kind: 'update_topics'
-  covered: string[]
-  open: string[]
-}
 
 /**
  * register_step — append a new step. The tool keeps all read/decide logic
@@ -198,7 +190,6 @@ export interface BackfillDataSourcesIntent {
 }
 
 export type WriteIntent =
-  | UpdateTopicsIntent
   | RegisterStepIntent
   | RecordSlotIntent
   | RecordGovernanceIntent

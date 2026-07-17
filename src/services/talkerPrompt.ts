@@ -230,7 +230,7 @@ Stelle im Chat KEINE weitere Frage — die Abschlussfragen erscheinen im Interfa
 
   // closing
   // KI-19 (2026-07-11): the scripted completion/farewell call also passes phase='closing'
-  // (runInterviewTurn.ts, after checkLifecycle already decided shouldComplete=true and DB
+  // (runInterviewTurn.ts, after resolveTurnLifecycle already decided complete=true and DB
   // status is already 'completed') — without this branch it inherited the SAME unconditional
   // PFLICHT-ask-the-closing-probe-first instruction below, which routinely beat the softer
   // advisory farewellBriefing.suggested_question ("Verabschiede dich kurz und herzlich") and
@@ -297,7 +297,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
       : ''
 
   // WP1 (2026-07-14): the scripted completion/farewell call (runInterviewTurn.ts, after
-  // checkLifecycle already decided shouldComplete=true) needs nothing but a header + the
+  // resolveTurnLifecycle already decided complete=true) needs nothing but a header + the
   // farewell methodology text — no step tracker, no briefing, no signal sections. Sending
   // the full dynamic block also created a live contradiction: ambiguitySection could demand
   // a PFLICHT follow-up question in the same turn the methodology said "KEINE weitere Frage"
