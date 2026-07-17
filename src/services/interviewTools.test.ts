@@ -1,15 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 
-// The default Supabase store path (createInterviewStream) is reachable in the
-// module graph via a dynamic import; stub the server-only admin client so the
-// jsdom test env doesn't trip `import 'server-only'`. These tests drive the
-// in-memory MemoryTurnStore, so the stub is never actually exercised.
+// Defensive stub: interviewTools.ts itself has no supabase-admin dependency, but
+// keep the jsdom test env safe against any transitive server-only import in the
+// module graph (matches the pattern used across the other service tests).
 vi.mock('@/lib/supabase-admin', () => ({ getSupabaseAdmin: vi.fn() }))
 
 // PROJ-34/ADR-018: tools no longer write to Supabase; they stage WriteIntents
 // through a TurnSession. Tests run against the in-memory MemoryTurnStore and
 // assert the tool's LLM-facing result + the resulting snapshot/committed state.
-import { buildTools } from './interviewAgent'
+// PROJ-44: moved from interviewAgent.test.ts — buildTools now lives in
+// interviewTools.ts (interviewAgent.ts / createInterviewStream were deleted).
+import { buildTools } from './interviewTools'
 import { createMemoryTurnStore } from './turnStore/memoryTurnStore'
 import type { StepEntry, RawExtraction } from './interviewSemantic'
 

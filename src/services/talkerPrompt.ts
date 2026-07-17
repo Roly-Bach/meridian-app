@@ -282,8 +282,9 @@ const WALKTHROUGH_EXAMPLES = `
 </EXAMPLE>`
 
 // ─── Dynamic Context Builder ──────────────────────────────────────────────────
-// Called by interviewTalker.ts (Iteration 3) with the Analyst briefing, and by
-// interviewAgent.createInterviewStream.
+// Called by interviewTalker.ts (createTalkerStream) with the Analyst briefing —
+// the only remaining Talker entry point (PROJ-44: interviewAgent.ts's legacy
+// createInterviewStream call site was deleted, ADR-021 D6).
 
 export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBriefing | null): string {
   const focusLine = ctx.focusTopics

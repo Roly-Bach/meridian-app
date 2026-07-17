@@ -1,38 +1,22 @@
-import { resolveModel } from '@/lib/llm-provider'
-import { streamText, tool } from 'ai'
-import { buildTraceMetadata, type TraceCtx } from './_telemetry'
 import { z } from 'zod'
-import type { TurnSession, TurnStore } from './turnStore/port'
+import { tool } from 'ai'
+import type { TurnSession } from './turnStore/port'
 import type { WriteSource } from './slotConflictResolver'
 import { generateEmbedding } from './embeddings'
-import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD, SOFT_THRESHOLD } from './stepIdentity'
+import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD } from './stepIdentity'
 import {
-  TAZITE_SLOT_NAMES,
   POTENZIAL_SLOT_NAMES,
   colonParent,
   tokenJaccardNorm,
-  normalizeStepEntry,
-  type SlotValue,
   type StepEntry,
-  type TaziteSlotName,
-  type PotenzialSlotName,
-  type TaziteSlot,
-  type TaziteSlotArray,
-  type GovernanceSlot,
-  type Abhaengigkeiten,
-  type AbhaengigkeitsKante,
-  type EinflussKante,
-  type Schritt,
 } from './interviewSemantic'
-import type {
-  InterviewContext,
-  TurnMessage,
-  AnalystBriefing,
-} from './interviewTypes'
-import { buildDynamicContext, STATIC_PROMPT } from './talkerPrompt'
+
+// PROJ-44: moved out of interviewAgent.ts (deleted — legacy createInterviewStream/
+// buildStaticPrompt path). buildTools is now a Deep-Module-internal detail of the
+// Analyst (interviewAnalyst.ts is the only remaining consumer).
 
 // Normalize step title for substring-based dedup — strips whole-string
-// process noun suffix. Used only inside interviewAgent for title dedup.
+// process noun suffix. Used only inside register_step for title dedup.
 function normalizeStepTitleForDedup(title: string): string {
   return title
     .trim()
@@ -64,26 +48,6 @@ function extractSentenceAroundSpan(text: string, span: string): string {
   return sentence.length > 280 ? sentence.slice(0, 280) : sentence
 }
 
-// ─── System Prompt ────────────────────────────────────────────────────────────
-// PROJ-37: STATIC_PROMPT (talkerPrompt.ts) is the single source of truth for
-// conversation-behavior rules (turn format, Ausweichen-Eskalation, verboten
-// topics, no_repeat, kein_kommentar) — shared with the Talker's every-turn
-// prompt. Only the <tools> block below is agent-specific (the Talker doesn't
-// call live tools; the Analyst does that in the dual loop).
-
-function buildStaticPrompt(): string {
-  return STATIC_PROMPT + `<tools>
-Tool-Calls laufen still im Hintergrund — erscheinen nie im Text.
-evidence_quote muss ein wörtliches Zitat aus dem Mitarbeiter-Statement sein.
-Slots nur setzen wenn Mitarbeiter den Wert explizit genannt hat.
-record_governance aufrufen sobald Mitarbeiter Rolle, OE oder zuständige Systeme nennt.
-update_topics nach jedem Turn mit aktualisierten Listen aufrufen.
-PFLICHT: Nach Tool-Calls IMMER eine Textantwort generieren — auch nur ein Reaktionssatz + Frage. Eine leere Antwort ist kein gültiger Turn.
-</tools>
-
-`
-}
-
 // ─── Tools ────────────────────────────────────────────────────────────────────
 // Iteration 2: phase-management tools (transition_phase, complete_interview, enter_coverage_check)
 // removed — Orchestrator (interviewOrchestrator.ts) handles all phase transitions deterministically.
@@ -92,7 +56,7 @@ export function buildTools(
   session: TurnSession,
   currentUserInput?: string,
   opts?: {
-    source?: 'quick' | 'analyst' | 'analyst_online' | 'analyst_catchup'
+    source?: 'analyst' | 'analyst_online' | 'analyst_catchup'
     /** When set, only tools whose names are in this list are included in the returned object. */
     allowedTools?: string[]
     /** User turn texts indexed 0-based. Reserved for catchup evidence validation. */
@@ -604,138 +568,4 @@ export function buildTools(
   }
 
   return allTools
-}
-
-
-// ─── Stream Factory ───────────────────────────────────────────────────────────
-// Used by chat/start/reconnect routes (Iterations 1+2) and start/reconnect in Iteration 3.
-// chat/route.ts switches to createTalkerStream in Iteration 3.
-
-export interface AgentStreamOptions {
-  context: InterviewContext
-  history: TurnMessage[]
-  userInput?: string
-  isReconnect?: boolean
-  isStart?: boolean
-  briefing?: AnalystBriefing | null
-  onFinish?: (text: string) => Promise<void>
-  traceCtx?: TraceCtx
-  /** TurnStore for the greeting/reconnect tool writes. Defaults to the prod Supabase store. */
-  store?: TurnStore
-}
-
-export async function createInterviewStream(opts: AgentStreamOptions) {
-  const modelString = process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
-  const model = resolveModel(modelString)
-
-  // PROJ-34/ADR-018: open one session for this pass; the tools stage intents and
-  // commit() persists at pass end (in the stream's onFinish). Default to the prod
-  // Supabase store (lazy import keeps the eval/tsx graph free of supabase-admin).
-  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
-  const session = await store.openTurn(opts.context.interviewId, opts.context.workspaceId)
-
-  const staticPart = buildStaticPrompt()
-  // F1: feed last assistant turns into context for drill-stop detection.
-  // F1b: also feed last user turn for refuse-detect.
-  // E3.4: feed last user turns for laddering streak detection.
-  const recentAssistantTurns = opts.history
-    .filter((t) => t.role === 'assistant')
-    .slice(-4)
-    .map((t) => t.content)
-  const lastUserTurn = [...opts.history].reverse().find((t) => t.role === 'user')?.content
-  const recentUserTurns = opts.history
-    .filter((t) => t.role === 'user')
-    .slice(-4)
-    .map((t) => t.content)
-  const dynamicPart = buildDynamicContext(
-    { ...opts.context, recentAssistantTurns, lastUserTurn, recentUserTurns },
-    opts.briefing,
-  )
-
-  type PlainMessage = { role: 'user' | 'assistant'; content: string }
-  type RichMessage = { role: 'user' | 'assistant'; content: string | Array<{ type: 'text'; text: string }> }
-
-  const baseMessages: PlainMessage[] = opts.isReconnect
-    ? [
-        ...opts.history.map((t) => ({ role: t.role, content: t.content })),
-        { role: 'user' as const, content: 'Ich bin wieder da, können wir weitermachen?' },
-      ]
-    : opts.isStart
-    ? [{ role: 'user' as const, content: 'Bitte starte das Interview.' }]
-    : opts.history.map((t) => ({ role: t.role, content: t.content }))
-
-  // Static prompt in system (cacheable), dynamic context prepended to last user turn.
-  let systemPrompt: string
-  let messages: RichMessage[]
-
-  if (baseMessages.length > 0) {
-    systemPrompt = staticPart
-    messages = baseMessages.map((msg, idx) => {
-      if (idx === baseMessages.length - 1 && msg.role === 'user') {
-        return {
-          role: 'user' as const,
-          content: [
-            { type: 'text' as const, text: dynamicPart + '\n\n---\n\n' },
-            { type: 'text' as const, text: msg.content },
-          ],
-        }
-      }
-      return msg
-    })
-  } else {
-    systemPrompt = `${staticPart}\n\n${dynamicPart}`
-    messages = baseMessages
-  }
-
-  return streamText({
-    model,
-    temperature: 0.5,
-    system: systemPrompt,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    messages: messages as any,
-    tools: buildTools(session, opts.userInput),
-    experimental_telemetry: buildTraceMetadata('interview.talker', {
-      interviewId: opts.context.interviewId,
-      model: modelString,
-      environment: 'prod',
-      component: 'talker',
-      ...opts.traceCtx,
-    }),
-    // Stop as soon as any step has produced visible text.
-    // Allow up to 8 tool-only steps before forcing a stop (Flash 3.5 uses up to 4 per turn
-    // for register_step + record_slot calls; budget doubled to prevent empty responses).
-    stopWhen: ({ steps }) => {
-      if (steps.length === 0) return false
-      const hasText = steps.some((s) => s.text.trim().length > 0)
-      return hasText || steps.length >= 8
-    },
-    // Always commit the staged tool writes at pass end (ADR-018 D5), then run the
-    // caller's onFinish. Commit runs even when the caller passes no onFinish.
-    onFinish: async ({ text, usage, providerMetadata }) => {
-      try {
-        await session.commit()
-      } catch (err) {
-        console.error('[createInterviewStream] session.commit failed:', err)
-      }
-      const meta = providerMetadata as Record<string, unknown> | undefined
-      const anthropicMeta = meta?.anthropic as Record<string, unknown> | undefined
-      const details = usage.inputTokenDetails as Record<string, unknown> | undefined
-      const usageData = {
-        model: modelString,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        cacheReadTokens: (details?.cacheReadTokens as number | undefined) ?? null,
-        cacheCreationTokens: (details?.cacheWriteTokens as number | undefined) ?? (anthropicMeta?.cacheCreationInputTokens as number | undefined) ?? null,
-        googleCachedTokens: (details?.cacheReadTokens as number | undefined) ?? null,
-      }
-      console.log('[token-usage] turn', usageData)
-      if (process.env.NODE_ENV === 'development') {
-        try {
-          const fs = await import('fs')
-          fs.writeFileSync('.eval-last-usage.json', JSON.stringify(usageData))
-        } catch { /* non-blocking */ }
-      }
-      if (opts.onFinish) await opts.onFinish(text)
-    },
-  })
 }

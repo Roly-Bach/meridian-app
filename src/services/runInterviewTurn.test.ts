@@ -26,14 +26,11 @@ vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
   }
 })
 
+// PROJ-44/ADR-021: the three analyst entrypoints (runAnalystOnline/Catchup/FailureRetry)
+// collapsed into one runAnalyst — mode selection + the closing-mode two-sub-pass split
+// are interviewAnalyst.ts-internal details, not observable from runInterviewTurn.ts.
 vi.mock('@/services/interviewAnalyst', () => ({
-  runAnalystOnline: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
-  runAnalystCatchup: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
-  runAnalystFailureRetry: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
-}))
-
-vi.mock('@/services/interviewQuickExtract', () => ({
-  runQuickExtract: vi.fn().mockResolvedValue(null),
+  runAnalyst: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [] }),
 }))
 
 vi.mock('@/services/extraction', () => ({
@@ -58,6 +55,7 @@ vi.mock('@/services/roleGuard', () => ({
   buildOffTopicRedirect: vi.fn().mockReturnValue('Dazu kann ich als Interviewer leider nichts beitragen — bleiben wir beim Prozessgespräch. Wo waren wir stehengeblieben?'),
 }))
 
+import type { StepEntry } from '@/services/interviewSemantic'
 import { runInterviewTurn } from './runInterviewTurn'
 import { createTalkerStream } from '@/services/interviewTalker'
 import {
@@ -65,12 +63,7 @@ import {
   decideNextPhaseWithMeta,
   CLOSING_PROBE_TEXT,
 } from '@/services/interviewOrchestrator'
-import {
-  runAnalystOnline,
-  runAnalystCatchup,
-  runAnalystFailureRetry,
-} from '@/services/interviewAnalyst'
-import { runQuickExtract } from '@/services/interviewQuickExtract'
+import { runAnalyst } from '@/services/interviewAnalyst'
 import { checkRoleGuard } from '@/services/roleGuard'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -108,7 +101,7 @@ function makeStateRow(phase = 'intro', stepTracker: unknown[] = []) {
   }
 }
 
-function makeStepEntry(title = 'Rechnungsprüfung', status = 'exploring') {
+function makeStepEntry(title = 'Rechnungsprüfung', status: StepEntry['status'] = 'exploring'): StepEntry {
   return {
     id: 'S001',
     title,
@@ -145,25 +138,23 @@ function makePhaseUpdateMock() {
   }
 }
 
-// Shared non-blocking processing-write mock
+// Shared non-blocking processing-write mock (analyst_status='processing')
 function makeProcessingWriteMock() {
   const processingWriteEq = vi.fn().mockResolvedValue({ data: null, error: null })
   return { update: vi.fn().mockReturnValue({ eq: processingWriteEq }) }
 }
 
-// store.loadStepTracker() chain mock — used by the KI-12 soft_confirm recheck
-function makeStepTrackerLoadMock(stepTracker: unknown[] = []) {
-  return {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: stepTracker }, error: null }),
-  }
-}
-
 /**
  * Set up supabase mocks.
- * @param includePhaseUpdate When true (default false), adds a phase-update mock between
- *   the turns fetch and the processing-write mock. Set true when orchestratedPhase !== currentPhase.
+ *
+ * PROJ-44/ADR-021: the synchronous Analyst call sits BEFORE the phase decision
+ * now, so the analyst_status='processing' write fires BEFORE any phase-update
+ * write (reversed from the pre-PROJ-44 order, where processing was written
+ * right before the Talker call, after the phase decision). Order below:
+ *   interview fetch → state fetch → turns fetch → processing write → [phase update]
+ *
+ * @param opts.includePhaseUpdate When true (default false), adds a phase-update mock
+ *   after the processing-write mock. Set true when orchestratedPhase !== currentPhase.
  */
 function setupSupabaseMocks(opts: {
   interviewRow?: Record<string, unknown>
@@ -198,12 +189,12 @@ function setupSupabaseMocks(opts: {
 
   const mocks: unknown[] = [interviewFetch, stateFetch, turnsFetch]
 
+  // analyst_status='processing' non-blocking write — now BEFORE the phase update.
+  mocks.push(makeProcessingWriteMock())
+
   if (opts.includePhaseUpdate) {
     mocks.push(makePhaseUpdateMock())
   }
-
-  // analyst_status='processing' non-blocking write
-  mocks.push(makeProcessingWriteMock())
 
   if (opts.extraCalls) {
     mocks.push(...opts.extraCalls)
@@ -222,10 +213,11 @@ describe('runInterviewTurn', () => {
     vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: false, reason: null })
     vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'intro' as never, phaseJustEntered: null })
     vi.mocked(checkRoleGuard).mockResolvedValue({ checked: false })
+    vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [] })
   })
 
   // T1: Normal turn — meta.completed === false, createTalkerStream called
-  it('T1: normal turn returns meta.completed=false and calls createTalkerStream', async () => {
+  it('T1: normal turn returns meta.completed=false, runs the synchronous analyst, and calls createTalkerStream', async () => {
     setupSupabaseMocks({})
 
     const result = await runInterviewTurn({
@@ -236,21 +228,33 @@ describe('runInterviewTurn', () => {
 
     expect(result.meta.completed).toBe(false)
     expect(result.meta.reason).toBeNull()
+    expect(runAnalyst).toHaveBeenCalledTimes(1)
+    expect(runAnalyst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ phase: 'intro', stepTracker: [] }),
+        currentUserInput: 'Ich prüfe Rechnungen täglich.',
+        analystStatus: 'idle',
+      })
+    )
     expect(createTalkerStream).toHaveBeenCalled()
     expect(result.stream).toBeDefined()
+    expect(result.meta.analyst).toEqual({ briefing: {}, toolCalls: [], stepTracker: [] })
   })
 
-  // T2: missingSlotsForCoverageCheck computed when phase is 'closing'
-  it('T2: computes missingSlotsForCoverageCheck for closing phase', async () => {
+  // T2: missingSlotsForCoverageCheck computed when phase is 'closing', using the
+  // ANALYST's fresh stepTracker (not the stale state-loaded one — quick-extract is gone).
+  it('T2: computes missingSlotsForCoverageCheck for closing phase from the analyst result', async () => {
     vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'closing' as never, phaseJustEntered: 'closing' as never })
 
     const step = makeStepEntry('Rechnungsprüfung', 'walkthrough')
+    vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [step] })
+
     // The closing probe must already be in history — otherwise shouldInjectClosingProbe
     // fires first and short-circuits the turn before it ever reaches createTalkerStream.
     const priorTurn = { turn_number: 1, user_input: 'Ich glaube das war alles.', agent_response: CLOSING_PROBE_TEXT, created_at: new Date().toISOString() }
     // phase transitions from 'intro' (stateRow default) to 'closing' — include phase update mock
     setupSupabaseMocks({
-      stateRow: makeStateRow('intro', [step]),
+      stateRow: makeStateRow('intro', []),
       turnsData: [priorTurn],
       includePhaseUpdate: true,
     })
@@ -278,7 +282,8 @@ describe('runInterviewTurn', () => {
     vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'explore' as never, phaseJustEntered: null })
 
     const step = makeStepEntry('Monatsabschluss', 'walkthrough')
-    setupSupabaseMocks({ stateRow: makeStateRow('explore', [step]) })
+    vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [step] })
+    setupSupabaseMocks({ stateRow: makeStateRow('explore', []) })
 
     await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -297,35 +302,11 @@ describe('runInterviewTurn', () => {
   })
 
   // T4: Lifecycle complete → meta.completed=true, farewell stream, no talkerStream
-  it('T4: lifecycle complete returns meta.completed=true and farewell stream', async () => {
-    // soft_confirm triggers the KI-12 pre-completion recheck: checkLifecycle is called
-    // a second time after the synchronous analyst pass. No new step found here, so it
-    // returns the same decision both times — completion proceeds as before.
+  it('T4: lifecycle complete returns meta.completed=true and farewell stream (analyst already ran synchronously)', async () => {
     vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'soft_confirm' })
-
-    const updateMock = {
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }
-
-    mockAdminFrom.mockReset()
-    const interviewFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
-    }
-    const stateFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow(), error: null }),
-    }
-    const turnsFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: [], error: null }),
-    }
-    ;[interviewFetch, stateFetch, turnsFetch, makeStepTrackerLoadMock([]), updateMock]
-      .forEach((m) => mockAdminFrom.mockReturnValueOnce(m))
+    setupSupabaseMocks({ extraCalls: [
+      { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }, // completeInterview
+    ] })
 
     const result = await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -335,7 +316,8 @@ describe('runInterviewTurn', () => {
 
     expect(result.meta.completed).toBe(true)
     expect(result.meta.reason).toBe('soft_confirm')
-    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
+    // Exactly one synchronous analyst call for the whole turn — no separate KI-12 recheck anymore.
+    expect(runAnalyst).toHaveBeenCalledTimes(1)
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({ phase: 'closing', isCompletionFarewell: true }),
@@ -344,83 +326,166 @@ describe('runInterviewTurn', () => {
     )
   })
 
-  // T11 (KI-12): soft_confirm fires on stale state, but the synchronous recheck finds a
-  // brand-new step the user just mentioned — completion must be vetoed, normal turn continues.
-  it('T11 (KI-12): soft_confirm is vetoed when the recheck finds a freshly-registered step', async () => {
-    vi.mocked(checkLifecycle)
-      .mockReturnValueOnce({ shouldComplete: true, reason: 'soft_confirm' })
-      .mockReturnValueOnce({ shouldComplete: false, reason: null })
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'clarification' as never, phaseJustEntered: 'clarification' as never })
+  // ─── Fail-Safe (ADR-021 D4) ─────────────────────────────────────────────────
 
-    const newlyRegisteredStep = makeStepEntry('Mahnwesen', 'exploring')
+  describe('Fail-Safe: synchronous analyst retry + soft_confirm veto', () => {
+    it('retries once on transient failure, then uses the fresh (retry) result', async () => {
+      const freshStep = makeStepEntry('Neu entdeckter Prozess', 'exploring')
+      vi.mocked(runAnalyst)
+        .mockRejectedValueOnce(new Error('transient network blip'))
+        .mockResolvedValueOnce({ briefing: { next_focus: 'frisch' }, toolCalls: [], stepTracker: [freshStep] })
+      setupSupabaseMocks({})
 
-    mockAdminFrom.mockReset()
-    const interviewFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
-    }
-    const stateFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('closing', []), error: null }),
-    }
-    const turnsFetch = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: [], error: null }),
-    }
-    const phaseUpdate = makePhaseUpdateMock()
-    const processingWrite = makeProcessingWriteMock()
-    ;[interviewFetch, stateFetch, turnsFetch, makeStepTrackerLoadMock([newlyRegisteredStep]), phaseUpdate, processingWrite]
-      .forEach((m) => mockAdminFrom.mockReturnValueOnce(m))
+      const result = await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Ein Satz.',
+        timerMinutes: 5,
+      })
 
-    const result = await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Ach, der monatliche Mahnlauf — den hatten wir noch nicht erwähnt.',
-      timerMinutes: 15,
+      expect(runAnalyst).toHaveBeenCalledTimes(2)
+      expect(result.meta.analyst).toEqual({ briefing: { next_focus: 'frisch' }, toolCalls: [], stepTracker: [freshStep] })
+      expect(createTalkerStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          briefing: expect.objectContaining({ next_focus: 'frisch' }),
+          context: expect.objectContaining({ stepTracker: [freshStep] }),
+        })
+      )
     })
 
-    expect(result.meta.completed).toBe(false)
-    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
-    expect(createTalkerStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({
-          stepTracker: expect.arrayContaining([
-            expect.objectContaining({ title: 'Mahnwesen' }),
-          ]),
-        }),
+    it('vetoes a soft_confirm completion when the analyst fails on every retry — turn proceeds normally instead', async () => {
+      vi.mocked(runAnalyst).mockRejectedValue(new Error('persistent failure'))
+      vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'soft_confirm' })
+      setupSupabaseMocks({})
+
+      const result = await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Das war eigentlich alles.',
+        timerMinutes: 15,
       })
-    )
+
+      // 1 initial attempt + 1 retry = 2 calls, both fail.
+      expect(runAnalyst).toHaveBeenCalledTimes(2)
+      expect(result.meta.completed).toBe(false)
+      expect(result.meta.analyst).toBeNull()
+      expect(createTalkerStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.not.objectContaining({ isCompletionFarewell: true }),
+        })
+      )
+      expect(createTalkerStream).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
+        })
+      )
+    })
+
+    it('does NOT veto a hard_stop completion when the analyst fails — time-out is unconditional', async () => {
+      vi.mocked(runAnalyst).mockRejectedValue(new Error('persistent failure'))
+      vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'hard_stop' })
+      setupSupabaseMocks({ extraCalls: [
+        { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) }, // completeInterview
+      ] })
+
+      const result = await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Die Zeit ist um.',
+        timerMinutes: 30,
+      })
+
+      expect(result.meta.completed).toBe(true)
+      expect(result.meta.reason).toBe('hard_stop')
+      expect(createTalkerStream).toHaveBeenCalledWith(
+        expect.objectContaining({ context: expect.objectContaining({ isCompletionFarewell: true }) })
+      )
+    })
+
+    it('failure-window: a previously failed analyst pass is recovered on the next turn via previousUserInput', async () => {
+      const turn1 = { turn_number: 1, user_input: 'Ich prüfe Rechnungen.', agent_response: 'Wie oft?', created_at: new Date().toISOString() }
+      const turn2 = { turn_number: 2, user_input: 'Ungefähr 100 mal.', agent_response: 'Danke.', created_at: new Date().toISOString() }
+
+      setupSupabaseMocks({
+        interviewRow: makeInterviewRow({ analyst_status: 'failed' }),
+        turnsData: [turn1, turn2],
+      })
+
+      await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Und es dauert 5 Minuten.',
+        timerMinutes: 10,
+      })
+
+      expect(runAnalyst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          analystStatus: 'failed',
+          previousUserInput: turn2.user_input,
+          currentUserInput: 'Und es dauert 5 Minuten.',
+        })
+      )
+    })
+
+    it('does NOT set up the failure-window when fewer than 2 prior turns exist', async () => {
+      const turn1 = { turn_number: 1, user_input: 'Ich prüfe Rechnungen.', agent_response: 'Wie oft?', created_at: new Date().toISOString() }
+
+      setupSupabaseMocks({
+        interviewRow: makeInterviewRow({ analyst_status: 'failed' }),
+        turnsData: [turn1],
+      })
+
+      await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Ungefähr 100 mal.',
+        timerMinutes: 5,
+      })
+
+      expect(runAnalyst).toHaveBeenCalledWith(
+        expect.objectContaining({ previousUserInput: undefined })
+      )
+    })
   })
 
-  // T13 (#8): the synchronous pre-completion recheck itself fails (network blip, rate
-  // limit) — must veto completion rather than trust the stale soft_confirm decision,
-  // since that decision was made on state that never saw this turn's userInput.
-  it('T13 (#8): recheck failure vetoes completion — turn proceeds normally, no farewell stream', async () => {
-    vi.mocked(checkLifecycle).mockReturnValue({ shouldComplete: true, reason: 'soft_confirm' })
-    vi.mocked(runAnalystOnline).mockRejectedValueOnce(new Error('Netzwerkfehler'))
+  // ─── BUG-1-Staleness / BUG-6 regression (PROJ-44/ADR-021 shared root cause) ─
 
-    setupSupabaseMocks({})
+  describe('BUG-1-Staleness / BUG-6 regression — orchestrator sees THIS turn, not the previous one', () => {
+    it('BUG-1: decideNextPhaseWithMeta receives the freshly-registered step from THIS turn\'s analyst pass, not the stale (empty) pre-turn tracker', async () => {
+      // Phase stays 'explore' — isolates the stepTracker-freshness assertion from
+      // the (separately tested) phase-transition/DB-update mechanics.
+      vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'explore' as never, phaseJustEntered: null })
+      const freshlyDiscoveredStep = makeStepEntry('Gerade entdeckter Prozess', 'exploring')
+      vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [freshlyDiscoveredStep] })
+      // Pre-turn state has NO steps at all — if the orchestrator saw this stale
+      // tracker instead of the analyst's fresh one, the newly-discovered step
+      // would be invisible to the phase decision this turn (the original bug).
+      setupSupabaseMocks({ stateRow: makeStateRow('explore', []) })
 
-    const result = await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Das war eigentlich alles.',
-      timerMinutes: 15,
+      await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Übrigens mache ich auch noch den Mahnlauf.',
+        timerMinutes: 10,
+      })
+
+      expect(decideNextPhaseWithMeta).toHaveBeenCalledWith(
+        expect.objectContaining({ stepTracker: [freshlyDiscoveredStep] }),
+        expect.anything(),
+      )
     })
 
-    expect(runAnalystOnline).toHaveBeenCalledTimes(1)
-    expect(result.meta.completed).toBe(false)
-    expect(createTalkerStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.not.objectContaining({ isCompletionFarewell: true }),
+    it('BUG-6: checkLifecycle receives THIS turn\'s fresh analyst briefing, not interview.next_briefing from before this turn ran', async () => {
+      const staleBriefing = { next_focus: 'veraltet', suggested_question: 'Alte Frage?' }
+      const freshBriefing = { next_focus: 'aktuell', suggested_question: 'Neue Frage?', clarification_cards: [] }
+      vi.mocked(runAnalyst).mockResolvedValue({ briefing: freshBriefing, toolCalls: [], stepTracker: [] })
+      setupSupabaseMocks({ interviewRow: makeInterviewRow({ next_briefing: staleBriefing }) })
+
+      await runInterviewTurn({
+        interviewId: INTERVIEW_ID,
+        userInput: 'Ein Satz.',
+        timerMinutes: 5,
       })
-    )
-    expect(createTalkerStream).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
-      })
-    )
+
+      // checkLifecycle must have seen the FRESH briefing this turn — never the
+      // stale interview.next_briefing snapshot from before the analyst ran.
+      expect(checkLifecycle).toHaveBeenCalledWith(expect.anything(), freshBriefing)
+      expect(checkLifecycle).not.toHaveBeenCalledWith(expect.anything(), staleBriefing)
+    })
   })
 
   // T5: Closing-probe injection → stream returns CLOSING_PROBE_TEXT, no createTalkerStream
@@ -457,6 +522,8 @@ describe('runInterviewTurn', () => {
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: [], error: null }),
     })
+    // analyst_status='processing' write (now BEFORE the phase update)
+    mockAdminFrom.mockReturnValueOnce(makeProcessingWriteMock())
     // Phase update (explore → closing)
     mockAdminFrom.mockReturnValueOnce({
       update: vi.fn().mockReturnThis(),
@@ -476,11 +543,21 @@ describe('runInterviewTurn', () => {
     const text = await result.stream.text
     expect(text).toBe(CLOSING_PROBE_TEXT)
     expect(createTalkerStream).not.toHaveBeenCalled()
+    // finalize is a no-op for this deterministic, non-Talker turn — must not throw.
+    await expect(result.finalize()).resolves.toBeUndefined()
   })
 
-  // T6: background() calls runAnalystOnline in standard case
-  it('T6: background() calls runAnalystOnline in standard case', async () => {
-    setupSupabaseMocks({})
+  // ─── finalize() (ADR-021 D5 — replaces background()) ───────────────────────
+
+  it('finalize() is exposed and resolves for a normal Talker turn (extractAndEmbed/onCompleted wiring is exercised via mocked ports)', async () => {
+    setupSupabaseMocks({ extraCalls: [
+      // finalize()'s store.loadInterview re-read (status check for onCompleted gating)
+      {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
+      },
+    ] })
 
     const result = await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -488,126 +565,15 @@ describe('runInterviewTurn', () => {
       timerMinutes: 5,
     })
 
-    // Need fresh step_tracker reload — mock the background DB call
-    mockAdminFrom.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
-    })
-
-    await result.background()
-
-    expect(runAnalystOnline).toHaveBeenCalledWith(
-      expect.objectContaining({
-        currentUserInput: 'Ich prüfe Rechnungen.',
-      })
-    )
-  })
-
-  // T7: background() calls runAnalystCatchup when phaseJustEntered === 'closing'
-  it('T7: background() calls runAnalystCatchup when phaseJustEntered is closing', async () => {
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'closing' as never, phaseJustEntered: 'closing' as never })
-
-    // The closing probe must already be in history — otherwise shouldInjectClosingProbe
-    // fires first and short-circuits the turn before background() ever gets built.
-    const priorTurn = { turn_number: 1, user_input: 'Ich glaube das war alles.', agent_response: CLOSING_PROBE_TEXT, created_at: new Date().toISOString() }
-    setupSupabaseMocks({ turnsData: [priorTurn], includePhaseUpdate: true })
-
-    const result = await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Das war der letzte Schritt.',
-      timerMinutes: 20,
-    })
-
-    // Mock the two DB reloads in background (online + catchup)
-    mockAdminFrom
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
-      })
-
-    await result.background()
-
-    expect(runAnalystOnline).toHaveBeenCalled()
-    expect(runAnalystCatchup).toHaveBeenCalled()
-  })
-
-  // T8: background() calls runAnalystFailureRetry when analyst_status='failed' and existingTurns >= 2
-  it('T8: background() calls runAnalystFailureRetry when analyst_status=failed and 2+ turns exist', async () => {
-    // Return 'intro' to match the default stateRow phase — no phase-update DB call
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValue({ phase: 'intro' as never, phaseJustEntered: null })
-
-    const turn1 = { turn_number: 1, user_input: 'Ich prüfe Rechnungen.', agent_response: 'Wie oft?', created_at: new Date().toISOString() }
-    const turn2 = { turn_number: 2, user_input: 'Ungefähr 100 mal.', agent_response: 'Danke.', created_at: new Date().toISOString() }
-
-    setupSupabaseMocks({
-      interviewRow: makeInterviewRow({ analyst_status: 'failed' }),
-      turnsData: [turn1, turn2],
-    })
-
-    const result = await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Und es dauert 5 Minuten.',
-      timerMinutes: 10,
-    })
-
-    // Mock the DB reload in background
-    mockAdminFrom.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { step_tracker: [] }, error: null }),
-    })
-
-    await result.background()
-
-    expect(runAnalystFailureRetry).toHaveBeenCalledWith(
-      expect.objectContaining({
-        previousUserInput: turn2.user_input,
-        currentUserInput: 'Und es dauert 5 Minuten.',
-      })
-    )
-    expect(runAnalystOnline).not.toHaveBeenCalled()
-  })
-
-  // T9: Quick-Extract only called when stepTracker is non-empty
-  it('T9: runQuickExtract not called when stepTracker is empty', async () => {
-    // Use 'intro' as stateRow phase so no phase-update fires (mock returns 'intro')
-    setupSupabaseMocks({ stateRow: makeStateRow('intro', []) })
-
-    await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Ich prüfe Rechnungen.',
-      timerMinutes: 3,
-    })
-
-    expect(runQuickExtract).not.toHaveBeenCalled()
-  })
-
-  it('T9b: runQuickExtract called when stepTracker has entries', async () => {
-    const step = makeStepEntry()
-    // Mock decideNextPhaseWithMeta to return explore (matching state) — no phase-update
-    vi.mocked(decideNextPhaseWithMeta).mockReturnValueOnce({ phase: 'explore' as never, phaseJustEntered: null })
-    setupSupabaseMocks({ stateRow: makeStateRow('explore', [step]) })
-
-    await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Ich prüfe Rechnungen täglich.',
-      timerMinutes: 8,
-    })
-
-    expect(runQuickExtract).toHaveBeenCalled()
+    // onFinish is never invoked by the mocked createTalkerStream, so no turnId was
+    // captured — finalize() must still resolve cleanly (no extractAndEmbed attempt).
+    await expect(result.finalize()).resolves.toBeUndefined()
   })
 
   // ─── Role Guard (PROJ-42 / KI-24) ───────────────────────────────────────────
 
   describe('Role Guard early-return', () => {
-    it('T14: off_topic classification ends the turn — no quick-extract, no Talker call, no background analyst', async () => {
+    it('T14: off_topic classification ends the turn — no synchronous analyst call, no Talker call', async () => {
       vi.mocked(checkRoleGuard).mockResolvedValue({ checked: true, classification: 'off_topic' })
 
       const turnInsert = {
@@ -641,11 +607,10 @@ describe('runInterviewTurn', () => {
       })
 
       expect(result.meta.completed).toBe(false)
+      expect(result.meta.analyst).toBeNull()
       expect(createTalkerStream).not.toHaveBeenCalled()
-      expect(runQuickExtract).not.toHaveBeenCalled()
-      const bg = await result.background()
-      expect(bg).toBeNull()
-      expect(runAnalystOnline).not.toHaveBeenCalled()
+      expect(runAnalyst).not.toHaveBeenCalled()
+      await expect(result.finalize()).resolves.toBeUndefined()
     })
 
     it('T15: meta classification (or no prefilter hit) runs the turn normally', async () => {
@@ -659,6 +624,7 @@ describe('runInterviewTurn', () => {
       })
 
       expect(createTalkerStream).toHaveBeenCalled()
+      expect(runAnalyst).toHaveBeenCalledTimes(1)
       expect(result.meta.completed).toBe(false)
     })
   })

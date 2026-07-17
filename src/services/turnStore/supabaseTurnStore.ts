@@ -206,15 +206,6 @@ class SupabaseBackend implements InterviewStoreBackend {
     if (fields.openerText !== undefined) update.opener_text = fields.openerText
     await this.db.from('interview_state').update(update).eq('interview_id', interviewId)
   }
-
-  async loadStepTracker(interviewId: string): Promise<unknown[]> {
-    const { data } = await this.db
-      .from('interview_state')
-      .select('step_tracker')
-      .eq('interview_id', interviewId)
-      .maybeSingle()
-    return (data?.step_tracker as unknown[] | null) ?? []
-  }
 }
 
 /** TurnStore only (openTurn) — for the LLM-pass callers. */

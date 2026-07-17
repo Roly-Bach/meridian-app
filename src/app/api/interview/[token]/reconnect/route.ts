@@ -1,21 +1,32 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-
-const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-import { createInterviewStream } from '@/services/interviewAgent'
-import type { Phase, StepEntry, RawExtraction } from '@/services/interviewSemantic'
-import type { TurnMessage } from '@/services/interviewTypes'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
 import type { Database } from '@/lib/database.types'
 
+const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 type InterviewRow = Database['public']['Tables']['interviews']['Row']
-type StateRow = Database['public']['Tables']['interview_state']['Row']
-type TurnRow = Database['public']['Tables']['turns']['Row']
 
 // ─── POST /api/interview/[token]/reconnect ────────────────────────────────────
 // Public endpoint — authenticated via token only.
-// Called when a returning employee opens an active interview.
-// Streams an adaptive greeting. NOT saved as a turn in the DB.
+// Called when a returning employee opens an active interview. NOT saved as a turn.
+//
+// PROJ-44/ADR-021 D6: the LLM path is deleted without replacement (was already
+// unreachable in practice — KI-22, see below). Always returns a static
+// re-engagement line — no LLM call, no interview_state read needed.
+//
+// KI-22 (2026-07-11): turns are persisted as atomic (user_input, agent_response)
+// pairs (store.insertTurn writes both together, only after the agent has
+// responded), so the agent is always mid-question on reconnect — there is no
+// history shape where the LLM path would ever have fired a different reply.
+// Previously this always went through the LLM anyway with a synthetic "Ich bin
+// wieder da, können wir weitermachen?" nudge — the model's natural response was
+// to re-pose the still-open question, which rendered as a near-verbatim
+// duplicate of the already-visible last chat bubble (reproduced live, manual UI
+// test 2026-07-07 — "Du hast vorhin 180 Rechnungen..." shown twice in a row).
+// The pending question is already fully visible in the rendered history, so no
+// LLM call is needed (also saves a cost+latency hit on every page reload, since
+// the frontend fires /reconnect on every mount).
 
 export async function POST(
   req: Request,
@@ -29,11 +40,11 @@ export async function POST(
 
   const { data: rawInterview, error: fetchError } = await supabase
     .from('interviews')
-    .select('id, workspace_id, employee_name, employee_role, department, focus_topics, status, token_expires_at, max_duration_minutes')
+    .select('id, status, token_expires_at')
     .eq('access_token', token)
     .single()
 
-  const interview = rawInterview as InterviewRow | null
+  const interview = rawInterview as Pick<InterviewRow, 'id' | 'status' | 'token_expires_at'> | null
 
   if (fetchError || !interview) {
     return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
@@ -55,84 +66,22 @@ export async function POST(
   const rateLimitResponse = await checkTokenEndpointLimits(token, ip)
   if (rateLimitResponse) return rateLimitResponse
 
-  const [{ data: rawState }, { data: rawTurns, error: turnsError }] = await Promise.all([
-    supabase
-      .from('interview_state')
-      .select('phase, timer_minutes, topics_covered, topics_open, extractions_log, step_tracker')
-      .eq('interview_id', interview.id)
-      .maybeSingle(),
-    supabase
-      .from('turns')
-      .select('turn_number, user_input, agent_response, created_at')
-      .eq('interview_id', interview.id)
-      .order('turn_number', { ascending: true }),
-  ])
+  const { data: turnsData, error: turnsError } = await supabase
+    .from('turns')
+    .select('turn_number')
+    .eq('interview_id', interview.id)
+    .limit(1)
 
   if (turnsError) {
     return NextResponse.json({ error: 'Interner Fehler beim Laden des Gesprächs.' }, { status: 500 })
   }
 
-  const state = rawState as (Partial<StateRow> & { step_tracker?: unknown }) | null
-  const existingTurns = (rawTurns as TurnRow[]) ?? []
-  const stepTracker: StepEntry[] = (state?.step_tracker as StepEntry[] | null) ?? []
-
-  // Voraussetzung für die role==='assistant'-Prämisse des KI-22-Fixes weiter unten:
-  // erst ab hier ist garantiert existingTurns.length > 0.
-  if (existingTurns.length === 0) {
+  if (!turnsData || turnsData.length === 0) {
     return NextResponse.json(
       { error: 'Kein bisheriges Gespräch — bitte /start für den ersten Aufruf verwenden.' },
       { status: 409 }
     )
   }
 
-  let timerMinutes = 0
-  if (existingTurns.length > 0) {
-    const firstTurnTime = new Date(existingTurns[0].created_at).getTime()
-    timerMinutes = Math.floor((Date.now() - firstTurnTime) / 60000)
-  }
-
-  const history: TurnMessage[] = existingTurns.flatMap((t) => [
-    { role: 'user' as const, content: t.user_input },
-    { role: 'assistant' as const, content: t.agent_response },
-  ])
-
-  // KI-22 (2026-07-11): turns are persisted as atomic (user_input, agent_response) pairs
-  // (store.insertTurn writes both together, only after the agent has responded), so
-  // `history`'s last entry here is always 'assistant' — the agent is still waiting on a
-  // reply to its own last question. (Relies on the 409-guard above: existingTurns.length > 0
-  // is what makes `history` non-empty here.) Previously this always went through the LLM anyway
-  // with a synthetic "Ich bin wieder da, können wir weitermachen?" nudge — the model's
-  // natural response was to re-pose the still-open question, which rendered as a
-  // near-verbatim duplicate of the already-visible last chat bubble (reproduced live,
-  // manual UI test 2026-07-07 — "Du hast vorhin 180 Rechnungen..." shown twice in a row).
-  // The pending question is already fully visible in the rendered history, so no LLM
-  // call is needed for the common case: skip it entirely (also saves a cost+latency hit
-  // on every page reload, since the frontend fires /reconnect on every mount).
-  const lastMessage = history[history.length - 1]
-  if (lastMessage?.role === 'assistant') {
-    return new Response('Willkommen zurück — lass uns da weitermachen, wo wir aufgehört haben.')
-  }
-
-  const stream = await createInterviewStream({
-    context: {
-      interviewId: interview.id,
-      workspaceId: interview.workspace_id,
-      employeeName: interview.employee_name,
-      employeeRole: interview.employee_role,
-      department: interview.department,
-      focusTopics: interview.focus_topics,
-      phase: (state?.phase ?? 'intro') as Phase,
-      timerMinutes,
-      topicsCovered: state?.topics_covered ?? [],
-      topicsOpen: state?.topics_open ?? [],
-      extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
-      maxDurationMinutes: interview.max_duration_minutes ?? 30,
-      stepTracker,
-    },
-    history,
-    isReconnect: true,
-    // Reconnect greeting is not saved as a turn
-  })
-
-  return stream.toTextStreamResponse()
+  return new Response('Willkommen zurück — lass uns da weitermachen, wo wir aufgehört haben.')
 }

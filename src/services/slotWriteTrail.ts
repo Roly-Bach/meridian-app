@@ -1,9 +1,8 @@
 /**
- * Slot-Write-Trail Emitter (ADR-015)
+ * Slot-Write-Trail Emitter (ADR-015, quick removed PROJ-44/ADR-021 D3)
  *
- * Observability for the three slot-write paths in the Dual-Loop engine:
- *   - analyst   : record_slot called from interviewAnalyst
- *   - quick      : record_slot called from interviewQuickExtract
+ * Observability for the slot-write paths in the interview engine:
+ *   - analyst   : record_slot called from interviewAnalyst (online or catchup sub-pass)
  *   - backfill   : deterministic data_sources backfill in interviewAnalyst
  *   - update_walkthrough : per ADR-014, no longer writes slot fields — kept
  *     in the enum for completeness in case a future writer reuses the path
@@ -23,7 +22,7 @@ export interface SlotWriteEvent {
   /** Current turn at the time of the write (1-indexed) */
   turn?: number
   /** Which write path produced this event */
-  source: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'quick' | 'backfill' | 'update_walkthrough'
+  source: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'backfill' | 'update_walkthrough'
   /** Step identifier (slug or UUID) if known — falls back to stepTitle */
   stepId?: string | null
   /** Step title the slot was written to */

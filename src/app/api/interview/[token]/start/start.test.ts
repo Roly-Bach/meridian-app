@@ -12,8 +12,8 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
 }))
 
-vi.mock('@/services/interviewAgent', () => ({
-  createInterviewStream: vi.fn().mockReturnValue({
+vi.mock('@/services/interviewTalker', () => ({
+  createTalkerStream: vi.fn().mockReturnValue({
     toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
   }),
 }))
@@ -24,7 +24,7 @@ vi.mock('@/lib/ratelimit', () => ({
 }))
 
 import { POST } from './route'
-import { createInterviewStream } from '@/services/interviewAgent'
+import { createTalkerStream } from '@/services/interviewTalker'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -173,12 +173,12 @@ describe('POST /api/interview/[token]/start', () => {
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(200)
-    expect(createInterviewStream).toHaveBeenCalledWith(
+    expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({ isStart: true })
     )
   })
 
-  it('passes employee_name, role, and focus_topics to createInterviewStream', async () => {
+  it('passes employee_name, role, and focus_topics to createTalkerStream', async () => {
     const interview = {
       id: 'iv-new',
       workspace_id: 'ws-1',
@@ -198,7 +198,7 @@ describe('POST /api/interview/[token]/start', () => {
 
     await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
 
-    expect(createInterviewStream).toHaveBeenCalledWith(
+    expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
           employeeName: 'Lena Braun',
@@ -229,7 +229,7 @@ describe('POST /api/interview/[token]/start', () => {
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(200)
-    expect(createInterviewStream).toHaveBeenCalledWith(
+    expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
           employeeRole: null,

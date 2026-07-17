@@ -1,17 +1,27 @@
 /**
- * runInterviewTurn — deep module for the interview turn loop (PROJ-33 / ADR-016).
+ * runInterviewTurn — deep module for the interview turn loop (PROJ-33 / ADR-016,
+ * timing flipped by PROJ-44 / ADR-021).
  *
  * Encapsulates the complete per-turn logic:
- *   load → orchestrate → wrap-up-inject | talker-stream + background analyst
+ *   load → role-guard → SYNCHRONOUS analyst → orchestrate → wrap-up-inject | talker-stream
+ *
+ * ADR-021 (Timing-Amendment): the Analyst (interviewAnalyst.ts's runAnalyst) now
+ * runs synchronously, once per turn, BEFORE the phase/completion decision and
+ * before the Talker — not after/parallel to the Talker as ADR-011 D2 had it.
+ * `checkLifecycle`/`decideNextPhaseWithMeta`/`shouldInjectClosingProbe` therefore
+ * read state INCLUDING the current turn, not "end of previous turn". The old
+ * two-stage `soft_confirm` recheck (KI-12) and the pre-Talker Quick-Extract
+ * (interviewQuickExtract.ts) are gone — the single synchronous Analyst pass
+ * subsumes both.
  *
  * The Prod Route and the Eval Runner are thin adapters around this function.
  * Neither `import { after } from 'next/server'` belongs here — `after()` remains
- * the Prod adapter's concern.
+ * the Prod adapter's concern, wrapping the returned `finalize()`.
  *
  * PROJ-34 / ADR-018: persistence is injected via `ports`. `runInterviewTurn`
  * never touches `getSupabaseAdmin()` directly — all loads, the turns-insert and
  * the interview_state/interviews updates go through `ports.store`. The
- * post-completion derivation (`onCompleted`) and per-turn `extractAndEmbed` are
+ * post-response derivation (`onCompleted`) and per-turn `extractAndEmbed` are
  * injected too: Prod = real, Eval = no-op. Default `ports` are the prod
  * Supabase store + real pipeline (lazy-imported so the eval/tsx graph stays clean).
  */
@@ -33,13 +43,7 @@ import {
 } from '@/services/interviewOrchestrator'
 import { checkRoleGuard, buildOffTopicRedirect } from '@/services/roleGuard'
 import { createTalkerStream } from '@/services/interviewTalker'
-import {
-  runAnalystOnline,
-  runAnalystCatchup,
-  runAnalystFailureRetry,
-  type AnalystRunResult,
-} from '@/services/interviewAnalyst'
-import { runQuickExtract } from '@/services/interviewQuickExtract'
+import { runAnalyst, type AnalystRunResult } from '@/services/interviewAnalyst'
 import type { InterviewStore } from '@/services/turnStore/port'
 import type { OnTokenUsage } from '@/services/_telemetry'
 
@@ -57,7 +61,7 @@ export interface RunTurnPorts {
   store: InterviewStore
   /** Per-turn knowledge extraction + embedding. Prod = real; Eval = no-op (returns []). */
   extractAndEmbed: (args: ExtractAndEmbedArgs) => Promise<RawExtraction[]>
-  /** Post-completion derivation pipeline. Prod = real; Eval = no-op. */
+  /** Post-response derivation pipeline. Prod = real; Eval = no-op. */
   onCompleted: (args: { interviewId: string; workspaceId: string }) => Promise<void>
 }
 
@@ -127,12 +131,15 @@ export interface TurnMeta {
   completed: boolean
   reason: 'hard_stop' | 'soft_confirm' | null
   stepTracker: StepEntry[]
+  /** The synchronous Analyst's result this turn — null when it didn't run (off_topic) or failed terminally (ADR-021 D4). */
+  analyst: AnalystRunResult | null
 }
 
 export interface TurnResult {
   stream: TurnStream
-  background: () => Promise<AnalystRunResult | null>
-  /** Only consumed by the eval runner (turnResult.meta.phase/.completed) — chat/route.ts ignores it. */
+  /** Post-response derivation: extractAndEmbed + onCompleted (ADR-021 D5). Prod: `after(() => turn.finalize())`. Void — the Analyst already ran synchronously above; `meta.analyst` carries its result. */
+  finalize: () => Promise<void>
+  /** Only consumed by the eval runner (turnResult.meta.phase/.completed/.analyst) — chat/route.ts ignores it. */
   meta: TurnMeta
 }
 
@@ -153,6 +160,14 @@ function makeStaticStream(text: string): TurnStream {
     text: Promise.resolve(text),
   }
 }
+
+/** No-op finalize for turns that never reached the Talker (nothing to extract/complete). */
+async function noopFinalize(): Promise<void> {}
+
+// Bounded retry for the synchronous Analyst call (ADR-021 D4) — same shape as
+// the roleGuard/talkerGroundingGuard judge-call retries elsewhere in this codebase.
+const ANALYST_RETRIES = 1
+const ANALYST_RETRY_DELAY_MS = 300
 
 // ─── Core function ────────────────────────────────────────────────────────────
 
@@ -177,6 +192,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   let stepTracker: StepEntry[] = ((state?.step_tracker as unknown[] | null) ?? [])
     .map((raw, i) => normalizeStepEntry(raw, i + 1))
   const nextTurnNumber = existingTurns.length + 1
+  const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
 
   // ── Build history including current user turn ───────────────────────────────
   const history: TurnMessage[] = existingTurns.flatMap((t) => [
@@ -191,11 +207,9 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   history.push({ role: 'user', content: userInput })
 
   // ── Role Guard (PROJ-42 / KI-24) ────────────────────────────────────────────
-  // Earliest gate — structurally analogous to the lifecycle.shouldComplete
-  // early-return further below, but runs before it (phase-agnostic, per spec:
-  // fires even during 'closing'). Class off_topic ends the turn here: quick-
-  // extract, the Talker call and the background Analyst planning are all
-  // skipped for this turn, and the stored interview state (phase, stepTracker,
+  // Earliest gate, phase-agnostic — runs before the synchronous Analyst. Class
+  // off_topic ends the turn here: the Analyst never runs for this turn, the
+  // Talker call is skipped, and the stored interview state (phase, stepTracker,
   // topics) is left completely unchanged.
   const talkerModelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const roleGuard = await checkRoleGuard(userInput, history, talkerModelString, traceCtx, input.onTokenUsage)
@@ -209,41 +223,104 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     })
     return {
       stream: makeStaticStream(redirectText),
-      background: async () => null,
+      finalize: noopFinalize,
       meta: {
         phase: currentPhase,
         completed: false,
         reason: null,
         stepTracker,
+        analyst: null,
       },
     }
   }
 
-  // ── Analyst briefing from previous turn ────────────────────────────────────
+  // ── Shared context fields (Analyst + Talker) ────────────────────────────────
+  const contextBase = {
+    interviewId,
+    workspaceId: interview.workspace_id,
+    employeeName: interview.employee_name,
+    employeeRole: interview.employee_role,
+    department: interview.department,
+    focusTopics: interview.focus_topics,
+    maxDurationMinutes: interview.max_duration_minutes ?? 30,
+    topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+    topicsOpen: (state?.topics_open as string[] | null) ?? [],
+    extractionsLog: currentLog,
+  }
+
+  // ── Synchronous Analyst (ADR-021 D1) ────────────────────────────────────────
+  // Runs BEFORE the phase/completion decision and the Talker — mode is selected
+  // from currentPhase (loaded state), not the not-yet-computed phase decision.
   const analystStatus = interview.analyst_status ?? 'idle'
   let analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
 
-  // #18 (fixed 2026-07-14): the Talker persists usedFillerPhrases into next_briefing via
-  // a read-merge-write (interviewTalker.ts:312-336), but AnalystBriefingSchema has no
-  // usedFillerPhrases field, so a produce_briefing tool call never carries it forward.
-  // applyProduceBriefing (turnStore/applyIntent.ts) now merges the value from the
-  // session's loaded snapshot back into the patch, so the Analyst's commit no longer
-  // wipes it. Residual: a same-turn race with the Talker's own write is narrowed (the
-  // snapshot is loaded once per pass) but not fully eliminated — see the TurnSnapshot
-  // comment in turnStore/intents.ts.
+  // Failure-window (ADR-021 D2/D4): the previous turn's synchronous Analyst call
+  // failed terminally — recover it by prepending its raw user input, on top of
+  // whichever mode (online/closing) currentPhase selects this turn.
+  const needsFailureWindow = analystStatus === 'failed' && existingTurns.length >= 2
+  const previousUserInputForFailureWindow = needsFailureWindow
+    ? existingTurns[existingTurns.length - 1]?.user_input
+    : undefined
+
+  void store.setAnalystStatus(interviewId, 'processing').then(() => {}, () => {})
+
+  const resolvedTraceCtx = traceCtx ?? { interviewId, environment: 'prod' as const }
+
+  let analystResult: AnalystRunResult | null = null
+  for (let attempt = 0; attempt <= ANALYST_RETRIES; attempt++) {
+    try {
+      analystResult = await runAnalyst({
+        context: { ...contextBase, phase: currentPhase, timerMinutes, stepTracker },
+        history,
+        currentUserInput: userInput,
+        previousBriefing: analystBriefing,
+        analystStatus,
+        previousUserInput: previousUserInputForFailureWindow,
+        traceCtx: resolvedTraceCtx,
+        store,
+        onTokenUsage: input.onTokenUsage,
+      })
+      break
+    } catch (err) {
+      if (attempt < ANALYST_RETRIES) {
+        await new Promise((r) => setTimeout(r, ANALYST_RETRY_DELAY_MS * (attempt + 1)))
+        continue
+      }
+      // #8/KI-12 successor (ADR-021 D4): terminal failure after all retries —
+      // the turn continues with the PREVIOUS (state-loaded) briefing/tracker
+      // (self-healing degradation, bounded to this one turn). The next turn's
+      // analyst_status='failed' triggers the failure-window recovery above.
+      console.error('[runInterviewTurn] synchronous analyst failed after retries, continuing with stale briefing/tracker:', err)
+    }
+  }
+
+  const analystFailedThisTurn = analystResult === null
+  if (analystResult) {
+    analystBriefing = analystResult.briefing
+    stepTracker = analystResult.stepTracker
+  }
+
+  // #18 (fixed 2026-07-14, structurally closed by PROJ-44): the Talker persists
+  // usedFillerPhrases into next_briefing via a read-merge-write (interviewTalker.ts),
+  // but AnalystBriefingSchema has no usedFillerPhrases field, so a produce_briefing
+  // tool call never carries it forward. applyProduceBriefing (turnStore/applyIntent.ts)
+  // merges the value from the session's loaded snapshot back into the patch, so the
+  // Analyst's commit doesn't wipe it. Read AFTER the synchronous Analyst call so this
+  // reflects what it just committed (the Analyst now always runs before the Talker,
+  // same turn — the race this used to describe no longer exists).
   const persistedFillers = analystBriefing?.usedFillerPhrases ?? []
   const usedFillerPhrases: string[] = persistedFillers.length === 0
     ? SEED_FILLERS
     : persistedFillers
 
-  // ── Build orchestrator context ──────────────────────────────────────────────
+  // ── Build orchestrator context (fresh — includes this turn) ─────────────────
   const orchestratorCtx: OrchestratorContext = {
     phase: currentPhase,
     stepTracker,
-    topicsOpen: (state?.topics_open as string[] | null) ?? [],
-    topicsCovered: (state?.topics_covered as string[] | null) ?? [],
+    topicsOpen: contextBase.topicsOpen,
+    topicsCovered: contextBase.topicsCovered,
     timerMinutes,
-    maxDurationMinutes: interview.max_duration_minutes ?? 30,
+    maxDurationMinutes: contextBase.maxDurationMinutes,
     historyLength: history.length,
     history,
   }
@@ -251,58 +328,41 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   // ── Lifecycle check ─────────────────────────────────────────────────────────
   let lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
 
-  // KI-12: stepTracker/analystBriefing above reflect state as of the END of the
-  // PREVIOUS turn — this turn's userInput has not been seen by any analyst pass
-  // yet (that normally happens in background, after this turn streams). Deciding
-  // soft_confirm on stale state can complete the interview the instant a brand-new
-  // topic is mentioned in the very input that triggered it (e.g. answering the
-  // wrap-up "anything we missed?" question by naming a process never seen before)
-  // — the topic then never gets explored, just whatever this one pass can grab.
-  // Run the online analyst synchronously once before trusting soft_confirm, so a
-  // freshly-registered step can veto premature completion.
-  let preCompletionAnalystResult: AnalystRunResult | null = null
+  // ADR-021 D4: a soft_confirm decision must not complete the interview on a
+  // turn whose synchronous Analyst call failed terminally — that decision would
+  // rest on the PREVIOUS turn's state, never having seen this turn's userInput
+  // at all (the exact class of bug the old KI-12 recheck existed to prevent).
+  // hard_stop is unconditional (time-out) and proceeds regardless.
+  if (analystFailedThisTurn && lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') {
+    console.error('[runInterviewTurn] vetoing soft_confirm completion this turn — synchronous analyst failed (ADR-021 D4 fail-safe)')
+    lifecycle = { shouldComplete: false, reason: null }
+  }
 
-  if (lifecycle.shouldComplete && lifecycle.reason === 'soft_confirm') {
-    try {
-      preCompletionAnalystResult = await runAnalystOnline({
-        context: {
+  // ── Shared post-response finalize (ADR-021 D5 — was background()) ──────────
+  // Only extractAndEmbed + onCompleted remain here; the Analyst ran synchronously
+  // above. Prod wraps this in after(); the eval runner awaits it inline.
+  let capturedTurnId: string | undefined
+
+  const finalize = async (): Promise<void> => {
+    if (capturedTurnId) {
+      try {
+        const newExtractions = await p.extractAndEmbed({
           interviewId,
           workspaceId: interview.workspace_id,
-          employeeName: interview.employee_name,
-          employeeRole: interview.employee_role,
-          department: interview.department,
-          focusTopics: interview.focus_topics,
-          phase: 'closing' as Phase,
-          timerMinutes,
-          topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-          topicsOpen: (state?.topics_open as string[] | null) ?? [],
-          extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
-          maxDurationMinutes: interview.max_duration_minutes ?? 30,
-          stepTracker,
-        },
-        history,
-        currentUserInput: userInput,
-        previousBriefing: analystBriefing,
-        traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
-        store,
-        onTokenUsage: input.onTokenUsage,
-      })
-
-      stepTracker = (await store.loadStepTracker(interviewId) as unknown[])
-        .map((raw, i) => normalizeStepEntry(raw, i + 1))
-      orchestratorCtx.stepTracker = stepTracker
-      analystBriefing = preCompletionAnalystResult.briefing
-      lifecycle = checkLifecycle(orchestratorCtx, analystBriefing)
-    } catch (err) {
-      // #8 (2026-07-14): previously fell through and trusted the stale (pre-recheck)
-      // lifecycle decision — if that decision was shouldComplete=true, a transient
-      // failure here (network blip, rate limit) could complete the interview on
-      // state that never saw this turn's userInput at all (the exact class of bug
-      // this recheck exists to prevent, see KI-12 above). Veto completion instead:
-      // the turn proceeds normally below, and background() runs the Analyst as a
-      // natural retry on the next pass — no interview is silently lost, only delayed.
-      console.error('[runInterviewTurn] pre-completion analyst recheck failed, vetoing completion this turn:', err)
-      lifecycle = { shouldComplete: false, reason: null }
+          turnId: capturedTurnId,
+          userInput,
+        })
+        if (newExtractions.length > 0) {
+          const updatedLog = [...currentLog, ...newExtractions]
+          await store.updateStateAfterTurn(interviewId, { extractionsLog: updatedLog })
+        }
+      } catch (err) {
+        console.error('[runInterviewTurn/finalize] extractAndEmbed failed:', err)
+      }
+    }
+    const ci = await store.loadInterview(interviewId)
+    if (ci?.status === 'completed') {
+      await p.onCompleted({ interviewId, workspaceId: interview.workspace_id })
     }
   }
 
@@ -318,18 +378,9 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
     const farewellStream = await createTalkerStream({
       context: {
-        interviewId,
-        workspaceId: interview.workspace_id,
-        employeeName: interview.employee_name,
-        employeeRole: interview.employee_role,
-        department: interview.department,
-        focusTopics: interview.focus_topics,
+        ...contextBase,
         phase: 'closing' as Phase,
         timerMinutes,
-        topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-        topicsOpen: (state?.topics_open as string[] | null) ?? [],
-        extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
-        maxDurationMinutes: interview.max_duration_minutes ?? 30,
         stepTracker,
         usedFillerPhrases,
         isCompletionFarewell: true,
@@ -338,77 +389,32 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       briefing: farewellBriefing,
       onFinish: async (agentText) => {
         if (!agentText) return
-        await store.insertTurn({
+        const newTurn = await store.insertTurn({
           interviewId,
           turnNumber: nextTurnNumber,
           userInput,
           agentResponse: agentText,
         })
+        if (newTurn?.id) capturedTurnId = newTurn.id
       },
       onTokenUsage: input.onTokenUsage,
     })
 
-    // This closure and the "Background analyst closure" further below (normal path)
-    // independently check the same preCompletionAnalystResult dedup condition —
-    // same logic twice instead of a shared helper (docs/architecture/00-vorgeschlagene-anpassungen.md #15).
-    const background = async (): Promise<AnalystRunResult | null> => {
-      if (preCompletionAnalystResult) {
-        // Already ran synchronously above during the soft_confirm recheck —
-        // running again would double-process this turn's input (duplicate
-        // slot writes / knowledge objects).
-        await p.onCompleted({ interviewId, workspaceId: interview.workspace_id })
-        return preCompletionAnalystResult
-      }
-      try {
-        // B5: hard_stop path — Analyst never ran for this final turn (no soft_confirm
-        // recheck happened), run it now so this turn's slots aren't lost before
-        // process-step creation.
-        const freshTracker = (await store.loadStepTracker(interviewId) as unknown[])
-          .map((raw, i) => normalizeStepEntry(raw, i + 1))
-        await runAnalystOnline({
-          context: {
-            interviewId,
-            workspaceId: interview.workspace_id,
-            employeeName: interview.employee_name,
-            employeeRole: interview.employee_role,
-            department: interview.department,
-            focusTopics: interview.focus_topics,
-            phase: 'closing' as Phase,
-            timerMinutes,
-            topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-            topicsOpen: (state?.topics_open as string[] | null) ?? [],
-            extractionsLog: (state?.extractions_log as RawExtraction[] | null) ?? [],
-            maxDurationMinutes: interview.max_duration_minutes ?? 30,
-            stepTracker: freshTracker,
-          },
-          history,
-          currentUserInput: userInput,
-          previousBriefing: analystBriefing,
-          traceCtx: traceCtx ?? { interviewId, environment: 'prod' as const },
-          store,
-          onTokenUsage: input.onTokenUsage,
-        })
-      } catch (err) {
-        console.error('[runInterviewTurn] post-complete analyst failed:', err)
-      }
-      await p.onCompleted({ interviewId, workspaceId: interview.workspace_id })
-      return null
-    }
-
     return {
       stream: farewellStream,
-      background,
+      finalize,
       meta: {
         phase: 'closing' as Phase,
         completed: true,
         reason: lifecycle.reason as 'hard_stop' | 'soft_confirm',
         stepTracker,
+        analyst: analystResult,
       },
     }
   }
 
   // ── Phase decision ──────────────────────────────────────────────────────────
-  const { phase: nextPhaseDecision, phaseJustEntered } = decideNextPhaseWithMeta(orchestratorCtx, analystBriefing)
+  const { phase: nextPhaseDecision } = decideNextPhaseWithMeta(orchestratorCtx, analystBriefing)
   const orchestratedPhase: Phase = nextPhaseDecision === 'completed' ? 'closing' : (nextPhaseDecision as Phase)
 
   if (orchestratedPhase !== currentPhase) {
@@ -427,31 +433,15 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
     return {
       stream: makeStaticStream(agentText),
-      background: async () => null,
+      finalize: noopFinalize,
       meta: {
         phase: 'closing' as Phase,
         completed: false,
         reason: null,
         stepTracker,
+        analyst: analystResult,
       },
     }
-  }
-
-  // ── Pre-Talker Quick-Extract ────────────────────────────────────────────────
-  let freshStepTracker = stepTracker
-  if (stepTracker.length > 0) {
-    const activeStep = stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
-    const qeTracker = await runQuickExtract({
-      interviewId,
-      workspaceId: interview.workspace_id,
-      userInput,
-      stepTracker,
-      currentTurnNumber: nextTurnNumber,
-      activeStepTitle: activeStep?.title ?? null,
-      store,
-      onTokenUsage: input.onTokenUsage,
-    })
-    if (qeTracker !== null) freshStepTracker = qeTracker.map((raw, i) => normalizeStepEntry(raw as unknown, i + 1))
   }
 
   // ── Missing slots ───────────────────────────────────────────────────────────
@@ -460,32 +450,16 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   // Clarification Cards take over the rest (unchanged PROJ-23 mechanism).
   const missingSlotsForCoverageCheck =
     orchestratedPhase === 'closing'
-      ? computeMissingMandatorySlots(freshStepTracker)
+      ? computeMissingMandatorySlots(stepTracker)
       : undefined
-
-  // ── Analyst status ──────────────────────────────────────────────────────────
-  const needsCatchup = analystStatus === 'failed'
-
-  void store.setAnalystStatus(interviewId, 'processing').then(() => {}, () => {})
-
-  const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
 
   // ── Talker stream ───────────────────────────────────────────────────────────
   const stream = await createTalkerStream({
     context: {
-      interviewId,
-      workspaceId: interview.workspace_id,
-      employeeName: interview.employee_name,
-      employeeRole: interview.employee_role,
-      department: interview.department,
-      focusTopics: interview.focus_topics,
+      ...contextBase,
       phase: orchestratedPhase,
       timerMinutes,
-      topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-      topicsOpen: (state?.topics_open as string[] | null) ?? [],
-      extractionsLog: currentLog,
-      maxDurationMinutes: interview.max_duration_minutes ?? 30,
-      stepTracker: freshStepTracker,
+      stepTracker,
       missingSlotsForCoverageCheck,
       usedFillerPhrases,
     },
@@ -505,121 +479,19 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
       await store.updateStateAfterTurn(interviewId, { timerMinutes, extractionsLog: currentLog })
 
-      const runPostCompletionTasks = async () => {
-        const ci = await store.loadInterview(interviewId)
-        if (ci?.status !== 'completed') return
-        await p.onCompleted({ interviewId, workspaceId: interview.workspace_id })
-      }
-
-      if (newTurn?.id) {
-        p.extractAndEmbed({
-          interviewId,
-          workspaceId: interview.workspace_id,
-          turnId: newTurn.id,
-          userInput,
-        })
-          .then(async (newExtractions) => {
-            if (newExtractions.length > 0) {
-              const updatedLog = [...currentLog, ...newExtractions]
-              await store.updateStateAfterTurn(interviewId, { extractionsLog: updatedLog })
-            }
-            await runPostCompletionTasks()
-          })
-          .catch((err) => console.error('[runInterviewTurn/onFinish] extractAndEmbed failed:', err))
-      } else {
-        await runPostCompletionTasks()
-      }
+      if (newTurn?.id) capturedTurnId = newTurn.id
     },
   })
 
-  // ── Background analyst closure ──────────────────────────────────────────────
-  const background = async (): Promise<AnalystRunResult | null> => {
-    if (preCompletionAnalystResult) {
-      // Already ran synchronously during the soft_confirm recheck above (which
-      // then decided NOT to complete) — don't process this turn's input twice.
-      return preCompletionAnalystResult
-    }
-    try {
-      const analystHistory = history
-
-      const freshTrackerForAnalyst = (await store.loadStepTracker(interviewId) as unknown[])
-        .map((raw, i) => normalizeStepEntry(raw, i + 1))
-
-      const sharedContext = {
-        interviewId,
-        workspaceId: interview.workspace_id,
-        employeeName: interview.employee_name,
-        employeeRole: interview.employee_role,
-        department: interview.department,
-        focusTopics: interview.focus_topics,
-        phase: orchestratedPhase,
-        timerMinutes,
-        topicsCovered: (state?.topics_covered as string[] | null) ?? [],
-        topicsOpen: (state?.topics_open as string[] | null) ?? [],
-        extractionsLog: currentLog,
-        maxDurationMinutes: interview.max_duration_minutes ?? 30,
-        stepTracker: freshTrackerForAnalyst,
-      }
-
-      const resolvedTraceCtx = traceCtx ?? { interviewId, environment: 'prod' as const }
-
-      if (needsCatchup && existingTurns.length >= 2) {
-        const prevUserInput = existingTurns[existingTurns.length - 1]?.user_input ?? ''
-        const result = await runAnalystFailureRetry({
-          context: sharedContext,
-          history: analystHistory,
-          previousUserInput: prevUserInput,
-          currentUserInput: userInput,
-          previousBriefing: analystBriefing,
-          traceCtx: resolvedTraceCtx,
-          store,
-          onTokenUsage: input.onTokenUsage,
-        })
-        return result
-      }
-
-      const onlineResult = await runAnalystOnline({
-        context: sharedContext,
-        history: analystHistory,
-        currentUserInput: userInput,
-        previousBriefing: analystBriefing,
-        traceCtx: resolvedTraceCtx,
-        store,
-        onTokenUsage: input.onTokenUsage,
-      })
-
-      // PROJ-42: coverage_check/wrap_up collapsed into 'closing' — catchup runs
-      // once on entry into Closing (same trigger point as before, new name).
-      const shouldRunCatchup = phaseJustEntered === 'closing'
-      if (shouldRunCatchup) {
-        const postOnlineTracker = (await store.loadStepTracker(interviewId) as unknown[])
-          .map((raw, i) => normalizeStepEntry(raw, i + 1))
-
-        await runAnalystCatchup({
-          context: { ...sharedContext, stepTracker: postOnlineTracker },
-          history: analystHistory,
-          currentUserInput: userInput,
-          traceCtx: resolvedTraceCtx,
-          store,
-          onTokenUsage: input.onTokenUsage,
-        })
-      }
-
-      return onlineResult
-    } catch (err) {
-      console.error('[runInterviewTurn] background analyst error:', err)
-      return null
-    }
-  }
-
   return {
     stream,
-    background,
+    finalize,
     meta: {
       phase: orchestratedPhase,
       completed: false,
       reason: null,
-      stepTracker: freshStepTracker,
+      stepTracker,
+      analyst: analystResult,
     },
   }
 }

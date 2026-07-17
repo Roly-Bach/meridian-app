@@ -6,6 +6,11 @@ type Props = {
 
 export function MessageBubble({ role, content, isStreaming }: Props) {
   const isUser = role === 'user'
+  // PROJ-44/ADR-021: the synchronous Analyst now runs before the Talker, so
+  // time-to-first-token rises on purpose (bewusster Trade-off — Korrektheit vor
+  // Geschwindigkeit). Without a visible cue, an empty streaming bubble reads as
+  // a silent hang rather than a deliberate analysis step.
+  const isAnalyzing = isStreaming && content.length === 0
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       <div
@@ -15,9 +20,15 @@ export function MessageBubble({ role, content, isStreaming }: Props) {
             : 'bg-white border border-[#E5E5E5] text-[#111111]'
         }`}
       >
-        {content}
-        {isStreaming && (
-          <span className="inline-block w-1.5 h-4 ml-0.5 align-middle bg-current opacity-60 animate-pulse rounded-sm" />
+        {isAnalyzing ? (
+          <span className="italic text-[#767676]">Analysiere…</span>
+        ) : (
+          <>
+            {content}
+            {isStreaming && (
+              <span className="inline-block w-1.5 h-4 ml-0.5 align-middle bg-current opacity-60 animate-pulse rounded-sm" />
+            )}
+          </>
         )}
       </div>
     </div>

@@ -92,7 +92,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
 
   it('priority block leaves the persisted value untouched', async () => {
     const session = await handle.store.openTurn(IV, WS)
-    // frequency was written by analyst_online (priority 3); quick (priority 2) must not overwrite.
+    // frequency was written by analyst_online (priority 3); backfill (priority 1) must not overwrite.
     const res = session.stage({
       kind: 'record_slot',
       stepId: 'S001',
@@ -101,7 +101,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
       value: 999,
       isNichtBefundMode: false,
       quote: 'x',
-      writeSource: 'quick',
+      writeSource: 'backfill',
     })
     expect(res.status).toBe('blocked')
     await session.commit()

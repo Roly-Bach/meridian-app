@@ -79,7 +79,7 @@ export interface ScoreSet {
 }
 
 export interface TokenUsageRecord {
-  component: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'talker' | 'quick_extract' | 'grounding_guard' | 'tester' | 'judge_dialog_naturalness' | 'judge_slot_depth' | 'judge_talker_grounding'
+  component: 'analyst' | 'analyst_online' | 'analyst_catchup' | 'talker' | 'grounding_guard' | 'tester' | 'judge_dialog_naturalness' | 'judge_slot_depth' | 'judge_talker_grounding'
   model: string
   inputTokens: number
   cacheReadTokens?: number

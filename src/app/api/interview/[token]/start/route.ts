@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-import { createInterviewStream } from '@/services/interviewAgent'
+import { createTalkerStream } from '@/services/interviewTalker'
 import type { Phase, StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { TurnMessage } from '@/services/interviewTypes'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
@@ -82,7 +82,11 @@ export async function POST(
 
   const history: TurnMessage[] = []
 
-  const stream = await createInterviewStream({
+  // PROJ-44/ADR-021 D6: createTalkerStream (toollos — the Talker never calls
+  // tools, ADR-011 D3) replaces the deleted createInterviewStream/interviewAgent.ts
+  // legacy path. Cold-start greeting extracts nothing; the grounding guard is a
+  // no-op on empty history (checkGroundingViolation short-circuits).
+  const stream = await createTalkerStream({
     context: {
       interviewId: interview.id,
       workspaceId: interview.workspace_id,

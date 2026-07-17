@@ -25,8 +25,8 @@ const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 //   - Rate limiting
 //   - created → active activation
 //   - timerMinutes calculation from first turn timestamp
-//   - Delegate full turn logic to runInterviewTurn
-//   - Schedule background analyst via after()
+//   - Delegate full turn logic to runInterviewTurn (Analyst now runs synchronously inside it — PROJ-44/ADR-021)
+//   - Schedule post-response finalize (extractAndEmbed + onCompleted) via after()
 //   - Return stream response
 
 export async function POST(
@@ -119,7 +119,7 @@ export async function POST(
     traceCtx: { interviewId: interview.id, environment: 'prod' },
   })
 
-  after(() => turn.background())
+  after(() => turn.finalize())
 
   return turn.stream.toTextStreamResponse()
 }

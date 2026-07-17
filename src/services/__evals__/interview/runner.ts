@@ -847,16 +847,19 @@ async function runInterview(
 
     const agentText = await turnResult.stream.text
 
-    // Await background analyst to capture tool calls for scoring.
-    const analystResult = await turnResult.background().catch(err => {
-      console.error('[runner] background analyst failed:', err)
-      return null
-    })
-    const analystToolCalls: AnalystToolCallRecord[] = analystResult?.toolCalls ?? []
+    // PROJ-44/ADR-021: the Analyst ran synchronously inside runInterviewTurn —
+    // its result (tool calls for scoring) is already on turnResult.meta.analyst,
+    // no separate call needed. finalize() (extractAndEmbed + onCompleted) still
+    // needs to run — mirrors the prod route's after(() => turn.finalize()).
+    const analystToolCalls: AnalystToolCallRecord[] = turnResult.meta.analyst?.toolCalls ?? []
 
     if (analystToolCalls.length > 0) {
       console.log(`  [analyst tools] ${analystToolCalls.map(tc => tc.toolName).join(', ')}`)
     }
+
+    await turnResult.finalize().catch(err => {
+      console.error('[runner] finalize failed:', err)
+    })
 
     const turnNumber = dbHistory.length / 2 + 1
 

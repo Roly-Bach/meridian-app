@@ -1,14 +1,14 @@
 /**
  * PROJ-40 (Kriterium B): cost tracking moved out of runner.ts so it's unit-testable
  * without spinning up the full eval runner. Three buckets — interview engine (the
- * agent under test: analyst/talker/quick_extract/grounding_guard), test engine (the
+ * agent under test: analyst/talker/grounding_guard), test engine (the
  * persona simulator — `tester`), eval engine (judges) — so a cheap interview model's
  * savings aren't hidden inside a fixed test/eval overhead.
  */
 import type { TokenUsageRecord, CostSummary, ComponentCostSummary } from './types'
 
 export const INTERVIEW_ENGINE_COMPONENTS = new Set([
-  'analyst', 'analyst_online', 'analyst_catchup', 'talker', 'quick_extract', 'grounding_guard',
+  'analyst', 'analyst_online', 'analyst_catchup', 'talker', 'grounding_guard',
 ])
 
 export const TEST_ENGINE_COMPONENTS = new Set(['tester'])

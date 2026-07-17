@@ -1,10 +1,10 @@
 /**
- * Slot-Writer Priority Hierarchy (ADR-016)
+ * Slot-Writer Priority Hierarchy (ADR-016, quick removed PROJ-44/ADR-021 D3)
  *
- * Three async paths can write the same slot concurrently:
- *   analyst_catchup  — history scan on phase transition (highest authority: wide context)
- *   analyst_online   — current-turn extraction (strong authority: fresh evidence)
- *   quick            — pre-Talker sync extract (moderate: narrow 1-turn window)
+ * Two synchronous sub-passes (interviewAnalyst.ts's runAnalyst) can write the
+ * same slot within one turn:
+ *   analyst_catchup  — Backfill sub-pass, full-history scan (highest authority: wide context)
+ *   analyst_online   — Online sub-pass, current-turn extraction (strong authority: fresh evidence)
  *   backfill         — deterministic data_sources heuristic (lowest: no LLM evidence)
  *   analyst          — legacy label, treated same as analyst_online
  *
@@ -13,13 +13,12 @@
  * correction within the same path level).
  */
 
-export type WriteSource = 'analyst_catchup' | 'analyst_online' | 'analyst' | 'quick' | 'backfill'
+export type WriteSource = 'analyst_catchup' | 'analyst_online' | 'analyst' | 'backfill'
 
 const PRIORITY: Record<WriteSource, number> = {
   analyst_catchup: 4,
   analyst_online: 3,
   analyst: 3,
-  quick: 2,
   backfill: 1,
 }
 

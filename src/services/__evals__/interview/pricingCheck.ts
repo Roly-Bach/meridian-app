@@ -22,7 +22,6 @@ function resolveComponentModels(): Map<string, string[]> {
   const interviewModel = process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const talkerModel = process.env.INTERVIEW_TALKER_MODEL ?? interviewModel
   const analystModel = process.env.INTERVIEW_ANALYST_MODEL ?? interviewModel
-  const quickExtractModel = process.env.INTERVIEW_QUICK_EXTRACT_MODEL ?? interviewModel
   const testerModel = process.env.TESTER_MODEL ?? 'google/gemini-3.1-flash-lite'
   // Guard + judges are cross-vendor by design (never grade the model under test) —
   // resolveGuardJudgeModel/getJudgeModel mirror the exact runtime resolution so this
@@ -35,7 +34,6 @@ function resolveComponentModels(): Map<string, string[]> {
     byModel.set(model, [...(byModel.get(model) ?? []), component])
   }
   add(talkerModel, 'talker')
-  add(quickExtractModel, 'quick_extract')
   add(analystModel, 'analyst / analyst_online / analyst_catchup')
   add(testerModel, 'tester')
   add(guardJudgeModel, 'grounding_guard')

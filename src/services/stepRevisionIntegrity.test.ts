@@ -311,13 +311,13 @@ describe('is_correction: corrected slot value replaces previous', () => {
   })
 
   it('is_correction=true lifts priority block — lower-source write proceeds', () => {
-    // Without is_correction: quick cannot overwrite analyst slot (priority blocked)
+    // Without is_correction: backfill cannot overwrite analyst slot (priority blocked)
     const isOverwrite = true
-    const priorityBlocked = isOverwrite && !false && !canOverwrite('analyst', 'quick')
+    const priorityBlocked = isOverwrite && !false && !canOverwrite('analyst', 'backfill')
     expect(priorityBlocked).toBe(true)  // blocked normally
 
     // With is_correction=true: `!is_correction` is false → block bypassed
-    const priorityBlockedWithCorrection = isOverwrite && !true && !canOverwrite('analyst', 'quick')
+    const priorityBlockedWithCorrection = isOverwrite && !true && !canOverwrite('analyst', 'backfill')
     expect(priorityBlockedWithCorrection).toBe(false)  // correction goes through
   })
 })

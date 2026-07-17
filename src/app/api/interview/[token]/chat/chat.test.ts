@@ -12,33 +12,9 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
 }))
 
-vi.mock('@/services/interviewTalker', () => ({
-  createTalkerStream: vi.fn().mockReturnValue({
-    toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
-  }),
-}))
-
-vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/interviewOrchestrator')>()
-  return {
-    ...actual,
-    checkLifecycle: vi.fn().mockReturnValue({ shouldComplete: false, reason: null }),
-    decideNextPhase: vi.fn().mockImplementation((ctx: import('@/services/interviewOrchestrator').OrchestratorContext) => ctx.phase),
-    decideNextPhaseWithMeta: vi.fn().mockImplementation((ctx: import('@/services/interviewOrchestrator').OrchestratorContext) => ({ phase: ctx.phase, phaseJustEntered: null })),
-  }
-})
-
-vi.mock('@/services/interviewAnalyst', () => ({
-  runAnalyst: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
-  runAnalystOnline: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
-  runAnalystCatchup: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
-  runAnalystFailureRetry: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [] }),
-}))
-
-vi.mock('@/services/interviewQuickExtract', () => ({
-  runQuickExtract: vi.fn().mockResolvedValue(null),
-}))
-
+// PROJ-44/ADR-021: chat/route.ts's only service import is runInterviewTurn,
+// mocked wholesale below — its internals (Talker/Analyst/Orchestrator/turnStore/
+// extraction pipeline) never execute in this test, so they don't need mocks here.
 vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>()
   return {
@@ -46,19 +22,6 @@ vi.mock('next/server', async (importOriginal) => {
     after: vi.fn().mockImplementation(() => {}),
   }
 })
-
-vi.mock('@/services/extraction', () => ({
-  extractAndEmbed: vi.fn().mockResolvedValue(undefined),
-  deduplicateKnowledgeObjects: vi.fn().mockResolvedValue(undefined),
-}))
-
-vi.mock('@/services/processEnrichment', () => ({
-  createProcessStepsFromTracker: vi.fn().mockResolvedValue(undefined),
-}))
-
-vi.mock('@/services/processClustering', () => ({
-  clusterProcessSteps: vi.fn().mockResolvedValue(undefined),
-}))
 
 vi.mock('@/lib/ratelimit', () => ({
   checkTokenEndpointLimits: mockCheckTokenEndpointLimits,
@@ -68,8 +31,8 @@ vi.mock('@/lib/ratelimit', () => ({
 vi.mock('@/services/runInterviewTurn', () => ({
   runInterviewTurn: vi.fn().mockResolvedValue({
     stream: { toTextStreamResponse: () => new Response('ok') },
-    background: vi.fn().mockResolvedValue(null),
-    meta: { phase: 'interview', completed: false, reason: null, stepTracker: [] },
+    finalize: vi.fn().mockResolvedValue(undefined),
+    meta: { phase: 'interview', completed: false, reason: null, stepTracker: [], analyst: null },
   }),
 }))
 

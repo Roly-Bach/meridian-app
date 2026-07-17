@@ -120,7 +120,10 @@ export function closingProbeAnswerReceived(
 
 /**
  * Deterministically decides the phase for the upcoming Talker turn.
- * Reads the state that was left by the PREVIOUS turn's Analyst/tools.
+ * PROJ-44/ADR-021: reads the state INCLUDING the current turn — the synchronous
+ * Analyst (interviewAnalyst.ts's runAnalyst) has already run against this turn's
+ * userInput by the time runInterviewTurn.ts calls this, so ctx.stepTracker and
+ * analystSuggestion reflect this turn, not the end of the previous one.
  * The phase returned is the phase that should be WRITTEN to interview_state before the Talker runs.
  */
 export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): ExtendedPhase {
@@ -227,6 +230,15 @@ export function decideNextPhaseWithMeta(ctx: OrchestratorContext, analystSuggest
  * FAREWELL_MARKERS string matching over the last two assistant turns) is
  * removed entirely — termination is now deterministic in state (the closing
  * probe + its answer), not guessed from text heuristics (KI-23).
+ *
+ * PROJ-44/ADR-021: like decideNextPhase, this now reads state INCLUDING the
+ * current turn (the synchronous Analyst already ran). The pre-PROJ-44
+ * soft_confirm staleness problem (KI-12) — completing on a snapshot that never
+ * saw this turn's userInput — no longer needs the two-stage recheck that used
+ * to live in runInterviewTurn.ts; the fresh state this function reads already
+ * accounts for it. Fail-safe: runInterviewTurn.ts vetoes a soft_confirm result
+ * when the synchronous Analyst call failed this turn (ADR-021 D4) — hard_stop
+ * is unconditional and proceeds regardless.
  */
 export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: AnalystBriefing | null): LifecycleDecision {
   // Trigger A: Hard-Stop — unconditional, last resort. Still produces a

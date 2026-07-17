@@ -72,7 +72,7 @@ describe('emitSlotWrite', () => {
     process.env.SLOT_TRAIL_FILE = tmpFile
 
     await emitSlotWrite(baseEvent)
-    await emitSlotWrite({ ...baseEvent, source: 'quick', overwrite: true })
+    await emitSlotWrite({ ...baseEvent, source: 'analyst_online', overwrite: true })
 
     const lines = fs.readFileSync(tmpFile, 'utf8').trim().split('\n')
     expect(lines).toHaveLength(2)
@@ -80,7 +80,7 @@ describe('emitSlotWrite', () => {
     expect(first.source).toBe('analyst')
     expect(first.overwrite).toBe(false)
     const second = JSON.parse(lines[1]) as SlotWriteEvent
-    expect(second.source).toBe('quick')
+    expect(second.source).toBe('analyst_online')
     expect(second.overwrite).toBe(true)
 
     fs.unlinkSync(tmpFile)

@@ -28,7 +28,7 @@ export interface SlotValue {
   confidence?: 'confirmed' | 'estimate' | 'unknown'
   qualifier?: string | null
   /** Which write path last successfully wrote this slot — used for conflict resolution */
-  writeSource?: 'analyst_catchup' | 'analyst_online' | 'quick' | 'backfill' | 'analyst'
+  writeSource?: 'analyst_catchup' | 'analyst_online' | 'backfill' | 'analyst'
   /** Explicit non-finding marker — deckungsgleich mit TaziteSlot/Schema NichtBefundTyp (PROJ-28/BL-E2.1) */
   nicht_befund_typ?: NichtBefundTyp
 }

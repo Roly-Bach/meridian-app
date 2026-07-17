@@ -272,14 +272,6 @@ class PGliteBackend implements InterviewStoreBackend {
     }
     await this.db.query(`UPDATE interview_state SET ${sets.join(', ')} WHERE interview_id = $1`, params)
   }
-
-  async loadStepTracker(interviewId: string): Promise<unknown[]> {
-    const res = await this.db.query<{ step_tracker: unknown }>(
-      `SELECT step_tracker FROM interview_state WHERE interview_id = $1`,
-      [interviewId],
-    )
-    return (res.rows[0]?.step_tracker as unknown[] | null) ?? []
-  }
 }
 
 /**

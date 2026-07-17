@@ -27,7 +27,7 @@ import { canOverwrite } from './slotConflictResolver'
 type SlotWrite = {
   slot: PotenzialSlotName
   value: unknown
-  writeSource: 'analyst' | 'quick' | 'backfill'
+  writeSource: 'analyst' | 'analyst_online' | 'backfill'
 }
 
 function makeEmptyStep(title: string): StepEntry {
@@ -88,7 +88,7 @@ describe('L4: concurrent slot-write race condition', () => {
 
     // Writer A (analyst) reads — gets t=0 snapshot
     const snapshotA = JSON.parse(JSON.stringify(dbState)) as StepEntry[]
-    // Writer B (quick) reads — gets t=0 snapshot too (race window)
+    // Writer B (online extraction) reads — gets t=0 snapshot too (race window)
     const snapshotB = JSON.parse(JSON.stringify(dbState)) as StepEntry[]
 
     // Writer A modifies + writes duration_minutes
@@ -103,7 +103,7 @@ describe('L4: concurrent slot-write race condition', () => {
     const bResult = currentImplWrite(snapshotB, 0, {
       slot: 'media_breaks',
       value: 2,
-      writeSource: 'quick',
+      writeSource: 'analyst_online',
     })
     dbState = bResult
 
@@ -123,7 +123,7 @@ describe('L4: concurrent slot-write race condition', () => {
     dbState = currentImplWrite(dbState, 0, {
       slot: 'media_breaks',
       value: 2,
-      writeSource: 'quick',
+      writeSource: 'analyst_online',
     })
     expect(dbState[0].potenzial.duration_minutes).not.toBeNull()
     expect(dbState[0].potenzial.media_breaks).not.toBeNull()
@@ -144,7 +144,7 @@ describe('L4: concurrent slot-write race condition', () => {
 
     const initial = { potenzial: { duration_minutes: null, media_breaks: null } }
     const aWrite = { value: 1200, writeSource: 'analyst' }
-    const bWrite = { value: 2, writeSource: 'quick' }
+    const bWrite = { value: 2, writeSource: 'analyst_online' }
 
     // Order A→B: both slots filled regardless
     const ab = jsonbSetPath(
@@ -188,7 +188,7 @@ describe('L4: concurrent slot-write race condition', () => {
   it('canOverwrite priority resolver does NOT catch lost update on empty slot', () => {
     // ADR-016 only blocks lower-priority overwrites of FILLED slots.
     // Empty slot (undefined existingSource) → always allows write.
-    expect(canOverwrite(undefined, 'quick')).toBe(true)
+    expect(canOverwrite(undefined, 'analyst_online')).toBe(true)
     expect(canOverwrite(undefined, 'analyst')).toBe(true)
     // → Race-window: both writers see slot as empty → both writes allowed → last wins.
   })

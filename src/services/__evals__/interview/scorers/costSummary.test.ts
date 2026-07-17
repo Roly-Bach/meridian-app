@@ -223,7 +223,7 @@ describe('computeCostSummary', () => {
       const records: TokenUsageRecord[] = [
         { component: 'analyst', model: 'google/gemini-3.5-flash', inputTokens: 1000, outputTokens: 150 },
         { component: 'talker', model: 'google/gemini-3.1-flash-lite', inputTokens: 500, outputTokens: 100 },
-        { component: 'quick_extract', model: 'google/gemini-3.1-flash-lite', inputTokens: 300, outputTokens: 50 },
+        { component: 'grounding_guard', model: 'google/gemini-3.1-flash-lite', inputTokens: 300, outputTokens: 50 },
       ]
       const summary = computeCostSummary(records)
 

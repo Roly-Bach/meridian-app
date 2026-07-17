@@ -185,8 +185,6 @@ export interface OrchestrationStore {
     interviewId: string,
     fields: { timerMinutes?: number; extractionsLog?: RawExtraction[]; openerText?: string },
   ): Promise<void>
-  /** Fresh step_tracker read (raw rows) — used by the background analyst's re-reads. */
-  loadStepTracker(interviewId: string): Promise<unknown[]>
 }
 
 export interface InterviewStoreBackend extends TurnStoreBackend, OrchestrationStore {}
@@ -205,6 +203,5 @@ export function createInterviewStore(backend: InterviewStoreBackend): InterviewS
     completeInterview: (id) => backend.completeInterview(id),
     setAnalystStatus: (id, status) => backend.setAnalystStatus(id, status),
     updateStateAfterTurn: (id, fields) => backend.updateStateAfterTurn(id, fields),
-    loadStepTracker: (id) => backend.loadStepTracker(id),
   }
 }

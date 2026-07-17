@@ -12,12 +12,6 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn().mockReturnValue({ from: mockAdminFrom }),
 }))
 
-vi.mock('@/services/interviewAgent', () => ({
-  createInterviewStream: vi.fn().mockReturnValue({
-    toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
-  }),
-}))
-
 vi.mock('@/lib/ratelimit', () => ({
   checkTokenEndpointLimits: mockCheckTokenEndpointLimits,
   extractIP: vi.fn().mockReturnValue('1.2.3.4'),
@@ -41,17 +35,32 @@ function makePOSTRequest(token: string) {
   })
 }
 
+function mockInterviewFetch(data: object | null, error: Error | null = null) {
+  return {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data, error }),
+  }
+}
+
+function mockTurnsFetch(data: object[] | null, error: Error | null = null) {
+  return {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue({ data, error }),
+  }
+}
+
 // ─── POST /api/interview/[token]/reconnect ────────────────────────────────────
+// PROJ-44/ADR-021 D6: the LLM path is deleted without replacement — the route
+// always returns a static re-engagement line once past the guards (no
+// interview_state read, no createTalkerStream/createInterviewStream call).
 
 describe('POST /api/interview/[token]/reconnect', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('returns 404 for unknown token', async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: new Error('Not found') }),
-    })
+    mockAdminFrom.mockReturnValue(mockInterviewFetch(null, new Error('Not found')))
 
     const res = await POST(makePOSTRequest('bad-token'), makeParams('bad-token'))
     expect(res.status).toBe(404)
@@ -60,14 +69,9 @@ describe('POST /api/interview/[token]/reconnect', () => {
   })
 
   it('returns 410 for expired token', async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { id: 'iv-1', status: 'active', token_expires_at: PAST_EXPIRY },
-        error: null,
-      }),
-    })
+    mockAdminFrom.mockReturnValue(
+      mockInterviewFetch({ id: 'iv-1', status: 'active', token_expires_at: PAST_EXPIRY })
+    )
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(410)
@@ -76,31 +80,9 @@ describe('POST /api/interview/[token]/reconnect', () => {
   })
 
   it('returns 409 for cold-start (no turns) — must use /start', async () => {
-    const interview = {
-      id: 'iv-new',
-      employee_name: 'Anna',
-      employee_role: 'Teamleiterin',
-      department: 'Qualität',
-      focus_topics: null,
-      status: 'created',
-      token_expires_at: FUTURE_EXPIRY,
-    }
     mockAdminFrom
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: interview, error: null }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
+      .mockReturnValueOnce(mockInterviewFetch({ id: 'iv-new', status: 'created', token_expires_at: FUTURE_EXPIRY }))
+      .mockReturnValueOnce(mockTurnsFetch([]))
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(409)
@@ -108,32 +90,10 @@ describe('POST /api/interview/[token]/reconnect', () => {
     expect(json.error).toContain('/start')
   })
 
-  it('returns 500 when turns DB query fails', async () => {
-    const interview = {
-      id: 'iv-dberr',
-      employee_name: 'Hans',
-      employee_role: null,
-      department: 'IT',
-      focus_topics: null,
-      status: 'active',
-      token_expires_at: FUTURE_EXPIRY,
-    }
+  it('returns 500 when the turns DB query fails', async () => {
     mockAdminFrom
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: interview, error: null }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: null, error: new Error('DB unreachable') }),
-      })
+      .mockReturnValueOnce(mockInterviewFetch({ id: 'iv-dberr', status: 'active', token_expires_at: FUTURE_EXPIRY }))
+      .mockReturnValueOnce(mockTurnsFetch(null, new Error('DB unreachable')))
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(500)
@@ -148,14 +108,9 @@ describe('POST /api/interview/[token]/reconnect', () => {
     )
     mockCheckTokenEndpointLimits.mockResolvedValueOnce(rateLimitResponse)
 
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { id: 'iv-1', status: 'active', token_expires_at: FUTURE_EXPIRY },
-        error: null,
-      }),
-    })
+    mockAdminFrom.mockReturnValue(
+      mockInterviewFetch({ id: 'iv-1', status: 'active', token_expires_at: FUTURE_EXPIRY })
+    )
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(429)
@@ -165,14 +120,9 @@ describe('POST /api/interview/[token]/reconnect', () => {
   })
 
   it('returns 409 when interview is already completed', async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { id: 'iv-1', status: 'completed', token_expires_at: FUTURE_EXPIRY },
-        error: null,
-      }),
-    })
+    mockAdminFrom.mockReturnValue(
+      mockInterviewFetch({ id: 'iv-1', status: 'completed', token_expires_at: FUTURE_EXPIRY })
+    )
 
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
     expect(res.status).toBe(409)
@@ -180,56 +130,21 @@ describe('POST /api/interview/[token]/reconnect', () => {
     expect(json.error).toBe('Interview is already completed')
   })
 
-  // KI-22 (2026-07-11): turns are always persisted as atomic (user_input, agent_response)
-  // pairs, so the reconnected history's last entry is always 'assistant' — this is the
-  // ONLY case that occurs in practice. The route now short-circuits to a static
-  // re-engagement line instead of calling the LLM (previously reproduced a visible
-  // duplicate: the model re-posed the still-open question near-verbatim).
-  it('returns a static re-engagement line WITHOUT calling the LLM when the agent is still awaiting a reply', async () => {
-    const interview = {
-      id: 'iv-active',
-      employee_name: 'Hans',
-      employee_role: 'Schichtleiter',
-      department: 'Fertigung',
-      focus_topics: null,
-      status: 'active',
-      token_expires_at: FUTURE_EXPIRY,
-    }
-    const state = { phase: 'exploration', timer_minutes: 15, topics_covered: ['Tagesablauf'], topics_open: [] }
-    const turns = [
-      {
-        turn_number: 1,
-        user_input: 'Hallo',
-        agent_response: 'Willkommen',
-        created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      },
-    ]
-
+  // KI-22 (2026-07-11) / PROJ-44 (2026-07-16): turns are always persisted as
+  // atomic (user_input, agent_response) pairs, so a returning employee always
+  // finds the agent mid-question — this is the ONLY case that occurs in
+  // practice, which is exactly why ADR-021 D6 deletes the LLM path rather than
+  // keeping it as dead code. The route now always returns the static
+  // re-engagement line for an active interview with existing turns.
+  it('returns a static re-engagement line without any LLM call', async () => {
     mockAdminFrom
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: interview, error: null }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: state, error: null }),
-      })
-      .mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: turns, error: null }),
-      })
+      .mockReturnValueOnce(mockInterviewFetch({ id: 'iv-active', status: 'active', token_expires_at: FUTURE_EXPIRY }))
+      .mockReturnValueOnce(mockTurnsFetch([{ turn_number: 1 }]))
 
-    const { createInterviewStream } = await import('@/services/interviewAgent')
     const res = await POST(makePOSTRequest(VALID_TOKEN), makeParams(VALID_TOKEN))
 
     expect(res.status).toBe(200)
-    expect(createInterviewStream).not.toHaveBeenCalled()
     const text = await res.text()
-    expect(text.length).toBeGreaterThan(0)
-    // Must NOT repeat the still-open question verbatim — that was the duplicate-bubble bug.
-    expect(text).not.toBe(turns[0].agent_response)
+    expect(text).toBe('Willkommen zurück — lass uns da weitermachen, wo wir aufgehört haben.')
   })
 })

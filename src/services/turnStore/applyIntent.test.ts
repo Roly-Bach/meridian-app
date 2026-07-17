@@ -185,19 +185,31 @@ describe('record_slot — priority conflict', () => {
   it('blocks lower-priority overwrite of a higher-priority slot, emits blocked trail', () => {
     const step = makeStep({ status: 'walkthrough' })
     step.potenzial.frequency_per_month = pslot(90, 'analyst_catchup') // priority 4
-    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'quick' }), CTX) // priority 2
+    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'backfill' }), CTX) // priority 1
     expect(out.result.status).toBe('blocked')
     expect(out.result.reason).toBe('priority')
     expect(out.patches).toHaveLength(0)
     expect(out.trail).toHaveLength(1)
-    expect(out.trail[0]).toMatchObject({ blocked: true, overwrite: true, source: 'quick', value: 120 })
+    expect(out.trail[0]).toMatchObject({ blocked: true, overwrite: true, source: 'backfill', value: 120 })
     // snapshot unchanged
     expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(90)
   })
 
   it('allows equal-or-higher priority overwrite', () => {
     const step = makeStep({ status: 'walkthrough' })
-    step.potenzial.frequency_per_month = pslot(90, 'quick')
+    step.potenzial.frequency_per_month = pslot(90, 'backfill')
+    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'analyst_online' }), CTX)
+    expect(out.result.status).toBe('accepted')
+    expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(120)
+  })
+
+  // PROJ-44/ADR-021 D3: a historical interview whose slot trail still carries
+  // writeSource='quick' (interviewQuickExtract.ts, removed) must degrade
+  // correctly — canOverwrite's `?? 0` fallback treats the unrecognized string
+  // as priority 0, so the current Analyst (priority 3) may overwrite it.
+  it('degrades a historical "quick" writeSource to priority 0 — analyst_online may overwrite it', () => {
+    const step = makeStep({ status: 'walkthrough' })
+    step.potenzial.frequency_per_month = { value: 90, quote: 'q', writeSource: 'quick' as SlotValue['writeSource'] }
     const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'analyst_online' }), CTX)
     expect(out.result.status).toBe('accepted')
     expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(120)

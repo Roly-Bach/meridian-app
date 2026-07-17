@@ -1,6 +1,6 @@
 # ADR-021: Analyst synchron vor Talker — Timing-Amendment zu ADR-011 D2
 
-**Status:** Proposed (2026-07-16)
+**Status:** Accepted (2026-07-17 — implementiert via PROJ-44 `/backend`)
 **Author:** lyas53
 **Repository:** Roly-Bach/meridian-app
 **Auslöser:** Realer Interview-Durchlauf („Tim", 2026-07-14) + die daraus abgeleiteten PROJ-42-Befunde BUG-1-Staleness und BUG-6 (doppelte Verabschiedung). Beide teilen dieselbe Wurzel wie KI-12/KI-14/KI-15: die Ein-Turn-Zustandsverzögerung der Dual-Loop-Pipeline.

@@ -2,7 +2,7 @@ import { resolveModel } from '@/lib/llm-provider'
 import { generateText, stepCountIs, tool } from 'ai'
 import { z } from 'zod'
 import { buildTraceMetadata, type TraceCtx, type OnTokenUsage } from './_telemetry'
-import { buildTools } from './interviewAgent'
+import { buildTools } from './interviewTools'
 import {
   MANDATORY_SLOTS,
   OPTIONAL_SLOTS,
@@ -22,10 +22,10 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { TurnStore, TurnSession, InterviewStore } from './turnStore/port'
 import type { TurnSnapshot } from './turnStore/intents'
 
-// ─── Analyst (Iteration 3) ────────────────────────────────────────────────────
-// Runs async via after() in chat/route.ts (Vercel Fluid Compute).
+// ─── Analyst (PROJ-44 / ADR-021) ───────────────────────────────────────────────
+// Runs SYNCHRONOUSLY before the phase decision and the Talker (runInterviewTurn.ts).
 // Responsibilities: knowledge extraction (register_step, record_slot, etc.)
-// + produce_briefing for the next Talker turn.
+// + produce_briefing for THIS turn's Talker call.
 // Does NOT generate user-facing text.
 
 // thinkingBudget: 2048 — enables careful analysis before tool calls, reducing
@@ -50,9 +50,9 @@ const EXTRACTION_TOOL_NAMES = new Set([
 
 /**
  * Pure, deterministic (no LLM involved) — computes the next produce_briefing
- * payload for this pass. Extracted from runAnalystCore so the bridging logic
- * (streak reset/increment + carry-forward-when-not-called) is independently
- * unit-testable without mocking generateText/turnStore.
+ * payload for this pass. Extracted so the bridging logic (streak reset/increment
+ * + carry-forward-when-not-called) is independently unit-testable without
+ * mocking generateText/turnStore.
  *
  * - hadExtraction=true (any knowledge tool called this pass) → streak resets to 0.
  * - modelCalledBriefing=true → the LLM's own next_focus/suggested_question/
@@ -82,16 +82,25 @@ export interface AnalystRunOptions {
   context: InterviewContext
   /** History up to and including the current user turn (WITHOUT Talker's response for this turn) */
   history: TurnMessage[]
-  /** The raw user input for the current turn — enables evidence_quote contamination guard */
-  currentUserInput?: string
+  /** The raw user input for the current turn — enables evidence_span contamination guard + online-mode extraction */
+  currentUserInput: string
   /**
-   * PROJ-42: the briefing as persisted from the PREVIOUS turn (interviews.next_briefing).
+   * The briefing as persisted from the PREVIOUS turn (interviews.next_briefing).
    * Used to (a) carry next_focus/suggested_question/clarification_cards forward
    * unchanged when this pass makes no substantial change (the analyst prompt's
    * own "don't call produce_briefing on a boring turn" instruction), and (b) as
    * the base for the deterministic noNewExtractionStreak computed in code below.
    */
   previousBriefing?: AnalystBriefing | null
+  /**
+   * interview.analyst_status as loaded at turn start (ADR-021 D2/D4). 'failed'
+   * selects the failure-window augmentation: the previous (missed) turn's raw
+   * user input is prepended to history so this pass recovers it, on top of
+   * whichever mode (online/closing) the current phase selects.
+   */
+  analystStatus?: string | null
+  /** The immediately preceding turn's raw user input — required for the failure-window augmentation above. */
+  previousUserInput?: string
   traceCtx?: TraceCtx
   /** TurnStore for the analyst's staged writes. Defaults to the prod Supabase store.
    *  Pass an InterviewStore to enable setAnalystStatus on the error path. */
@@ -286,16 +295,6 @@ ${stepIdList}
 // ─── Clarification Cards Generation ──────────────────────────────────────────
 
 function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
-  // 2026-06-08 fix — phase guard dropped. Analyst runs in `after()` parallel to Talker,
-  // so ctx.phase here is the PREVIOUS phase (set before Talker). When orchestrator
-  // transitions to closing at iter N+1, analyst at iter N still sees the old phase
-  // and a "phase !== 'closing'" guard would suppress cards. Cards never landed in DB.
-  //
-  // Safe to drop because orchestrator double-gates clarification routing
-  // (interviewOrchestrator.ts decideNextPhase 'closing' case + checkLifecycle
-  // Trigger B): cards only route to the clarification phase once the closing
-  // probe has actually been asked and answered — never prematurely.
-  //
   // Tracker must have at least one step — empty trackers can't have missing slots.
   if (ctx.stepTracker.length === 0) return false
   return computeEmptyMandatorySlots(ctx.stepTracker).length > 0
@@ -331,6 +330,12 @@ export interface AnalystToolCallRecord {
 export interface AnalystRunResult {
   briefing: AnalystBriefing
   toolCalls: AnalystToolCallRecord[]
+  /**
+   * Fresh step_tracker read from the session snapshot after commit — replaces
+   * the separate DB reload (`store.loadStepTracker`) the pre-PROJ-44 background()
+   * closures used (ADR-021 D2 design decision #3).
+   */
+  stepTracker: StepEntry[]
 }
 
 // ─── Step Merger ──────────────────────────────────────────────────────────────
@@ -411,7 +416,7 @@ function computeMergedSteps(
   return { merged, changed: true }
 }
 
-// ─── Catchup System Prompt ────────────────────────────────────────────────────
+// ─── Catchup System Prompt (used by the Backfill sub-pass) ───────────────────
 
 function buildCatchupSystemPrompt(ctx: InterviewContext, history: TurnMessage[]): string {
   const activeStep = ctx.stepTracker.find(s => s.status === 'exploring' || s.status === 'walkthrough')
@@ -453,67 +458,36 @@ ${turnIndex}
 `
 }
 
-// ─── Internal Core ────────────────────────────────────────────────────────────
+// ─── Internal sub-passes (share ONE session — ADR-021 D2/D3) ─────────────────
 
-interface RunAnalystCoreOptions extends AnalystRunOptions {
-  /** Prompt mode: 'online' restricts extraction to the current turn; 'default' is unrestricted. */
-  promptMode?: 'online' | 'default'
-  /** Source marker written to the slot-write trail. */
-  writeSource?: 'analyst' | 'analyst_online' | 'analyst_catchup'
-  /** When set, only these tools are exposed to the LLM (allowedTools filter). */
-  allowedTools?: string[]
-  /** When true, skip step-merger (catchup mode should not mutate tracker before history scan). */
-  skipMerge?: boolean
+interface OnlinePassOptions {
+  context: InterviewContext
+  history: TurnMessage[]
+  currentUserInput: string
+  previousBriefing?: AnalystBriefing | null
+  session: TurnSession
+  traceCtx?: TraceCtx
+  onTokenUsage?: OnTokenUsage
 }
 
 /**
- * Core analyst runner — shared implementation. Public variants (runAnalystOnline,
- * runAnalystCatchup, runAnalyst) call this with appropriate options.
+ * Online sub-pass — extracts knowledge ONLY from the current user statement,
+ * registers new steps, and produces this turn's briefing (register + Briefing
+ * + Cards). Used standalone (mode='online') and as the second half of the
+ * Closing mode (against the tracker the Backfill sub-pass just filled).
  */
-async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunResult> {
-  const modelString =
-    process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
+async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: AnalystBriefing; toolCalls: AnalystToolCallRecord[] }> {
+  const modelString = process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
   const model = resolveModel(modelString)
-  const { interviewId, workspaceId } = opts.context
-  const promptMode = opts.promptMode ?? 'default'
-  const writeSource = opts.writeSource ?? 'analyst'
+  const { interviewId } = opts.context
+  const { session } = opts
 
-  // PROJ-34/ADR-018: one session per analyst pass. openTurn loads the snapshot;
-  // merge + tools + briefing + backfill all stage into it; commit persists at pass end.
-  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
-  const session: TurnSession = await store.openTurn(interviewId, workspaceId)
-
-  if (!opts.skipMerge) {
-    // Merge fragmented steps before building LLM context so the Analyst sees a clean
-    // tracker and generates correct clarification cards. Staged through the session.
-    try {
-      const { merged, changed } = computeMergedSteps(session.snapshot().stepTracker)
-      if (changed) {
-        session.stage({ kind: 'register_step', tracker: merged })
-        opts = { ...opts, context: { ...opts.context, stepTracker: merged } }
-      }
-    } catch (err) {
-      console.error('[analyst] computeMergedSteps failed (non-fatal):', err)
-    }
-  }
-
-  const systemPrompt = promptMode === 'default'
-    ? buildAnalystSystemPrompt(opts.context, 'default')
-    : buildAnalystSystemPrompt(opts.context, 'online')
-
-  // Messages: full history as analyst context
+  const systemPrompt = buildAnalystSystemPrompt(opts.context, 'online')
   const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
 
-  // Build tool set: all knowledge tools + produce_briefing
-  let capturedBriefing: AnalystBriefing = {
-    next_focus: '',
-    suggested_question: '',
-  }
+  let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
 
-  const knowledgeTools = buildTools(session, opts.currentUserInput, {
-    source: writeSource,
-    allowedTools: opts.allowedTools,
-  })
+  const knowledgeTools = buildTools(session, opts.currentUserInput, { source: 'analyst_online' })
 
   // PROJ-42: staging moved out of this tool's execute (see post-generateText
   // block below) — the deterministic noNewExtractionStreak needs the FULL set
@@ -544,54 +518,43 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
 
   let capturedToolCalls: AnalystToolCallRecord[] = []
 
-  try {
-    const genResult = await generateText({
-      model,
-      system: systemPrompt,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      messages: messages as any,
-      tools: allTools,
-      stopWhen: stepCountIs(15),
-      ...(isGoogleModel && {
-        providerOptions: {
-          google: { thinkingConfig: { thinkingBudget: ANALYST_THINKING_BUDGET } },
-        },
-      }),
-      experimental_telemetry: buildTraceMetadata('interview.analyst', {
-        interviewId,
-        model: modelString,
-        environment: (opts.traceCtx?.environment ?? 'prod') as 'prod' | 'eval',
-        component: 'analyst',
-        ...opts.traceCtx,
-      }),
-    })
+  const genResult = await generateText({
+    model,
+    system: systemPrompt,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: messages as any,
+    tools: allTools,
+    stopWhen: stepCountIs(15),
+    ...(isGoogleModel && {
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: ANALYST_THINKING_BUDGET } },
+      },
+    }),
+    experimental_telemetry: buildTraceMetadata('interview.analyst', {
+      interviewId,
+      model: modelString,
+      environment: (opts.traceCtx?.environment ?? 'prod') as 'prod' | 'eval',
+      component: 'analyst',
+      ...opts.traceCtx,
+    }),
+  })
 
-    capturedToolCalls = genResult.steps.flatMap(step =>
-      (step.toolCalls ?? []).map(tc => ({
-        toolName: tc.toolName,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        args: (tc as any).input ?? (tc as any).args ?? {},
-      }))
-    )
-    {
-      const details = genResult.usage.inputTokenDetails as Record<string, unknown> | undefined
-      opts.onTokenUsage?.({
-        component: (writeSource) as 'analyst' | 'analyst_online' | 'analyst_catchup',
-        model: modelString,
-        inputTokens: genResult.usage.inputTokens ?? 0,
-        cacheReadTokens: (details?.cacheReadTokens as number | undefined),
-        outputTokens: genResult.usage.outputTokens ?? 0,
-      })
-    }
-  } catch (err) {
-    // Analyst error: set status='failed' so next turn triggers catch-up run
-    console.error('[analyst] run failed:', err)
-    if (opts.store && 'setAnalystStatus' in opts.store) {
-      await (opts.store as InterviewStore).setAnalystStatus(interviewId, 'failed')
-    } else {
-      await getSupabaseAdmin().from('interviews').update({ analyst_status: 'failed' }).eq('id', interviewId)
-    }
-    throw err
+  capturedToolCalls = genResult.steps.flatMap(step =>
+    (step.toolCalls ?? []).map(tc => ({
+      toolName: tc.toolName,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      args: (tc as any).input ?? (tc as any).args ?? {},
+    }))
+  )
+  {
+    const details = genResult.usage.inputTokenDetails as Record<string, unknown> | undefined
+    opts.onTokenUsage?.({
+      component: 'analyst_online',
+      model: modelString,
+      inputTokens: genResult.usage.inputTokens ?? 0,
+      cacheReadTokens: (details?.cacheReadTokens as number | undefined),
+      outputTokens: genResult.usage.outputTokens ?? 0,
+    })
   }
 
   // PROJ-42: deterministic (code-computed, not LLM-guessed) noNewExtractionStreak,
@@ -602,55 +565,39 @@ async function runAnalystCore(opts: RunAnalystCoreOptions): Promise<AnalystRunRe
   // onlyIfNotDone preserves the PROJ-27/BL-E1.5 .neq('analyst_status','done') guard.
   session.stage({ kind: 'produce_briefing', briefing: capturedBriefing })
 
-  // Post-processing: deterministic data_sources backfill, staged through the same
-  // session so it runs through stage's conflict logic + trail emission (ADR-018 §C).
-  try {
-    const backfill = computeDataSourcesBackfill(session.snapshot())
-    if (backfill) session.stage({ kind: 'backfill_data_sources', tracker: backfill.tracker, emits: backfill.emits })
-  } catch (err) {
-    console.error('[analyst] data_sources backfill failed:', err)
-  }
-
-  // Commit the whole pass (merge + tool writes + briefing + backfill) at pass end (D5).
-  await session.commit()
-
   return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-/**
- * Online analyst — default path, runs after every user turn.
- * Extracts knowledge ONLY from the current user statement.
- * System prompt explicitly forbids catch-up extraction from prior turns.
- * evidence_quote must be a verbatim span from the current user input.
- */
-export async function runAnalystOnline(opts: AnalystRunOptions): Promise<AnalystRunResult> {
-  return runAnalystCore({ ...opts, promptMode: 'online', writeSource: 'analyst_online' })
+interface BackfillPassOptions {
+  context: InterviewContext
+  history: TurnMessage[]
+  session: TurnSession
+  traceCtx?: TraceCtx
+  onTokenUsage?: OnTokenUsage
 }
 
 /**
- * Catchup analyst — triggered on phase entry into 'closing' (PROJ-42).
- * Scans the full conversation history for missed slot values.
- * Only record_slot and produce_briefing are available (no register_step, no update_walkthrough_data).
- * Every record_slot call MUST include evidence_quote + source_turn.
+ * Backfill sub-pass — scans the FULL conversation history for missed slot
+ * values (only record_slot, no register/briefing). Runs first in Closing mode,
+ * once per closing episode (triggered by ctx.phase==='closing' at turn start —
+ * ADR-021 D2). Supplementary: a failure here is swallowed by the caller
+ * (runAnalyst) rather than failing the whole pass — the Online sub-pass is
+ * what matters for the phase/completion decision.
  */
-export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<AnalystRunResult> {
-  const { interviewId, workspaceId } = opts.context
+async function runBackfillPass(opts: BackfillPassOptions): Promise<{ toolCalls: AnalystToolCallRecord[] }> {
+  const { interviewId } = opts.context
   const modelString =
     process.env.INTERVIEW_ANALYST_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.5-flash'
   const model = resolveModel(modelString)
-  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
-  const session: TurnSession = await store.openTurn(interviewId, workspaceId)
   const isGoogleModel = modelString.startsWith('google/')
+  const { session } = opts
 
   const systemPrompt = buildCatchupSystemPrompt(opts.context, opts.history)
   const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
 
-  // Catchup only gets record_slot — no produce_briefing, no structural tools.
-  // The online analyst's next_briefing is preserved: catchup fills missed slots
-  // but does not regenerate the conversation briefing (M2 fix).
-  // F2: Pass user turn texts for evidence_quote Jaccard validation in record_slot
+  // Backfill only gets record_slot — no produce_briefing, no structural tools.
+  // The Online sub-pass's next_briefing is what matters: backfill fills missed
+  // slots but does not regenerate the conversation briefing.
   const userTurns = opts.history.filter(t => t.role === 'user').map(t => t.content)
   const catchupTools = buildTools(session, undefined, {
     source: 'analyst_catchup',
@@ -658,79 +605,166 @@ export async function runAnalystCatchup(opts: AnalystRunOptions): Promise<Analys
     userTurns,
   })
 
-  let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
-
   let capturedToolCalls: AnalystToolCallRecord[] = []
 
-  try {
-    const genResult = await generateText({
-      model,
-      system: systemPrompt,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      messages: messages as any,
-      tools: catchupTools,
-      stopWhen: stepCountIs(10),
-      ...(isGoogleModel && {
-        providerOptions: {
-          google: { thinkingConfig: { thinkingBudget: ANALYST_THINKING_BUDGET } },
-        },
-      }),
-      experimental_telemetry: buildTraceMetadata('interview.analyst', {
-        interviewId,
-        model: modelString,
-        environment: (opts.traceCtx?.environment ?? 'prod') as 'prod' | 'eval',
-        component: 'analyst_catchup',
-        ...opts.traceCtx,
-      }),
-    })
+  const genResult = await generateText({
+    model,
+    system: systemPrompt,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: messages as any,
+    tools: catchupTools,
+    stopWhen: stepCountIs(10),
+    ...(isGoogleModel && {
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: ANALYST_THINKING_BUDGET } },
+      },
+    }),
+    experimental_telemetry: buildTraceMetadata('interview.analyst', {
+      interviewId,
+      model: modelString,
+      environment: (opts.traceCtx?.environment ?? 'prod') as 'prod' | 'eval',
+      component: 'analyst_catchup',
+      ...opts.traceCtx,
+    }),
+  })
 
-    capturedToolCalls = genResult.steps.flatMap(step =>
-      (step.toolCalls ?? []).map(tc => ({
-        toolName: tc.toolName,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        args: (tc as any).input ?? (tc as any).args ?? {},
-      }))
-    )
-    {
-      const details = genResult.usage.inputTokenDetails as Record<string, unknown> | undefined
-      opts.onTokenUsage?.({
-        component: 'analyst_catchup',
-        model: modelString,
-        inputTokens: genResult.usage.inputTokens ?? 0,
-        cacheReadTokens: (details?.cacheReadTokens as number | undefined),
-        outputTokens: genResult.usage.outputTokens ?? 0,
+  capturedToolCalls = genResult.steps.flatMap(step =>
+    (step.toolCalls ?? []).map(tc => ({
+      toolName: tc.toolName,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      args: (tc as any).input ?? (tc as any).args ?? {},
+    }))
+  )
+  {
+    const details = genResult.usage.inputTokenDetails as Record<string, unknown> | undefined
+    opts.onTokenUsage?.({
+      component: 'analyst_catchup',
+      model: modelString,
+      inputTokens: genResult.usage.inputTokens ?? 0,
+      cacheReadTokens: (details?.cacheReadTokens as number | undefined),
+      outputTokens: genResult.usage.outputTokens ?? 0,
+    })
+  }
+
+  return { toolCalls: capturedToolCalls }
+}
+
+// ─── Public API — single Deep-Module entry point (ADR-021 D2) ────────────────
+
+/**
+ * The Analyst's single entry point. Runs synchronously, once per turn, before
+ * the phase decision and the Talker (runInterviewTurn.ts). Mode is selected
+ * from `opts.context.phase` — the phase loaded at turn start, not the (not yet
+ * computed) phase decision:
+ *
+ *   - phase !== 'closing' → ONLINE mode: one pass, current statement only,
+ *     register + Briefing + Cards.
+ *   - phase === 'closing' → CLOSING mode: one call, two internal sub-passes —
+ *     Backfill (full history, record_slot only, priority analyst_catchup=4)
+ *     then Online (current statement, register + Briefing + Cards against the
+ *     backfilled tracker, priority analyst_online=3). The Closing-entry turn
+ *     itself still runs in ONLINE mode (ctx.phase is still 'explore' at its
+ *     turn start) — Closing mode fires on the ONE turn per closing episode
+ *     whose start-phase is already 'closing' (the turn that answers the
+ *     catch-all probe).
+ *
+ * `analystStatus==='failed'` additionally prepends the previous (missed) turn's
+ * raw user input to history — recovering the turn a prior terminal failure
+ * couldn't process — on top of whichever mode above applies.
+ *
+ * On terminal failure: sets `analyst_status='failed'` and rethrows. The caller
+ * (runInterviewTurn.ts) retries a bounded number of times, then degrades this
+ * turn to the previous briefing/tracker (ADR-021 D4) — the NEXT turn's
+ * analystStatus='failed' triggers the recovery augmentation above.
+ */
+export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunResult> {
+  const { interviewId, workspaceId } = opts.context
+  const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
+  const session: TurnSession = await store.openTurn(interviewId, workspaceId)
+
+  const history: TurnMessage[] = opts.analystStatus === 'failed' && opts.previousUserInput
+    ? [{ role: 'user', content: opts.previousUserInput }, ...opts.history]
+    : opts.history
+
+  // Merge fragmented steps once, before either sub-pass builds its LLM context.
+  try {
+    const { merged, changed } = computeMergedSteps(session.snapshot().stepTracker)
+    if (changed) session.stage({ kind: 'register_step', tracker: merged })
+  } catch (err) {
+    console.error('[analyst] computeMergedSteps failed (non-fatal):', err)
+  }
+
+  const mergedContext: InterviewContext = { ...opts.context, stepTracker: session.snapshot().stepTracker }
+
+  const allToolCalls: AnalystToolCallRecord[] = []
+  let briefing: AnalystBriefing
+
+  try {
+    if (mergedContext.phase === 'closing') {
+      // (a) Backfill sub-pass — supplementary, its own failure doesn't fail the pass.
+      try {
+        const backfill = await runBackfillPass({
+          context: mergedContext,
+          history,
+          session,
+          traceCtx: opts.traceCtx,
+          onTokenUsage: opts.onTokenUsage,
+        })
+        allToolCalls.push(...backfill.toolCalls)
+      } catch (err) {
+        console.error('[analyst:backfill] failed (non-fatal, supplementary):', err)
+      }
+
+      // (b) Online sub-pass — against the now-backfilled tracker.
+      const onlineContext: InterviewContext = { ...mergedContext, stepTracker: session.snapshot().stepTracker }
+      const online = await runOnlinePass({
+        context: onlineContext,
+        history,
+        currentUserInput: opts.currentUserInput,
+        previousBriefing: opts.previousBriefing,
+        session,
+        traceCtx: opts.traceCtx,
+        onTokenUsage: opts.onTokenUsage,
       })
+      allToolCalls.push(...online.toolCalls)
+      briefing = online.briefing
+    } else {
+      const online = await runOnlinePass({
+        context: mergedContext,
+        history,
+        currentUserInput: opts.currentUserInput,
+        previousBriefing: opts.previousBriefing,
+        session,
+        traceCtx: opts.traceCtx,
+        onTokenUsage: opts.onTokenUsage,
+      })
+      allToolCalls.push(...online.toolCalls)
+      briefing = online.briefing
     }
   } catch (err) {
-    console.error('[analyst:catchup] run failed:', err)
-    // Don't set analyst_status=failed — catchup is supplementary, not critical
+    // Online-sub-pass (or standalone online-mode) failure: critical — sets
+    // analyst_status='failed' so the next turn's failure-window recovers it.
+    console.error('[analyst] run failed:', err)
+    if (opts.store && 'setAnalystStatus' in opts.store) {
+      await (opts.store as InterviewStore).setAnalystStatus(interviewId, 'failed')
+    } else {
+      await getSupabaseAdmin().from('interviews').update({ analyst_status: 'failed' }).eq('id', interviewId)
+    }
     throw err
   }
 
+  // Deterministic data_sources/hilfsmittel backfill, once at pass end.
+  try {
+    const backfill = computeDataSourcesBackfill(session.snapshot())
+    if (backfill) session.stage({ kind: 'backfill_data_sources', tracker: backfill.tracker, emits: backfill.emits })
+  } catch (err) {
+    console.error('[analyst] data_sources backfill failed:', err)
+  }
+
+  // Commit the whole pass (merge + backfill sub-pass + online sub-pass + data_sources backfill) once, at pass end.
   await session.commit()
-  return { briefing: capturedBriefing, toolCalls: capturedToolCalls }
-}
 
-/**
- * Legacy analyst — backward-compatible wrapper used by the eval runner.
- * Behaves identically to the previous runAnalyst: no online/catchup mode split.
- * New code should prefer runAnalystOnline.
- */
-export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunResult> {
-  return runAnalystCore({ ...opts, writeSource: 'analyst' })
-}
-
-/**
- * Failure-retry run: processes two turns at once when previous analyst run failed.
- * Renamed from the old runAnalystCatchup (which was semantically different from
- * the new history-scan runAnalystCatchup).
- */
-export async function runAnalystFailureRetry(opts: AnalystRunOptions & { previousUserInput: string }): Promise<AnalystRunResult> {
-  const augmentedHistory: TurnMessage[] = [
-    { role: 'user', content: opts.previousUserInput },
-    ...opts.history,
-  ]
-  return runAnalystOnline({ ...opts, history: augmentedHistory })
+  return { briefing, toolCalls: allToolCalls, stepTracker: session.snapshot().stepTracker }
 }
 
 /**
@@ -795,4 +829,3 @@ function computeDataSourcesBackfill(
   if (!mutated) return null
   return { tracker: updated, emits }
 }
-
