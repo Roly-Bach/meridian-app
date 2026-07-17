@@ -9,7 +9,7 @@ import type { StepEntry, PotenzialSlotName } from '@/services/interviewSemantic'
  * nicht maß. Diese Metrik schließt die Lücke.
  *
  * Ein Potenzial-Slot gilt als gefüllt, wenn sein Wert non-null ist ODER ein nicht_befund_typ
- * gesetzt wurde (deckungsgleich mit slotCoverage.isCoverageFieldFilled).
+ * gesetzt wurde (deckungsgleich mit interviewSemantic.isCoverageFieldFilled).
  */
 function isPotenzialFilled(step: StepEntry, slot: PotenzialSlotName): boolean {
   const sv = step.potenzial[slot]

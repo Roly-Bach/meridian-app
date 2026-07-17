@@ -87,6 +87,8 @@ function ctxAt(overrides: Partial<OrchestratorContext>): OrchestratorContext {
     maxDurationMinutes: MAX_DURATION_MINUTES,
     historyLength: 0,
     history: [],
+    newStepThisTurn: false,
+    oDrought: { stepId: null, streak: 0, exhaustedStepIds: [] },
     ...overrides,
   }
 }
@@ -123,7 +125,12 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
 
   it('turn 9 (real elapsed ~3min): advances to closing once the Analyst judges the process sufficiently covered — content-driven, matches the real probe text', () => {
     const tracker = [makeStep('Softwareentwicklung', 'walkthrough', { id: 'S001' })]
-    const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 3, topicsOpen: [], historyLength: 16 })
+    // PROJ-44 Remediation (M-1): by turn 9 the single active step has also
+    // drought-fired (no new O-field across the last few of the largely
+    // off-topic turns 5-8) — both signals (Analyst step_advance_ready AND the
+    // tracker-derived O-Drought) agree it's time to close, not step_advance_ready alone.
+    const oDrought = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+    const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 3, topicsOpen: [], historyLength: 16, oDrought })
 
     const next = decideNextPhase(ctx, { step_advance_ready: true })
     expect(next).toBe('closing')

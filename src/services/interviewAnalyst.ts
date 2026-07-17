@@ -12,11 +12,13 @@ import {
   type StepEntry,
   type SlotName,
 } from './interviewSemantic'
+import { updateODrought } from './interviewOrchestrator'
 import type {
   InterviewContext,
   TurnMessage,
   AnalystBriefing,
   ClarificationCard,
+  ODroughtState,
 } from './interviewTypes'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { TurnStore, TurnSession, InterviewStore } from './turnStore/port'
@@ -106,6 +108,15 @@ export interface AnalystRunOptions {
    *  Pass an InterviewStore to enable setAnalystStatus on the error path. */
   store?: TurnStore | InterviewStore
   onTokenUsage?: OnTokenUsage
+  /**
+   * PROJ-44 Remediation (M-3 Fokus-Lock): this turn's pre-computed focus lock —
+   * see interviewOrchestrator.ts's computeFocusLock, run by the caller against
+   * the pre-Analyst tracker + the previous turn's persisted oDrought state.
+   * Steers the Online sub-pass's next_focus/suggested_question toward this
+   * step (buildAnalystSystemPrompt) and seeds the O-Drought streak the Online
+   * sub-pass updates before persisting it on the returned briefing.
+   */
+  focusLock: ODroughtState
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -156,6 +167,14 @@ export function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' |
   const activeStepLine = activeStep
     ? `Aktiv im Walkthrough: "${activeStep.title}" (${activeStep.id ?? 'no-id'}, Status: ${activeStep.status})`
     : 'Aktiv im Walkthrough: keiner — bereit für neue Step-Registration oder Backfill'
+
+  // PROJ-44 Remediation (M-3 Fokus-Lock): only present when the orchestrator locked a
+  // step for this turn (computeFocusLock) — absent for the first turns / when nothing
+  // is lockable, so this line never widens the STUFE-0-4 prefix's byte-identity (WP5).
+  const focusStep = ctx.focusStepId ? ctx.stepTracker.find(s => s.id === ctx.focusStepId) : undefined
+  const focusLockLine = focusStep
+    ? `\nFOKUS-LOCK (gesperrter aktiver Schritt): "${focusStep.title}" (${focusStep.id}). Richte next_focus und suggested_question PRIMÄR auf diesen Schritt, solange er qualitativ noch nicht ausreichend vertieft ist (O2–O6: Entscheidungslogik, tazite Cues, Ausnahmen, Inputs, Outputs, Hilfsmittel, Abhängigkeiten). Wechsle den Fokus NICHT eigenständig — das System sperrt/entsperrt automatisch, sobald dieser Schritt ausgeschöpft ist. Beiläufig genannte Werte anderer Schritte trotzdem opportunistisch erfassen (record_slot bleibt unabhängig vom Fokus).`
+    : ''
 
   const stepIdList = ctx.stepTracker.length > 0
     ? ctx.stepTracker.map(s => `  ${s.id ?? '?'}: "${s.title}"`).join('\n')
@@ -285,7 +304,7 @@ Richtig: "Wie viele Stunden wendest du pro Monat dafür auf?"
 - Abteilung: ${ctx.department}
 - Fokusthemen: ${ctx.focusTopics ?? 'keine spezifischen'}
 - Step-Tracker: ${ctx.stepTracker.length} Steps registriert (Hard Cap: 5 — keinen neuen register_step wenn bereits 5 existieren)
-- ${activeStepLine}
+- ${activeStepLine}${focusLockLine}
 
 Schritt-IDs (nutze step_id in record_slot statt step_title):
 ${stepIdList}
@@ -468,6 +487,10 @@ interface OnlinePassOptions {
   session: TurnSession
   traceCtx?: TraceCtx
   onTokenUsage?: OnTokenUsage
+  /** PROJ-44 Remediation (M-3): this turn's focus lock, forwarded from AnalystRunOptions. */
+  focusLock: ODroughtState
+  /** PROJ-44 Remediation (M-3): the tracker as loaded at turn start (pre-Analyst) — the baseline updateODrought diffs against. */
+  preTurnTracker: StepEntry[]
 }
 
 /**
@@ -561,6 +584,10 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
   // always staged exactly once here regardless of whether the model called
   // produce_briefing this pass — see computeNextBriefing for the bridging logic.
   capturedBriefing = computeNextBriefing(capturedBriefing, modelCalledBriefing, capturedToolCalls, opts.previousBriefing)
+  // PROJ-44 Remediation (M-1/M-3): deterministic O-Drought streak update — did the
+  // locked step gain a new O2–O6 field this pass? session.snapshot() here reflects
+  // everything staged so far this pass (merge + backfill sub-pass + this online sub-pass).
+  capturedBriefing = { ...capturedBriefing, oDrought: updateODrought(opts.focusLock, opts.preTurnTracker, session.snapshot().stepTracker) }
   // PROJ-34: stage the interviews write (next_briefing + analyst_status='done').
   // onlyIfNotDone preserves the PROJ-27/BL-E1.5 .neq('analyst_status','done') guard.
   session.stage({ kind: 'produce_briefing', briefing: capturedBriefing })
@@ -682,6 +709,11 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
   const store = opts.store ?? (await import('./turnStore/supabaseTurnStore')).createSupabaseTurnStore()
   const session: TurnSession = await store.openTurn(interviewId, workspaceId)
 
+  // PROJ-44 Remediation (M-3): the tracker exactly as loaded at turn start, before
+  // this pass's merge/backfill/online sub-passes touch anything — the baseline
+  // updateODrought diffs against to decide whether the locked step progressed.
+  const preTurnTrackerForDrought = opts.context.stepTracker
+
   const history: TurnMessage[] = opts.analystStatus === 'failed' && opts.previousUserInput
     ? [{ role: 'user', content: opts.previousUserInput }, ...opts.history]
     : opts.history
@@ -694,7 +726,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
     console.error('[analyst] computeMergedSteps failed (non-fatal):', err)
   }
 
-  const mergedContext: InterviewContext = { ...opts.context, stepTracker: session.snapshot().stepTracker }
+  const mergedContext: InterviewContext = { ...opts.context, stepTracker: session.snapshot().stepTracker, focusStepId: opts.focusLock.stepId }
 
   const allToolCalls: AnalystToolCallRecord[] = []
   let briefing: AnalystBriefing
@@ -725,6 +757,8 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
         session,
         traceCtx: opts.traceCtx,
         onTokenUsage: opts.onTokenUsage,
+        focusLock: opts.focusLock,
+        preTurnTracker: preTurnTrackerForDrought,
       })
       allToolCalls.push(...online.toolCalls)
       briefing = online.briefing
@@ -736,6 +770,8 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
         previousBriefing: opts.previousBriefing,
         session,
         traceCtx: opts.traceCtx,
+        focusLock: opts.focusLock,
+        preTurnTracker: preTurnTrackerForDrought,
         onTokenUsage: opts.onTokenUsage,
       })
       allToolCalls.push(...online.toolCalls)

@@ -349,6 +349,53 @@ export const COVERAGE_FIELDS = [
 
 export type CoverageField = (typeof COVERAGE_FIELDS)[number]
 
+/**
+ * True iff an O1–O6 coverage field is "filled" for a step (non-null value OR an
+ * explicit nicht_befund_typ). Shared by the dedup_slot_coverage eval scorer
+ * (slotCoverage.ts) and the O-Drought primitive (interviewOrchestrator.ts,
+ * PROJ-44 Remediation) so both stay behaviorally identical.
+ */
+export function isCoverageFieldFilled(step: StepEntry, field: CoverageField): boolean {
+  switch (field) {
+    case 'bezeichnung':
+      // O1 — title always present (non-empty string = filled)
+      return typeof step.title === 'string' && step.title.trim().length > 0
+    case 'reihenfolge':
+      // O1 — integer set by register_step; always filled for PROJ-25+ entries
+      return typeof step.reihenfolge === 'number'
+    case 'abhaengigkeiten': {
+      const dep = step.abhaengigkeiten
+      if (dep == null) return false
+      return (
+        (Array.isArray(dep.depends_on) && dep.depends_on.length > 0) ||
+        (Array.isArray(dep.influences) && dep.influences.length > 0) ||
+        dep.nicht_befund_typ != null
+      )
+    }
+    default: {
+      // O2–O5 tazite slots — field name matches slots key directly
+      const slot = step.slots[field as keyof typeof step.slots]
+      if (slot == null) return false
+      return slot.value != null || slot.nicht_befund_typ != null
+    }
+  }
+}
+
+/**
+ * O2–O6 fields only — excludes the auto-filled O1 (bezeichnung/reihenfolge).
+ * The "substantial" coverage fields the O-Drought primitive tracks (PROJ-44
+ * Remediation): a step whose O1 alone is set (just registered) has made no
+ * qualitative progress yet.
+ */
+export const O_SLOT_FIELDS = COVERAGE_FIELDS.filter(
+  (f): f is Exclude<CoverageField, 'bezeichnung' | 'reihenfolge'> => f !== 'bezeichnung' && f !== 'reihenfolge',
+)
+
+/** Count of filled O2–O6 fields for a step — the "depth" signal the O-Drought streak tracks. */
+export function countFilledOFields(step: StepEntry): number {
+  return O_SLOT_FIELDS.filter((f) => isCoverageFieldFilled(step, f)).length
+}
+
 const STEP_STOPWORDS = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
 
 export function normalizeToken(t: string): string {

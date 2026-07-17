@@ -1,5 +1,5 @@
-import { type Phase, type StepEntry } from './interviewSemantic'
-import type { AnalystBriefing } from './interviewTypes'
+import { type Phase, type StepEntry, countFilledOFields } from './interviewSemantic'
+import type { AnalystBriefing, ODroughtState } from './interviewTypes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,22 @@ export interface OrchestratorContext {
   /** Total number of messages in history including the current user turn */
   historyLength: number
   history: { role: 'user' | 'assistant'; content: string }[]
+  /**
+   * PROJ-44 Remediation (H-1): true iff a step whose id was NOT present in the
+   * pre-Analyst tracker appears in the post-Analyst (this turn's) tracker —
+   * i.e. a genuinely new process was registered THIS turn, regardless of the
+   * status the synchronous Analyst already advanced it to (register_step +
+   * an immediate record_slot bumps exploring→walkthrough in the same pass,
+   * which the older hasStepInStatus('exploring')-only reentry guard misses).
+   * See runInterviewTurn.ts's hasNewStepThisTurn call.
+   */
+  newStepThisTurn: boolean
+  /**
+   * PROJ-44 Remediation (M-1/M-3): this turn's fresh O-Drought state (after
+   * updateODrought ran inside the synchronous Analyst pass) — read by
+   * hasUnexhaustedStep to decide whether explore→closing is still premature.
+   */
+  oDrought: ODroughtState
 }
 
 export interface LifecycleDecision {
@@ -39,11 +55,22 @@ export interface LifecycleDecision {
 const SOFT_ANCHOR_RATIO = 0.8
 const MAX_GRACE_MINUTES = 3
 const DEFAULT_NO_NEW_EXTRACTION_LIMIT = 3
+const DEFAULT_O_DROUGHT_LIMIT = 3
 
 /** Eval-tunable via NO_NEW_EXTRACTION_LIMIT env var (AC: "Startwert K=3, eval-tunbar"). */
 function noNewExtractionLimit(): number {
   const env = Number(process.env.NO_NEW_EXTRACTION_LIMIT)
   return Number.isFinite(env) && env > 0 ? env : DEFAULT_NO_NEW_EXTRACTION_LIMIT
+}
+
+/**
+ * PROJ-44 Remediation (M-1/M-3): consecutive turns without a new O-field for the
+ * locked step before its drought fires. Eval-tunable via O_DROUGHT_LIMIT env var,
+ * same pattern as NO_NEW_EXTRACTION_LIMIT — measure-first, no fixed threshold.
+ */
+function oDroughtLimit(): number {
+  const env = Number(process.env.O_DROUGHT_LIMIT)
+  return Number.isFinite(env) && env > 0 ? env : DEFAULT_O_DROUGHT_LIMIT
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,13 +79,79 @@ function hasStepInStatus(tracker: StepEntry[], status: 'exploring' | 'walkthroug
   return tracker.some((s) => s.status === status)
 }
 
-function hasUnexploredFocusTopic(topicsOpen: string[], tracker: StepEntry[]): boolean {
-  if (topicsOpen.length === 0) return false
-  const registeredTitles = tracker.map((s) => s.title.trim().toLowerCase())
-  return topicsOpen.some((topic) => {
-    const t = topic.trim().toLowerCase()
-    return !registeredTitles.some((rt) => rt.includes(t) || t.includes(rt))
-  })
+/**
+ * PROJ-44 Remediation (H-1): tracker-diff by stable id, not by status. Catches
+ * a newly-registered step that the SAME synchronous Analyst pass already
+ * advanced past 'exploring' (register_step + an immediate record_slot bumps
+ * exploring→walkthrough — see applyIntent.ts) — the status-only
+ * hasStepInStatus('exploring') reentry guard misses exactly this case.
+ * computeMergedSteps never invents new ids for a merge of pre-existing steps
+ * (the canonical member keeps its id), so a genuinely new id here always means
+ * register_step ran this turn, not a merge artifact.
+ */
+export function hasNewStepThisTurn(beforeTracker: StepEntry[], afterTracker: StepEntry[]): boolean {
+  const beforeIds = new Set(beforeTracker.map((s) => s.id).filter((id): id is string => id != null))
+  return afterTracker.some((s) => s.id != null && !beforeIds.has(s.id))
+}
+
+/**
+ * PROJ-44 Remediation (M-3 Fokus-Lock): determines which registered, non-done
+ * step's question-direction is "locked" for this turn — computed from the
+ * tracker + the previous turn's persisted drought state, BEFORE the
+ * synchronous Analyst runs (so it can steer next_focus/suggested_question).
+ * A step whose drought already fired is never re-locked; the lock advances to
+ * the next non-exhausted step. Returns stepId=null when nothing is lockable
+ * (empty tracker, or every step done/exhausted).
+ */
+export function computeFocusLock(stepTracker: StepEntry[], previous: ODroughtState | null): ODroughtState {
+  const limit = oDroughtLimit()
+  const exhausted = new Set(previous?.exhaustedStepIds ?? [])
+  if (previous?.stepId != null && previous.streak >= limit) exhausted.add(previous.stepId)
+
+  const candidates = stepTracker.filter((s) => s.status !== 'done' && s.id != null && !exhausted.has(s.id))
+  if (candidates.length === 0) {
+    return { stepId: null, streak: 0, exhaustedStepIds: [...exhausted] }
+  }
+
+  const stillLocked = previous?.stepId != null ? candidates.find((s) => s.id === previous.stepId) : undefined
+  const locked = stillLocked ?? candidates[0]
+
+  return {
+    stepId: locked.id ?? null,
+    streak: stillLocked ? (previous?.streak ?? 0) : 0,
+    exhaustedStepIds: [...exhausted],
+  }
+}
+
+/**
+ * PROJ-44 Remediation (M-1/M-3): post-Analyst update of the locked step's
+ * drought streak — did it gain a new O2–O6 field THIS turn? Resets on
+ * progress, increments on drought. `beforeTracker` is the tracker as loaded at
+ * turn start (pre-Analyst); `afterTracker` is the Analyst's committed result.
+ * `lock` is this turn's computeFocusLock result (its streak is the carried-over
+ * starting point — already reset to 0 if the lock just switched to a new step).
+ */
+export function updateODrought(lock: ODroughtState, beforeTracker: StepEntry[], afterTracker: StepEntry[]): ODroughtState {
+  if (lock.stepId == null) return lock
+  const before = beforeTracker.find((s) => s.id === lock.stepId)
+  const after = afterTracker.find((s) => s.id === lock.stepId)
+  const beforeCount = before ? countFilledOFields(before) : 0
+  const afterCount = after ? countFilledOFields(after) : beforeCount
+  const progressed = afterCount > beforeCount
+  return { ...lock, streak: progressed ? 0 : lock.streak + 1 }
+}
+
+/**
+ * PROJ-44 Remediation (M-1): replaces the removed hasUnexploredFocusTopic
+ * breadth check — "gibt es einen registrierten Prozess, der qualitativ noch
+ * nicht erschöpft ist?" (tracker-derived, not topicsOpen-derived). `lock` must
+ * be this turn's POST-update O-Drought state (after updateODrought ran).
+ */
+function hasUnexhaustedStep(stepTracker: StepEntry[], lock: ODroughtState): boolean {
+  const limit = oDroughtLimit()
+  const exhausted = new Set(lock.exhaustedStepIds)
+  if (lock.stepId != null && lock.streak >= limit) exhausted.add(lock.stepId)
+  return stepTracker.some((s) => s.status !== 'done' && !exhausted.has(s.id ?? ''))
 }
 
 /**
@@ -164,12 +257,14 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
       if (noNewExtractionStreak >= noNewExtractionLimit()) return 'closing'
 
       // Primary driver — content-based advance: the active process is judged
-      // sufficiently explored (Analyst signal) AND no open topic/finding
-      // remains → Closing. Advance-signal alone (an open topic remains) keeps
-      // Explore running; the Talker methodology actively asks about the next
-      // recurring task (breadth-first, unchanged principle).
+      // sufficiently explored (Analyst signal) AND no registered step remains
+      // qualitatively unexhausted (PROJ-44 Remediation M-1: tracker-derived
+      // O-Drought check, replaces the removed topicsOpen-based
+      // hasUnexploredFocusTopic — depth and breadth collapse into one
+      // criterion). Advance-signal alone (an unexhausted step remains) keeps
+      // Explore running.
       const stepAdvanceReady = analystSuggestion?.step_advance_ready === true
-      if (stepAdvanceReady && !hasUnexploredFocusTopic(ctx.topicsOpen, ctx.stepTracker)) {
+      if (stepAdvanceReady && !hasUnexhaustedStep(ctx.stepTracker, ctx.oDrought)) {
         return 'closing'
       }
 
@@ -179,7 +274,10 @@ export function decideNextPhase(ctx: OrchestratorContext, analystSuggestion: Ana
     case 'closing': {
       // A newly-discovered process during Closing is first-class — back to
       // Explore in full (no more 2-turn clarification-only cap for late finds).
-      if (hasStepInStatus(ctx.stepTracker, 'exploring')) return 'explore'
+      // PROJ-44 Remediation (H-1): newStepThisTurn catches the case the
+      // status-only check misses — a step registered THIS turn that the same
+      // synchronous Analyst pass already slotted past 'exploring'.
+      if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.newStepThisTurn) return 'explore'
 
       // Deterministic in STATE: the catch-all probe must be present in history
       // and answered before a completion/clarification decision is owed.
@@ -251,8 +349,10 @@ export function checkLifecycle(ctx: OrchestratorContext, analystSuggestion: Anal
   // Trigger B: Soft-Confirm — the Closing sequence converged: catch-all probe
   // asked + answered, no newly-discovered process, no pending clarification cards.
   if (ctx.phase === 'closing') {
-    if (hasStepInStatus(ctx.stepTracker, 'exploring')) {
-      // Routed back to Explore by decideNextPhase — don't complete out from under it.
+    if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.newStepThisTurn) {
+      // Routed back to Explore by decideNextPhase — don't complete out from
+      // under it. PROJ-44 Remediation (H-1): newStepThisTurn covers the case
+      // the status-only check misses (see decideNextPhase's closing case).
       return { shouldComplete: false, reason: null }
     }
     if (closingProbeAnswerReceived(ctx.history)) {

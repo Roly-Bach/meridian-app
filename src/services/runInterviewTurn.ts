@@ -39,6 +39,8 @@ import {
   checkLifecycle,
   shouldInjectClosingProbe,
   CLOSING_PROBE_TEXT,
+  computeFocusLock,
+  hasNewStepThisTurn,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
 import { checkRoleGuard, buildOffTopicRedirect } from '@/services/roleGuard'
@@ -191,6 +193,10 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   const currentPhase = (state?.phase ?? 'intro') as Phase
   let stepTracker: StepEntry[] = ((state?.step_tracker as unknown[] | null) ?? [])
     .map((raw, i) => normalizeStepEntry(raw, i + 1))
+  // PROJ-44 Remediation (H-1/M-3): the tracker exactly as loaded, before the
+  // synchronous Analyst runs — the baseline hasNewStepThisTurn/computeFocusLock
+  // diff against (stepTracker itself gets reassigned to the Analyst's result below).
+  const preTurnTracker = stepTracker
   const nextTurnNumber = existingTurns.length + 1
   const currentLog = (state?.extractions_log as RawExtraction[] | null) ?? []
 
@@ -254,6 +260,12 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   const analystStatus = interview.analyst_status ?? 'idle'
   let analystBriefing: AnalystBriefing | null = (interview.next_briefing as AnalystBriefing | null) ?? null
 
+  // PROJ-44 Remediation (M-3 Fokus-Lock): computed BEFORE the Analyst runs, from
+  // the pre-turn tracker + the previous turn's persisted drought state — steers
+  // this turn's next_focus/suggested_question and seeds the streak the Analyst
+  // updates (see interviewAnalyst.ts's runOnlinePass).
+  const focusLockThisTurn = computeFocusLock(preTurnTracker, analystBriefing?.oDrought ?? null)
+
   // Failure-window (ADR-021 D2/D4): the previous turn's synchronous Analyst call
   // failed terminally — recover it by prepending its raw user input, on top of
   // whichever mode (online/closing) currentPhase selects this turn.
@@ -279,6 +291,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         traceCtx: resolvedTraceCtx,
         store,
         onTokenUsage: input.onTokenUsage,
+        focusLock: focusLockThisTurn,
       })
       break
     } catch (err) {
@@ -323,6 +336,15 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     maxDurationMinutes: contextBase.maxDurationMinutes,
     historyLength: history.length,
     history,
+    // PROJ-44 Remediation (H-1): tracker-diff by id, before vs. after the
+    // synchronous Analyst — catches a step registered+slotted THIS turn even
+    // when its status already advanced past 'exploring' in the same pass.
+    newStepThisTurn: hasNewStepThisTurn(preTurnTracker, stepTracker),
+    // PROJ-44 Remediation (M-1/M-3): the fresh (this-turn) O-Drought state —
+    // runOnlinePass always attaches it before staging produce_briefing when the
+    // Analyst ran; on a terminal Analyst failure analystBriefing stays the
+    // previous turn's value (untouched), so fall back to the pre-computed lock.
+    oDrought: analystBriefing?.oDrought ?? focusLockThisTurn,
   }
 
   // ── Lifecycle check ─────────────────────────────────────────────────────────

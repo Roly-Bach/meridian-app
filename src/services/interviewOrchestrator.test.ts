@@ -12,10 +12,14 @@ import {
   closingProbeAlreadyAsked,
   shouldInjectClosingProbe,
   closingProbeAnswerReceived,
+  computeFocusLock,
+  updateODrought,
+  hasNewStepThisTurn,
   CLOSING_PROBE_TEXT,
   type OrchestratorContext,
 } from './interviewOrchestrator'
 import type { StepEntry } from './interviewSemantic'
+import type { ODroughtState } from './interviewTypes'
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -55,6 +59,8 @@ function makeStep(title: string, status: 'exploring' | 'walkthrough' | 'done', s
   return { title, reihenfolge: 1, governance: null, abhaengigkeiten: null, status, potenzial: emptyPotenzial, slots, process_steps: [], friction_points: [], friction_tools: [], pain_point_primary: null, ...extra }
 }
 
+const emptyODrought: ODroughtState = { stepId: null, streak: 0, exhaustedStepIds: [] }
+
 function baseCtx(overrides: Partial<OrchestratorContext> = {}): OrchestratorContext {
   return {
     phase: 'intro',
@@ -65,6 +71,8 @@ function baseCtx(overrides: Partial<OrchestratorContext> = {}): OrchestratorCont
     maxDurationMinutes: 30,
     historyLength: 2,
     history: [{ role: 'user', content: 'Hallo' }, { role: 'assistant', content: 'Hallo!' }],
+    newStepThisTurn: false,
+    oDrought: emptyODrought,
     ...overrides,
   }
 }
@@ -93,21 +101,27 @@ describe('decideNextPhase — explore (content-driven, PROJ-42)', () => {
     expect(decideNextPhase(baseCtx({ phase: 'explore', stepTracker: tracker }), null)).toBe('explore')
   })
 
-  it('stays in explore when step_advance_ready is true but an open focus topic remains unregistered (breadth-first)', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough')]
-    const ctx = baseCtx({ phase: 'explore', stepTracker: tracker, topicsOpen: ['Mahnwesen'] })
+  // PROJ-44 Remediation (M-1): the old topicsOpen-based hasUnexploredFocusTopic
+  // breadth check is replaced by a tracker-derived O-Drought exhaustion check —
+  // depth and breadth collapse into one criterion (see computeFocusLock/
+  // updateODrought/hasUnexhaustedStep tests further below for the primitive itself).
+  it('stays in explore when step_advance_ready is true but the locked step is not yet drought-exhausted', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', emptySlots, { id: 'S001' })]
+    const oDrought: ODroughtState = { stepId: 'S001', streak: 1, exhaustedStepIds: [] }
+    const ctx = baseCtx({ phase: 'explore', stepTracker: tracker, oDrought })
     expect(decideNextPhase(ctx, { step_advance_ready: true })).toBe('explore')
   })
 
-  it('advances to closing when step_advance_ready is true and no open focus topic remains', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough')]
-    const ctx = baseCtx({ phase: 'explore', stepTracker: tracker, topicsOpen: [] })
+  it('advances to closing when step_advance_ready is true and the only registered step has drought-fired (hit the default limit K=3)', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', emptySlots, { id: 'S001' })]
+    const oDrought: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+    const ctx = baseCtx({ phase: 'explore', stepTracker: tracker, oDrought })
     expect(decideNextPhase(ctx, { step_advance_ready: true })).toBe('closing')
   })
 
-  it('advances to closing when the open focus topic is already reflected as a registered step', () => {
-    const tracker = [makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial })]
-    const ctx = baseCtx({ phase: 'explore', stepTracker: tracker, topicsOpen: ['Mahnwesen'] })
+  it('advances to closing when the only registered step is already done (no unexhausted step remains)', () => {
+    const tracker = [makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S001' })]
+    const ctx = baseCtx({ phase: 'explore', stepTracker: tracker })
     expect(decideNextPhase(ctx, { step_advance_ready: true })).toBe('closing')
   })
 
@@ -201,6 +215,15 @@ describe('decideNextPhase — closing', () => {
     expect(decideNextPhase(baseCtx({ phase: 'closing', historyLength: 10, stepTracker: [lateStep] }), null)).toBe('explore')
   })
 
+  // PROJ-44 Remediation (H-1): the synchronous Analyst can register a new step
+  // AND slot it in the same pass, bumping it straight to 'walkthrough' — the
+  // status-only hasStepInStatus('exploring') check above misses that case.
+  it('routes a new step back to explore even when the synchronous Analyst already advanced it past exploring this turn (H-1)', () => {
+    const freshlySlottedStep = makeStep('Mahnwesen: Bearbeitung', 'walkthrough', undefined, { id: 'S002' })
+    const ctx = baseCtx({ phase: 'closing', historyLength: 10, stepTracker: [freshlySlottedStep], newStepThisTurn: true })
+    expect(decideNextPhase(ctx, null)).toBe('explore')
+  })
+
   it('stays in closing when the last assistant turn is not the deterministic probe text', () => {
     const history = [
       { role: 'assistant' as const, content: 'Irgendwas anderes noch?' },
@@ -274,6 +297,19 @@ describe('checkLifecycle', () => {
     expect(result.reason).toBe(null)
   })
 
+  // PROJ-44 Remediation (H-1): same scenario, but the synchronous Analyst already
+  // slotted the new step past 'exploring' this turn — newStepThisTurn must still veto.
+  it('does NOT complete when a new step was registered+slotted this turn (H-1), even though its status already advanced past exploring', () => {
+    const freshlySlottedStep = makeStep('Reisekostenabrechnung', 'walkthrough', undefined, { id: 'S002' })
+    const history = [
+      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
+      { role: 'user' as const, content: 'Ach, da gibt es noch was, das mache ich auch.' },
+    ]
+    const result = checkLifecycle(baseCtx({ phase: 'closing', stepTracker: [freshlySlottedStep], history, historyLength: 2, newStepThisTurn: true }), null)
+    expect(result.shouldComplete).toBe(false)
+    expect(result.reason).toBe(null)
+  })
+
   it('returns no completion outside closing when timer is fine', () => {
     const result = checkLifecycle(baseCtx({ phase: 'explore', timerMinutes: 5, maxDurationMinutes: 30 }), null)
     expect(result.shouldComplete).toBe(false)
@@ -322,5 +358,120 @@ describe('closingProbeAlreadyAsked / shouldInjectClosingProbe / closingProbeAnsw
     const asked = [{ role: 'assistant' as const, content: CLOSING_PROBE_TEXT }]
     expect(closingProbeAnswerReceived(asked)).toBe(false) // no reply yet
     expect(closingProbeAnswerReceived([...asked, { role: 'user' as const, content: 'Nein.' }])).toBe(true)
+  })
+})
+
+// ─── computeFocusLock / updateODrought / hasNewStepThisTurn (PROJ-44 Remediation) ──
+
+describe('computeFocusLock (M-3 Fokus-Lock)', () => {
+  it('locks onto the first candidate step when no previous lock exists', () => {
+    const tracker = [
+      makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' }),
+      makeStep('Monatsabschluss', 'exploring', undefined, { id: 'S002' }),
+    ]
+    const lock = computeFocusLock(tracker, null)
+    expect(lock.stepId).toBe('S001')
+    expect(lock.streak).toBe(0)
+    expect(lock.exhaustedStepIds).toEqual([])
+  })
+
+  it('keeps the lock on the same step across turns while it is not yet drought-exhausted', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
+    const previous: ODroughtState = { stepId: 'S001', streak: 1, exhaustedStepIds: [] }
+    const lock = computeFocusLock(tracker, previous)
+    expect(lock.stepId).toBe('S001')
+    expect(lock.streak).toBe(1)
+  })
+
+  it('switches to the next candidate step once the drought limit fires (default K=3), marking the old step exhausted', () => {
+    const tracker = [
+      makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' }),
+      makeStep('Monatsabschluss', 'exploring', undefined, { id: 'S002' }),
+    ]
+    const previous: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+    const lock = computeFocusLock(tracker, previous)
+    expect(lock.stepId).toBe('S002')
+    expect(lock.streak).toBe(0)
+    expect(lock.exhaustedStepIds).toContain('S001')
+  })
+
+  it('never re-locks a previously-exhausted step even if it is the only remaining candidate structurally reachable', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
+    const previous: ODroughtState = { stepId: 'S001', streak: 5, exhaustedStepIds: [] }
+    const lock = computeFocusLock(tracker, previous)
+    expect(lock.stepId).toBeNull()
+    expect(lock.exhaustedStepIds).toContain('S001')
+  })
+
+  it('ignores done steps as lock candidates', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'done', fullSlots, { id: 'S001', potenzial: fullPotenzial })]
+    const lock = computeFocusLock(tracker, null)
+    expect(lock.stepId).toBeNull()
+  })
+
+  it('respects O_DROUGHT_LIMIT env override', () => {
+    const prev = process.env.O_DROUGHT_LIMIT
+    process.env.O_DROUGHT_LIMIT = '1'
+    try {
+      const tracker = [
+        makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' }),
+        makeStep('Monatsabschluss', 'exploring', undefined, { id: 'S002' }),
+      ]
+      const previous: ODroughtState = { stepId: 'S001', streak: 1, exhaustedStepIds: [] }
+      const lock = computeFocusLock(tracker, previous)
+      expect(lock.stepId).toBe('S002')
+    } finally {
+      if (prev === undefined) delete process.env.O_DROUGHT_LIMIT
+      else process.env.O_DROUGHT_LIMIT = prev
+    }
+  })
+})
+
+describe('updateODrought (M-1/M-3 shared primitive)', () => {
+  it('resets the streak to 0 when the locked step gained a new O-field this turn', () => {
+    const before = makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })
+    const after = makeStep('Rechnungsprüfung', 'walkthrough', {
+      ...emptySlots,
+      tazite_cues: { value: ['SAP-Wissen'], quote: 'SAP', nicht_befund_typ: null },
+    }, { id: 'S001' })
+    const lock: ODroughtState = { stepId: 'S001', streak: 2, exhaustedStepIds: [] }
+    const updated = updateODrought(lock, [before], [after])
+    expect(updated.streak).toBe(0)
+  })
+
+  it('increments the streak when no new O-field appeared for the locked step', () => {
+    const step = makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })
+    const lock: ODroughtState = { stepId: 'S001', streak: 1, exhaustedStepIds: [] }
+    const updated = updateODrought(lock, [step], [step])
+    expect(updated.streak).toBe(2)
+  })
+
+  it('is a no-op when nothing is locked (stepId=null)', () => {
+    const lock: ODroughtState = { stepId: null, streak: 0, exhaustedStepIds: ['S001'] }
+    const updated = updateODrought(lock, [], [])
+    expect(updated).toEqual(lock)
+  })
+})
+
+describe('hasNewStepThisTurn (H-1 tracker-diff)', () => {
+  it('is false when the tracker is unchanged', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
+    expect(hasNewStepThisTurn(tracker, tracker)).toBe(false)
+  })
+
+  it('is true when a step with a new id appears in the after-tracker', () => {
+    const before = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
+    const after = [...before, makeStep('Mahnwesen: Bearbeitung', 'exploring', undefined, { id: 'S002' })]
+    expect(hasNewStepThisTurn(before, after)).toBe(true)
+  })
+
+  it('is false for a merge that only combines pre-existing ids (canonical id preserved, no new id introduced)', () => {
+    const before = [
+      makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' }),
+      makeStep('Rechnungsprüfung: Detail', 'exploring', undefined, { id: 'S002' }),
+    ]
+    // Simulates computeMergedSteps collapsing S002 into canonical S001 — no new id.
+    const after = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
+    expect(hasNewStepThisTurn(before, after)).toBe(false)
   })
 })

@@ -42,6 +42,13 @@ export interface InterviewContext {
    * the closing probe or a new question.
    */
   isCompletionFarewell?: boolean
+  /**
+   * PROJ-44 Remediation (M-3 Fokus-Lock): this turn's pre-computed focus-locked
+   * step id (interviewOrchestrator.ts's computeFocusLock), read by
+   * buildAnalystSystemPrompt to steer next_focus/suggested_question toward this
+   * step. Null/undefined = no lock (empty tracker / all steps exhausted).
+   */
+  focusStepId?: string | null
 }
 
 export interface TurnMessage {
@@ -81,4 +88,28 @@ export interface AnalystBriefing {
    * Safety-net escalation to 'closing' when this reaches the configured limit.
    */
   noNewExtractionStreak?: number
+  /**
+   * PROJ-44 Remediation (M-1/M-3 shared primitive): deterministic O-field
+   * drought state for the currently focus-locked step. Threaded through
+   * next_briefing like noNewExtractionStreak/usedFillerPhrases — see
+   * interviewOrchestrator.ts's computeFocusLock/updateODrought.
+   */
+  oDrought?: ODroughtState
+}
+
+/**
+ * PROJ-44 Remediation (M-1/M-3 shared primitive): per-locked-step drought state
+ * for O2–O6 fields (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs,
+ * hilfsmittel, abhaengigkeiten — the substantial COVERAGE_FIELDS, excluding the
+ * auto-filled O1 bezeichnung/reihenfolge). Deterministically computed in code
+ * (not LLM-guessed). See interviewOrchestrator.ts's computeFocusLock/
+ * updateODrought/hasUnexhaustedStep.
+ */
+export interface ODroughtState {
+  /** The currently locked/active step's stable id (S001…), or null when none is lockable (empty tracker / all exhausted). */
+  stepId: string | null
+  /** Consecutive turns without a new O-field for stepId. */
+  streak: number
+  /** Step ids whose drought already fired this interview — never re-locked. */
+  exhaustedStepIds: string[]
 }

@@ -9,7 +9,7 @@ import type { StepEntry } from '@/services/interviewSemantic'
  *
  * Ein (deduplizierter) Schritt zählt als „Abhängigkeit erfasst", wenn er mindestens eine
  * depends_on- oder influences-Kante trägt ODER explizit ein nicht_befund_typ gesetzt wurde
- * (deckungsgleich mit slotCoverage.isCoverageFieldFilled für 'abhaengigkeiten').
+ * (deckungsgleich mit interviewSemantic.isCoverageFieldFilled für 'abhaengigkeiten').
  */
 function isDependencyCaptured(step: StepEntry): boolean {
   const dep = step.abhaengigkeiten
