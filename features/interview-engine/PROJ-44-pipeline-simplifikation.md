@@ -1,14 +1,14 @@
 # PROJ-44: Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad)
 
-## Status: Architected
+## Status: In Review
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** L (1–3 Tage)
-**Bugs:** —
+**Bugs:** 1:3:0 (H-1 Closing→Explore-Reentry-Bug — Gate-Blocker; M-1 vorzeitiges Closing; M-2 Rollen-Guard-FP; M-3 Themen-Ping-Pong)
 **Created:** 2026-07-16
-**Last Updated:** 2026-07-16
-**ADR:** ADR-021 (Timing-Amendment zu ADR-011 D2)
+**Last Updated:** 2026-07-17
+**ADR:** ADR-021 (Timing-Amendment zu ADR-011 D2) — Status: Accepted
 
 ## Context
 
@@ -59,34 +59,34 @@ Grund der Trennung: die KI-18-Historie zeigt, dass Talker-Prompt-Änderungen bei
 
 ### Strom 5 — Analyst synchron vor Talker
 
-- [ ] Pro Turn läuft der volle Analyst (`runAnalystOnline`) **synchron VOR** der Phasenentscheidung und vor dem Talker-Call. Sein Ergebnis (frisch geladener `stepTracker` + frisches `AnalystBriefing`) speist `checkLifecycle`, `decideNextPhaseWithMeta` **und** `createTalkerStream`.
-- [ ] Der Talker konsumiert das Briefing **dieses** Turns, nicht mehr das `next_briefing` vom Vorturn. Der Lag verschwindet damit auch für `suggested_question`/`next_focus`, nicht nur für die Phasenentscheidung.
-- [ ] Der separate `soft_confirm`-Zwei-Stufen-Recheck (`preCompletionAnalystResult` samt der doppelten Dedup-Guards in beiden `background()`-Closures) ist **entfernt** — der generelle synchrone Lauf subsumiert ihn. Kein Turn verarbeitet seinen `userInput` doppelt (kein zweiter Analyst-Pass).
-- [ ] Die drei heutigen Analyst-Einstiegspunkte (`runAnalystOnline`, `runAnalystCatchup` bei Closing-Eintritt, `runAnalystFailureRetry` bei `analyst_status='failed'`) sind zu **einem einzigen Analyst-Einstiegspunkt** konsolidiert (Deep Module): das Interface ist ein Aufruf, die drei bisherigen Verhaltensweisen werden interne, verborgene Modi (normaler Pass / Closing-Sweep / Failure-Window). Sie existierten nur, weil der Analyst in drei Timing-Kontexten lief (Recheck, Background-Online, Background-Catchup); mit dem synchronen Lauf entfällt dieser Grund. Der Turn hat danach genau **einen** synchronen Analyst-Aufrufort statt Recheck plus zwei Background-Zweige.
-- [ ] Quick-Extract (`interviewQuickExtract.ts`) ist **entfernt**; die Slot-Füllung des aktuellen Turns übernimmt vollständig der synchrone Analyst.
-- [ ] `quick` ist als Write-Source **ersatzlos entfernt** ([slotConflictResolver.ts](../../src/services/slotConflictResolver.ts), [slotWriteTrail.ts](../../src/services/slotWriteTrail.ts)), kein Read-/Ranking-Kompatibilitäts-Eintrag. Historische `quick`-Strings in gespeicherten Trails degradieren über den bestehenden `?? 0`-Fallback von `canOverwrite` genau richtig: der aktuelle Analyst (Priorität 3) darf einen alten `quick`-Slot überschreiben, was ohnehin das gewünschte Verhalten ist (frische Analyst-Daten schlagen eine alte Quick-Schätzung). Kein `quick`-Literal bleibt im Write-Pfad zurück.
-- [ ] Der Vertrag von `decideNextPhase`/`checkLifecycle` ist dokumentiert umgekehrt: sie lesen jetzt den Zustand **inklusive des aktuellen Turns**, nicht mehr „Ende Vorturn". Die Doc-Kommentare ([interviewOrchestrator.ts:123](../../src/services/interviewOrchestrator.ts#L123)) sind entsprechend aktualisiert. Die Orchestrator-**Logik selbst** (Signalkaskade) ist unverändert.
-- [ ] `next_briefing`-Persistenz bleibt erhalten, aber nur noch als (a) Fail-Safe-Quelle und (b) `usedFillerPhrases`-Cross-Turn-Bridge. Ihre Rolle als „für den nächsten Turn geplantes" Briefing entfällt.
-- [ ] BUG-1-Staleness und BUG-6 sind über die frische Phasenentscheidung strukturell behoben; je ein Regressionstest belegt es.
+- [x] Pro Turn läuft der volle Analyst (`runAnalystOnline`) **synchron VOR** der Phasenentscheidung und vor dem Talker-Call. Sein Ergebnis (frisch geladener `stepTracker` + frisches `AnalystBriefing`) speist `checkLifecycle`, `decideNextPhaseWithMeta` **und** `createTalkerStream`.
+- [x] Der Talker konsumiert das Briefing **dieses** Turns, nicht mehr das `next_briefing` vom Vorturn. Der Lag verschwindet damit auch für `suggested_question`/`next_focus`, nicht nur für die Phasenentscheidung.
+- [x] Der separate `soft_confirm`-Zwei-Stufen-Recheck (`preCompletionAnalystResult` samt der doppelten Dedup-Guards in beiden `background()`-Closures) ist **entfernt** — der generelle synchrone Lauf subsumiert ihn. Kein Turn verarbeitet seinen `userInput` doppelt (kein zweiter Analyst-Pass).
+- [x] Die drei heutigen Analyst-Einstiegspunkte (`runAnalystOnline`, `runAnalystCatchup` bei Closing-Eintritt, `runAnalystFailureRetry` bei `analyst_status='failed'`) sind zu **einem einzigen Analyst-Einstiegspunkt** konsolidiert (Deep Module): das Interface ist ein Aufruf, die drei bisherigen Verhaltensweisen werden interne, verborgene Modi (normaler Pass / Closing-Sweep / Failure-Window). Sie existierten nur, weil der Analyst in drei Timing-Kontexten lief (Recheck, Background-Online, Background-Catchup); mit dem synchronen Lauf entfällt dieser Grund. Der Turn hat danach genau **einen** synchronen Analyst-Aufrufort statt Recheck plus zwei Background-Zweige.
+- [x] Quick-Extract (`interviewQuickExtract.ts`) ist **entfernt**; die Slot-Füllung des aktuellen Turns übernimmt vollständig der synchrone Analyst.
+- [x] `quick` ist als Write-Source **ersatzlos entfernt** ([slotConflictResolver.ts](../../src/services/slotConflictResolver.ts), [slotWriteTrail.ts](../../src/services/slotWriteTrail.ts)), kein Read-/Ranking-Kompatibilitäts-Eintrag. Historische `quick`-Strings in gespeicherten Trails degradieren über den bestehenden `?? 0`-Fallback von `canOverwrite` genau richtig: der aktuelle Analyst (Priorität 3) darf einen alten `quick`-Slot überschreiben, was ohnehin das gewünschte Verhalten ist (frische Analyst-Daten schlagen eine alte Quick-Schätzung). Kein `quick`-Literal bleibt im Write-Pfad zurück.
+- [x] Der Vertrag von `decideNextPhase`/`checkLifecycle` ist dokumentiert umgekehrt: sie lesen jetzt den Zustand **inklusive des aktuellen Turns**, nicht mehr „Ende Vorturn". Die Doc-Kommentare ([interviewOrchestrator.ts:123](../../src/services/interviewOrchestrator.ts#L123)) sind entsprechend aktualisiert. Die Orchestrator-**Logik selbst** (Signalkaskade) ist unverändert.
+- [x] `next_briefing`-Persistenz bleibt erhalten, aber nur noch als (a) Fail-Safe-Quelle und (b) `usedFillerPhrases`-Cross-Turn-Bridge. Ihre Rolle als „für den nächsten Turn geplantes" Briefing entfällt.
+- [x] BUG-1-Staleness und BUG-6 sind über die frische Phasenentscheidung strukturell behoben; je ein Regressionstest belegt es.
 
 ### Strom 5 — Fail-Safe + UI
 
-- [ ] Der synchrone Analyst-Call hat einen gedeckelten Retry (bestehendes `withRetry`-Muster, 1–2 Versuche + kurzer Backoff). Transiente Fehler (Netzwerk-Blip, Rate-Limit) werden aufgefangen.
-- [ ] Terminaler Fehler (alle Retries erschöpft, selten): der Turn läuft mit dem Vorturn-Briefing weiter (selbstheilende Degradation = heutiges Verhalten, eng begrenzt), `analyst_status='failed'` wird gesetzt, `console.error` statt Silent-Fail. Der **nächste** Turn holt via `runAnalystFailureRetry`-Catchup den verpassten Turn synchron vor dem Talker nach; der Recovery-Turn ist damit wieder voll frisch. Kein blockierter oder toter Turn.
-- [ ] Ein sichtbarer „Analysiere…"-Indikator erscheint im Chat-UI, solange der synchrone Analyst läuft, bis das erste Talker-Token gestreamt wird (client-seitiger Ladezustand vom Absenden bis zum ersten Token).
+- [x] Der synchrone Analyst-Call hat einen gedeckelten Retry (bestehendes `withRetry`-Muster, 1–2 Versuche + kurzer Backoff). Transiente Fehler (Netzwerk-Blip, Rate-Limit) werden aufgefangen.
+- [x] Terminaler Fehler (alle Retries erschöpft, selten): der Turn läuft mit dem Vorturn-Briefing weiter (selbstheilende Degradation = heutiges Verhalten, eng begrenzt), `analyst_status='failed'` wird gesetzt, `console.error` statt Silent-Fail. Der **nächste** Turn holt via `runAnalystFailureRetry`-Catchup den verpassten Turn synchron vor dem Talker nach; der Recovery-Turn ist damit wieder voll frisch. Kein blockierter oder toter Turn.
+- [x] Ein sichtbarer „Analysiere…"-Indikator erscheint im Chat-UI, solange der synchrone Analyst läuft, bis das erste Talker-Token gestreamt wird (client-seitiger Ladezustand vom Absenden bis zum ersten Token).
 
 ### Strom 6 — Legacy-Pfad vereinheitlichen
 
-- [ ] Die Start-Route nutzt `createTalkerStream({ isStart: true })` statt `createInterviewStream`. Der Cold-Start-Gruß läuft **toollos** (extrahiert nichts); der Opener wird wie heute über `onFinish` als `opener_text` gespeichert.
-- [ ] Die Reconnect-Route: der LLM-Pfad ist **ersatzlos gestrichen**; sie gibt immer den statischen „Willkommen zurück"-Text zurück (kein LLM-Call).
-- [ ] `buildTools` ist nach `interviewTools.ts` verschoben; einziger verbleibender Konsument ist `interviewAnalyst.ts`.
-- [ ] `interviewAgent.ts` (`createInterviewStream` + `buildStaticPrompt`) und `interviewQuickExtract.ts` sind **vollständig gelöscht**.
-- [ ] Der PROJ-37-Static-Prompt-Drift ist aufgelöst: `STATIC_PROMPT` ([talkerPrompt.ts](../../src/services/talkerPrompt.ts)) ist die einzige verbleibende Static-Prompt-Quelle.
+- [x] Die Start-Route nutzt `createTalkerStream({ isStart: true })` statt `createInterviewStream`. Der Cold-Start-Gruß läuft **toollos** (extrahiert nichts); der Opener wird wie heute über `onFinish` als `opener_text` gespeichert.
+- [x] Die Reconnect-Route: der LLM-Pfad ist **ersatzlos gestrichen**; sie gibt immer den statischen „Willkommen zurück"-Text zurück (kein LLM-Call).
+- [x] `buildTools` ist nach `interviewTools.ts` verschoben; einziger verbleibender Konsument ist `interviewAnalyst.ts`.
+- [x] `interviewAgent.ts` (`createInterviewStream` + `buildStaticPrompt`) und `interviewQuickExtract.ts` sind **vollständig gelöscht**.
+- [x] Der PROJ-37-Static-Prompt-Drift ist aufgelöst: `STATIC_PROMPT` ([talkerPrompt.ts](../../src/services/talkerPrompt.ts)) ist die einzige verbleibende Static-Prompt-Quelle.
 
 ### Eval-Gate + Netto-Reduktion
 
-- [ ] Pflicht-Eval-Gate grün (general.md, Interview-Engine): mindestens 1 PASS je Persona (buchhalter, it-support), `dedup_slot_coverage ≥ 0.75`. **Measure-first:** falls nach dem Timing-Flip weiterhin rot, wird innerhalb von PROJ-44 diagnostiziert, ob es die `step_advance_ready`-Schwelle (zu großzügig), die Clarification-Cards-Zuverlässigkeit (Null-Slots erzeugen keine Card) oder beides ist, und gezielt am richtigen Knopf behoben. Kein blindes Vorab-Nachjustieren.
-- [ ] Netto weniger Code **und weniger Kanten zwischen Modulen**: `interviewAgent.ts` + `interviewQuickExtract.ts` entfernt, ein toter LLM-Pfad entfernt, Zwei-Stufen-Recheck kollabiert, drei Analyst-Einstiegspunkte auf einen reduziert. Der Turn kreuzt danach genau eine Analyst-Naht und eine Talker-Naht. Zeilen-/Modul-Delta plus Einstiegspunkt-Zählung sind im Backend-Abschnitt dokumentiert.
+- [ ] Pflicht-Eval-Gate grün (general.md, Interview-Engine): mindestens 1 PASS je Persona (buchhalter, it-support), `dedup_slot_coverage ≥ 0.75`. **Measure-first:** falls nach dem Timing-Flip weiterhin rot, wird innerhalb von PROJ-44 diagnostiziert, ob es die `step_advance_ready`-Schwelle (zu großzügig), die Clarification-Cards-Zuverlässigkeit (Null-Slots erzeugen keine Card) oder beides ist, und gezielt am richtigen Knopf behoben. Kein blindes Vorab-Nachjustieren. **Offen — noch kein Live-`/eval:interview`-Lauf gefahren (braucht `/qa`, siehe Backend-Abschnitt unten).**
+- [x] Netto weniger Code **und weniger Kanten zwischen Modulen**: `interviewAgent.ts` + `interviewQuickExtract.ts` entfernt, ein toter LLM-Pfad entfernt, Zwei-Stufen-Recheck kollabiert, drei Analyst-Einstiegspunkte auf einen reduziert. Der Turn kreuzt danach genau eine Analyst-Naht und eine Talker-Naht. Zeilen-/Modul-Delta plus Einstiegspunkt-Zählung sind im Backend-Abschnitt dokumentiert.
 
 ## Edge Cases
 
@@ -229,8 +229,168 @@ Time-to-first-token steigt bewusst: auf dem kritischen Pfad ersetzt der volle An
 
 Keine neuen Pakete. Keine DB-Migration. ADR-021 (Timing-Amendment) ist Pflicht vor Bau-Abschluss.
 
+## Backend Implementation Notes (2026-07-17)
+
+Gebaut wie in Tech Design B/C/D/E entschieden — keine Abweichung von ADR-021. Verifiziert direkt am Code (nicht nur an Docs), da Vorgabe des Aufrufs.
+
+**Modul-Änderungen (Ist-Stand):**
+- **Gelöscht:** `interviewAgent.ts` (741 Zeilen, `createInterviewStream`+`buildStaticPrompt`), `interviewQuickExtract.ts` (213 Zeilen) — je inkl. Test.
+- **Neu:** `interviewTools.ts` (571 Zeilen — `buildTools` + `extractSentenceAroundSpan`/`normalizeStepTitleForDedup`, einziger Konsument `interviewAnalyst.ts`) + `interviewTools.test.ts` (aus `interviewAgent.test.ts` übernommen).
+- **Konsolidiert:** `interviewAnalyst.ts` — `runAnalystOnline`/`runAnalystCatchup`/`runAnalystFailureRetry` → ein `runAnalyst(opts)` mit internen `runOnlinePass`/`runBackfillPass`-Sub-Pässen, die sich EINE `TurnSession` teilen (ein `commit()` statt zwei getrennter Sessions vorher). Rückgabe erweitert um `stepTracker` (ersetzt die vier `store.loadStepTracker`-Reloads, die es dafür vorher brauchte).
+- **Umgebaut:** `runInterviewTurn.ts` — neue Reihenfolge Rollen-Guard → synchroner `runAnalyst` (mit 1-Retry-Backoff) → `checkLifecycle`/`decideNextPhaseWithMeta` (frisch) → Talker → `finalize()`. `background()` → `finalize(): Promise<void>`; Analyst-Ergebnis wandert nach `TurnMeta.analyst`.
+- **Vertrag-Doc:** `interviewOrchestrator.ts` — nur Doc-Kommentare geändert (liest jetzt this-turn state), Signalkaskade unverändert (0 Logik-Diff, verifiziert per Test-Suite-Grün).
+- **Umgestellt:** `start/route.ts` → `createTalkerStream({isStart:true})`; `reconnect/route.ts` → LLM-Pfad ersatzlos gestrichen (auch die zuvor tote `history`/State-Ladung entfernt, da sie nur den gelöschten LLM-Zweig fütterte), gibt immer den statischen Re-Engagement-Text zurück.
+- **Bereinigt:** `quick` als `WriteSource` entfernt (`slotConflictResolver.ts`, `slotWriteTrail.ts`, `interviewSemantic.ts SlotValue.writeSource`); `loadStepTracker` als toter Code aus `OrchestrationStore`-Interface + beiden Backends (`supabaseTurnStore.ts`, `pgliteTurnStore.ts`) entfernt (nach der `runAnalyst`-Konsolidierung keinen Aufrufer mehr); `quick_extract` als Telemetrie-Komponente aus `_telemetry.ts`/`scorers/types.ts`/`costSummary.ts`/`pricingCheck.ts` entfernt.
+
+**Zeilen-Delta (production code, ohne Tests):** 20 bestehende Dateien geändert (+483/−1587) + `interviewTools.ts` neu (+571) → netto **−533 Zeilen** production code, bei gleichzeitig weniger Modulen (−1: zwei gelöscht, eines neu) und weniger Analyst-Einstiegspunkten (3 exportierte Funktionen + 1 Ad-hoc-Recheck-Callsite → 1 exportierte Funktion).
+
+**Turn-Nähte nach dem Umbau:** genau eine Analyst-Naht (`runAnalyst`, synchron) + eine Talker-Naht (`createTalkerStream`) pro Turn — verifiziert über die neuen `runInterviewTurn.test.ts`-Assertions (`runAnalyst` wird pro Turn genau einmal aufgerufen, außer beim off-topic-Kurzschluss: 0×).
+
+**Fail-Safe (D4) — Umsetzung:** 1 Retry mit 300 ms Backoff in `runInterviewTurn.ts` (kein neuer `withRetry`-Util, gleiches Inline-Retry-Muster wie `roleGuard.ts`/`talkerGroundingGuard.ts`). Bei endgültigem Fehlschlag: `soft_confirm` wird vetoed (Turn läuft mit Vorturn-Briefing weiter), `hard_stop` schließt trotzdem ab. Getestet in `runInterviewTurn.test.ts` (`Fail-Safe`-Describe-Block).
+
+**Closing-Mode-Sub-Pass-Reihenfolge (Design-Entscheidung, nicht in ADR explizit vorgezeichnet):** Backfill-Sub-Pass läuft VOR dem Online-Sub-Pass (umgekehrt zur alten Online-dann-Catchup-Reihenfolge), damit die Card-Generierung im Online-Pass den bereits nachgefüllten Tracker sieht — vermeidet redundante Cards für Slots, die der Backfill gerade erst gefüllt hat.
+
+**Regressionstests (AC "je ein Regressionstest"):** zwei gezielte Tests in `runInterviewTurn.test.ts` statt eines vollen Zwei-Turn-Nachbaus des historischen Tim-Bugs — beide belegen die eigentliche Timing-Fix-Eigenschaft (Orchestrator-Funktionen erhalten dieses Turns frischen `stepTracker`/`analystBriefing`, nicht den alten Snapshot), die laut ADR-021 die gemeinsame Wurzel von BUG-1 und BUG-6 ist. Kein Anspruch, den historischen Mehrturn-Ablauf 1:1 zu reproduzieren (dafür bräuchte es Live-LLM-Verhalten, kein Unit-Test-Fall).
+
+**Nicht in diesem Backend-Pass:** Live-`/eval:interview`-Lauf (Interview-Engine-Eval-Gate laut general.md ist erst vor `Approved` Pflicht, nicht vor `In Progress`); manueller adversarialer Durchlauf (Tim-artig); Latenz-Delta-Messung Time-to-first-Token vorher/nachher; Start/Reconnect curl-Verifikation gegen eine echte laufende Instanz. Alle vier sind Teil der Spec-„Verifikation"-Zeile unten und gehören in `/qa`.
+
 ## QA Test Results
-_To be added by /qa_
+
+> `/qa PROJ-44` — 2026-07-17. Status bleibt **In Review** (Eval-Gate nicht erfüllt, siehe unten). Kein PROJ-44-Regressionsbefund.
+
+### Zusammenfassung
+
+| Achse | Ergebnis |
+|-------|----------|
+| `tsc --noEmit` | ✅ pass |
+| Unit-Suite | ✅ 888 passed / 1 skipped (67 Test-Dateien, 6.8s) — Skip vorbestehend |
+| Code-Level-AC | ✅ alle in der Spec als `[x]` markierten ACs am Code verifiziert |
+| Security | ✅ keine neue Route; Token-Format + Expiry + Rate-Limit auf allen 3 geänderten Routen intakt |
+| Eval-Gate (Pflicht) | ❌ **nicht erfüllt** — 0/2 PASS; Ursache code-verifiziert (H-1, deterministisch, nicht bloß Varianz) |
+| Bugs (H:M:L) | **1:3:0** (H-1 Closing→Explore-Reentry-Bug; M-1 vorzeitiges Closing; M-2 Rollen-Guard-FP; M-3 Themen-Ping-Pong) |
+| Production-ready | **NEIN** — H-1 (High) + unerfülltes Eval-Gate blocken Approved |
+
+### 1. Automatisierte Tests
+
+- `npx tsc --noEmit` → grün.
+- `npm test` → 888 passed, 1 skipped (vorbestehend). Neue/umgeschriebene Tests grün: `runInterviewTurn.test.ts` (Fail-Safe-Retry, soft_confirm-Veto, hard_stop-unconditional, Failure-Window-Recovery, BUG-1/BUG-6-Regression), `interviewTools.test.ts` (aus `interviewAgent.test.ts` übernommen), `start.test.ts` (Cold-Start → `createTalkerStream({isStart:true})`), `reconnect.test.ts` (Statiktext, kein LLM), `slotConflictResolver.test.ts`/`slotWriteTrail.test.ts` (ohne `quick`).
+
+### 2. Acceptance-Criteria-Verifikation (Code-Level)
+
+Alle in der Spec `[x]` markierten ACs direkt am Code geprüft, alle bestätigt:
+
+- **Turn-Reihenfolge** ([runInterviewTurn.ts](../../src/services/runInterviewTurn.ts)): Rollen-Guard → synchroner `runAnalyst` (1 Retry, 300ms Backoff) → `checkLifecycle`/`decideNextPhaseWithMeta` mit **frischem** `stepTracker`+`briefing` → Talker → `finalize()`. Off-topic kurzschließt VOR dem Analyst (0× runAnalyst). Entspricht ADR-021 B/C 1:1.
+- **Ein Analyst-Einstiegspunkt** ([interviewAnalyst.ts](../../src/services/interviewAnalyst.ts)): `runAnalyst(opts)` mit internen `runOnlinePass`/`runBackfillPass`, Modus aus `ctx.phase`; Backfill-vor-Online im Closing-Modus; Failure-Window via `previousUserInput`. Gibt `{ briefing, toolCalls, stepTracker }` zurück (ersetzt die alten `loadStepTracker`-Reloads).
+- **Löschungen**: `interviewAgent.ts` + `interviewQuickExtract.ts` weg (git `D`); keine Import-Statements auf die gelöschten Module mehr (nur Doc-Kommentare referenzieren sie historisch). `quick`-Write-Source aus `WriteSource`/`PRIORITY`/Trail-Enum entfernt, kein Literal im Write-Pfad. `loadStepTracker` aus Store-Port + beiden Backends entfernt. `quick_extract`-Telemetrie-Komponente aus `_telemetry.ts`/`pricingCheck.ts`/`costSummary.ts`/`scorers/types.ts` entfernt (Pricing-Check bestätigt: keine quick_extract-Zeile mehr).
+- **`interviewTools.ts`** neu, einziger Konsument = `interviewAnalyst.ts` (+ eigener Test).
+- **Routen**: Start → `createTalkerStream({isStart:true})`; Reconnect → reiner Statiktext, LLM-Pfad ersatzlos weg. Chat-Route delegiert an `runInterviewTurn` + `after(() => turn.finalize())`.
+- **„Analysiere…"-Indikator** ([MessageBubble.tsx](../../src/components/interview/MessageBubble.tsx#L13)): rendert bei `isStreaming && content.length===0`. [ChatInterface.tsx](../../src/components/interview/ChatInterface.tsx#L122) fügt beim Absenden sofort eine leere Streaming-Bubble ein → Indikator deckt das synchrone-Analyst-Fenster ab.
+- **Runner-Migration** ([runner.ts](../../src/services/__evals__/interview/runner.ts)): liest `turnResult.meta.analyst?.toolCalls` + ruft `turnResult.finalize()` (statt `background()`).
+- **Regressionstests**: BUG-1 (`decideNextPhaseWithMeta` erhält frisch registrierten Step dieses Turns, nicht den leeren Pre-Turn-Tracker) + BUG-6 (`checkLifecycle` erhält frisches Briefing dieses Turns, nicht `interview.next_briefing` von vorher) — beide echt, prüfen die von ADR-021 benannte gemeinsame Wurzel.
+
+### 3. Security-Audit
+
+- Keine neue Route (nur Modifikationen an bestehenden token-authentifizierten `chat`/`start`/`reconnect`). Objekt-Ownership-Regel (neue `[id]`-Route) nicht anwendbar.
+- Alle 3 geänderten Routen behalten: UUID-Token-Format-Check, `token_expires_at`-Expiry-Guard, `checkTokenEndpointLimits`-Rate-Limit, `completed`-Guard.
+- Reconnect gibt jetzt statischen Text ohne DB-State-Read/LLM-Call zurück → reduziert Angriffs-/Kostenfläche (kein LLM auf jedem Page-Reload). Keine Datenexposition.
+
+### 4. Eval-Gate (Pflicht, general.md — Interview-Engine)
+
+Konfiguration: alle Komponenten `google/gemini-3.1-flash-lite` (Demo-Baseline), Judges `anthropic/claude-haiku-4-5`, Store `supabase`, `--seed 42`. Beide API-Keys vor dem Lauf validiert (Google 200, Anthropic 200).
+
+| Persona | interview_id | turns | status | dedup_slot_coverage (Gate ≥0.75) | dialog_naturalness | grounding_viol | hallucination | step_registration |
+|---------|-------------|-------|--------|-----------------------------------|--------------------|----------------|---------------|-------------------|
+| buchhalter | `a9e01aa6…` | 5 | **FAIL** | 0.56 | 1.0 | 0 | 0 | 1.0 |
+| it-support | `c26ee562…` | 10 | **FAIL** | 0.33 | 0.67 | 0 | 0 | 1.0 |
+
+**Kernbefund: Kein PROJ-44-Regressionssignal.** Alle regressions-sensiblen Qualitätsmetriken sind in BEIDEN Läufen gesund (hallucination 0, talker_grounding_violations 0, blocked_rate 0, schema_conformance 1.0, step_registration 1.0, anchoring 0). Der Grounding-Guard hat im buchhalter-Lauf live eine Fabrikation ("Monatsabschluss erwähnt") erkannt und regeneriert. Der Timing-Flip funktioniert nachweislich (synchroner Analyst vor Talker, frischer State).
+
+**Der FAIL ist pre-existing Varianz, kein Neubruch.** Vergleich gegen die am HEAD eingecheckten Pre-PROJ-44-Baselines (PROJ-42-QA, 2026-07-16):
+- buchhalter pre-44: dedup 0.47 / 0.67 / 0.63 / 0.56 / 0.52 (alle FAIL); zusätzlich PASSes am 2026-07-11 und 2026-07-14. → Unser 0.56 liegt mitten in der bestehenden Verteilung.
+- it-support pre-44: dedup 0.78 (**PASS**) / 0.59 (FAIL) — 1/2. Hohe Seed-Varianz. → Unser 0.33 ist ein niedriges Sample einer notorisch streuenden Metrik.
+
+**Ursache der Coverage-FAILs (Transkript-Diagnose, deckt sich mit dem Measure-First-Item der Spec):** Beide Interviews terminieren, während später genannte Prozesse noch unterexploriert sind. buchhalter completet in Turn 5, unmittelbar nachdem die Persona auf die Closing-Sonde einen **dritten** Prozess (Mahnwesen) offenbart — der nie registriert wird; Monatsabschluss bekommt nur 1/4 Slots. Es werden **keine** Clarification-Cards für die leeren Pflicht-Slots erzeugt (`clarification_coverage_delta: 0`). Das sind exakt die beiden in der Eval-Gate-AC genannten Knöpfe: (a) `step_advance_ready`-Schwelle zu großzügig (explore→closing nach ~3 Turns), (b) Cards-Zuverlässigkeit (leere Slots erzeugen keine Card). Der Late-Discovery-während-Closing-Pfad ist zugleich BUG-4-Territorium (bewusst nach **PROJ-46** verschoben).
+
+**Transkript-Level-Diagnose (Nutzer-Review 2026-07-17) — der eigentliche Befund.** Die aggregierten Scores verdeckten einen konkreten, reproduzierbaren High-Severity-Bug, der erst in der Turn-für-Turn-Lektüre beider Läufe sichtbar wurde (vgl. `feedback_transcript_level_qa_verification`). Beide Personas zeigen dasselbe Muster: nach ~3–4 substanziellen Turns springt die Phase auf `closing`; die Catch-all-Sonde fragt „gibt es noch etwas Wiederkehrendes?"; die Persona offenbart daraufhin einen **neuen, wesentlichen Prozess** (buchhalter Turn 5: Mahnwesen; it-support Turn 10: Software-Installation inkl. Genehmigungs-Bottleneck) — und das Interview **verabschiedet sich trotzdem sofort**, statt zurück in `explore` zu gehen und den Prozess zu vertiefen.
+
+**Root Cause (am Code verifiziert) — H-1: Closing→Explore-Reentry greift für inhaltsreiche Late-Discovery nicht.** Der Reentry-Guard in [interviewOrchestrator.ts:254](../../src/services/interviewOrchestrator.ts#L254) (`checkLifecycle`) und [:182](../../src/services/interviewOrchestrator.ts#L182) (`decideNextPhase`) prüft `hasStepInStatus(ctx.stepTracker, 'exploring')`. Ein in der Sonden-Antwort genannter Prozess wird vom **synchronen** Analyst (PROJ-44-Timing) im selben Pass `register_step` (Status `exploring`) **und** direkt mit `record_slot`/`update_walkthrough_data` befüllt — und genau diese Slot-Writes heben den Status via [applyIntent.ts:167/194/208](../../src/services/turnStore/applyIntent.ts#L167) `exploring → walkthrough`. Bevor `checkLifecycle` läuft, ist der frische Step also bereits `walkthrough`; der `'exploring'`-only-Guard verfehlt ihn; `closingProbeAnswerReceived` ist true; ohne Cards → `soft_confirm`-Completion. Beleg: it-supports `finalStepTracker` enthält Software-Installation als **`walkthrough`** (Daten wurden erfasst) — die Exploration endete trotzdem. Der Guard feuert nur noch bei **inhaltsleeren** Late-Mentions (register ohne Slot → bleibt `exploring`); bei den quantitativ reichen Antworten der Personas (der wertvolle Fall) versagt er systematisch. Das ist der primäre Treiber der niedrigen `dedup_slot_coverage` und damit des roten Gates.
+
+**Verhältnis zu PROJ-44:** Kein Rückschritt gegenüber pre-44 (dort ging der Late-Prozess über den Lag ganz verloren; jetzt werden seine Slots immerhin erfasst — eine Teilverbesserung). Aber die AC „BUG-1-Staleness … strukturell behoben; je ein Regressionstest belegt es" ist **nicht vollständig eingelöst**: der BUG-1-Regressionstest prüft nur, dass `decideNextPhaseWithMeta` den frischen Tracker *erhält* (mit einem `exploring`-Step im Fixture) — er deckt den realen Pfad (Late-Step wird im selben Turn geslottet → `walkthrough` → Guard verfehlt → Completion) **nicht** ab. Testlücke, nicht nur Prompt-Kalibrierung. Der Fix ist klein und orchestrator-lokal (Guard-Prädikat auf „in diesem Turn erstmals gesehener/registrierter Step" erweitern, nicht nur `exploring`) — und liegt im measure-first-Mandat der Eval-Gate-AC von PROJ-44 („gezielt am richtigen Knopf behoben").
+
+**Weitere Transkript-Befunde:**
+- **M-1 (vorzeitiges explore→closing):** `step_advance_ready` wird zu großzügig gesetzt → `closing` nach ~3 Turns bei 2 unterexplorierten Prozessen (buchhalter Turn 4). Der zweite in der Eval-Gate-AC namentlich genannte Knopf. Durch das frische Timing feuert `step_advance_ready` ggf. einen Turn früher als pre-44.
+- **M-2 (Rollen-Guard-Falschpositiv, PROJ-42-Ursprung):** it-support Turn 2 — „15 bis 20 Tickets pro Tag. Zeitaufwand? Kommt drauf an." wird als `off_topic` klassifiziert → statischer Redirect + **wortgleiche** Wiederholung der Turn-1-Frage; da off_topic den Analyst kurzschließt (PROJ-44-Reihenfolge), wird der genannte Wert „15–20/Tag" in diesem Turn **nicht** extrahiert (erst Turn 3 nachgeholt). [roleGuard.ts](../../src/services/roleGuard.ts) unverändert durch PROJ-44 — Präzisionsproblem des Prefilter/Judge.
+- **M-3 (sprunghafte Themenführung / fehlende Vertiefung):** „hin und her" zwischen Prozessen ohne Drill-Down (buchhalter Turn 2 Rechnungsprüfung→Monatsabschluss, Turn 3 zurück; it-support Turn 6 abrupt zu Hardware-Tausch). Analyst-Briefing-getrieben (`next_focus`), PROJ-43-Scope (Elicitation-Reorientierung), von PROJ-44 nicht adressiert.
+
+**Fazit Eval-Gate:** rot, aber jetzt mit klarer, code-verifizierter Ursache statt „nur Varianz". Der Gate-Blocker ist überwiegend **H-1** (ein kleiner, lokalisierter Orchestrator-Fix), sekundär **M-1**. Kein `--runs 3` nötig, um das zu erkennen — die Ursache ist deterministisch und in beiden Single-Runs identisch reproduziert. Empfehlung: H-1 (und möglichst M-1) innerhalb von PROJ-44s measure-first-Mandat fixen, dann Gate erneut fahren; M-2/M-3 sind Fremd-Feature-Scope (PROJ-42/PROJ-43).
+
+Eval-Artefakte:
+- `docs/evals/interview/2026-07-16/2026-07-16-01-20-49-google-gemini-3-1-flash-lite-buchhalter.md`
+- `docs/evals/interview/2026-07-16/2026-07-16-01-29-47-google-gemini-3-1-flash-lite-it-support.md`
+
+(Hinweis: der Runner legte die Reports wegen einer Zeitzonen-/Datums-Kante am Mitternachtsübergang im Ordner `2026-07-16` ab; Systemdatum war 2026-07-17. Kosmetisch, unabhängig von PROJ-44.)
+
+### 5. Noch offen (gehören zur In-Review-Runde, nicht Approved-blockend über das Eval-Gate hinaus)
+
+- **Start/Reconnect curl-Verifikation gegen laufende Instanz:** nicht gefahren. Abgedeckt durch die umgeschriebenen Unit-Tests (`start.test.ts`/`reconnect.test.ts`, alle Guards + Happy-Path) und dadurch, dass die zwei Live-Evals die Chat-Turn-Pipeline inkl. `finalize()`/Extraktion/Dedup real ausgeführt haben (`[dedup] removed N duplicates` in beiden Läufen).
+- **Latenz-Delta (Time-to-first-token vorher/nachher):** keine präzise A/B-Messung (bräuchte Revert des Working-Trees). Architektonisch bekannt: der volle synchrone Analyst (budget 2048) ersetzt den leichten Quick-Extract auf dem kritischen Pfad → TTFT steigt bewusst; der „Analysiere…"-Indikator überbrückt UX-seitig.
+- **Manueller adversarialer Durchlauf (Tim-artig):** nicht separat gefahren; die buchhalter-Closing-Sonde hat einen realen Late-Discovery-Fall erzeugt (Mahnwesen), der die Coverage-Kalibrierungs-Lücke sichtbar gemacht hat.
+
+### Bug-Tally
+
+**0 Critical · 1 High · 3 Medium · 0 Low → 1:3:0**
+
+- **H-1 (High):** Closing→Explore-Reentry greift für inhaltsreiche Late-Discovery nicht. Ein in der Sonden-Antwort genannter neuer Prozess wird vom synchronen Analyst im selben Turn registriert **und** geslottet → Status `exploring→walkthrough` ([applyIntent.ts:167](../../src/services/turnStore/applyIntent.ts#L167)) → der `hasStepInStatus('exploring')`-Guard in [interviewOrchestrator.ts:254/182](../../src/services/interviewOrchestrator.ts#L254) verfehlt ihn → `soft_confirm`-Completion statt Reentry. Primärer Treiber der niedrigen `dedup_slot_coverage` (rotes Gate), beide Personas, jeder Lauf. Kern-Produktwert (vollständige Prozesserfassung) degradiert. Fix klein + orchestrator-lokal; BUG-1-Regressionstest deckt diesen Pfad nicht ab (Testlücke).
+- **M-1 (Medium):** Vorzeitiges explore→closing — `step_advance_ready` zu großzügig; `closing` nach ~3 Turns mit unterexplorierten Prozessen. Measure-first-Knopf der Eval-Gate-AC.
+- **M-2 (Medium, PROJ-42-Ursprung):** Rollen-Guard-Falschpositiv (it-support Turn 2) → Redirect + wortgleiche Fragewiederholung + Slot-Verlust dieses Turns (Analyst kurzgeschlossen).
+- **M-3 (Medium, PROJ-43-Scope):** Sprunghafte Themenführung ohne Vertiefung (Prozess-Ping-Pong).
+
+Keine Critical-Befunde. Keine harte Regression (nichts vormals Funktionierendes ist gebrochen). H-1 ist ein von PROJ-44s synchronem Timing sichtbar gemachter Completion-Bug im Scope von PROJ-44s Eval-Gate-Verantwortung; M-2/M-3 sind Fremd-Feature-Scope, aber während dieser QA real beobachtet.
+
+### Production-Ready-Entscheidung: **NEIN**
+
+Zwei Gründe: (1) Pflicht-Eval-Gate (≥1 PASS je Persona) nicht nachgewiesen (0/2); (2) **H-1** ist ein High-Severity-Completion-Bug, der Approved unabhängig vom Gate blockt (QA-Regel: kein Approved bei Critical/High). PROJ-44 bleibt **In Review**. Empfohlener nächster Schritt: H-1 (+ möglichst M-1) im measure-first-Mandat fixen, `runInterviewTurn`-Regressionstest um den Late-Discovery-Slot-Pfad ergänzen, dann Gate erneut fahren.
+
+## Remediation Plan — H-1 + M-1 + M-3 gebündelt (Nutzer-Freigabe 2026-07-17)
+
+> Ergebnis der QA-Folge-Design-Diskussion (2026-07-17, Opus). Nutzer-Entscheidung: die drei zusammenhängenden Gesprächsführungs-Befunde **hier in PROJ-44** bündeln statt M-3 in PROJ-43 erneut aufzumachen — sie hängen alle am selben deterministischen Primitiv. M-2 (Rollen-Guard-Präzision) bleibt separat (KI-26 → PROJ-42). **Scope-Hinweis:** das Bündel weitet PROJ-44 über den ursprünglichen „schmalen" Schnitt (Option 1) hinaus; Appetite steigt faktisch von L Richtung XL. Bewusster Trade-off: kohärentes Gesprächsverhalten (Tiefe-zuerst) > saubere M-1/M-3-Eval-Attribuierbarkeit.
+
+### Gemeinsames Primitiv: Grenznutzen-Drought auf O-Slots
+
+Ein **per-aktiver-Schritt**-Zähler aufeinanderfolgender Turns **ohne neues O-Feld** (O2–O6: entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, abhaengigkeiten — die substanziellen `COVERAGE_FIELDS` ohne das auto-gefüllte O1). Im Code berechnet (Muster wie `noNewExtractionStreak`, aber O-slot-spezifisch statt „irgendeine Extraktion" — der bestehende Streak resettet auf jede Extraktion inkl. Zahlen/Governance und taugt daher nicht), in `next_briefing` persistiert, am Turn-Anfang gelesen. „Belohnung" = neues O-Feld durch gezieltes Nachhaken; „Drought" (K Turns kein neues O-Feld für den aktiven Schritt) = Schritt qualitativ erschöpft. **Selbst-kalibrierend — kein fester Schwellwert.** K env-tunbar (analog `NO_NEW_EXTRACTION_LIMIT`), Startwert measure-first. Warum das die richtige Basis ist: das Gate `dedup_slot_coverage` misst genau diese O-Felder ([slotCoverage.ts:36](../../src/services/__evals__/interview/scorers/slotCoverage.ts#L36)), und die quantitativen `potenzial`-Slots sollen mit PROJ-43 ff. an Bedeutung verlieren (Zahlen → Cards) — ein Floor auf O-Feldern zieht mit beidem, ein Floor auf freq/duration liefe dagegen.
+
+### Drei Fixes auf diesem Primitiv
+
+**H-1 — Closing→Explore-Reentry (High, Gate-Blocker):**
+- Erkennung via **Tracker-Diff nach `id`** in [runInterviewTurn.ts](../../src/services/runInterviewTurn.ts) (Pre-Analyst-Tracker vs. `analystResult.stepTracker`) → `newStepThisTurn`. Nicht über `toolCalls` — die tragen nur Args, kein Dedup-Ergebnis ([interviewAnalyst.ts:546](../../src/services/interviewAnalyst.ts#L546)); `StepEntry.id` (S001…) ist stabil und Merges behalten die kanonische id, also keine False Positives.
+- `newStepThisTurn` in `OrchestratorContext`. [checkLifecycle](../../src/services/interviewOrchestrator.ts#L253) closing: `soft_confirm` vetoen wenn `newStepThisTurn`. [decideNextPhase](../../src/services/interviewOrchestrator.ts#L182) closing: `return 'explore'` wenn `newStepThisTurn` — status-unabhängig, ergänzt den bestehenden `hasStepInStatus('exploring')`-Check (der den walkthrough-gebumpten Late-Step verfehlt).
+
+**M-1 — vorzeitiges explore→closing (Medium), Breite tracker-basiert (Alternative B):**
+- `hasUnexploredFocusTopic`/`topicsOpen` aus der Phasenentscheidung **entfernen** — einziger funktionaler Konsument, daher risikoarm; kein Prompt/Scorer liest die Werte. `topicsOpen`/`update_topics` bleiben als inerte Plumbing (Analyst schreibt weiter, niemand liest → kein Bruch; späteres Cleanup optional).
+- Ersetzen durch tracker-abgeleiteten Check: nicht nach closing, solange ein registrierter Schritt qualitativ **nicht erschöpft** ist (O-Drought noch nicht gefeuert). Tiefe + Breite verschmelzen zu **einem** Kriterium: „gibt es einen registrierten Prozess, der qualitativ noch nicht erschöpft ist?"
+
+**M-3 — Fokus-Lock / Tiefe-zuerst (Medium, aus KI-27 hierher gezogen):**
+- Das Ping-Pong lebt in der **Fokus-Wahl** (`next_focus`, analyst-getrieben), nicht in der Phasenentscheidung — ein anderer Hebel als M-1.
+- Am Turn-Anfang bestimmt der Orchestrator den **gesperrten aktiven Schritt** aus Tracker + Drought-State und gibt ihn als `focusStepId` **in** den synchronen `runAnalyst`-Lauf → kohärentes Briefing + `suggested_question` für genau diesen Schritt (kein nachträgliches `next_focus`-Überschreiben, das mit der Frage kollidieren würde). Timing passt: der Drought-Streak ist am Turn-Anfang aus `next_briefing` verfügbar (wie `noNewExtractionStreak` heute).
+- Der Lock löst **nur**, wenn die Drought des aktiven Schritts feuert → dann nächsten unerschöpften/neuen Schritt als aktiv wählen. Fokus wechselt nie mitten im Drill → **kein Ping-Pong**, Tiefe-zuerst garantiert.
+- **Extraktion bleibt opportunistisch** — nebenbei genannte Daten anderer Prozesse werden weiter erfasst (Slots füllen sich); nur die Frage-Richtung ist gesperrt.
+
+### Grenzen (kein Endlos-Loop, keine Strafe nötig)
+Drought (primärer Stopp — Belohnung fällt selbst auf 0, wenn nichts mehr zu holen ist) + Wall-Clock-Soft-Anker 80% ([:148](../../src/services/interviewOrchestrator.ts#L148)) + Hard-Stop 100% ([:132](../../src/services/interviewOrchestrator.ts#L132)) als Deckel. **Keine separate Straffunktion** — sie wäre redundant und würde vorzeitig abbrechen. Ein sturer Prozess (Persona liefert keine O-Felder) hängt nicht fest: Drought feuert nach K → weiter.
+
+### Tests (inkl. der bei H-1 gefundenen Testlücke)
+- **H-1:** Closing-Turn, Analyst registriert **und** slottet neuen Step (→walkthrough) → `checkLifecycle` completet nicht, `decideNextPhase='explore'`.
+- **M-1:** `step_advance_ready=true`, ein Step unerschöpft → bleibt `explore`; alle Steps erschöpft → `closing`.
+- **M-3:** aktiver Schritt unerschöpft → `focusStepId` bleibt über mehrere Turns auf ihm; Drought feuert → wechselt auf nächsten dünnen Step.
+- **Grenzen:** unerschöpfter Step + Soft-Anker überschritten → trotzdem `closing` (Floor hebelt die Zeit-Netze nicht aus).
+- **Drought-Berechnung:** O-spezifisch, per-Step, persistiert — eigener reiner Unit-Test analog `computeNextBriefing`.
+
+### Nicht in diesem Bündel
+- **Clarification-Cards-Zuverlässigkeit** (`clarification_coverage_delta 0` trotz leerer Pflicht-Slots) — dritter Gate-Faktor, eigene Diagnose **nach** dem Bündel-Fix (H-1+M-1 heben Coverage schon deutlich; falls das Gate danach knapp rot bleibt, ist das der nächste Verdächtige, evtl. Prompt-nah).
+- **M-2** (Rollen-Guard-Präzision) → KI-26 / PROJ-42.
+
+### Nächster Schritt
+`/backend` (bzw. `/build`) für dieses Bündel; danach das Pflicht-Eval-Gate erneut (buchhalter + it-support). QA fixt nicht selbst.
 
 ## Deployment
 _To be added by /deploy_
