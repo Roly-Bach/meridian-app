@@ -4,8 +4,8 @@
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
-**Appetite:** L (1–3 Tage)
-**Bugs:** 1:3:0 (H-1 Closing→Explore-Reentry-Bug — Gate-Blocker; M-1 vorzeitiges Closing; M-2 Rollen-Guard-FP; M-3 Themen-Ping-Pong)
+**Appetite:** XL (>3 Tage; ursprünglich L geschätzt, faktisch XL durch das H-1/M-1/M-3-Remediation-Bündel — siehe Scope-Hinweis im Remediation Plan)
+**Bugs:** 2:5:2 (Runde 2 nach Nutzer-Transkript-Review: H-2 Farewell-Limbo, H-3 ctx.phase stale → BUG-6-AC widerlegt; M-2, M-4, M-5, M-6 Fokus-Lock nur advisory, M-7 Abschluss ignoriert Sonden-Antwort; L-1, L-2. H-1/M-1 live verifiziert behoben, M-3 nur gemildert.)
 **Created:** 2026-07-16
 **Last Updated:** 2026-07-17
 **ADR:** ADR-021 (Timing-Amendment zu ADR-011 D2) — Status: Accepted
@@ -67,7 +67,7 @@ Grund der Trennung: die KI-18-Historie zeigt, dass Talker-Prompt-Änderungen bei
 - [x] `quick` ist als Write-Source **ersatzlos entfernt** ([slotConflictResolver.ts](../../src/services/slotConflictResolver.ts), [slotWriteTrail.ts](../../src/services/slotWriteTrail.ts)), kein Read-/Ranking-Kompatibilitäts-Eintrag. Historische `quick`-Strings in gespeicherten Trails degradieren über den bestehenden `?? 0`-Fallback von `canOverwrite` genau richtig: der aktuelle Analyst (Priorität 3) darf einen alten `quick`-Slot überschreiben, was ohnehin das gewünschte Verhalten ist (frische Analyst-Daten schlagen eine alte Quick-Schätzung). Kein `quick`-Literal bleibt im Write-Pfad zurück.
 - [x] Der Vertrag von `decideNextPhase`/`checkLifecycle` ist dokumentiert umgekehrt: sie lesen jetzt den Zustand **inklusive des aktuellen Turns**, nicht mehr „Ende Vorturn". Die Doc-Kommentare ([interviewOrchestrator.ts:123](../../src/services/interviewOrchestrator.ts#L123)) sind entsprechend aktualisiert. Die Orchestrator-**Logik selbst** (Signalkaskade) ist unverändert.
 - [x] `next_briefing`-Persistenz bleibt erhalten, aber nur noch als (a) Fail-Safe-Quelle und (b) `usedFillerPhrases`-Cross-Turn-Bridge. Ihre Rolle als „für den nächsten Turn geplantes" Briefing entfällt.
-- [x] BUG-1-Staleness und BUG-6 sind über die frische Phasenentscheidung strukturell behoben; je ein Regressionstest belegt es.
+- [~] BUG-1-Staleness und BUG-6 sind über die frische Phasenentscheidung strukturell behoben; je ein Regressionstest belegt es. **Teilweise. BUG-1-Staleness ist eingelöst und live verifiziert** (H-1-Fix, Late-Discovery-Reentry funktioniert in beiden Personas). **BUG-6 ist NICHT eingelöst** (QA-Runde 2, H-3): `runInterviewTurn.ts` liest die Phase weiterhin als Vorturn-Wert aus dem State ([:193](../../src/services/runInterviewTurn.ts#L193) → [:331](../../src/services/runInterviewTurn.ts#L331)) und ruft `checkLifecycle` ([:351](../../src/services/runInterviewTurn.ts#L351)) vor `decideNextPhaseWithMeta` ([:439](../../src/services/runInterviewTurn.ts#L439)) auf. Der `closing`-Trigger greift damit konstruktionsbedingt erst einen Turn nach dem Closing-Eintritt, also exakt der unter „Context" beschriebene BUG-6-Mechanismus. Frisch sind nur `stepTracker` und `analystBriefing`, nicht der Phasenwert. Der vorhandene Regressionstest prüft die Briefing-Frische und deckt den Phasen-Pfad nicht ab (gleiche Testlücken-Klasse wie bei BUG-1 in Runde 1). Siehe QA-Runde 2, Abschnitt 6.2.
 
 ### Strom 5 — Fail-Safe + UI
 
@@ -85,7 +85,7 @@ Grund der Trennung: die KI-18-Historie zeigt, dass Talker-Prompt-Änderungen bei
 
 ### Eval-Gate + Netto-Reduktion
 
-- [ ] Pflicht-Eval-Gate grün (general.md, Interview-Engine): mindestens 1 PASS je Persona (buchhalter, it-support), `dedup_slot_coverage ≥ 0.75`. **Measure-first:** falls nach dem Timing-Flip weiterhin rot, wird innerhalb von PROJ-44 diagnostiziert, ob es die `step_advance_ready`-Schwelle (zu großzügig), die Clarification-Cards-Zuverlässigkeit (Null-Slots erzeugen keine Card) oder beides ist, und gezielt am richtigen Knopf behoben. Kein blindes Vorab-Nachjustieren. **Offen — noch kein Live-`/eval:interview`-Lauf gefahren (braucht `/qa`, siehe Backend-Abschnitt unten).**
+- [ ] Pflicht-Eval-Gate grün (general.md, Interview-Engine): mindestens 1 PASS je Persona (buchhalter, it-support), `dedup_slot_coverage ≥ 0.75`. **Measure-first:** falls nach dem Timing-Flip weiterhin rot, wird innerhalb von PROJ-44 diagnostiziert, ob es die `step_advance_ready`-Schwelle (zu großzügig), die Clarification-Cards-Zuverlässigkeit (Null-Slots erzeugen keine Card) oder beides ist, und gezielt am richtigen Knopf behoben. Kein blindes Vorab-Nachjustieren. **Offen nach zwei Gate-Runden (0/2 PASS, buchhalter 0.48 / it-support 0.56).** Die Measure-first-Diagnose ist damit abgeschlossen: beide in dieser AC genannten Knöpfe (`step_advance_ready`-Schwelle und Cards-Zuverlässigkeit) sind identifiziert, der erste ist über das Remediation-Bündel behoben (M-1), der zweite ist als M-4 bestätigt und weiterhin offen. Zusätzlich in Runde 2 aufgedeckt und in dieser AC nicht vorgesehen: `dependency_capture` ist strukturell 0 (M-5, deckelt die Metrik bei 0.89) und der Nenner-Effekt der Coverage-Quote bestraft die von H-1 korrekt gefundenen Zusatzprozesse. Das Gate ist mit Agenten-Kalibrierung allein nicht erreichbar; siehe QA-Runde 2, Abschnitt 3.
 - [x] Netto weniger Code **und weniger Kanten zwischen Modulen**: `interviewAgent.ts` + `interviewQuickExtract.ts` entfernt, ein toter LLM-Pfad entfernt, Zwei-Stufen-Recheck kollabiert, drei Analyst-Einstiegspunkte auf einen reduziert. Der Turn kreuzt danach genau eine Analyst-Naht und eine Talker-Naht. Zeilen-/Modul-Delta plus Einstiegspunkt-Zählung sind im Backend-Abschnitt dokumentiert.
 
 ## Edge Cases
@@ -391,6 +391,310 @@ Drought (primärer Stopp — Belohnung fällt selbst auf 0, wenn nichts mehr zu 
 
 ### Nächster Schritt
 `/backend` (bzw. `/build`) für dieses Bündel; danach das Pflicht-Eval-Gate erneut (buchhalter + it-support). QA fixt nicht selbst.
+
+## Remediation Implementation Notes (2026-07-17, `/backend`)
+
+Gebaut wie im Remediation Plan oben entschieden — ein gemeinsames Primitiv (O-Drought), drei Fixes darauf. Keine Abweichung vom Plan.
+
+**Gemeinsames Primitiv:** `ODroughtState { stepId, streak, exhaustedStepIds }` neu in [interviewTypes.ts](../../src/services/interviewTypes.ts) (neben `AnalystBriefing`, dort auch `AnalystBriefing.oDrought?` + `InterviewContext.focusStepId?`). `isCoverageFieldFilled` (bisher lokal in `slotCoverage.ts`) + neu `O_SLOT_FIELDS`/`countFilledOFields` nach [interviewSemantic.ts](../../src/services/interviewSemantic.ts) verschoben — ein Ort für "was zählt als O-Feld", vom Eval-Scorer UND vom Drought-Primitiv genutzt (`slotCoverage.ts` importiert jetzt von dort, keine Logik-Duplikation).
+
+**[interviewOrchestrator.ts](../../src/services/interviewOrchestrator.ts) — vier neue reine Funktionen:**
+- `hasNewStepThisTurn(before, after)` (H-1): Tracker-Diff nach `id`, nicht nach Status.
+- `computeFocusLock(stepTracker, previous)` (M-3): wählt den gesperrten aktiven Schritt vor dem Analyst-Lauf; feuert die Drought des Vorschritts (`streak >= Limit`) → markiert ihn `exhaustedStepIds`, sperrt auf den nächsten nicht-done/nicht-erschöpften Kandidaten (Streak-Reset auf 0).
+- `updateODrought(lock, before, after)` (M-1/M-3): Post-Analyst — vergleicht `countFilledOFields` vor/nach für den gesperrten Schritt, resettet oder inkrementiert.
+- `hasUnexhaustedStep(tracker, lock)` (M-1, intern): ersetzt `hasUnexploredFocusTopic` in `decideNextPhase`'s `explore`-Case.
+
+`OrchestratorContext` um zwei Pflichtfelder erweitert: `newStepThisTurn: boolean`, `oDrought: ODroughtState`. `decideNextPhase`'s `closing`-Case und `checkLifecycle`'s Trigger B prüfen jetzt zusätzlich `ctx.newStepThisTurn` (H-1); `decideNextPhase`'s `explore`-Case nutzt `hasUnexhaustedStep(ctx.stepTracker, ctx.oDrought)` statt der entfernten `hasUnexploredFocusTopic(ctx.topicsOpen, ...)` (M-1). `topicsOpen`/`update_topics` bleiben unverändert (inerte Plumbing, wie im Plan vorgesehen).
+
+**[interviewAnalyst.ts](../../src/services/interviewAnalyst.ts) (M-3):** `AnalystRunOptions`/`OnlinePassOptions` um `focusLock: ODroughtState` (+ `preTurnTracker` bei letzterem) erweitert. `runAnalyst` setzt `focusStepId` auf dem `InterviewContext` (nur für den Analyst-Aufruf, nicht auf `contextBase` — bleibt dadurch vom Talker-Kontext getrennt, PROJ-46-Scope-Grenze gewahrt). `buildAnalystSystemPrompt` rendert bei gesetztem `focusStepId` eine `FOKUS-LOCK`-Zeile im "Aktueller Kontext"-Footer (nicht im stabilen STUFE-0-4-Präfix — WP5-Cache-Test bleibt grün, da die Zeile bei fehlendem Fokus leer ist). `runOnlinePass` berechnet `updateODrought` unmittelbar vor dem `produce_briefing`-Stage-Call und hängt das Ergebnis ans Briefing — ein einziger Commit pro Pass bleibt erhalten (kein zweiter `produce_briefing`-Stage-Aufruf, der am `briefingProduced`-Guard scheitern würde).
+
+**[runInterviewTurn.ts](../../src/services/runInterviewTurn.ts):** `preTurnTracker`-Konstante direkt nach dem Tracker-Laden (Baseline für Diff/Lock); `computeFocusLock` läuft VOR dem synchronen Analyst-Aufruf (liest `analystBriefing?.oDrought` vom Vorturn); `focusLock` wird in den `runAnalyst`-Call gereicht; `orchestratorCtx` bekommt `newStepThisTurn` (Diff pre-/post-Analyst) und `oDrought` (`analystBriefing?.oDrought` nach dem Analyst-Lauf, Fallback auf den vorab berechneten Lock bei terminalem Analyst-Fehler — ADR-021-D4-Fail-Safe bleibt intakt).
+
+**Tests:** 17 neue/ersetzte Unit-Tests in `interviewOrchestrator.test.ts` (3× M-1 explore/closing-Fälle, 1× H-1 `decideNextPhase`, 1× H-1 `checkLifecycle`, je ein Describe-Block für `computeFocusLock`/`updateODrought`/`hasNewStepThisTurn`, inkl. `O_DROUGHT_LIMIT`-Env-Override-Test analog `NO_NEW_EXTRACTION_LIMIT`). `interviewOrchestrator.tim-regression.test.ts` Turn-9-Fixture um ein explizites `oDrought` ergänzt (der reale Tim-Verlauf hätte bis Turn 9 auch drought-technisch gefeuert — beide Signale stimmen jetzt überein, statt nur `step_advance_ready` allein reichen zu lassen). `tsc --noEmit` grün, volle Suite **902/903** (1 Skip vorbestehend, 67 Testdateien).
+
+**Nicht in diesem Pass:** Live-`/eval:interview`-Lauf (gehört zu `/qa`, nicht `/backend`). Status bleibt **In Review** bis QA das Bündel gegen das Eval-Gate erneut verifiziert; `Bugs: 1:3:0` im Header unverändert, da nur QA nach Verifikation die Zählung aktualisiert (general.md-Konvention).
+
+## QA Test Results — Runde 2 (Remediation-Verifikation, 2026-07-17)
+
+> `/qa PROJ-44`, zweiter Durchlauf nach dem H-1/M-1/M-3-Remediation-Bündel. Status bleibt **In Review**. Die drei remediierten Bugs sind live verifiziert behoben; das Pflicht-Eval-Gate bleibt rot, mit jetzt vollständig aufgeklärter Ursachenstruktur, und ein neuer High-Befund (H-2) ist dazugekommen.
+
+### Zusammenfassung
+
+| Achse | Ergebnis |
+|-------|----------|
+| `tsc --noEmit` | ✅ pass |
+| Unit-Suite | ✅ 902 passed / 1 skipped (67 Dateien) — Skip vorbestehend |
+| Remediation-Code (Code-Level) | ✅ Plan 1:1 umgesetzt, Drought-Baseline korrekt verdrahtet |
+| H-1 (Closing→Explore-Reentry) | ✅ **live behoben**, beide Personas |
+| M-1 (vorzeitiges Closing) | ✅ **live behoben** (Closing ab Turn 9 bzw. 12 statt 3–4) |
+| M-3 (Themen-Ping-Pong) | 🟡 **gemildert, nicht behoben** (Tiefe-zuerst greift, it-support O-Felder 3 → 9; Fokus-Lock ist aber nur advisory → Sprünge bleiben. Korrigiert nach Nutzer-Review, siehe 6.1) |
+| Eval-Gate (Pflicht) | ❌ **0/2 PASS** (buchhalter 0.48, it-support 0.56; Gate ≥ 0.75) |
+| Regressions-sensible Metriken | ✅ hallucination 0, grounding 0, anchoring 0, schema 1.0, step_registration 1.0, blocked 0 (beide Läufe) |
+| Bugs (H:M:L) | **2:5:2** (revidiert nach Nutzer-Transkript-Review, siehe Abschnitt 6) |
+| Production-ready | **NEIN** (H-2, H-3 + rotes Gate) |
+
+Konfiguration identisch zur Runde 1 (alle Komponenten `google/gemini-3.1-flash-lite`, Judges `anthropic/claude-haiku-4-5`, `--store supabase --seed 42`), damit der Vergleich sauber attribuierbar ist. Beide API-Keys vorab validiert (Google 200 via Node-Fetch, Anthropic 200). Kosten rund $0.12 je Lauf.
+
+### 1. Remediation live verifiziert (die eigentliche Frage dieser Runde)
+
+**H-1 behoben, in beiden Personas reproduziert.** Genau der Pfad, an dem Runde 1 scheiterte, läuft jetzt korrekt:
+
+| Persona | Late-Discovery | Verhalten Runde 1 | Verhalten jetzt |
+|---------|----------------|-------------------|-----------------|
+| buchhalter | Turn 10 „Mahnlauf" (Phase war `closing` in Turn 9) | Interview verabschiedete sich sofort (Completion Turn 5) | Rücksprung nach `explore`, Mahnlauf über Turns 11–13 exploriert, 3 O-Felder erfasst |
+| it-support | Turn 13 „Softwareanfragen" (Phase war `closing` in Turn 12) | Completion trotz neuem Prozess | Rücksprung nach `explore`, Turns 14–16 vertieft |
+
+**M-3 behoben:** kein Prozess-Ping-Pong mehr, Fokus bleibt über mehrere Turns am selben Schritt. Deutlichster Beleg it-support: die O-Feld-Tiefe stieg von 1 O-Feld pro Schritt (Runde 1: alle drei Schritte nur `hilfsmittel`) auf 4/4/1. `dedup_slot_coverage` dort 0.33 → **0.56**.
+
+**M-1 behoben:** `closing` fällt nicht mehr nach ~3 Turns, sondern erst bei Turn 9 (buchhalter) bzw. 12 (it-support).
+
+**Architektur-AC live bestätigt:** `analyst_online` lief exakt 17 Calls auf 17 Turns bzw. 18 auf 18. Genau eine Analyst-Naht pro Turn, wie in ADR-021 gefordert.
+
+### 2. Neuer Befund H-2: Farewell-Limbo (High)
+
+Der Transkript-Level-Review (nicht die Aggregat-Scores) legte einen neuen, reproduzierbaren Fehler offen. buchhalter Turns 14 bis 17, vier aufeinanderfolgende Verabschiedungen:
+
+| Turn | Phase | Agent |
+|------|-------|-------|
+| 14 | `explore` | „Damit haben wir alle wesentlichen Kernaufgaben erfasst. Ich wünsche dir einen produktiven weiteren Arbeitstag." |
+| 15 | `explore` | „Danke, ebenso. Einen erfolgreichen Tag noch." |
+| 16 | `closing` | „Alles klar, dann belassen wir es dabei. Einen erfolgreichen Tag noch." |
+| 17 | `closing` | „Vielen Dank für deine Zeit ... Einen erfolgreichen Tag noch." |
+
+**Mechanismus (am Code und am Transkript verifiziert):** In Turn 13 bestätigt die Persona, dass es keine weiteren Prozesse gibt. Der Talker hat damit nichts mehr zu fragen und improvisiert eine Verabschiedung. Die Phasenmaschine schließt aber nicht ab, weil `decideNextPhase`s `explore`-Zweig zwei Wege nach `closing` kennt und beide blockiert sind:
+1. `hasUnexhaustedStep(...)` ist noch `true` (die O-Drought hat nicht jeden Schritt erschöpft). Das ist genau der von M-1 neu eingezogene Floor.
+2. Die Notbremse `noNewExtractionStreak >= 3` feuert nicht, weil der Analyst auch aus reinen Höflichkeitsfloskeln noch etwas extrahiert. Turn 15 schreibt `record_slot frequency_per_month` für S001 aus der Nachricht „Vielen Dank für das angenehme Gespräch ...", was den Streak auf 0 zurücksetzt.
+
+Damit hält der Streak-Reset die Notbremse offen, während der M-1-Floor den regulären Weg sperrt. Das Interview läuft leer weiter, bis eine andere Bedingung greift.
+
+**Einordnung, ehrlich abgegrenzt:** Das Symptom ist nicht neu (die KI-18-Historie dokumentiert am 2026-06-30 ein „vierfaches Auf-Wiederhören-Wiederholungsmuster", vor PROJ-44). Der Mechanismus ist auch **nicht** die Wurzel von BUG-6 (Pre-Turn-Phasenwert), die PROJ-44 tatsächlich behoben hat. Aber: das Remediation-Bündel macht diesen Zustand erst erreichbar, weil es Interviews absichtlich in die Länge zieht (buchhalter 5 → 17 Turns) und damit regelmäßig in den Zustand „Talker hat nichts mehr zu fragen, Floor lässt noch nicht schließen" führt. Vor der Remediation schloss buchhalter in Turn 5 und erreichte den Zustand nie. Kein Datenverlust, `completion_correctness` bleibt `true`; die Einstufung als High folgt daraus, dass es im Demo-Pfad unmittelbar sichtbar ist und rund ein Viertel des Turn-Budgets verbrennt.
+
+Hinweis zur Instrument-Güte: der `dialog_naturalness`-Judge hat die vier Verabschiedungen **nicht** bemängelt (0.67, Begründung nennt nur Redundanz in zwei Texten). Der Befund war ausschließlich über die Turn-für-Turn-Lektüre sichtbar, siehe `feedback_transcript_level_qa_verification`.
+
+### 3. Eval-Gate: warum es trotz behobener Bugs rot bleibt
+
+| Persona | Runde 1 (pre-Remediation) | Runde 2 (post) | Gate | Turns | Schritte |
+|---------|---------------------------|----------------|------|-------|----------|
+| buchhalter | 0.56 FAIL | **0.48 FAIL** | ≥0.75 | 5 → 17 | 2 → 3 |
+| it-support | 0.33 FAIL | **0.56 FAIL** | ≥0.75 | 10 → 18 | 3 → 3 |
+
+**buchhalters Rückgang ist ein Artefakt der Metrik, kein Rückschritt im Inhalt.** `dedup_slot_coverage` ist ein Verhältnis: `Σ gefüllte Felder / (n_Schritte × 9)` ([slotCoverage.ts](../../src/services/__evals__/interview/scorers/slotCoverage.ts)). Der von H-1 neu gefundene dritte Prozess (Mahnlauf) hebt den Nenner um 9. Absolut erfasst der Lauf **mehr** Wissen als vorher (13 statt 10 gefüllte Felder, 3 statt 2 Prozesse), die Quote fällt trotzdem von 0.56 auf 0.48. Das Gate bestraft damit genau das, was H-1 richtig macht, solange der neu entdeckte Prozess nicht mindestens so tief exploriert wird wie der Durchschnitt der bestehenden. Das ist ein Zielkonflikt zwischen Messinstrument und Produktwert und gehört vor der nächsten Gate-Runde entschieden (Instrument-Frage, PROJ-40/ADR-020-Territorium, nicht durch weiteres Nachjustieren am Agenten lösbar).
+
+**Zwei strukturelle Deckel, die das Gate unabhängig davon fast unerreichbar machen:**
+- **M-5: `dependency_capture` ist 0 in 4 von 4 Läufen** (beide Runden, beide Personas). O6 `abhaengigkeiten` ist eines der 9 Coverage-Felder und wird nie gefüllt. Damit liegt die erreichbare Obergrenze bei 8/9 = 0.89, und rund 11 Prozentpunkte des Abstands zum Gate sind rein strukturell.
+- **M-4: `clarification_coverage_delta` ist 0 in 4 von 4 Läufen.** Leere Pflicht-Slots erzeugen weiterhin keine Clarification-Card. Das ist der im Remediation-Plan bewusst zurückgestellte „dritte Gate-Faktor". Er ist damit jetzt als real bestätigt, nicht mehr als Verdacht.
+
+Rechnerisch: für 0.75 müssten je Schritt 6.75 der 9 Felder gefüllt sein. Bei 2 automatischen (O1) und faktisch 0 für O6 müssten also fast alle 6 verbleibenden O-Felder je Schritt sitzen. Ist-Stand sind 2 bis 4. Der Agent verbringt die gewonnenen Turns überwiegend mit quantitativen Fragen (Frequenz, Dauer, Fehlerquote), die **nicht** in `dedup_slot_coverage` zählen. Genau diese Verlagerung von Zahlen zu Cards ist PROJ-43-Scope. Der Fokus-Lock steuert den Analysten korrekt auf O-Felder, aber die Fragerichtung des Talkers folgt weiterhin seinem eigenen Methodik-Block (PROJ-46-Scope).
+
+### 4. Regression und Sicherheit
+
+- Keine harte Regression: hallucination_rate 0, `talker_grounding_violations` 0, anchoring 0, `schema_conformance_rate` 1.0, `step_registration_coverage` 1.0, `blocked_rate` 0 in beiden Läufen. `dialog_naturalness` 0.67 in beiden, Gate ≥0.65 gehalten.
+- `completion_correctness` `true` in beiden Läufen, beide Interviews terminieren sauber (`completed`).
+- M-2 (Rollen-Guard-Falschpositiv) ist in dieser Runde **nicht** aufgetreten (0 Redirects in beiden Transkripten). Unverändert ungelöst, nur nicht getriggert. Bleibt KI-26 / PROJ-42.
+- BUG-4 (wortgleiche Wiederholung der Catch-all-Sonde nach Late-Discovery) ist in it-support Turn 17 erwartungsgemäß erneut aufgetreten. Bekannt, bewusst nach PROJ-46 verschoben, kein neuer Befund.
+- Sicherheit: keine Änderung gegenüber Runde 1, keine neue Route, keine neuen Datenpfade.
+
+### 5. Testlücke (Restbefund, Low-Impact)
+
+Die Einzelteile der Remediation sind sauber getestet (`hasNewStepThisTurn`, `computeFocusLock`, `updateODrought`, plus H-1 auf `decideNextPhase`/`checkLifecycle`). Nicht getestet ist die **Verdrahtung** in `runInterviewTurn.ts`, also dass `preTurnTracker` tatsächlich die Pre-Analyst-Baseline ist und der Diff `newStepThisTurn` erreicht. Am Code verifiziert (der `runAnalyst`-Aufruf in Zeile 285 liegt vor der Tracker-Neuzuweisung in Zeile 313), und der Live-Eval belegt das Verhalten in beiden Personas. Ein Integrationstest auf `runInterviewTurn`-Ebene würde die Klasse Lücke schließen, die Runde 1 bei BUG-1 aufgedeckt hat. Nicht als eigener Bug gezählt, da Verhalten doppelt belegt.
+
+### 6. Nutzer-Transkript-Review (2026-07-17) und Befundanalyse
+
+> Der Nutzer hat beide Transkripte Turn für Turn annotiert (17 Anmerkungen). Jede wurde gegen Code und Transkript geprüft. Ergebnis: **zwei Bewertungen aus Abschnitt 1 dieser QA-Runde waren zu großzügig und sind unten korrigiert.** Die Annotationen decken zusätzlich zwei Befunde auf, die weder Runde 1 noch der Aggregat-Blick dieser Runde gefunden hat.
+
+#### 6.1 Korrektur: M-3 ist nur teilweise behoben, nicht behoben
+
+Abschnitt 1 behauptete „M-3 behoben, kein Prozess-Ping-Pong mehr". Die Annotationen 1c, 1f, 2e und 2f widerlegen das mit konkreten Turns. Am Code verifizierte Ursache:
+
+Der Fokus-Lock ist **advisory, nicht bindend**. `runAnalyst` setzt `focusStepId` ausschließlich auf dem Analyst-Kontext ([interviewAnalyst.ts](../../src/services/interviewAnalyst.ts), `mergedContext`) und rendert daraus die `FOKUS-LOCK`-Zeile im **Analyst**-Systemprompt. Der Talker sieht `focusStepId` nie (bewusste PROJ-46-Scope-Grenze, im Backend-Abschnitt sogar explizit als Feature notiert). Er erhält den Lock nur indirekt über `briefing.next_focus`/`suggested_question`, und sein eigener Prompt stuft das ausdrücklich als unverbindlich ein: `Empfohlene Frage (anpassen wenn bereits beantwortet)` ([talkerPrompt.ts:389](../../src/services/talkerPrompt.ts#L389)).
+
+Konsequenz: der Lock steuert, **worüber der Analyst nachdenkt**, nicht **was der Interviewer fragt**. Er hebt die Tiefe statistisch (it-support 1/1/1 → 4/4/1 O-Felder), verhindert Themensprünge aber nicht. Beleg aus den Transkripten: buchhalter Turn 7 und Turn 12 springen zurück zum Monatsabschluss, obwohl dessen Drought längst gefeuert hatte und er damit gar nicht mehr lockbar ist (`computeFocusLock` nimmt erschöpfte Schritte nie erneut auf). Dasselbe it-support Turn 15 (zurück zum Hardware-Tausch) und Turn 16 (Sprung zu Softwareanfragen). Der Talker ignoriert den Lock schlicht.
+
+Richtige Formulierung: **M-3 gemildert, nicht behoben.** Strukturell bindend wird der Lock erst mit PROJ-46 (Judgment-Signal-Migration). KI-27 ist entsprechend auf „teilweise behoben" zurückgesetzt.
+
+#### 6.2 Neuer High-Befund H-3: `ctx.phase` ist weiterhin der Vorturn-Wert, BUG-6-Mechanismus damit unbehoben
+
+Die Annotation 1i („der automatische Abschluss nach Turn 14 klappt nicht, warum?") führt auf einen Befund, der eine als `[x]` markierte AC widerlegt.
+
+`runInterviewTurn.ts` liest die Phase in Zeile 193 aus dem persistierten State: `const currentPhase = (state?.phase ?? 'intro') as Phase`. Das ist der Wert vom **Ende des Vorturns**. Dieser Wert geht unverändert als `phase: currentPhase` in den `orchestratorCtx` (Zeile 331), dessen Kommentar „fresh — includes this turn" nur für `stepTracker` und `analystBriefing` zutrifft, **nicht** für die Phase. `checkLifecycle` läuft in Zeile 351, `decideNextPhaseWithMeta` erst in Zeile 439. Die Lifecycle-Prüfung kann die Phasenentscheidung dieses Turns also **konstruktionsbedingt nie sehen**.
+
+`checkLifecycle`s Trigger B ist an `ctx.phase === 'closing'` gebunden. Ein Turn, der `closing` gerade erst betritt, kann daher niemals im selben Turn abschließen. Der Abschluss ist strukturell immer mindestens einen Turn später.
+
+Genau das ist der in dieser Spec unter „Context" formulierte **BUG-6**: „doppelte Verabschiedung, weil `checkLifecycle`s `closing`-Trigger auf dem Pre-Turn-Phasenwert nicht greift." PROJ-44 hat die Staleness von Tracker und Briefing beseitigt, den Phasenwert selbst aber unangetastet gelassen. Die AC „BUG-1-Staleness und BUG-6 sind über die frische Phasenentscheidung strukturell behoben; je ein Regressionstest belegt es" ist für den BUG-6-Teil **nicht eingelöst**. Der zugehörige Regressionstest prüft laut Runde-1-QA, dass `checkLifecycle` das frische **Briefing** erhält, nicht dass es den frischen **Phasenwert** erhält. Gleiche Testlücken-Klasse, die Runde 1 schon bei BUG-1 gefunden hat.
+
+Nachweis am buchhalter-Verlauf (`meta.phase` im Transkript ist die für den Turn **aufgelöste** Phase, also der Wert, den der Folgeturn als `ctx.phase` liest):
+
+| Turn | `ctx.phase` (Turnbeginn) | aufgelöste Phase | Completion möglich? |
+|------|--------------------------|------------------|---------------------|
+| 15 | `explore` | `explore` | nein, Trigger B verlangt `closing` |
+| 16 | `explore` | `closing` | **nein, obwohl alle Abschlussbedingungen erfüllt waren** (Sonde in Turn 9 gestellt, in Turn 10 beantwortet, kein neuer Schritt, keine Cards) |
+| 17 | `closing` | `closing` | ja, `soft_confirm` |
+
+Turn 16 ist damit ein **direkt der Phasen-Staleness zurechenbarer Leerlauf-Turn**. Die Sonde war bereits gestellt, also unterdrückt `shouldInjectClosingProbe` eine Wiederholung, und der Talker hatte in Turn 16 keine Anweisung. Er improvisierte die dritte Verabschiedung.
+
+**Präzisierung nach Code-Review (2026-07-17): H-3 ist keine bloße Reihenfolge-Frage, sondern eine verlustbehaftete Doppelung.** `decideNextPhase` und `checkLifecycle` implementieren dieselbe Entscheidung zweimal: die Hard-Stop-Timer-Regel und die komplette Abschluss-Bedingung (`closing` + Sonde beantwortet + kein neuer Schritt + keine Cards) stehen in **beiden** Funktionen. `decideNextPhase` berechnete in Turn 16 bereits korrekt `'completed'`, und [runInterviewTurn.ts:440](../../src/services/runInterviewTurn.ts#L440) verwirft es sofort: `nextPhaseDecision === 'completed' ? 'closing' : ...`. Der `return 'completed'`-Zweig ist damit **toter Code** (verhält sich identisch zum Fallthrough `return 'closing'`); `decideNextPhaseWithMeta` hat genau einen Produktions-Aufrufer, der `'completed'` verwirft. Turn 16 *wusste* also, dass fertig ist, hat es weggeworfen; Turn 17 leitete dieselbe Schlussfolgerung über `checkLifecycle` ein zweites Mal her. **Konsequenz für den Fix: zusammenlegen, nicht umsortieren.** Bloßes Umsortieren würde die Doppelung konservieren. Eine Funktion `{phase, complete, reason}` mit einer Wahrheitsquelle löst H-3, entfernt den toten Zweig und entspricht dem Deep-Module-Leitprinzip der Spec. Der Regressionstest muss die **Phasen**frische prüfen, nicht die Briefingfrische.
+
+#### 6.3 Damit zerfällt H-2 (Farewell-Limbo) in drei getrennte Ursachen
+
+Die vier Verabschiedungen sind kein einzelner Bug, sondern drei Mechanismen hintereinander:
+
+| Turn | Ursache |
+|------|---------|
+| 14, 15 | Der **Analyst** schreibt die Verabschiedung selbst ins Briefing, der Talker führt sie nur aus (siehe 6.6-i). Gleichzeitig sperrt der M-1-Floor (`hasUnexhaustedStep` noch `true`) den regulären Weg nach `closing`, und die Notbremse `noNewExtractionStreak` kann nicht feuern, weil **fehlgeschlagene** Extraktionsversuche sie zurücksetzen (siehe 6.6-ii). |
+| 16 | **H-3**: `closing` ist entschieden, aber `ctx.phase` ist noch `explore`, Trigger B greift nicht. |
+| 17 | Abschluss (`soft_confirm`). |
+
+Bemerkenswert: der Remediation-Plan hat die Schwäche des Streaks selbst benannt („der bestehende Streak resettet auf jede Extraktion inkl. Zahlen/Governance und taugt daher nicht") und deshalb die O-Drought eingeführt, sie dann aber nur für den Floor genutzt und die Notbremse unverändert gelassen. Floor und Notbremse widersprechen sich seitdem.
+
+#### 6.4 Neuer Medium-Befund M-7: Abschluss ignoriert eine substanzielle Sonden-Antwort
+
+Annotation 2h trifft einen Fall, der schwerer wiegt als „Formulierung geht nicht auf die Antwort ein". it-support Turn 18:
+
+> **Mitarbeiter:** „Ständiger Wechsel zwischen Jira, Remote-Desktop und Wiki. Drei Mal pro Ticket. Ziemlich ineffizient."
+> **Agent:** „Danke für deine Zeit und die Einblicke in deine tägliche Arbeit. Damit sind wir am Ende des Gesprächs."
+
+Das ist ein echter Medienbruch mit Frequenzangabe, also genau das KI-Potenzial-Signal, das das Produkt sucht. Zwei Ursachen:
+1. **H-1s Guard ist zu eng.** `newStepThisTurn` vetoet die Completion nur bei einem neuen **Schritt**. Die Antwort fügte einem bestehenden Schritt einen Bottleneck hinzu (Turn 18 feuerte 12× `record_slot` plus `link_bottleneck`), registrierte aber keinen neuen Schritt. Also kein Veto, `soft_confirm` greift, sobald die Sonde überhaupt beantwortet ist, unabhängig **wovon** die Antwort handelt.
+2. **Der Completion-Farewell ist inhaltsblind.** Der Abschluss-Talker-Call bekommt ein festes `farewellBriefing = { next_focus: 'Verabschiedung', suggested_question: 'Verabschiede dich kurz und herzlich.' }` ([runInterviewTurn.ts:395](../../src/services/runInterviewTurn.ts#L395)). Die Historie liegt zwar an, die Anweisung ist aber generisch.
+
+Immerhin: die Extraktion lief, das Wissen ist in der Datenbank. Der Verlust ist konversationell (kein Nachhaken auf ein starkes Signal), nicht datenseitig. Daher Medium, nicht High.
+
+#### 6.5 Bewertung der übrigen Annotationen
+
+| # | Annotation | Prüfergebnis | Zuordnung |
+|---|-----------|--------------|-----------|
+| 1a | Turn 4: kein Übergang von Prozess X zu Y | **Bestätigt.** Der Drought-getriebene Lock-Wechsel (`computeFocusLock` schaltet auf den nächsten Kandidaten) hat keine Übergangs-Affordanz. Der Analyst bekommt einen neuen `next_focus`, niemand fordert eine sprachliche Brücke oder einen Mini-Wrap-up an. Nebenwirkung der Remediation. | neu, → PROJ-46 (Briefing-Signale) |
+| 1b | Turn 5 „sehr stark" | Positivbefund, Medienbruch-Frage aus Systemwechsel abgeleitet. Kein Handlungsbedarf. | — |
+| 1c | Turn 7: Rücksprung Monatsabschluss trotz Lock | **Bestätigt, Ursache 6.1** (Lock nur advisory). Die vom Nutzer genannte inhaltliche Plausibilität (Medienbruch-Thema quer über Prozesse) ist zutreffend, die Formulierung bleibt schwach, weil kein Übergang gefordert wird. | M-6, → PROJ-46 |
+| 1d | Turn 8 „sehr gut" | Positivbefund. | — |
+| 1e | Turn 9: Sonde ohne Übergang | **Bekannt und erwartet.** `CLOSING_PROBE_TEXT` ist ein statischer, deterministisch injizierter Text ohne LLM-Formulierung ([interviewOrchestrator.ts](../../src/services/interviewOrchestrator.ts)). Exakt das Item „Audit der statischen Text-Ausgaben" aus der PROJ-46-Abgrenzung dieser Spec. | bekannt, → PROJ-46 |
+| 1f | Turn 12: erneut Monatsabschluss; „Ausdrucken" nie erwähnt? | **Beides bestätigt.** (a) Rücksprung wie 1c. (b) Der Mitarbeiter hat „ausdrucken" bis Turn 12 **nie** erwähnt: die einzigen Treffer auf „druck" davor sind „Zeit**druck**" (Turn 2 und 4), ein anderes Wort. Der Agent bringt das Beispiel selbst ein. **Keine** Grounding-Verletzung im Sinne des Guards (keine Zuschreibung „du hast erwähnt"), deshalb korrekt nicht geflaggt, aber eine anbietende/suggestive Frage der KI-21-Klasse. Der Mitarbeiter musste sie in Turn 13 verneinen, was einen Turn kostete. Die Medienbruch-Frage zum Monatsabschluss war in Turn 7/8 tatsächlich schon geklärt (SAP FI → Excel), die Wiederholung also redundant. | M-6 + KI-21/KI-25, → PROJ-43 |
+| 1g | Turn 13 Closing „bessere Richtung" | Positivbefund: dieses Closing ist LLM-formuliert und nennt die erfassten Prozesse. Kontrast zur statischen Sonde in 1e stützt das PROJ-46-Statik-Audit. | — |
+| 1h | Turn 14: Formulierung passt nicht zur Antwort | **Bestätigt**, gleiche Wurzel wie 6.3 (Talker ohne Anweisung im Leerlauf). | H-2 |
+| 1i | Turn 15–17 dürfte es nicht geben | **Bestätigt, Ursache 6.2/6.3.** | H-2 + H-3 |
+| 2a | Turn 3: Forced-Choice trotz „Notieren wir das als variabel" | **Bekanntes Fehlerbild**, KI-25 (Forced-Choice greift blind) plus KI-21 (Anchoring durch die Frageform). Zusätzlich verbalisiert der Agent seine interne Notiz. Von PROJ-44 nicht adressiert. | bekannt, → PROJ-43 |
+| 2b | Turn 3–5 mehrfaches Nachhaken | Vom Nutzer als grenzwertig, aber überwiegend positiv bewertet. Kein Bug. | — |
+| 2c | Turn 7 Übergang funktioniert | Positivbefund. Zeigt, dass die Übergangsqualität LLM-abhängig schwankt, nicht strukturell gesichert ist. Stützt 1a. | — |
+| 2d | Turn 12 Sonde | Wie 1e. | bekannt, → PROJ-46 |
+| 2e | Turn 15: Sprung zum Hardware-Tausch, Frage aus Turn 6 wiederholt | **Bestätigt**, Ursache 6.1. Zusätzlich: die Frage war in Turn 6/7 beantwortet und wurde mit „Du hast die manuellen Abgleiche bestätigt" abgeschlossen, statt vertieft. | M-6 |
+| 2f | Turn 16: Sprung zu Softwareanfragen | **Bestätigt**, Ursache 6.1. | M-6 |
+| 2g | Turn 17: Sonde erneut | **Bekannt, erwartet:** BUG-4 (wortgleiche Sonden-Wiederholung nach Late-Discovery-Umweg), bewusst nach PROJ-46 verschoben. | bekannt, → PROJ-46 |
+| 2h | Turn 18: Abschluss ohne Bezug zur Antwort | **Bestätigt und schwerwiegender als beschrieben**, siehe 6.4. | M-7 (neu) |
+
+#### 6.6 Vertiefung H-2: die zwei Mechanismen, am Trace belegt
+
+> Nutzer-Rückfrage 2026-07-17. Meine erste H-2-Erklärung („der Talker improvisiert eine Verabschiedung, der Analyst extrahiert aus Höflichkeitsfloskeln") war eine Hypothese und ist in **beiden** Punkten mechanisch falsch. Die belegte Fassung:
+
+**(i) Der Talker improvisiert nicht. Der Analyst befiehlt die Verabschiedung.**
+
+Die Tool-Calls der betroffenen Turns zeigen es wörtlich. Der Analyst produziert (synchron VOR dem Talker, also genau die PROJ-44-Reihenfolge) folgendes Briefing:
+
+| Turn | `next_focus` | `suggested_question` |
+|------|--------------|----------------------|
+| 14 | `Zusammenfassung / Abschluss` | „Vielen Dank, Andreas. Damit haben wir ein sehr klares Bild deiner Tätigkeiten. Gibt es aus deiner Sicht noch irgendeine Frage [...], bevor wir unser Gespräch abschließen?" |
+| 15 | `Abschluss der Datenerhebung` | „Vielen Dank für das aufschlussreiche Gespräch, Herr Meier. Wir haben alle wesentlichen Punkte erfasst. **Ich wünsche Ihnen einen angenehmen Arbeitstag.**" |
+
+Die „empfohlene Frage" ist in Turn 15 gar keine Frage mehr, sondern eine fertige Verabschiedung. Der Talker rendert sie pflichtgemäß. Er verhält sich also **korrekt**; der Fehler sitzt eine Ebene höher.
+
+Das ist ein **Split-Brain in der Terminierungs-Hoheit**: PROJ-42 hat die Beendigung bewusst deterministisch in den Zustand gelegt („termination is now deterministic in state [...] not guessed from text heuristics (KI-23)", Doc-Kommentar in `checkLifecycle`). Der Analyst ist an diese Entscheidung aber nicht gebunden. Sein Briefing ist ein freier Textkanal direkt in den Mund des Interviewers, und niemand prüft, ob eine `suggested_question` überhaupt zur aktuellen Phase passt. Der Analyst kann das Gespräch also **verbal** beenden, während der Orchestrator es formal offen hält. Genau dieser Widerspruch erzeugt die Verabschiedungs-Schleife: der Analyst hat innerlich abgeschlossen, die Zustandsmaschine nicht.
+
+Konsequenz für den Fix: die Notbremse ist nur die halbe Miete. Der Analyst darf eine Terminierung gar nicht erst vorschlagen dürfen. Sein legitimes Signal dafür heißt `step_advance_ready`; die Entscheidung gehört dem Orchestrator.
+
+**(ii) Der Analyst extrahiert nichts aus der Floskel. Sein Versuch wird abgelehnt, zählt aber trotzdem.**
+
+Der Turn-15-Call lautet `record_slot { step_id: "S001", slot: "frequency_per_month", value: 1, evidence_span: "finale Erstellung einmal pro Monat" }`. Dieser `evidence_span` stammt aus **Turn 2**, nicht aus der Floskel. Der Grund, dass der Analyst überhaupt alte Turns re-extrahieren kann: `runOnlinePass` übergibt dem Modell die **volle Historie** (`const messages = opts.history.map(...)`, [interviewAnalyst.ts:509](../../src/services/interviewAnalyst.ts#L509)) und nicht, wie das Tech Design unter C behauptet, „nur letztes Statement".
+
+Der vorhandene Guard arbeitet dabei **korrekt**: `record_slot` prüft, ob der `evidence_span` wörtlich im aktuellen Mitarbeiter-Turn vorkommt, und lehnt sonst mit `success: false` ab ([interviewTools.ts:295–305](../../src/services/interviewTools.ts#L295)). Der Slot-Trail bestätigt die Ablehnung: `S001/frequency_per_month` steht dort **genau einmal**, mit `sourceTurn: 2`. Der Turn-15-Versuch ist nirgends im Trail. Es wurde also nichts geschrieben.
+
+Der Fehler liegt in der Zählung: `computeNextBriefing` bildet `hadExtraction` über die **aufgerufenen** Tools, nicht über die **angewendeten** Writes:
+
+```ts
+const hadExtraction = toolCalls.some(tc => EXTRACTION_TOOL_NAMES.has(tc.toolName))
+```
+
+`capturedToolCalls` entsteht aus `genResult.steps.flatMap(step => step.toolCalls...)` und kennt die Rückgabewerte der Tools nicht. Ein vom Guard **abgelehnter** `record_slot` setzt `noNewExtractionStreak` daher genauso auf 0 wie ein erfolgreicher. Die Notbremse misst „hat das Modell es versucht", nicht „ist etwas Neues entstanden".
+
+Wie tot die Notbremse dadurch ist, zeigt die Quote: **53 `record_slot`-Aufrufe stehen 17 tatsächlichen Writes gegenüber** (buchhalter), also rund 68 % abgelehnte Versuche. Turns ganz ohne Extraktions-**Aufruf**: buchhalter 2 von 17 (Turns 14 und 16, nie aufeinanderfolgend), it-support **0 von 18**. `noNewExtractionStreak >= 3` kann unter diesen Bedingungen praktisch nie eintreten. Die als Sicherheitsnetz gedachte Bedingung ist faktisch unerreichbar, unabhängig von PROJ-44.
+
+Nebenbefund gleicher Wurzel: die 53:17-Quote ist auch reine Token- und Latenz-Verschwendung. Der Analyst re-extrahiert jeden Turn Werte, die er längst hat, und läuft dabei wiederholt in denselben Guard.
+
+#### 6.7 Komplexitätsreduktion und Ballast nach der Remediation
+
+> Nutzer-Rückfrage: wurden die Leitprinzipien der Spec („Kanten reduzieren", „Deep Modules", „Deletion-Test", „alten Ballast ersatzlos entfernen") auch **in der Remediation** eingehalten?
+
+Der PROJ-44-Kernumbau hat sie eingehalten (netto −533 Zeilen, zwei Module gelöscht, drei Analyst-Einstiegspunkte auf einen). Das **Remediation-Bündel** hat sie an drei Stellen verletzt:
+
+| Befund | Bewertung |
+|--------|-----------|
+| **`topicsOpen`/`topicsCovered`/`update_topics` als toter Ballast** | Die Remediation hat `hasUnexploredFocusTopic` entfernt, den **einzigen funktionalen Konsumenten**, und das Plumbing bewusst stehen lassen („inerte Plumbing [...] späteres Cleanup optional"). Verifiziert: kein Orchestrator-Zweig liest `ctx.topicsOpen`/`ctx.topicsCovered` mehr, **kein** Prompt rendert sie (weder `talkerPrompt.ts` noch `interviewAnalyst.ts`). Das Tool bleibt aber im Analyst-Toolset und wird real gerufen: **14 `update_topics`-Aufrufe in 17 Turns**. Es ist damit nicht „inert", sondern kostet je Turn einen Tool-Call, Prompt-Fläche und Output-Tokens für ein Ergebnis, das niemand liest. Das widerspricht dem Leitprinzip „Alten Ballast ersatzlos entfernen [...] nicht mit Kompatibilitäts-Schichten kaschiert" direkt, und angesichts der KI-18-Historie (Prompt-Dichte schadet dem lite-Modell) ist es nicht folgenlos. `OrchestratorContext.topicsOpen/topicsCovered` sind jetzt tote Pflichtfelder, die jeder Aufrufer trotzdem füllen muss. |
+| **Neue Modulkante `interviewAnalyst` → `interviewOrchestrator`** | `runOnlinePass` ruft `updateODrought` und importiert dafür aus dem Orchestrator. Das dreht die Schichtung um: der Orchestrator ist die deterministische Entscheidungsebene, der Analyst die LLM-Ebene. Die Berechnung braucht nur `preTurnTracker` und den Post-Analyst-Tracker, beides liegt in `runInterviewTurn` bereits vor (dort stehen schon `computeFocusLock` und `hasNewStepThisTurn`). Die Drought-Fortschreibung gehört dorthin; dann verschwindet die Kante ersatzlos. Die Spec fordert „Kanten zwischen Modulen reduzieren"; das Bündel hat eine hinzugefügt, die vermeidbar ist. |
+| **`focusStepId` auf dem geteilten `InterviewContext`** | Das Feld nutzt ausschließlich der Analyst, liegt aber auf dem Typ, den Talker und Analyst teilen. Interface-Verbreiterung auf einem gemeinsamen Typ statt eines analyst-eigenen Options-Objekts. Klein, aber gegen „Deep Modules statt breiter Interfaces". |
+
+Zusätzlich zwei **Doku-Abweichungen vom Ist-Code**, die eigenständig irreführen:
+- Tech Design C stellt „Voll-Historie" (Backfill) gegen „nur letztes Statement" (Online), als unterschiede sich der **Kontext**. Tatsächlich bekommen beide Pässe die volle Historie ([interviewAnalyst.ts:509](../../src/services/interviewAnalyst.ts#L509) vs. [:623](../../src/services/interviewAnalyst.ts#L623)); verschieden sind nur Prompt, erlaubte Tools und Evidenz-Modell. **Klarstellung nach Historien-Prüfung:** das ist **vorbestehend, kein Remediation- und kein PROJ-44-Fehler** — `git show ac06db5` (vor PROJ-44) zeigt dieselbe Zeile; PROJ-44 hat `runAnalystOnline` nur zu `runOnlinePass` umbenannt. Inhaltlich braucht der Analyst die Historie als Kontext; die Extraktions-Reichweite „nur aktueller Turn" ist über den `evidence_span`-Guard durchgesetzt, nicht über das Kontextfenster. Der Doku-Text ist irreführend, der Code konsistent. Der echte Defekt sitzt in der Zählung (6.6-ii), nicht im Kontext.
+- Der Kommentar über `orchestratorCtx` in [runInterviewTurn.ts:329](../../src/services/runInterviewTurn.ts#L329) lautet „Build orchestrator context (fresh — includes this turn)". Für `phase` stimmt das nicht (H-3).
+
+**Fazit:** der Kernumbau hat aufgeräumt, das Remediation-Bündel hat wieder Ballast angesetzt. Die drei Punkte sind klein und ohne Verhaltensrisiko zu bereinigen; `update_topics` zu streichen ist zusätzlich eine direkte Token- und Prompt-Entlastung.
+
+#### 6.8 Was das für PROJ-44 bedeutet
+
+Der Timing-Flip selbst (ADR-021, ein synchroner Analyst-Pass vor dem Talker) ist unverändert bestätigt und trägt: H-1 ist live behoben, die Extraktion ist frisch, `analyst_online` läuft exakt einmal pro Turn. Was der Review offenlegt, ist eine **Grenze des Schnitts**, nicht ein Fehler in seiner Umsetzung: PROJ-44 hat den Zustand frisch gemacht, aber die zwei Stellen unangetastet gelassen, an denen der Zustand den Gesprächsverlauf tatsächlich steuert, nämlich den Phasenwert selbst (H-3) und den Talker-Prompt (M-6, per Scope-Entscheidung PROJ-46). Beide Befunde landen damit an derselben Naht, die PROJ-46 ohnehin aufmacht. H-3 ist die Ausnahme: er gehört zu PROJ-44, weil er dessen eigene BUG-6-AC widerlegt, und er ist orchestrator-lokal zu beheben (`checkLifecycle` nach `decideNextPhase` ziehen oder mit der aufgelösten Phase aufrufen, statt mit `currentPhase`).
+
+### Bug-Tally Runde 2 (nach Nutzer-Review revidiert)
+
+**0 Critical · 2 High · 5 Medium · 2 Low → 2:5:2**
+
+- **H-2 (High, NEU):** Farewell-Limbo, buchhalter Turns 14–17. Drei getrennte Ursachen, siehe 6.3: M-1-Floor sperrt `closing`, `noNewExtractionStreak`-Notbremse wird durch Extraktion aus Höflichkeitsfloskeln offengehalten, und H-3 kostet Turn 16.
+- **H-3 (High, NEU, PROJ-44-eigen):** `ctx.phase` ist weiterhin der Vorturn-Wert ([runInterviewTurn.ts:193/331](../../src/services/runInterviewTurn.ts#L193)), und `checkLifecycle` (Zeile 351) läuft vor `decideNextPhaseWithMeta` (Zeile 439). Ein Turn, der `closing` betritt, kann konstruktionsbedingt nie im selben Turn abschließen. Das ist exakt der in „Context" beschriebene BUG-6-Mechanismus. Die AC „BUG-6 strukturell behoben" ist damit **nicht eingelöst**; der zugehörige Regressionstest prüft die Briefing-Frische, nicht die Phasen-Frische. Siehe 6.2.
+- **M-2 (Medium, PROJ-42/KI-26):** Rollen-Guard-Falschpositiv. Unverändert, in dieser Runde nicht getriggert.
+- **M-4 (Medium):** Clarification-Cards feuern nie (`clarification_coverage_delta` 0 in 4/4 Läufen) trotz leerer Pflicht-Slots. Mit-Blocker des Gates, im Remediation-Plan bewusst zurückgestellt, jetzt bestätigt.
+- **M-5 (Medium):** `dependency_capture` 0 in 4/4 Läufen. O6 wird nie erfasst, deckelt `dedup_slot_coverage` strukturell bei 0.89.
+- **M-6 (Medium, NEU, Korrektur):** Fokus-Lock ist advisory, nicht bindend. Er erreicht nur den Analyst-Prompt, nicht den Talker. Themensprünge bleiben (buchhalter Turn 7/12, it-support Turn 15/16). **M-3 ist damit gemildert, nicht behoben.** Siehe 6.1.
+- **M-7 (Medium, NEU):** Abschluss ignoriert eine substanzielle Sonden-Antwort (it-support Turn 18: Medienbruch mit Frequenz „3× pro Ticket" → generischer Farewell). `newStepThisTurn` vetoet nur bei neuem **Schritt**, nicht bei neuem Inhalt auf bestehendem Schritt; der Completion-Farewell nutzt ein festes, inhaltsblindes `farewellBriefing`. Extraktion lief, Verlust ist konversationell. Siehe 6.4.
+- **L-1 (Low, NEU):** Fehlende sprachliche Übergänge beim Drought-getriebenen Lock-Wechsel (buchhalter Turn 4) und bei der statischen Sonde (Turn 9). Nebenwirkung der Remediation bzw. bekanntes Statik-Audit-Item.
+- **L-2 (Low):** Suggestive/anbietende Fragen (buchhalter Turn 12 „ausdrucken" ohne jede Vorerwähnung; it-support Turn 3 Forced-Choice trotz „variabel"). KI-21/KI-25-Klasse, von PROJ-44 nicht adressiert.
+
+**Behoben und geschlossen aus Runde 1:** H-1 und M-1 (beide live in beiden Personas verifiziert). **M-3 nur teilweise** (siehe M-6).
+
+### Production-Ready-Entscheidung: **NEIN**
+
+Zwei High-Befunde (H-2, H-3) plus unerfülltes Pflicht-Eval-Gate (0/2). PROJ-44 bleibt **In Review**.
+
+Priorisierungs-Empfehlung, in dieser Reihenfolge:
+1. **H-3 zuerst** (klein, orchestrator-lokal, PROJ-44-eigen): `checkLifecycle` mit der aufgelösten statt der Vorturn-Phase aufrufen, also nach `decideNextPhase` ziehen oder die entschiedene Phase hineinreichen. Löst BUG-6 tatsächlich ein und nimmt H-2 einen seiner drei Turns. Der Regressionstest muss die **Phasen**-Frische prüfen, nicht die Briefing-Frische.
+2. **H-2-Rest**: den Widerspruch zwischen M-1-Floor und Notbremse auflösen, indem `noNewExtractionStreak` auf O-Feld-Fortschritt umgestellt wird (dasselbe Primitiv, das die Remediation schon eingeführt hat) statt auf „irgendeine Extraktion".
+3. **M-6/M-7 und die Übergänge (L-1)** hängen alle am Talker-Prompt bzw. am Briefing und gehören damit sachlich in **PROJ-46**, nicht in eine dritte PROJ-44-Runde. PROJ-44 ist mit dem Remediation-Bündel bereits von L auf faktisch XL gewachsen.
+4. **Das Eval-Gate** ist mit Agenten-Tuning nicht erreichbar (M-4, M-5, plus der Nenner-Effekt aus Abschnitt 3). Das ist eine Instrument-Entscheidung, keine Kalibrierung, und sollte vor der nächsten Gate-Runde fallen. Nutzer-Entscheidung, nicht QA-Entscheidung.
+
+## Weg nach vorn — Plan + Nutzer-Entscheidungen (2026-07-17)
+
+> Ergebnis der QA-Nachbesprechung (Opus). Zwei Weichen wurden vom Nutzer gestellt (siehe unten). Der Timing-Flip selbst (ADR-021) bleibt bestätigt und getragen; was folgt, adressiert die Grenzen des Schnitts, die der Transkript-Review offengelegt hat.
+
+### Entscheidung 1 — PROJ-44-Scope: **eng halten**
+Nur die vier orchestrator-/turn-lokalen Fixes bleiben in PROJ-44. Die gesamte Briefing-/Talker-Überarbeitung wandert nach PROJ-46. Begründung: KI-18-Historie (Talker-Prompt-Änderungen brechen `dialog_naturalness` beim lite-Modell) plus saubere Eval-Attribuierung des Timing-Flips (kein vermischtes Delta).
+
+### Entscheidung 2 — Eval-Gate: **erst messen, Instrument-Anpassung nach hinten**
+Das Gate-Kriterium (`dedup_slot_coverage ≥ 0.75`) bleibt für die Vergleichbarkeit über die Läufe hinweg **unverändert**. Nach den vier Fixes wird erneut gemessen. Die Instrument-Frage (Nenner-Effekt bestraft vollständigere Interviews; gehören `dependency_capture`/Cards überhaupt in dieses Gate) wird **nicht** innerhalb PROJ-44 gelöst, sondern als eigenes Thema behandelt — Kandidat: neues Feature oder unter PROJ-40 (Eval-Instrument-Validierung, bereits In Review, thesis-relevant über ADR-020/metrik-audit). **Konsequenz, die vorab akzeptiert ist:** PROJ-44 erreicht `Approved` über dieses Gate wahrscheinlich **nicht** allein durch die vier Fixes (M-4/M-5 + Nenner deckeln), und das ist bewusst in Kauf genommen; die Gate-Entscheidung fällt nach dem Mess-Lauf.
+
+### Direkt umzusetzen in PROJ-44 (nächster Schritt: `/backend` bzw. `/architecture` für den Merge)
+Alle vier orchestrator-/turn-lokal, **keine** Talker-Prompt-Änderung:
+1. **Merge `decideNextPhase` + `checkLifecycle`** zu einer Funktion `{phase, complete, reason}` mit einer Wahrheitsquelle. Löst **H-3**/BUG-6 (die falsch als `[x]` markierte AC), entfernt die doppelte Timer-/Abschluss-Logik und den toten `'completed'`-Zweig (6.2). Regressionstest auf **Phasen**frische.
+2. **`hadExtraction` → angewendete Writes** statt Aufrufe in `computeNextBriefing` (**H-2** Schicht 3, 6.6-ii). Macht die `noNewExtractionStreak`-Notbremse wieder erreichbar.
+3. **Ballast der Remediation entfernen** (6.7): `update_topics`-Tool + `topicsOpen`/`topicsCovered`-Plumbing streichen (14 Calls/17 Turns, kein Leser); `updateODrought`-Aufruf von `interviewAnalyst` nach `runInterviewTurn` ziehen (killt die neue Analyst→Orchestrator-Kante); `focusStepId` vom geteilten `InterviewContext` lösen.
+4. **Minimaler Terminierungs-Guard** in der gemergten Funktion: in `explore` geht kein Abschluss/Abschied raus (**H-2** Schicht 1, minimal — die volle „Analyst darf nicht terminieren"-Lösung ist PROJ-46).
+
+Danach: ein Mess-Eval (buchhalter + it-support, gleiche Config/Seed) — erwartet werden die vier Leerlauf-Turns weniger und eine dadurch veränderte Coverage-Zahl als Basis für die Gate-Entscheidung.
+
+### In externe Specs gezogen
+| Befund | Ziel-Feature | Kern |
+|--------|-------------|------|
+| M-6 (Fokus-Lock nur advisory), M-7 (inhaltsblinder Abschluss-Farewell), L-1 (Übergänge vom Talker gestrichen), Briefing-trägt-Absicht-statt-Frage, verifizierter Anker (KI-18-Wurzel), Ziel-O-Feld ins Briefing, statische Sonde → Analyst-formuliert, „Analyst darf nicht terminieren" (voll) | **PROJ-46** (Talker-Briefing-Konsolidierung, Requires PROJ-44) | Der empirische Befund: Themen-Disziplin gehört an den Analyst (hält den Lock, liefert Übergänge), Formulierung an den Talker (die einzigen gelobten Fragen waren Talker-Erfindungen). Rollen schärfen statt Talker entfernen. |
+| L-2 (Forced-Choice trotz „variabel", suggestive „ausdrucken"-Frage), M-3-Rest (Elicitation-Sprünge über die Fokus-Wahl hinaus) | **PROJ-43** (Elicitation-Reorientierung) | KI-21/KI-25, Zahlen→Cards, Treiber/WHY statt Metrik-Nagging |
+| M-2 (Rollen-Guard-Falschpositiv) | **PROJ-42** / KI-26 | Prefilter/Judge-Präzision, unverändert durch PROJ-44 |
+| Instrument-Frage des Eval-Gates (Nenner-Effekt, dependency_capture/Cards-Zugehörigkeit) | **PROJ-40** oder neues Feature | Messvalidität, thesis-relevant; NICHT in PROJ-44 |
+
+### Talker behalten — begründet
+Der Talker produziert die einzigen im Nutzer-Review positiv markierten Fragen (buchhalter Turn 5/8), und zwar **gegen** den generischen Zahlen-Vorschlag des Analysten. Entfernen würde diese Stärke wegwerfen und die dokumentierte Prompt-Dichte-Falle (KI-18) beim Merge in den Analyst-Prompt aufmachen. Der richtige Schnitt ist Rollen-Schärfung (PROJ-46), nicht Konsolidierung auf einen Agenten.
 
 ## Deployment
 _To be added by /deploy_
