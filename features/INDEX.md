@@ -62,7 +62,7 @@
 | PROJ-43 | Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards) | Revision | Interview Engine | PROJ-29 | Roadmap | — | P1 | L | — |
 | PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-44-pipeline-simplifikation.md) | P1 | XL | 1:5:2 |
 | PROJ-45 | Schema-Erweiterung AI-Wert-Faktoren (Textverarbeitung u.a.) | Revision | Wissensbank | PROJ-25 | Roadmap | — | P1 | L | — |
-| PROJ-46 | Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst) | Revision | Interview Engine | PROJ-22 | Roadmap | — | P1 | L | — |
+| PROJ-46 | Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst) | Revision | Interview Engine | PROJ-22 | Planned | [spec](interview-engine/PROJ-46-talker-briefing-konsolidierung.md) | P1 | XL | — |
 
 <!-- Add features above this line -->
 
