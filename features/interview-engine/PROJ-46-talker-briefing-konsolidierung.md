@@ -1,6 +1,6 @@
 # PROJ-46: Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst)
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
@@ -8,6 +8,7 @@
 **Bugs:** —
 **Created:** 2026-07-18
 **Last Updated:** 2026-07-18
+**ADR:** [ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md) (Rollen-Vertrag-Amendment)
 
 ## Context
 
@@ -154,7 +155,101 @@ Die KI-18-Historie zeigt: dichte Talker-Prompts kosten `dialog_naturalness` beim
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+> Erarbeitet via `/architecture` + `/grilling` (2026-07-18). Rollen-Vertrag festgehalten in **[ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md)** (amendmentet ADR-011/021/022). Keine DB-Migration, kein neues npm-Paket. Alle Änderungen serverseitig + ein kleiner Frontend-Touch.
+
+### Leitprinzip
+
+Zwei deterministische Böden bleiben unangetastet, alles andere wird sparsame Analyst-Guidance oder Talker-Formulierung:
+- **Fortschritts-Boden:** der O-Drought-Fokus-Lock (garantiert, dass ein erschöpfter Schritt verlassen wird).
+- **Terminierungs-Boden:** die Orchestrator-State-Machine (`resolveTurnLifecycle`) — „Analyst darf nicht terminieren".
+
+### A) Turn-Ablauf — vorher / nachher
+
+Der Turn kreuzt dieselben Nähte wie nach PROJ-44; verändert wird, **was** über die Analyst→Talker-Brücke fließt und **wie** Closing/Off-Topic/Reconnect terminieren.
+
+```
+Rollen-Guard → computeFocusLock → runAnalyst (synchron) → resolveTurnLifecycle
+             → (Closing-Sonde-Injektion ENTFÄLLT) → Talker → after(finalize)
+```
+
+| Naht | Vorher | Nachher (PROJ-46) |
+|------|--------|-------------------|
+| Analyst→Talker-Brücke | `next_focus` + `suggested_question` (Freitext-Frage, advisory) | strukturierte **Absicht**: Ziel-Schritt (Lock) + Ziel-O-Feld (Enum) + Übergang-Grund (code). Kein Freitext. |
+| Talker-Steuerung | eigene Signal-Blöcke **und** advisory Briefing (zwei Quellen) | eine Quelle: bindender Ziel-Block + Rohverlauf. Signal-Blöcke gelöscht. |
+| Closing-Sonde | statischer `CLOSING_PROBE_TEXT`, einmal injiziert | Talker formuliert jedes Mal frisch eine Entdeckungsfrage. Injektions-Maschinerie gelöscht. |
+| Closing-Terminierung | „Sonde gestellt + beantwortet" | rein deterministisch: `ctx.phase=='closing' ∧ Streak≥K` **oder** Hard-Timer; M7-b routet neuen Inhalt zurück nach explore |
+| Off-Topic-Redirect | fester Text, wortgleiche Frage-Wiederholung | schlanker Talker-Call (formuliert, ohne Guard) |
+| Reconnect | statischer „Willkommen zurück"-Text | validierungs-only, kein Assistant-Text; Frontend rendert History |
+
+### B) Was die Analyst→Talker-Brücke trägt (Daten-Modell, Klartext)
+
+Das LLM-Briefing schrumpft auf drei strukturierte Felder — **kein Freitext-Feld**:
+
+| Feld | Herkunft | Bedeutung |
+|------|----------|-----------|
+| `target_o_field` | **LLM** (Analyst), Fallback deterministisch | eines der 7 O2–O6-Felder (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, abhaengigkeiten) des gelockten Schritts. Geführt „O2–O6 vor Quant, wähle das gesprächslogisch salienteste". Bei Auslassung: erstes leeres O2–O6-Feld des Locks. |
+| `step_advance_ready` | LLM | umgeframt zu „ist der aktive Schritt gedeckt" — advisory, der Fortschritts-Boden vetoet. |
+| `clarification_cards` | LLM | unverändert (nur Closing). Freitext geht in die Clarification-UI, **nie** in den Talker-Prompt. |
+
+Zusätzlich **code-berechnet** (nie LLM, laufen über die bestehende `next_briefing`-JSON-Bridge bzw. per-Turn ephemer):
+- **Ziel-Schritt** = `oDrought.stepId` (Fokus-Lock).
+- **Übergang-Grund** = `step_switch` (Lock wechselt Schritt) | `closing_entry` (Eintritt in Closing-Entdeckung) | keiner. Per-Turn frisch, nicht persistiert.
+- `oDrought`, `noNewExtractionStreak`, `hadExtractionThisTurn` — Steuersignale für den Orchestrator, erreichen den Talker nicht.
+
+**Invariante I1:** das einzige Analyst-**Freitext**, das den Talker erreicht, sind Schritt-**Titel** aus dem geteilten Tracker (sanitisiert) — die können nur einen Prozess benennen, nie das Interview beenden. Damit ist „kein Briefing-Feld drückt Farewell aus" strukturell und per Regressionstest wahr.
+
+### C) Wichtigste Entscheidungen (PM-lesbar)
+
+1. **Absicht statt Frage (Strom A).** Der Analyst formuliert keine Fragen mehr; er nennt nur noch *worüber* geredet werden soll (Schritt + O-Feld). *Wie* gefragt wird, erfindet allein der Talker aus dem Rohverlauf. Grund: die einzigen im Judge gelobten Fragen waren Talker-Erfindungen; und es schließt den H-2-Kanal (Analyst kann keinen Abschiedstext mehr schreiben).
+
+2. **Fokus-Lock bindend für den Talker (Strom B, M-6).** Der Talker folgt dem gesperrten Schritt + Ziel-O-Feld, bis der Schritt qualitativ ausgeschöpft ist — kein eigenständiger Themenwechsel mehr gegen den Lock. Der alte, gegen den Lock ziehende Ziel-Picker (`computeWalkthroughSlotTarget`) entfällt; die neue Ziel-Wahl ist per Konstruktion deckungsgleich mit dem, was den Lock freigibt.
+   - **Erschöpfung feuert auch bei voller O-Deckung** (ADR-023 D3, Grenzfall, den der *bindende* Lock aufdeckt): sind alle 7 O-Felder eines Schritts gefüllt (`countFilledOFields === 7`, Wert oder `nicht_befund`), gilt er **sofort** als erschöpft — auch wenn der Drought-Streak noch < K ist. Ohne das hielte der Lock einen fertigen Schritt bis zu K Turns ohne leeres Ziel (flaches Kreisen am Ende). So konvergieren Analyst-„fertig" (`step_advance_ready`) und Lock sauber: voller Schritt → Lock rückt sofort weiter oder Phase → closing. Zweite Erschöpfungs-Bedingung neben „K Turns trocken", keine neue Semantik.
+
+3. **Closing = Entdeckungs-Fortsetzung, deterministisch terminiert (Strom D).** Statt einer einmaligen statischen Sonde fragt der Interviewer im Closing weiter aktiv nach unentdeckten Prozessen — jedes Mal frisch formuliert. Abschluss ist eine einfache Zustandsregel:
+   - **Completion** nur wenn wir **schon** in Closing sind (geladene Phase `closing`) **und** K Turns in Folge nichts Neues kam. Der Eintritts-Turn stellt deshalb **immer mindestens eine** Entdeckungsfrage.
+   - **M7-b:** kommt in einem Closing-Turn neuer Inhalt (angewendete Extraktion, `hadExtractionThisTurn`), geht es zurück nach explore (vertiefen) — verallgemeinert das alte „nur neuer Schritt"-Veto.
+   - **Hard-Timer** bei 100 % beendet phasen-agnostisch und respektiert anstehende Cards → kann nie endlos laufen.
+   - Entdeckungs-Budget = `K − Streak beim Eintritt`, selbstanpassend: engagierte Interviews bekommen das volle Budget, erschöpfte genau einen letzten Versuch. Kein zweiter Zähler.
+
+4. **Analyst terminiert nicht (Strom D, H-2/D2).** `step_advance_ready` bleibt, aber als „Schritt gedeckt?"-Hinweis, den der Fortschritts-Boden vetoen kann — nicht als „Treiber". Completion ist zu 100 % die deterministische Orchestrator-Entscheidung; die Verabschiedung formuliert der Talker, ausgelöst einzig vom aufgelösten Completion-State.
+
+5. **Talker-Entdichtung + Anker-Pflicht → Option (Strom C/F, greift KI-18 an).** Fünf code-berechnete Signal-Blöcke, die Few-Shot-Beispiele, das Tool-Syntax-Verbot und die Anker-Sperre fallen weg. Die Anker-**Pflicht** („jede Nachfrage muss eine frühere Aussage referenzieren") wird zur **Option** — sie war laut Bestandsaufnahme die diffuse Wurzel der Grounding-Verletzungen (das lite-Modell erfindet einen Anker, wenn die Pflicht einen verlangt und keiner klar ist). Der Grounding-Guard bleibt der Backstop. PROJ-46 ist damit überwiegend Löschung — es verkleinert das KI-18-Dichte-Problem, statt es zu vergrößern.
+
+6. **Statische Textausgaben (Strom E).** Off-Topic-Redirect wird Talker-formuliert (schlanker Call, ohne Guard/Tracker; State unverändert — off_topic kurzschließt weiter vor dem Analyst). Reconnect-Text wird gelöscht; der Endpoint validiert nur noch, das Frontend rendert die persistierte History (die letzte Nachricht ist die offene Frage).
+
+### D) Betroffene Bausteine (kein neues Paket, keine DB-Migration)
+
+| Datei | Änderung |
+|-------|----------|
+| [interviewAnalyst.ts](../../src/services/interviewAnalyst.ts) | Briefing-Schema: `suggested_question`+`next_focus` raus, `target_o_field` (Enum, optional) rein; STUFE 4 umframen; Halluzinations-Guard für `suggested_question` entfällt |
+| [interviewTypes.ts](../../src/services/interviewTypes.ts) | `AnalystBriefing`: Felder anpassen (H-2-Invariante) |
+| [talkerPrompt.ts](../../src/services/talkerPrompt.ts) | statischen Prompt entdichten; dynamischen Kontext auf bindenden Ziel-Block + Rohverlauf reduzieren; Closing-Methodik = Entdeckung; Anker-Pflicht relaxen; `abhaengigkeiten`-Hint ergänzen |
+| [interviewOrchestrator.ts](../../src/services/interviewOrchestrator.ts) | Probe-Maschinerie + `CLOSING_PROBE_TEXT` löschen; Closing-Completion-Regel (phase-gebundener Streak); M7-b via `hadExtractionThisTurn`; `newStepThisTurn`/`hasNewStepThisTurn` löschen; Übergang-Grund + Ziel-O-Feld-Fallback; Erschöpfung bei voller O-Deckung (`hasUnexhaustedStep` + `computeFocusLock`) |
+| [runInterviewTurn.ts](../../src/services/runInterviewTurn.ts) | `hadExtractionThisTurn` aus `analystResult.toolCalls` berechnen; Sonden-Injektions-Zweig entfernen; Übergang-Grund ableiten; Off-Topic-Redirect auf Talker-Call umstellen |
+| [interviewSemantic.ts](../../src/services/interviewSemantic.ts) | `computeWalkthroughSlotTarget` ersatzlos löschen |
+| [conversationSignals.ts](../../src/services/conversationSignals.ts) | auf `question-stem` eindampfen; `exception`, numerische `ambiguity`, `recentlyRecontextualized`, Drill-Stop, Laddering, `extractNumericTokens`/`anchorNumbers` löschen |
+| [interviewTalker.ts](../../src/services/interviewTalker.ts) | schlanker Redirect-Pfad; `detectNumberAnchoring` + `isReconnect`-Flag löschen |
+| [roleGuard.ts](../../src/services/roleGuard.ts) | Redirect erzeugt Talker-Call statt festem Text (`buildOffTopicRedirect` entfällt/wird ersetzt) |
+| [reconnect/route.ts](../../src/app/api/interview/[token]/reconnect/route.ts) | Statiktext löschen, validierungs-only |
+| [ChatInterface.tsx](../../src/components/interview/ChatInterface.tsx) | Reconnect-Zweig erzeugt keine Greeting-Bubble; `/reconnect` nur noch Validitäts-Ping |
+
+### E) Löschkandidaten (Eval-gated — dokumentiert, falls nicht direkt entfernt)
+
+Provisorisch erhalten, mit klarer Löschbedingung (Nutzer-Vorgabe: Löschkandidaten dokumentieren):
+
+| Kandidat | Ort | Löschbedingung |
+|----------|-----|----------------|
+| `question-stem`-Detektor | `conversationSignals.ts` (Rest-Modul) | Eval bestätigt, dass Frage-Wiederholung ohne den Detektor nicht zurückkehrt → dann fällt das ganze Modul |
+| `filler`-Tracking (`usedFillerPhrases` + `detectFillerPhrases`) | `interviewTalker.ts` + Talker-Prompt | an den Forced-Choice-/Akzeptanz-Phrasen-Pool gekoppelt (PROJ-43) — mit PROJ-43 gemeinsam prüfen |
+| Rest-`conversationSignals.ts`-Modul | ganzes File | sobald `question-stem` fällt |
+
+### F) Bau-Hinweise
+
+- **Anchoring-Scorer-Koordination:** ohne `suggested_question` misst die Eval-Metrik `anchoringViolationRate` ([scorers/index.ts](../../src/services/__evals__/interview/scorers/index.ts)) eine jetzt unmögliche Leck-Klasse. Den Scorer sauber auf „leer/0" führen, nicht brechen lassen. (Instrument-Verfeinerung ist PROJ-40/31.)
+- **Reihenfolge (Bau):** Briefing-Schema → Fokus-Lock-Rendering im Talker → Closing-Completion-Regel + M7-b → Signal-Kollaps/Entdichtung → Off-Topic-Redirect → Reconnect/Frontend.
+- **Tests:** Ziel-O-Feld-Wahl am Lock (O2–O6-Priorität + Fallback), M7-b-`hadExtraction`-Veto, ≥1-Entdeckungsfrage-Garantie (Eintritts-Turn schließt nie ab), Erschöpfung bei voller O-Deckung (Lock rückt ohne K-Turn-Nachlauf, konvergiert mit `step_advance_ready`), Regressionstest „kein Briefing-Feld drückt Farewell/Terminierung aus" (H-2), Wegfall der gelöschten Symbole (keine Rest-Referenzen). `tsc --noEmit` + volle Suite grün.
+- **Verifikation (Pflicht-Gate, general.md):** `/eval:interview` mit ≥1 PASS je Persona (buchhalter, it-support), gleiche Config/Seed wie PROJ-44-Runde-3, Judge-Key-Preflight mit echtem `generateText`-Call; Transkript-für-Transkript-Lektüre gegen die Runde-3-Baseline (H-2/BUG-4/M-6/M-7/L-1 nicht mehr reproduzierbar); manueller adversarialer (Tim-artiger) Durchlauf; Latenz unverändert (keine neue Naht auf dem Haupt-Pfad).
 
 ## QA Test Results
 _To be added by /qa_
