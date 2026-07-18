@@ -52,9 +52,8 @@ function mockTurnsFetch(data: object[] | null, error: Error | null = null) {
 }
 
 // ─── POST /api/interview/[token]/reconnect ────────────────────────────────────
-// PROJ-44/ADR-021 D6: the LLM path is deleted without replacement — the route
-// always returns a static re-engagement line once past the guards (no
-// interview_state read, no createTalkerStream/createInterviewStream call).
+// PROJ-46/ADR-023 D6: validation-only — no assistant text at all (not even a
+// static line) once past the guards. No interview_state read, no Talker call.
 
 describe('POST /api/interview/[token]/reconnect', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -132,11 +131,10 @@ describe('POST /api/interview/[token]/reconnect', () => {
 
   // KI-22 (2026-07-11) / PROJ-44 (2026-07-16): turns are always persisted as
   // atomic (user_input, agent_response) pairs, so a returning employee always
-  // finds the agent mid-question — this is the ONLY case that occurs in
-  // practice, which is exactly why ADR-021 D6 deletes the LLM path rather than
-  // keeping it as dead code. The route now always returns the static
-  // re-engagement line for an active interview with existing turns.
-  it('returns a static re-engagement line without any LLM call', async () => {
+  // finds the agent mid-question — the pending question is already visible in
+  // the rendered history. PROJ-46/ADR-023 D6 goes past PROJ-44's static line
+  // and returns no assistant text at all for an active interview with turns.
+  it('returns an empty 200 without any LLM call or assistant text', async () => {
     mockAdminFrom
       .mockReturnValueOnce(mockInterviewFetch({ id: 'iv-active', status: 'active', token_expires_at: FUTURE_EXPIRY }))
       .mockReturnValueOnce(mockTurnsFetch([{ turn_number: 1 }]))
@@ -145,6 +143,6 @@ describe('POST /api/interview/[token]/reconnect', () => {
 
     expect(res.status).toBe(200)
     const text = await res.text()
-    expect(text).toBe('Willkommen zurück — lass uns da weitermachen, wo wir aufgehört haben.')
+    expect(text).toBe('')
   })
 })

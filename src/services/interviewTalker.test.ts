@@ -10,40 +10,8 @@ vi.mock('@/lib/llm-provider', () => ({ resolveModel: vi.fn().mockReturnValue({})
 vi.mock('./talkerGroundingGuard', () => ({ checkGroundingViolation: vi.fn() }))
 
 import { generateText } from 'ai'
-import { detectNumberAnchoring, detectFillerPhrases, createTalkerStream } from './interviewTalker'
+import { detectFillerPhrases, createTalkerStream, createOffTopicRedirectStream } from './interviewTalker'
 import { checkGroundingViolation } from './talkerGroundingGuard'
-
-// ─── detectNumberAnchoring (Pt7, output guard) ───────────────────────────────
-
-describe('detectNumberAnchoring', () => {
-  it('detects when Talker re-quotes a briefing number in a question', () => {
-    const talker = 'Du hast vorhin den Prozess beschrieben. Passiert das etwa 20 mal pro Monat?'
-    const briefing = 'Frage nach Häufigkeit — ca. 20 mal pro Monat'
-    expect(detectNumberAnchoring(talker, briefing)).toContain('20')
-  })
-
-  it('does NOT flag number that appears only in a statement, not a question', () => {
-    const talker = 'Du hast 20 Vorgänge erwähnt. Wie oft passiert das genau?'
-    const briefing = 'Häufigkeit: ca. 20 mal'
-    // "20" appears in a non-question sentence
-    expect(detectNumberAnchoring(talker, briefing)).toEqual([])
-  })
-
-  it('returns empty array when briefing has no numbers', () => {
-    const talker = 'Wie oft machst du das pro Monat?'
-    expect(detectNumberAnchoring(talker, 'Frage nach Häufigkeit des Prozesses')).toEqual([])
-  })
-
-  it('returns empty array when Talker does not re-quote the number', () => {
-    const talker = 'Wie oft passiert das ungefähr?'
-    expect(detectNumberAnchoring(talker, 'ca. 15 mal pro Woche')).toEqual([])
-  })
-
-  it('does NOT flag when Talker asks open question without number', () => {
-    const talker = 'Wie lange dauert dieser Schritt in der Regel?'
-    expect(detectNumberAnchoring(talker, 'Dauer ca. 30 Minuten')).toEqual([])
-  })
-})
 
 // ─── detectFillerPhrases (Pt13 / F1c, output guard) ──────────────────────────
 
@@ -176,5 +144,47 @@ describe('createTalkerStream — KI-18 grounding repair loop', () => {
     )
     errorSpy.mockRestore()
     warnSpy.mockRestore()
+  })
+})
+
+// ─── createOffTopicRedirectStream (PROJ-46 / ADR-023 D6) ─────────────────────
+// Replaces the deterministic buildOffTopicRedirect fixed-text re-anchor with a
+// schlanker Talker call — no buildDynamicContext, no grounding guard, no
+// filler tracking, just STATIC_PROMPT + a short addendum + history.
+
+describe('createOffTopicRedirectStream', () => {
+  beforeEach(() => {
+    vi.mocked(generateText).mockReset()
+    vi.mocked(checkGroundingViolation).mockReset()
+  })
+
+  it('makes exactly one generateText call and returns its text — no grounding guard call', async () => {
+    vi.mocked(generateText).mockResolvedValueOnce({
+      text: 'Dazu kann ich leider nichts sagen — wie sah dein Ablauf da noch mal aus?',
+      usage: { inputTokens: 1, outputTokens: 1, inputTokenDetails: {} },
+    } as unknown as Awaited<ReturnType<typeof generateText>>)
+
+    const stream = await createOffTopicRedirectStream({
+      interviewId: 'interview-1',
+      history: [{ role: 'assistant', content: 'Wie oft passiert das ungefähr pro Woche?' }],
+    })
+    const text = await stream.text
+
+    expect(text).toBe('Dazu kann ich leider nichts sagen — wie sah dein Ablauf da noch mal aus?')
+    expect(generateText).toHaveBeenCalledTimes(1)
+    expect(checkGroundingViolation).not.toHaveBeenCalled()
+  })
+
+  it('the system prompt includes the off-topic redirect addendum on top of STATIC_PROMPT', async () => {
+    vi.mocked(generateText).mockResolvedValueOnce({
+      text: 'Redirect.',
+      usage: { inputTokens: 1, outputTokens: 1, inputTokenDetails: {} },
+    } as unknown as Awaited<ReturnType<typeof generateText>>)
+
+    await createOffTopicRedirectStream({ interviewId: 'interview-1', history: [] })
+
+    const call = vi.mocked(generateText).mock.calls[0]![0] as { system: string }
+    expect(call.system).toContain('KI-Interviewer')
+    expect(call.system).toContain('fachfremde Frage')
   })
 })

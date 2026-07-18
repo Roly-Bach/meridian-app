@@ -356,13 +356,13 @@ describe('link_bottleneck', () => {
 
 describe('produce_briefing', () => {
   it('writes interviews patch with onlyIfNotDone guard', () => {
-    const out = applyIntent(makeSnapshot([]), { kind: 'produce_briefing', briefing: { next_focus: 'X', suggested_question: 'Q?' } }, CTX)
+    const out = applyIntent(makeSnapshot([]), { kind: 'produce_briefing', briefing: { target_o_field: 'ausnahmen' } }, CTX)
     expect(out.result.status).toBe('accepted')
-    expect(out.patches).toEqual([{ kind: 'interview', fields: { next_briefing: { next_focus: 'X', suggested_question: 'Q?' }, analyst_status: 'done' }, onlyIfNotDone: true }])
+    expect(out.patches).toEqual([{ kind: 'interview', fields: { next_briefing: { target_o_field: 'ausnahmen' }, analyst_status: 'done' }, onlyIfNotDone: true }])
     expect(out.snapshot.briefingProduced).toBe(true)
   })
   it('skips a second produce_briefing in the same pass', () => {
-    const out = applyIntent(makeSnapshot([], { briefingProduced: true }), { kind: 'produce_briefing', briefing: { next_focus: 'X' } }, CTX)
+    const out = applyIntent(makeSnapshot([], { briefingProduced: true }), { kind: 'produce_briefing', briefing: { target_o_field: 'ausnahmen' } }, CTX)
     expect(out.result.status).toBe('skipped')
     expect(out.result.reason).toBe('briefing_already_produced')
     expect(out.patches).toHaveLength(0)
@@ -374,12 +374,12 @@ describe('produce_briefing', () => {
   // own read-merge-write had persisted into interviews.next_briefing.usedFillerPhrases.
   it('preserves usedFillerPhrases from the snapshot even though the briefing carries none', () => {
     const snapshot = makeSnapshot([], { usedFillerPhrases: ['Vielen Dank', 'Interessant'] })
-    const out = applyIntent(snapshot, { kind: 'produce_briefing', briefing: { next_focus: 'X', suggested_question: 'Q?' } }, CTX)
+    const out = applyIntent(snapshot, { kind: 'produce_briefing', briefing: { target_o_field: 'ausnahmen' } }, CTX)
     expect(out.result.status).toBe('accepted')
     expect(out.patches).toEqual([{
       kind: 'interview',
       fields: {
-        next_briefing: { next_focus: 'X', suggested_question: 'Q?', usedFillerPhrases: ['Vielen Dank', 'Interessant'] },
+        next_briefing: { target_o_field: 'ausnahmen', usedFillerPhrases: ['Vielen Dank', 'Interessant'] },
         analyst_status: 'done',
       },
       onlyIfNotDone: true,
@@ -387,10 +387,10 @@ describe('produce_briefing', () => {
   })
 
   it('does not add an empty usedFillerPhrases key when the snapshot has none', () => {
-    const out = applyIntent(makeSnapshot([]), { kind: 'produce_briefing', briefing: { next_focus: 'X', suggested_question: 'Q?' } }, CTX)
+    const out = applyIntent(makeSnapshot([]), { kind: 'produce_briefing', briefing: { target_o_field: 'ausnahmen' } }, CTX)
     expect(out.patches).toEqual([{
       kind: 'interview',
-      fields: { next_briefing: { next_focus: 'X', suggested_question: 'Q?' }, analyst_status: 'done' },
+      fields: { next_briefing: { target_o_field: 'ausnahmen' }, analyst_status: 'done' },
       onlyIfNotDone: true,
     }])
   })

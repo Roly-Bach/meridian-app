@@ -2,7 +2,6 @@ import { resolveModel } from '@/lib/llm-provider'
 import { generateText } from 'ai'
 import { buildTraceMetadata, type TraceCtx, type OnTokenUsage } from './_telemetry'
 import { buildDynamicContext, STATIC_PROMPT } from './talkerPrompt'
-import { extractNumericTokens } from './conversationSignals'
 import { checkGroundingViolation } from './talkerGroundingGuard'
 import type { InterviewContext, TurnMessage, AnalystBriefing } from './interviewTypes'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
@@ -27,7 +26,6 @@ export interface TalkerStreamOptions {
   context: InterviewContext
   history: TurnMessage[]
   briefing?: AnalystBriefing | null
-  isReconnect?: boolean
   isStart?: boolean
   userInput?: string
   onFinish?: (text: string) => Promise<void>
@@ -38,23 +36,6 @@ export interface TalkerStreamOptions {
 // ─── Output Guards (PROJ-35 / ADR-017) ────────────────────────────────────────
 // Post-hoc detectors on the *generated* Talker text — they live next to their
 // only caller (onFinish below). Behaviour unchanged from interviewAgent.
-
-/**
- * Pt7: Detect whether a Talker response re-quotes numeric values from the briefing.
- * Returns matched numbers if anchoring is found, empty array otherwise.
- * Used in onFinish for observability logging.
- */
-export function detectNumberAnchoring(talkerText: string, suggestedQuestion: string): string[] {
-  const numbers = extractNumericTokens(suggestedQuestion)
-  if (numbers.length === 0) return []
-  // Only flag if the number appears inside a question (ends with ?)
-  const sentences = talkerText.split(/[.!]\s+/)
-  const questionSentences = sentences.filter(s => s.includes('?'))
-  return numbers.filter(n => questionSentences.some(q => {
-    const re = new RegExp(`\\b${n.replace('.', '\\.')}\\b`)
-    return re.test(q)
-  }))
-}
 
 /**
  * Pt13: Detect formulaic acknowledgment phrases in Talker output.
@@ -132,32 +113,20 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
   const modelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const model = resolveModel(modelString)
 
-  // F1: feed last assistant turns into context for drill-stop detection.
-  // F1b: also feed last user turn for refuse-detect.
-  // E3.4: feed last user turns for laddering streak detection.
+  // KI-15: feed last assistant turns into context for question-stem repetition detection.
   const recentAssistantTurns = opts.history
     .filter((t) => t.role === 'assistant')
     .slice(-4)
     .map((t) => t.content)
-  const lastUserTurn = [...opts.history].reverse().find((t) => t.role === 'user')?.content
-  const recentUserTurns = opts.history
-    .filter((t) => t.role === 'user')
-    .slice(-4)
-    .map((t) => t.content)
   const dynamicPart = buildDynamicContext(
-    { ...opts.context, recentAssistantTurns, lastUserTurn, recentUserTurns },
+    { ...opts.context, recentAssistantTurns },
     opts.briefing,
   )
 
   type PlainMessage = { role: 'user' | 'assistant'; content: string }
   type RichMessage = { role: 'user' | 'assistant'; content: string | Array<{ type: 'text'; text: string }> }
 
-  const baseMessages: PlainMessage[] = opts.isReconnect
-    ? [
-        ...opts.history.map((t) => ({ role: t.role, content: t.content })),
-        { role: 'user' as const, content: 'Ich bin wieder da, können wir weitermachen?' },
-      ]
-    : opts.isStart
+  const baseMessages: PlainMessage[] = opts.isStart
     ? [{ role: 'user' as const, content: 'Bitte starte das Interview.' }]
     : opts.history.map((t) => ({ role: t.role, content: t.content }))
 
@@ -233,18 +202,6 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
       cacheReadTokens: (details?.cacheReadTokens as number | undefined),
       outputTokens: first.usage.outputTokens ?? 0,
     })
-  }
-
-  // Pt7: Anchoring detection — log violations for eval analysis.
-  const suggestedQ = opts.briefing?.suggested_question ?? ''
-  if (suggestedQ) {
-    const anchored = detectNumberAnchoring(finalText, suggestedQ)
-    if (anchored.length > 0) {
-      console.warn('[talker:anchoring] number re-quote detected', {
-        numbers: anchored,
-        interviewId: opts.context.interviewId,
-      })
-    }
   }
 
   // KI-18: live grounding guard. Buffer-then-stream (see module header) makes
@@ -329,6 +286,70 @@ export async function createTalkerStream(opts: TalkerStreamOptions): Promise<{
 
   if (opts.onFinish) await opts.onFinish(finalText)
 
+  return {
+    text: Promise.resolve(finalText),
+    toTextStreamResponse: () =>
+      new Response(finalText, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }),
+  }
+}
+
+// ─── Off-Topic Redirect (PROJ-46 / ADR-023 D6) ────────────────────────────────
+// KI-26: the previous fixed buildOffTopicRedirect text wortgleich repeated the
+// prior question, which read as broken on a role-guard false-positive. Replaced
+// by a schlanker Talker-Call — STATIC_PROMPT + a short addendum, NO
+// buildDynamicContext, NO grounding guard, NO filler tracking (deliberately
+// thinner than the main turn: this is a rare, off-critical-path detour, not a
+// content turn). State is unaffected by this call — the roleGuard classification
+// itself (off_topic vs. meta) stays PROJ-42 scope, unchanged here.
+
+const OFF_TOPIC_ADDENDUM = `Der Mitarbeiter hat gerade eine fachfremde Frage gestellt oder eine Gegenfrage außerhalb des Interview-Themas. Weise kurz und freundlich darauf hin, dass du als Interviewer dazu nichts beitragen kannst, und führe das Gespräch zum offenen Thema zurück — in eigenen Worten daran anknüpfend, NICHT als wortgleiche Wiederholung deiner letzten Frage.`
+
+export interface OffTopicRedirectOptions {
+  interviewId: string
+  history: TurnMessage[]
+  traceCtx?: TraceCtx
+  onTokenUsage?: OnTokenUsage
+}
+
+export async function createOffTopicRedirectStream(opts: OffTopicRedirectOptions): Promise<{
+  text: Promise<string>
+  toTextStreamResponse: () => Response
+}> {
+  const modelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
+  const model = resolveModel(modelString)
+  const isGoogleModel = modelString.startsWith('google/')
+  const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
+
+  const result = await generateText({
+    model,
+    temperature: 0.5,
+    system: `${STATIC_PROMPT}\n\n${OFF_TOPIC_ADDENDUM}`,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: messages as any,
+    ...(isGoogleModel && {
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: TALKER_THINKING_BUDGET } },
+      },
+    }),
+    experimental_telemetry: buildTraceMetadata('interview.talker', {
+      interviewId: opts.interviewId,
+      model: modelString,
+      environment: 'prod',
+      component: 'talker_off_topic',
+      ...opts.traceCtx,
+    }),
+  })
+
+  const details = result.usage.inputTokenDetails as Record<string, unknown> | undefined
+  opts.onTokenUsage?.({
+    component: 'talker',
+    model: modelString,
+    inputTokens: result.usage.inputTokens ?? 0,
+    cacheReadTokens: (details?.cacheReadTokens as number | undefined),
+    outputTokens: result.usage.outputTokens ?? 0,
+  })
+
+  const finalText = result.text
   return {
     text: Promise.resolve(finalText),
     toTextStreamResponse: () =>

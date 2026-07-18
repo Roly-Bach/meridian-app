@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveTurnLifecycle, CLOSING_PROBE_TEXT, type OrchestratorContext } from './interviewOrchestrator'
+import { resolveTurnLifecycle, type OrchestratorContext } from './interviewOrchestrator'
 import type { StepEntry } from './interviewSemantic'
 import type { AnalystBriefing } from './interviewTypes'
 
@@ -19,13 +19,17 @@ import type { AnalystBriefing } from './interviewTypes'
  * near the 10-minute budget (max ~5 minutes across all 17 turns, well under the new
  * 80% soft anchor at 8 minutes) confirmed via the real `created_at` timestamps below.
  *
+ * PROJ-46 (ADR-023 D4) note: the scripted CLOSING_PROBE_TEXT injection this test
+ * originally pinned is gone — Closing is a Talker-formulated discovery continuation
+ * now, and completion binds to ctx.phase already being 'closing' plus the
+ * no-new-extraction streak, not a scripted probe having been asked+answered. The
+ * turn-by-turn narrative below is preserved for its historical context; assertions
+ * are updated to the new completion mechanism.
+ *
  * This test reconstructs a plausible per-turn state trace using the REAL user inputs,
  * REAL timestamps and the REAL final step_tracker pulled from Supabase — it is not a
  * byte-exact replay of the historical (buggy) system's internal state, since per-turn
  * Analyst snapshots were never persisted, only the inputs/outputs and final tracker.
- * Where the new system's behavior genuinely diverges from the buggy transcript (e.g.
- * turn 10's "Meetings" reentry), the assistant text is a plausible PROJ-42-era
- * response instead of the historical one, with the divergence called out.
  */
 
 const emptyPotenzial: StepEntry['potenzial'] = {
@@ -84,8 +88,7 @@ function ctxAt(overrides: Partial<OrchestratorContext>): OrchestratorContext {
     timerMinutes: 0,
     maxDurationMinutes: MAX_DURATION_MINUTES,
     historyLength: 0,
-    history: [],
-    newStepThisTurn: false,
+    hadExtractionThisTurn: false,
     oDrought: { stepId: null, streak: 0, exhaustedStepIds: [] },
     ...overrides,
   }
@@ -93,35 +96,18 @@ function ctxAt(overrides: Partial<OrchestratorContext>): OrchestratorContext {
 
 describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)', () => {
   it('turn 8 (real elapsed ~2min, 1 process registered): stays in explore — no premature escalation from turn count alone', () => {
-    // Real turns 1-8 verbatim. Only "Softwareentwicklung" registered so far, no
-    // advance signal yet (Analyst hasn't judged it sufficiently covered). Under the
-    // OLD computeTurnBudget ladder this was already deep into the escape-valve zone
+    // Real turns 1-8. Only "Softwareentwicklung" registered so far, no advance
+    // signal yet (Analyst hasn't judged it sufficiently covered). Under the OLD
+    // computeTurnBudget ladder this was already deep into the escape-valve zone
     // for a single-step tracker — the new model has no such turn-count driver at all.
-    const history = [
-      { role: 'user' as const, content: 'ICh arbeit eigentlich immer an unterschiedlichen PRojekten und bin dort meistens in einer ausführenden Rolle' },
-      { role: 'assistant' as const, content: 'Du bist also in der operativen Umsetzung tätig. Welche dieser Aufgaben oder Prozesse wiederholen sich dabei regelmäßig in deinem Arbeitsalltag?' },
-      { role: 'user' as const, content: 'Das schreiben von Code' },
-      { role: 'assistant' as const, content: 'Das Schreiben von Code ist der Kern deiner Tätigkeit. Welcher Teilbereich davon nimmt bei dir die meiste Zeit in Anspruch, etwa die Implementierung neuer Features oder die Fehlerbehebung?' },
-      { role: 'user' as const, content: 'der toilettengang' },
-      { role: 'assistant' as const, content: 'Wie oft schreibst du Code — eher täglich oder eher einmal pro Woche?' },
-      { role: 'user' as const, content: 'gar nicht' },
-      { role: 'assistant' as const, content: 'Du hast vorhin das Schreiben von Code als Aufgabe genannt — welche Tätigkeiten machen stattdessen den Großteil deiner Zeit aus?' },
-      { role: 'user' as const, content: 'Toilette' },
-      { role: 'assistant' as const, content: 'Da wir beim Thema Code nicht weiterkommen: Welche Art von Projekten betreust du in deiner Rolle als Developer primär?' },
-      { role: 'user' as const, content: 'ne spaß ist schon der code' },
-      { role: 'assistant' as const, content: 'Welche Tools verwendest du beim Coden und was ist das konkrete Ergebnis, das du damit erstellst?' },
-      { role: 'user' as const, content: 'visual studio code und das ergebnis kenne ich selber immer ganricht so genau, weil das mein Vorgesetzter anschaut und bewertet' },
-      { role: 'assistant' as const, content: 'Wenn dein Vorgesetzter die Ergebnisse prüft, wie viele Stunden am Tag verbringst du dann durchschnittlich mit dem eigentlichen Schreiben von Code?' },
-      { role: 'user' as const, content: '5' },
-    ]
     const tracker = [makeStep('Softwareentwicklung', 'walkthrough', { id: 'S001' })]
-    const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 2, historyLength: history.length, history })
+    const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 2, historyLength: 14 })
 
     // No advance signal, no streak exhaustion, well under the 80% soft anchor (8min) → stays explore.
     expect(resolveTurnLifecycle(ctx, { noNewExtractionStreak: 0 }).phase).toBe('explore')
   })
 
-  it('turn 9 (real elapsed ~3min): advances to closing once the Analyst judges the process sufficiently covered — content-driven, matches the real probe text', () => {
+  it('turn 9 (real elapsed ~3min): advances to closing once the Analyst judges the process sufficiently covered — content-driven, and never completes on this entry turn', () => {
     const tracker = [makeStep('Softwareentwicklung', 'walkthrough', { id: 'S001' })]
     // PROJ-44 Remediation (M-1): by turn 9 the single active step has also
     // drought-fired (no new O-field across the last few of the largely
@@ -132,63 +118,43 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
 
     const next = resolveTurnLifecycle(ctx, { step_advance_ready: true })
     expect(next.phase).toBe('closing')
-    // The real turn-9 response happens to be exactly CLOSING_PROBE_TEXT — the old
-    // system asked the same words, but as a symptom of turn-count escalation, not
-    // content coverage. Pinning the constant confirms the new deterministic probe
-    // text is unchanged from the historical wrap-up question wording.
-    expect(CLOSING_PROBE_TEXT).toBe(
-      'Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute noch nicht erwähnt haben?',
-    )
+    // PROJ-46 (ADR-023 D4): the explore→closing entry turn (ctx.phase was still
+    // 'explore') can never soft-confirm-complete on the same turn — it always
+    // asks at least one more discovery question first, formulated by the Talker.
+    expect(next.complete).toBe(false)
   })
 
   it('turn 10 real reveal ("Meetings"): a newly-discovered process during closing routes back to explore, first-class — not the old 2-turn clarification-only cap', () => {
-    // Real turn 10 user input reveals a genuinely new recurring task while the
-    // closing probe is pending. Modeled here as already reflected in the tracker
-    // (the pre-completion recheck, KI-12, existing/unchanged, is responsible for
-    // getting it registered before a lifecycle decision is trusted — verified
-    // separately in runInterviewTurn.test.ts T11).
-    const historyAfterReveal = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Meetings' },
-    ]
+    // Real turn 10 user input reveals a genuinely new recurring task while
+    // already in Closing (the discovery-continuation question from turn 9).
     const tracker = [
       makeStep('Softwareentwicklung', 'walkthrough', { id: 'S001' }),
       makeStep('Meetings', 'exploring', { id: 'S002' }),
     ]
-    const ctx = ctxAt({ phase: 'closing', stepTracker: tracker, timerMinutes: 3, history: historyAfterReveal, historyLength: 2 })
+    const ctx = ctxAt({ phase: 'closing', stepTracker: tracker, timerMinutes: 3, historyLength: 2, hadExtractionThisTurn: true })
 
     // Strom 1 AC: first-class Explore reentry (not 'clarification'), and must
-    // not complete out from under the freshly-discovered step, even though the
-    // probe was technically already asked+a user reply followed.
+    // not complete out from under the freshly-discovered step.
     const result = resolveTurnLifecycle(ctx, null)
     expect(result.phase).toBe('explore')
     expect(result.complete).toBe(false)
   })
 
   it('reaches complete=true by the end of the reconstructed sequence — the actual KI-23 fix (prod interview remains status=active to this day)', () => {
-    // Real turns 13/14 verbatim, including the EXACT string that broke the old
+    // Real turns 13/14, including the EXACT string that broke the old
     // FAREWELL_MARKERS regex ("wünsche ich dir" — substring "wünsche dir" required,
-    // never matched). The new mechanism does not use text heuristics at all, so this
-    // string's presence is irrelevant to completion — proven by the fact that
-    // resolveTurnLifecycle never inspects assistant text for farewell language anymore.
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Meetings' },
-      { role: 'assistant' as const, content: 'Wie oft finden diese Meetings statt und wie lange dauern sie im Durchschnitt?' },
-      { role: 'user' as const, content: '1 pro tag 20 min' },
-      { role: 'assistant' as const, content: 'Gerne. Bis bald.' },
-      { role: 'user' as const, content: 'danke' },
-      { role: 'assistant' as const, content: 'Alles klar, dann wünsche ich dir noch einen erfolgreichen Arbeitstag.' }, // the real, regex-breaking string
-      { role: 'user' as const, content: 'gerne' },
-    ]
+    // never matched). The new mechanism does not use text heuristics at all — it is
+    // irrelevant here too, since resolveTurnLifecycle never inspects assistant text
+    // for farewell language. By this point several consecutive turns produced no new
+    // extraction (Meetings' slots got filled turn 10-11, then only farewell exchanges
+    // 12-14) — the streak reaches the default limit K=3 while already in closing.
     const ctx = ctxAt({
       phase: 'closing',
       stepTracker: REAL_FINAL_TRACKER, // real final tracker — neither step is 'done'
       timerMinutes: 4,
-      history,
-      historyLength: history.length,
+      historyLength: 14,
     })
-    const analystSuggestion: AnalystBriefing | null = null // no pending clarification cards in this scenario
+    const analystSuggestion: AnalystBriefing = { noNewExtractionStreak: 3 }
 
     const lifecycle = resolveTurnLifecycle(ctx, analystSuggestion)
     expect(lifecycle.phase).toBe('closing')

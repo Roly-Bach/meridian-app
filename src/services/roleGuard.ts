@@ -117,27 +117,3 @@ export async function checkRoleGuard(
   console.error(`[roleGuard] judge call failed after ${retries + 1} attempts, fail-safe passthrough (class=meta):`, lastErr)
   return { checked: true, classification: 'meta' }
 }
-
-const REDIRECT_PREFIX = 'Dazu kann ich als Interviewer leider nichts beitragen — bleiben wir beim Prozessgespräch. '
-
-/**
- * Deterministic redirect for class=off_topic — no Talker call. Re-anchors on
- * the interviewer role and returns to the last open question verbatim.
- *
- * BUG-2 (PROJ-42 QA, 2026-07-16): naively taking "the last assistant turn"
- * re-embedded a PRIOR redirect verbatim when off-topic turns follow each
- * other back to back (Tim's real turn-16→17 pattern), growing the message by
- * one redirect-prefix per consecutive off-topic turn. Skip past any earlier
- * redirect turns to re-anchor on the last GENUINE question instead — repeated
- * off-topic turns now each produce the same, non-growing redirect.
- */
-export function buildOffTopicRedirect(history: TurnMessage[]): string {
-  const lastGenuineAssistant = [...history]
-    .reverse()
-    .find((t) => t.role === 'assistant' && !t.content.trim().startsWith(REDIRECT_PREFIX.trim()))
-    ?.content.trim()
-  const reanchor = lastGenuineAssistant && lastGenuineAssistant.length > 0
-    ? lastGenuineAssistant
-    : 'Wo waren wir stehengeblieben?'
-  return `${REDIRECT_PREFIX}${reanchor}`
-}

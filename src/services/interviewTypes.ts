@@ -8,8 +8,10 @@
  * imports (no supabase-admin, no next/server).
  */
 
-import type { MissingSlot } from './interviewSemantic'
-import type { Phase, StepEntry, RawExtraction } from './interviewSemantic'
+import type { Phase, StepEntry, RawExtraction, OSlotField } from './interviewSemantic'
+
+/** PROJ-46 (ADR-023 D1): why the Talker's binding target changed this turn — code-computed, per-turn ephemeral, never persisted. */
+export type TransitionReason = 'step_switch' | 'closing_entry' | null
 
 export interface InterviewContext {
   interviewId: string
@@ -25,15 +27,23 @@ export interface InterviewContext {
   extractionsLog: RawExtraction[]
   maxDurationMinutes: number
   stepTracker: StepEntry[]
-  missingSlotsForCoverageCheck?: MissingSlot[]
   /** Opening phrases the Talker already used — injected as avoidance list to prevent repetition */
   usedFillerPhrases?: string[]
-  /** Last 4 assistant messages — used for drill-stop detection (F1). */
+  /** Last 4 assistant messages — used for question-stem repetition detection (KI-15). */
   recentAssistantTurns?: string[]
-  /** Last user message — used for refuse-detect (F1b). */
-  lastUserTurn?: string
-  /** Last 4 user messages — used for laddering streak detection (E3.4). */
-  recentUserTurns?: string[]
+  /**
+   * PROJ-46 (ADR-023 D3): this turn's O-Drought-locked step id (Fokus-Lock),
+   * null when nothing is lockable (empty tracker, all exhausted, or closing).
+   * Binding for the Talker's topic/target choice — see interviewOrchestrator.ts's
+   * computeFocusLock.
+   */
+  focusStepId?: string | null
+  /**
+   * PROJ-46 (ADR-023 D1): code-computed reason the binding target changed this
+   * turn — drives the Talker's transition-sentence guidance. See
+   * interviewOrchestrator.ts's computeTransitionReason.
+   */
+  transitionReason?: TransitionReason
   /**
    * KI-19: set only by the scripted completion/farewell call in runInterviewTurn.ts
    * (resolveTurnLifecycle already decided complete=true, DB status is already
@@ -61,17 +71,28 @@ export interface ClarificationCard {
 }
 
 export interface AnalystBriefing {
-  next_focus?: string
-  suggested_question?: string
+  /**
+   * PROJ-46 (ADR-023 D1): the Analyst's chosen O2–O6 target field for the
+   * currently focus-locked step — structured Absicht, never a formulated
+   * question. LLM-chosen with a deterministic fallback (first empty O2–O6
+   * field of the locked step) when the model omits it — see
+   * interviewOrchestrator.ts's computeTargetOFieldFallback, injected into
+   * interviewAnalyst.ts's runAnalyst. Replaces next_focus/suggested_question
+   * (Invariante I1 — no briefing field can express a question, farewell, or
+   * termination).
+   */
+  target_o_field?: OSlotField
   clarification_cards?: ClarificationCard[]
   /** Accumulated opening phrases the Talker has used — stored in next_briefing for cross-turn tracking */
   usedFillerPhrases?: string[]
   /**
-   * PROJ-42 Advance-Signal: "ist der aktuelle Prozessschritt für jetzt ausreichend
-   * erhoben" — LLM-authored content judgment (Analyst, via AnalystBriefingSchema),
-   * read by resolveTurnLifecycle to progress Explore without relying on turn-count
-   * thresholds. snake_case to match the zod tool-call schema field verbatim
-   * (same convention as next_focus/suggested_question/clarification_cards).
+   * PROJ-42 Advance-Signal, reframed by PROJ-46/ADR-023 D2: "ist der aktuelle
+   * Prozessschritt für jetzt ausreichend erhoben" — advisory LLM-authored
+   * content judgment (Analyst, via AnalystBriefingSchema), read by
+   * resolveTurnLifecycle to progress Explore without relying on turn-count
+   * thresholds. The deterministic Fortschritts-Boden (hasUnexhaustedStep) can
+   * veto it — this is a hint, not a lifecycle driver. snake_case to match the
+   * zod tool-call schema field verbatim.
    */
   step_advance_ready?: boolean
   /**

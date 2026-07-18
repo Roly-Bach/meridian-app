@@ -1,20 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
-
-// interviewOrchestrator imports computeMissingMandatorySlots from interviewAgent,
-// which transitively imports supabase-admin (server-only). Mock it here.
-vi.mock('@/lib/supabase-admin', () => ({
-  getSupabaseAdmin: vi.fn().mockReturnValue({ from: vi.fn() }),
-}))
+import { describe, it, expect } from 'vitest'
 
 import {
   resolveTurnLifecycle,
-  closingProbeAlreadyAsked,
-  shouldInjectClosingProbe,
-  closingProbeAnswerReceived,
   computeFocusLock,
   updateODrought,
-  hasNewStepThisTurn,
-  CLOSING_PROBE_TEXT,
+  computeTargetOFieldFallback,
+  computeTransitionReason,
   type OrchestratorContext,
 } from './interviewOrchestrator'
 import type { StepEntry } from './interviewSemantic'
@@ -54,6 +45,15 @@ const fullSlots: StepEntry['slots'] = {
   hilfsmittel: { value: ['SAP'], quote: 'in SAP', nicht_befund_typ: null },
 }
 
+// Full O2–O6 coverage (7 fields: 6 tazite + abhaengigkeiten) but streak still low —
+// the D3 "exhaustion fires on full coverage" scenario. Potenzial is irrelevant to
+// O-coverage (O2–O6 only), left empty on purpose.
+const fullAbhaengigkeiten: StepEntry['abhaengigkeiten'] = {
+  depends_on: [{ schritt_id: 'S000', typ: 'voraussetzung', beschreibung: null }],
+  influences: [],
+  nicht_befund_typ: null,
+}
+
 function makeStep(title: string, status: 'exploring' | 'walkthrough' | 'done', slots: StepEntry['slots'] = emptySlots, extra: Partial<StepEntry> = {}): StepEntry {
   return { title, reihenfolge: 1, governance: null, abhaengigkeiten: null, status, potenzial: emptyPotenzial, slots, process_steps: [], friction_points: [], friction_tools: [], pain_point_primary: null, ...extra }
 }
@@ -67,8 +67,7 @@ function baseCtx(overrides: Partial<OrchestratorContext> = {}): OrchestratorCont
     timerMinutes: 5,
     maxDurationMinutes: 30,
     historyLength: 2,
-    history: [{ role: 'user', content: 'Hallo' }, { role: 'assistant', content: 'Hallo!' }],
-    newStepThisTurn: false,
+    hadExtractionThisTurn: false,
     oDrought: emptyODrought,
     ...overrides,
   }
@@ -119,6 +118,17 @@ describe('resolveTurnLifecycle — explore (content-driven, PROJ-42)', () => {
   it('advances to closing when the only registered step is already done (no unexhausted step remains)', () => {
     const tracker = [makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S001' })]
     const ctx = baseCtx({ phase: 'explore', stepTracker: tracker })
+    expect(resolveTurnLifecycle(ctx, { step_advance_ready: true }).phase).toBe('closing')
+  })
+
+  // PROJ-46 (ADR-023 D3): full O2–O6 coverage exhausts a step immediately,
+  // independent of its drought streak — otherwise a step whose 7th field fills
+  // the same turn its streak resets to 0 would stay locked with no empty
+  // target for up to K more turns.
+  it('advances to closing when the only registered step has full O2–O6 coverage despite a fresh (low) streak', () => {
+    const fullyCovered = makeStep('Mahnwesen: Bearbeitung', 'walkthrough', fullSlots, { id: 'S001', abhaengigkeiten: fullAbhaengigkeiten })
+    const oDrought: ODroughtState = { stepId: 'S001', streak: 0, exhaustedStepIds: [] }
+    const ctx = baseCtx({ phase: 'explore', stepTracker: [fullyCovered], oDrought })
     expect(resolveTurnLifecycle(ctx, { step_advance_ready: true }).phase).toBe('closing')
   })
 
@@ -180,109 +190,77 @@ describe('resolveTurnLifecycle — explore (content-driven, PROJ-42)', () => {
   })
 })
 
-// ─── closing transitions ──────────────────────────────────────────────────────
+// ─── closing transitions (PROJ-46 / ADR-023 D4: phase-bound streak, no scripted probe) ──
 
-describe('resolveTurnLifecycle — closing', () => {
-  it('stays in closing before the probe is answered', () => {
-    const history = [{ role: 'user' as const, content: 'Ja' }, { role: 'assistant' as const, content: 'Gut zu wissen.' }]
-    expect(resolveTurnLifecycle(baseCtx({ phase: 'closing', history, historyLength: 2 }), null).phase).toBe('closing')
+describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', () => {
+  // The explore→closing ENTRY turn: ctx.phase is still 'explore' (loaded state),
+  // even though resolvePhaseTransition resolves to 'closing' this turn — must
+  // never soft-confirm-complete on this same turn (≥1 discovery question guarantee).
+  it('never completes on the explore→closing entry turn, even with the streak already at the limit', () => {
+    const ctx = baseCtx({ phase: 'explore', timerMinutes: 24, maxDurationMinutes: 30, stepTracker: [] })
+    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 99 })
+    expect(result.phase).toBe('closing')
+    expect(result.complete).toBe(false)
+    expect(result.reason).toBe(null)
   })
 
-  it('completes after the probe is asked and answered, no cards (merged terminal evaluation)', () => {
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Nein, das war es eigentlich.' },
-    ]
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', history, historyLength: 2 }), null)
+  it('stays in closing, not yet complete, when already in closing but the streak is below the limit', () => {
+    const ctx = baseCtx({ phase: 'closing', stepTracker: [] })
+    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 1 })
+    expect(result.phase).toBe('closing')
+    expect(result.complete).toBe(false)
+  })
+
+  it('completes once already in closing AND the no-new-extraction streak reaches the limit, no cards', () => {
+    const ctx = baseCtx({ phase: 'closing', stepTracker: [] })
+    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 3 })
     expect(result.phase).toBe('closing')
     expect(result.complete).toBe(true)
     expect(result.reason).toBe('soft_confirm')
   })
 
-  it('advances to clarification when the Analyst provided clarification_cards', () => {
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Nein.' },
-    ]
+  it('advances to clarification instead of completing when the Analyst provided clarification_cards', () => {
     const analystSuggestion = {
+      noNewExtractionStreak: 3,
       clarification_cards: [{ process_step_id: 'uuid-1', step_title: 'Rechnungsprüfung', question: 'Wie oft?', options: ['Täglich', 'Wöchentlich', 'Andere'], slot_key: 'frequency' }],
     }
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', history, historyLength: 2 }), analystSuggestion)
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: [] }), analystSuggestion)
     expect(result.phase).toBe('clarification')
     expect(result.complete).toBe(false)
   })
 
   it('routes a newly-discovered process during closing back to explore, first-class (no clarification-only cap)', () => {
     const lateStep = makeStep('Reisekostenabrechnung', 'exploring')
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', historyLength: 10, stepTracker: [lateStep] }), null)
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: [lateStep] }), null)
     expect(result.phase).toBe('explore')
     expect(result.complete).toBe(false)
   })
 
-  // PROJ-44 Remediation (H-1): the synchronous Analyst can register a new step
-  // AND slot it in the same pass, bumping it straight to 'walkthrough' — the
-  // status-only hasStepInStatus('exploring') check above misses that case.
-  it('routes a new step back to explore even when the synchronous Analyst already advanced it past exploring this turn (H-1)', () => {
-    const freshlySlottedStep = makeStep('Mahnwesen: Bearbeitung', 'walkthrough', undefined, { id: 'S002' })
-    const ctx = baseCtx({ phase: 'closing', historyLength: 10, stepTracker: [freshlySlottedStep], newStepThisTurn: true })
-    const result = resolveTurnLifecycle(ctx, null)
-    expect(result.phase).toBe('explore')
-    expect(result.complete).toBe(false)
-  })
+  // PROJ-46 (ADR-023 D4, M7-b): generalizes the former H-1 newStepThisTurn veto —
+  // ANY applied knowledge write this turn (not just a brand-new step) routes
+  // back to explore instead of letting Closing complete out from under fresh content.
+  describe('M7-b: hadExtractionThisTurn veto', () => {
+    it('routes back to explore when a knowledge write was applied this turn, even with no exploring step', () => {
+      const doneStep = makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S001' })
+      const ctx = baseCtx({ phase: 'closing', stepTracker: [doneStep], hadExtractionThisTurn: true })
+      const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 5 })
+      expect(result.phase).toBe('explore')
+      expect(result.complete).toBe(false)
+    })
 
-  it('stays in closing when the last assistant turn is not the deterministic probe text', () => {
-    const history = [
-      { role: 'assistant' as const, content: 'Irgendwas anderes noch?' },
-      { role: 'user' as const, content: 'Nein.' },
-    ]
-    expect(resolveTurnLifecycle(baseCtx({ phase: 'closing', history, historyLength: 2 }), null).phase).toBe('closing')
+    it('stays in closing (and can complete) when no knowledge write was applied this turn', () => {
+      const doneStep = makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S001' })
+      const ctx = baseCtx({ phase: 'closing', stepTracker: [doneStep], hadExtractionThisTurn: false })
+      const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 3 })
+      expect(result.phase).toBe('closing')
+      expect(result.complete).toBe(true)
+    })
   })
 
   it('does not rely on text-heuristic farewell-loop detection (removed, KI-23) — repeated goodbyes alone do not complete', () => {
-    const history = [
-      { role: 'user' as const, content: 'Ja, das war alles.' },
-      { role: 'assistant' as const, content: 'Vielen Dank für das Gespräch! Ich verabschiede mich herzlich.' },
-      { role: 'user' as const, content: 'Danke auch.' },
-      { role: 'assistant' as const, content: 'Vielen Dank und auf Wiedersehen!' },
-      { role: 'user' as const, content: 'Tschüss.' },
-    ]
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', history, historyLength: 5 }), null)
+    const ctx = baseCtx({ phase: 'closing', stepTracker: [] })
+    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 2 })
     expect(result.complete).toBe(false)
-  })
-
-  // ADR-022 D1/H-3: the terminal evaluation runs against the RESOLVED phase,
-  // not ctx.phase (the Vorturn value) — a reentry into Closing whose probe was
-  // already answered in an EARLIER closing episode completes in THIS turn
-  // instead of a Leerlauf-turn later (the exact BUG-6 mechanism).
-  it('H-3/BUG-6 regression: completes in the SAME turn when a late-discovery reentry re-resolves to closing with the probe already answered', () => {
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Ach, da gibt es noch was: Mahnwesen.' },
-      { role: 'assistant' as const, content: 'Wie oft macht ihr das?' },
-      { role: 'user' as const, content: 'Einmal im Monat.' },
-    ]
-    // ctx.phase is 'explore' (the Vorturn value — the reentry into 'explore'
-    // happened on a prior turn). The old two-function split evaluated
-    // checkLifecycle's Trigger B against this Vorturn value, so a phase that
-    // resolves back to 'closing' THIS turn could never complete in the same
-    // turn — exactly the BUG-6 Leerlauf-turn. resolveTurnLifecycle instead
-    // evaluates termination against the RESOLVED phase: the newly-discovered
-    // step is now 'done' (step_advance_ready + no unexhausted step remains),
-    // so the transition resolves explore→closing, and the probe — still
-    // marked as asked from the earlier closing episode, with the last message
-    // now a user reply — is already answered, so this completes immediately.
-    const doneStep = makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S002' })
-    const ctx = baseCtx({
-      phase: 'explore',
-      history,
-      historyLength: history.length,
-      stepTracker: [doneStep],
-      newStepThisTurn: false,
-    })
-    const result = resolveTurnLifecycle(ctx, { step_advance_ready: true })
-    expect(result.phase).toBe('closing')
-    expect(result.complete).toBe(true)
-    expect(result.reason).toBe('soft_confirm')
   })
 })
 
@@ -340,76 +318,36 @@ describe('resolveTurnLifecycle — D2 terminination invariant', () => {
     expect(result.reason).toBe(null)
   })
 
-  it('does NOT complete when clarification_cards are pending, even with the probe answered', () => {
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Nein.' },
-    ]
+  it('does NOT complete when clarification_cards are pending, even with the streak at the limit', () => {
     const analystSuggestion = {
+      noNewExtractionStreak: 3,
       clarification_cards: [{ process_step_id: 'x', step_title: 'Test', question: 'Wie oft?', options: ['A', 'B'], slot_key: 'frequency' }],
     }
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', history, historyLength: 2 }), analystSuggestion)
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: [] }), analystSuggestion)
     expect(result.complete).toBe(false)
   })
 
   it('does NOT complete when a newly-discovered process is still exploring during closing', () => {
     const tracker = [makeStep('Reisekostenabrechnung', 'exploring')]
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Ach, da gibt es noch was.' },
-    ]
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: tracker, history, historyLength: 2 }), null)
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: tracker }), null)
     expect(result.complete).toBe(false)
     expect(result.reason).toBe(null)
   })
 
-  // PROJ-44 Remediation (H-1): same scenario, but the synchronous Analyst already
-  // slotted the new step past 'exploring' this turn — newStepThisTurn must still veto.
-  it('does NOT complete when a new step was registered+slotted this turn (H-1), even though its status already advanced past exploring', () => {
-    const freshlySlottedStep = makeStep('Reisekostenabrechnung', 'walkthrough', undefined, { id: 'S002' })
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Ach, da gibt es noch was, das mache ich auch.' },
-    ]
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: [freshlySlottedStep], history, historyLength: 2, newStepThisTurn: true }), null)
+  // PROJ-46 (ADR-023 D4, M7-b): same scenario, but via the generalized
+  // hadExtractionThisTurn veto instead of a still-exploring step.
+  it('does NOT complete when a knowledge write was applied this turn (M7-b), even with the streak at the limit', () => {
+    const tracker = [makeStep('Reisekostenabrechnung', 'walkthrough', undefined, { id: 'S002' })]
+    const result = resolveTurnLifecycle(
+      baseCtx({ phase: 'closing', stepTracker: tracker, hadExtractionThisTurn: true }),
+      { noNewExtractionStreak: 3 },
+    )
     expect(result.complete).toBe(false)
     expect(result.reason).toBe(null)
   })
 })
 
-// ─── Closing probe helpers (successor to WRAP_UP_QUESTION_TEXT) ──────────────
-
-describe('closingProbeAlreadyAsked / shouldInjectClosingProbe / closingProbeAnswerReceived', () => {
-  it('closingProbeAlreadyAsked is false with no prior probe', () => {
-    expect(closingProbeAlreadyAsked([{ role: 'assistant', content: 'Wie oft passiert das?' }])).toBe(false)
-  })
-
-  it('closingProbeAlreadyAsked is true once the verbatim probe is in history', () => {
-    expect(closingProbeAlreadyAsked([{ role: 'assistant', content: CLOSING_PROBE_TEXT }])).toBe(true)
-  })
-
-  it('shouldInjectClosingProbe is true only when nextPhase=closing, probe not yet asked, and last message is from the user', () => {
-    const history = [{ role: 'user' as const, content: 'Ja, das war so ziemlich alles.' }]
-    expect(shouldInjectClosingProbe('closing', history)).toBe(true)
-    expect(shouldInjectClosingProbe('explore', history)).toBe(false)
-  })
-
-  it('shouldInjectClosingProbe is false once the probe was already asked', () => {
-    const history = [
-      { role: 'assistant' as const, content: CLOSING_PROBE_TEXT },
-      { role: 'user' as const, content: 'Nein.' },
-    ]
-    expect(shouldInjectClosingProbe('closing', history)).toBe(false)
-  })
-
-  it('closingProbeAnswerReceived requires both the probe asked AND a trailing user reply', () => {
-    const asked = [{ role: 'assistant' as const, content: CLOSING_PROBE_TEXT }]
-    expect(closingProbeAnswerReceived(asked)).toBe(false) // no reply yet
-    expect(closingProbeAnswerReceived([...asked, { role: 'user' as const, content: 'Nein.' }])).toBe(true)
-  })
-})
-
-// ─── computeFocusLock / updateODrought / hasNewStepThisTurn (PROJ-44 Remediation) ──
+// ─── computeFocusLock / updateODrought (PROJ-44/46 Remediation) ──────────────
 
 describe('computeFocusLock (M-3 Fokus-Lock)', () => {
   it('locks onto the first candidate step when no previous lock exists', () => {
@@ -473,6 +411,25 @@ describe('computeFocusLock (M-3 Fokus-Lock)', () => {
       else process.env.O_DROUGHT_LIMIT = prev
     }
   })
+
+  // PROJ-46 (ADR-023 D3): full O2–O6 coverage exhausts a step immediately,
+  // independent of streak — never re-locked, even with streak=0.
+  describe('D3: exhaustion on full O2–O6 coverage', () => {
+    it('never locks a non-done step whose O2–O6 coverage is already complete', () => {
+      const fullyCovered = makeStep('Mahnwesen: Bearbeitung', 'walkthrough', fullSlots, { id: 'S001', abhaengigkeiten: fullAbhaengigkeiten })
+      const lock = computeFocusLock([fullyCovered], null)
+      expect(lock.stepId).toBeNull()
+      expect(lock.exhaustedStepIds).toContain('S001')
+    })
+
+    it('advances past a fully-covered step to the next candidate, without waiting for the streak', () => {
+      const fullyCovered = makeStep('Mahnwesen: Bearbeitung', 'walkthrough', fullSlots, { id: 'S001', abhaengigkeiten: fullAbhaengigkeiten })
+      const other = makeStep('Monatsabschluss', 'exploring', undefined, { id: 'S002' })
+      const previous: ODroughtState = { stepId: 'S001', streak: 0, exhaustedStepIds: [] }
+      const lock = computeFocusLock([fullyCovered, other], previous)
+      expect(lock.stepId).toBe('S002')
+    })
+  })
 })
 
 describe('updateODrought (M-1/M-3 shared primitive)', () => {
@@ -501,25 +458,65 @@ describe('updateODrought (M-1/M-3 shared primitive)', () => {
   })
 })
 
-describe('hasNewStepThisTurn (H-1 tracker-diff)', () => {
-  it('is false when the tracker is unchanged', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
-    expect(hasNewStepThisTurn(tracker, tracker)).toBe(false)
+// ─── computeTargetOFieldFallback (PROJ-46 / ADR-023 D1) ──────────────────────
+
+describe('computeTargetOFieldFallback', () => {
+  it('returns null when there is no locked step', () => {
+    expect(computeTargetOFieldFallback(undefined)).toBeNull()
   })
 
-  it('is true when a step with a new id appears in the after-tracker', () => {
-    const before = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
-    const after = [...before, makeStep('Mahnwesen: Bearbeitung', 'exploring', undefined, { id: 'S002' })]
-    expect(hasNewStepThisTurn(before, after)).toBe(true)
+  it('returns the first empty O2–O6 field in COVERAGE_FIELDS order', () => {
+    const step = makeStep('Rechnungsprüfung', 'walkthrough', emptySlots, { id: 'S001' })
+    expect(computeTargetOFieldFallback(step)).toBe('entscheidungslogik')
   })
 
-  it('is false for a merge that only combines pre-existing ids (canonical id preserved, no new id introduced)', () => {
-    const before = [
-      makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' }),
-      makeStep('Rechnungsprüfung: Detail', 'exploring', undefined, { id: 'S002' }),
-    ]
-    // Simulates computeMergedSteps collapsing S002 into canonical S001 — no new id.
-    const after = [makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })]
-    expect(hasNewStepThisTurn(before, after)).toBe(false)
+  it('skips already-filled fields (value or nicht_befund_typ) and returns the next open one', () => {
+    const step = makeStep('Rechnungsprüfung', 'walkthrough', {
+      entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
+      tazite_cues: { value: null, quote: null, nicht_befund_typ: 'unbekannt' },
+      ausnahmen: null,
+      inputs: null,
+      outputs: null,
+      hilfsmittel: null,
+    }, { id: 'S001' })
+    expect(computeTargetOFieldFallback(step)).toBe('ausnahmen')
+  })
+
+  it('returns abhaengigkeiten (O6) last, once all other O2–O5 fields are filled', () => {
+    const step = makeStep('Rechnungsprüfung', 'walkthrough', fullSlots, { id: 'S001' })
+    expect(computeTargetOFieldFallback(step)).toBe('abhaengigkeiten')
+  })
+
+  it('returns null when every O2–O6 field is already filled', () => {
+    const step = makeStep('Rechnungsprüfung', 'walkthrough', fullSlots, { id: 'S001', abhaengigkeiten: fullAbhaengigkeiten })
+    expect(computeTargetOFieldFallback(step)).toBeNull()
+  })
+})
+
+// ─── computeTransitionReason (PROJ-46 / ADR-023 D1) ──────────────────────────
+
+describe('computeTransitionReason', () => {
+  it('returns closing_entry when the resolved phase enters closing from a non-closing phase', () => {
+    expect(computeTransitionReason('S001', null, 'explore', 'closing')).toBe('closing_entry')
+  })
+
+  it('prioritizes closing_entry even when the locked step also changed', () => {
+    expect(computeTransitionReason('S001', 'S002', 'explore', 'closing')).toBe('closing_entry')
+  })
+
+  it('returns step_switch when the locked step id changed but the phase did not newly enter closing', () => {
+    expect(computeTransitionReason('S001', 'S002', 'explore', 'explore')).toBe('step_switch')
+  })
+
+  it('returns null when the same step remains locked', () => {
+    expect(computeTransitionReason('S001', 'S001', 'explore', 'explore')).toBeNull()
+  })
+
+  it('returns null when nothing was locked before or after', () => {
+    expect(computeTransitionReason(null, null, 'explore', 'explore')).toBeNull()
+  })
+
+  it('returns null once already in closing on both sides (no repeated closing_entry)', () => {
+    expect(computeTransitionReason(null, null, 'closing', 'closing')).toBeNull()
   })
 })

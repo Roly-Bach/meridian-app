@@ -134,7 +134,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
 
     const res = session.stage({
       kind: 'produce_briefing',
-      briefing: { next_focus: 'Nächster Schritt', suggested_question: 'Wie geht es weiter?' },
+      briefing: { target_o_field: 'ausnahmen' },
     })
     expect(res.status).toBe('accepted')
     await session.commit()
@@ -144,8 +144,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
       [IV],
     )
     expect(persisted.rows[0].next_briefing).toMatchObject({
-      next_focus: 'Nächster Schritt',
-      suggested_question: 'Wie geht es weiter?',
+      target_o_field: 'ausnahmen',
       usedFillerPhrases: ['Vielen Dank', 'Interessant'],
     })
   })

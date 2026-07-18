@@ -7,7 +7,6 @@ import { generateText } from 'ai'
 import {
   prefilterQuestionSignal,
   checkRoleGuard,
-  buildOffTopicRedirect,
 } from './roleGuard'
 import type { TurnMessage } from './interviewTypes'
 
@@ -116,57 +115,6 @@ describe('checkRoleGuard', () => {
   })
 })
 
-// ─── buildOffTopicRedirect (deterministic, no LLM call) ──────────────────────
-
-describe('buildOffTopicRedirect', () => {
-  it('re-anchors on the last assistant turn verbatim', () => {
-    const history: TurnMessage[] = [
-      { role: 'assistant', content: 'Wie oft passiert das ungefähr pro Woche?' },
-      { role: 'user', content: 'Was kostet ein VW Golf?' },
-    ]
-    const redirect = buildOffTopicRedirect(history)
-    expect(redirect).toContain('Wie oft passiert das ungefähr pro Woche?')
-    expect(redirect).toMatch(/Interviewer/)
-  })
-
-  it('falls back to a generic re-anchor when there is no prior assistant turn', () => {
-    const redirect = buildOffTopicRedirect([])
-    expect(redirect.length).toBeGreaterThan(0)
-  })
-
-  it('BUG-2: does not re-embed a prior redirect when off-topic turns follow each other (Tim turn 16→17)', () => {
-    const question = 'Schieß los.'
-    const history: TurnMessage[] = [
-      { role: 'assistant', content: question },
-      { role: 'user', content: 'Was kostet ein VW Golf?' },
-    ]
-    const redirectA = buildOffTopicRedirect(history)
-    expect(redirectA).toBe(`Dazu kann ich als Interviewer leider nichts beitragen — bleiben wir beim Prozessgespräch. ${question}`)
-
-    // Turn B: the just-computed redirect is now the last assistant turn, exactly
-    // as it would be persisted to history by runInterviewTurn.ts.
-    const historyAfterA: TurnMessage[] = [
-      ...history,
-      { role: 'assistant', content: redirectA },
-      { role: 'user', content: 'Und was kostet ungefähr ein Flug nach Mallorca?' },
-    ]
-    const redirectB = buildOffTopicRedirect(historyAfterA)
-
-    // Same message as redirectA — no growth, no nested redirect prefix.
-    expect(redirectB).toBe(redirectA)
-    expect(redirectB.match(/Dazu kann ich als Interviewer/g)?.length).toBe(1)
-  })
-
-  it('BUG-2: a third consecutive off-topic turn still produces the same, non-growing redirect', () => {
-    const question = 'Wie oft passiert das ungefähr pro Woche?'
-    let history: TurnMessage[] = [{ role: 'assistant', content: question }]
-    let redirect = ''
-    for (let i = 0; i < 3; i++) {
-      history = [...history, { role: 'user', content: `Off-topic Frage ${i}?` }]
-      redirect = buildOffTopicRedirect(history)
-      history = [...history, { role: 'assistant', content: redirect }]
-    }
-    expect(redirect).toBe(`Dazu kann ich als Interviewer leider nichts beitragen — bleiben wir beim Prozessgespräch. ${question}`)
-    expect(redirect.match(/Dazu kann ich als Interviewer/g)?.length).toBe(1)
-  })
-})
+// PROJ-46 (ADR-023 D6): the deterministic buildOffTopicRedirect (fixed-text
+// re-anchor) is gone — the redirect wording is now a schlanker Talker call
+// (interviewTalker.ts's createOffTopicRedirectStream), tested there.

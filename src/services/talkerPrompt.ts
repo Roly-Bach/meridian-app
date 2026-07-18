@@ -11,16 +11,14 @@
  */
 
 import { analyzeConversationSignals } from './conversationSignals'
-import { computeWalkthroughSlotTarget } from './interviewSemantic'
-import { CLOSING_PROBE_TEXT } from './interviewOrchestrator'
 import type {
   Phase,
   SlotValue,
   StepEntry,
   TaziteSlot,
   TaziteSlotArray,
-  TaziteSlotName,
   PotenzialSlotName,
+  OSlotField,
 } from './interviewSemantic'
 import type { InterviewContext, AnalystBriefing } from './interviewTypes'
 
@@ -40,7 +38,6 @@ Turn 1 (Opener): Kontext + offene Einstiegsfrage. NUR wenn history keine assista
 Wenn bereits eine Begrüßung in history vorhanden ist: KEIN erneutes "Hallo", KEIN erneutes Intro — direkt zur nächsten Frage.
 Abschluss-Turn: kurze Verabschiedung.
 Erkläre nie den Zweck von Fragen oder dass du etwas notierst. Nenne nie explizit dass du einen Schritt, Slot oder Wert "erfasst", "registrierst" oder "aufnimmst" — z.B. "Ich erfasse diesen Schritt als...", "Ich nehme das als Abschluss auf" oder ähnliche Formulierungen sind VERBOTEN.
-Gib NIEMALS Tool-Namen, Funktions-/Parameter-Syntax oder eckige Klammern wie "[...]" als Teil deiner Antwort aus — auch nicht in der Form "[ruft X(...) auf]" oder ähnlich. Tool-Aufrufe sind ausschließlich strukturierte Calls, nie sichtbarer Text. Deine Antwort besteht NUR aus dem Reaktionssatz und der Frage — kein Klammer-Präfix, kein Pseudo-Code davor.
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
 Verweise NIE auf Zahlen oder Werte als Persona-Zitate, wenn die Persona sie nicht wörtlich so genannt hat. Intern abgeleitete oder berechnete Werte (z.B. Minutenumrechnungen aus "2-3 Tage") dürfen nicht als Mitarbeiter-Aussage formuliert werden. Falsch: "Du hast vorhin 1200 Minuten erwähnt." Richtig: "Du hast von 2-3 Tagen gesprochen" oder neue Frage stellen.
 Spannen NICHT mehr konkretisieren wenn Wert bereits erfasst ist (✓ im Tracker). Nur bei echtem null.
@@ -84,20 +81,21 @@ Keine Ankündigung von Phasenwechseln: "Damit haben wir X sehr detailliert erfas
 
 `
 
-// Deutsche Slot-Label für Talker-Prompt — kurz, ohne Zahlen-Vorgabe (Anker-Sperre).
-const SLOT_PROMPT_HINT: Record<TaziteSlotName | PotenzialSlotName, string> = {
-  // Potenzial (quantitativ)
+// Deutsche Slot-Label für Talker-Prompt — kurz, ohne Zahlen-Vorgabe.
+const SLOT_PROMPT_HINT: Record<OSlotField | PotenzialSlotName, string> = {
+  // Potenzial (quantitativ, opportunistisch — kein Talker-Ziel)
   frequency_per_month: 'wie oft pro Monat / Woche dieser Schritt vorkommt',
   duration_minutes: 'wie lange eine einzelne Durchführung dieses Schritts dauert',
   error_rate_percent: 'wie häufig Fehler oder Korrekturen auftreten',
   media_breaks: 'ob es Medienbrüche zwischen Systemen gibt',
-  // Tazite (qualitativ)
+  // O2–O6 (qualitativ — Ziel-O-Feld-Menge, PROJ-46)
   entscheidungslogik: 'ob der Schritt festen Regeln folgt oder eigener Einschätzung Spielraum lässt — und welche Kriterien entscheiden',
   tazite_cues: 'was man aus Erfahrung wissen muss um diesen Schritt gut zu machen (implizites Wissen, Fingerspitzengefühl)',
   ausnahmen: 'welche Ausnahmen oder Sonderfälle auftreten und wie sie behandelt werden',
   inputs: 'welche Eingaben oder Voraussetzungen für diesen Schritt nötig sind',
   outputs: 'was dieser Schritt produziert oder weitergibt',
   hilfsmittel: 'welche Systeme, Tools oder Datenquellen dabei verwendet werden',
+  abhaengigkeiten: 'welche anderen Schritte dieser Schritt voraussetzt oder beeinflusst',
 }
 
 // Strip markdown headings and control characters from LLM-generated strings
@@ -202,7 +200,7 @@ Entdeckung: Gibt es einen weiteren wiederkehrenden Vorgang, der noch nicht regis
 Vertiefung (aktiver Schritt, Status exploring/walkthrough): Ablauf und Reibungspunkte erfassen — eine Frage pro Turn. Signalwörter ("zuerst", "dann", "danach", "als nächstes") → sofort update_walkthrough_data mit process_steps. Spontan genannte Werte (Häufigkeit, Dauer, Systeme) → record_slot bzw. update_walkthrough_data, keine direkten Slot-Fragen. Verbleibende Pflichtslots natürlich nachfragen — max. 2–3 pro Turn, kein Listenformat, keine Ankündigung. Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → kurze Bestätigung (max. 1–2 Versuche), dann weiter. confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen. governance: record_governance wenn Rolle/OE genannt wird. abhaengigkeiten: record_dependency wenn ein Schritt einen anderen voraussetzt oder beeinflusst. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — nicht slot-relevant.
 Kontextregel: Beschreibt die Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt — andere Prozesse per register_step registrieren, Erkundung im nächsten Turn.
 
-Anker-Pflicht (E3.3): Jede Nachfrage referenziert ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns. Verneinungen ("nutzen wir kein X", "passiert nie") sind kein Anker.
+Anker-Option (E3.3, PROJ-46): Wenn es gesprächslogisch passt, darf die Nachfrage ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns aufgreifen — ist aber nicht verpflichtet. Erfinde NIEMALS einen Anker, den es nicht gab. Verneinungen ("nutzen wir kein X", "passiert nie") sind kein Anker.
 Maieutik (E3.5): Keine inhaltlichen Vorschläge ("Was wäre, wenn du Tool X hättest?"), keine Leading-Questions ("Wäre das wie X?"). Frage offen.
 Ist-Fokus (E3.7): Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen. Bei spontaner To-be-Nennung: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?").`
   }
@@ -232,54 +230,49 @@ Stelle im Chat KEINE weitere Frage — die Abschlussfragen erscheinen im Interfa
   // KI-19 (2026-07-11): the scripted completion/farewell call also passes phase='closing'
   // (runInterviewTurn.ts, after resolveTurnLifecycle already decided complete=true and DB
   // status is already 'completed') — without this branch it inherited the SAME unconditional
-  // PFLICHT-ask-the-closing-probe-first instruction below, which routinely beat the softer
-  // advisory farewellBriefing.suggested_question ("Verabschiede dich kurz und herzlich") and
-  // made the model re-ask the probe (or a new unrelated question) as its last visible
-  // message instead of actually saying goodbye — confirmed on 36/82 historical
-  // gemini-3.1-flash-lite transcripts (44%), not an OSS-model-specific issue.
+  // ask-a-discovery-question-first instruction below, which routinely beat the softer advisory
+  // farewell guidance and made the model re-ask a question as its last visible message instead
+  // of actually saying goodbye — confirmed on 36/82 historical gemini-3.1-flash-lite
+  // transcripts (44%), not an OSS-model-specific issue.
   if (isCompletionFarewell) {
     return `## Methodik: closing (Abschluss)
-Die Abschluss-Sonde wurde bereits gestellt und beantwortet — das Interview ist inhaltlich abgeschlossen.
-Verabschiede dich jetzt kurz und herzlich. Stelle KEINE weitere Frage — auch nicht die Sonde
-erneut und keine neue Anschlussfrage. Deine Antwort besteht ausschließlich aus der Verabschiedung.`
+Das Interview ist inhaltlich abgeschlossen — mehrere Turns ohne neue Information.
+Verabschiede dich jetzt kurz und herzlich. Stelle KEINE weitere Frage. Deine Antwort besteht
+ausschließlich aus der Verabschiedung.`
   }
-  return `## Methodik: closing
-PFLICHT: Stelle als allererste Antwort in dieser Phase exakt diese Frage — keine Verabschiedung davor:
-"${CLOSING_PROBE_TEXT}"
-Verabschiede dich NICHT ohne diese Frage gestellt zu haben.
-Nach der Antwort:
-- Neuer Prozess → register_step aufrufen, explorieren — kein Abschluss.
-- Keine neuen Inhalte → kurz verabschieden.
-Ist-Fokus (E3.7): Die abschließende Frage zielt auf noch nicht genannte Ist-Prozesse. Keine Verbesserungsideen oder Zukunftswünsche anfragen. Bei spontaner To-be-Nennung: Ist-Problem dahinter erfassen.`
+  // PROJ-46 (ADR-023 D4/BUG-4): Closing ist Entdeckungs-Fortsetzung, kein einmaliges
+  // Skript mehr — der statische CLOSING_PROBE_TEXT + die closing-PFLICHT-Sonde entfallen.
+  return `## Methodik: closing (Entdeckung)
+Stelle weiter natürlich anschließende, JEDES MAL FRISCH FORMULIERTE Fragen nach unentdeckten
+wiederkehrenden Vorgängen oder Wissensobjekten — kein einmaliges Skript, keine wortgleiche
+Wiederholung einer früheren Frage.
+Neuer Prozess genannt → register_step aufrufen, explorieren.
+Keine neuen Inhalte über mehrere Turns → das System schließt automatisch ab, sobald genug Turns
+ohne neue Information vergangen sind — du musst das nicht ankündigen oder herbeiführen.
+Ist-Fokus (E3.7): Ziel sind noch nicht genannte Ist-Prozesse. Keine Verbesserungsideen oder
+Zukunftswünsche anfragen. Bei spontaner To-be-Nennung: Ist-Problem dahinter erfassen.`
 }
 
-// ─── Canonical Example (Iteration 1: 6 examples → 1) ─────────────────────────
-// KI-20 (2026-07-11): dieses Beispiel zeigte zuvor die Tool-Signatur als Klammer-
-// Pseudo-Code ("AGENT: [ruft update_walkthrough_data(...) auf]") — Modelle über
-// mehrere Vendor-Grenzen hinweg (Google, MiniMax) ahmten diese Notation gelegentlich
-// wörtlich als sichtbaren Antworttext nach statt einen strukturierten Tool-Call zu
-// machen (in 11 von 14 betroffenen historischen Transkripten war es sogar die
-// Demo-Baseline gemini-3.1-flash-lite, nicht nur OSS-Modelle). Gleiche Fehlerklasse
-// wie KI-16 (Quote-Artefakt aus einem illustrativen Prompt-Beispiel). Fix: keine
-// Klammer/Parameter-Syntax mehr im Beispieltext — nur Prosa-Beschreibung, klar als
-// "lautlos, nie als Text" markiert.
-const WALKTHROUGH_EXAMPLES = `
-<EXAMPLE phase="explore">
-  USER: "Zuerst schaue ich in Salesforce ob der Kunde bekannt ist. Dann öffne ich meine Excel-Liste
-         weil im Salesforce nicht alles drin ist. Danach prüfe ich den PDF-Katalog — ich weiß
-         manchmal nicht welche Version aktuell ist. Und dann frage ich beim Innendienst nach
-         den Konditionen. Das dauert manchmal einen halben Tag. Am Ende baue ich das Angebot in
-         Salesforce zusammen und setze einen Reminder zum Nachfassen."
-  INTERNER TOOL-CALL (lautlos, NIEMALS als Text ausgeben): update_walkthrough_data aufrufen mit
-    Schritt-Titel Angebotserstellung; Ablauf-Schritten Salesforce-Check (Bestandskunde?), Excel-Liste
-    prüfen, PDF-Katalog prüfen, Konditionen beim Innendienst anfragen, Angebot in Salesforce aufbauen,
-    Nachfass-Reminder setzen; Reibungspunkten PDF-Katalog Version unklar und Konditionen-Anfrage beim
-    Innendienst dauert bis zu einen halben Tag; genutzten Systemen Salesforce, Excel-Liste, PDF-Katalog.
-  EINZIGE SICHTBARE ANTWORT: "Der Katalog-Versions-Aspekt klingt fehlerträchtig — passiert es, dass du mit veralteten Preisen arbeitest?"
-  // update_walkthrough_data SOFORT wenn Mitarbeiter Ablauf beschreibt — alle Schritte in einem Call.
-  // Der Tool-Call selbst erscheint NIE im sichtbaren Antworttext — nur die Frage danach ist die Antwort.
-  // Keine Slot-Fragen (Frequenz, Dauer) während der Ablauf-Vertiefung.
-</EXAMPLE>`
+// ─── Ziel-Block (PROJ-46 / ADR-023 D1/D3) ─────────────────────────────────────
+// The binding target the Talker's topic/O-field choice follows this turn — the
+// only thing the Analyst→Talker bridge carries besides the raw step title.
+// Replaces the old advisory "NÄCHSTER TURN — Analyst-Empfehlung" (next_focus/
+// suggested_question) block: no formulated question crosses the bridge
+// anymore, only structured Absicht. Wording stays entirely the Talker's own.
+
+function buildZielBlock(ctx: InterviewContext, briefing?: AnalystBriefing | null): string {
+  if (ctx.transitionReason === 'closing_entry') {
+    return `\n\n## Ziel (bindend)\nÜbergang in die Entdeckungsphase — kein Schritt mehr gesperrt. Leite mit einem kurzen Übergangssatz ein und stelle eine offene Frage nach einem weiteren wiederkehrenden Vorgang, der noch nicht besprochen wurde.`
+  }
+  const focusStep = ctx.focusStepId ? ctx.stepTracker.find((s) => s.id === ctx.focusStepId) : undefined
+  if (!focusStep) return ''
+  const targetField = briefing?.target_o_field
+  const hint = targetField ? SLOT_PROMPT_HINT[targetField] : null
+  const transitionNote = ctx.transitionReason === 'step_switch'
+    ? ' Der Fokus hat gerade gewechselt — leite mit einem kurzen Übergangssatz zum neuen Thema über, statt abrupt zu springen.'
+    : ''
+  return `\n\n## Ziel (bindend)\nAktiver Schritt: "${sanitizeForPrompt(focusStep.title)}"${hint ? `\nFokus: ${hint}` : ''}\nDer Ziel-Schritt/Ziel-Bereich ist bindend — formuliere die Frage selbst, im Kontext des bisherigen Gesprächs.${transitionNote}`
+}
 
 // ─── Dynamic Context Builder ──────────────────────────────────────────────────
 // Called by interviewTalker.ts (createTalkerStream) with the Analyst briefing —
@@ -313,12 +306,6 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
 ${farewellMethodology}`
   }
 
-  const coverageCheckSection = ctx.phase === 'closing' && ctx.missingSlotsForCoverageCheck && ctx.missingSlotsForCoverageCheck.length > 0
-    ? `\n## Fehlende Pflicht-Slots (${ctx.phase})\n${ctx.missingSlotsForCoverageCheck.map(m => `- Schritt "${m.step_title}" → ${m.slot}`).join('\n')}\nFrage diese Werte gezielt und natürlich nach, falls im Gespräch noch Raum dafür ist.`
-    : ctx.phase === 'closing' && ctx.missingSlotsForCoverageCheck !== undefined
-    ? '\n## Coverage vollständig\nAlle Pflicht-Slots gefüllt.'
-    : ''
-
   // D1 — READ_ONLY_STATE: In explore only show filled slots to avoid
   // Observable-Goal pull on empty fields. In all other phases show the full tracker.
   let stepTrackerSection: string
@@ -345,25 +332,9 @@ ${farewellMethodology}`
     stepTrackerSection = filledLines.length > 0
       ? `\n<READ_ONLY_STATE>\nProtokoll bisher erfasster Daten — zur Orientierung, nicht zur Optimierung.\nDiese Felder beschreiben was bereits gesagt wurde. Leere Felder sind kein Gesprächsziel. Nicht auf Basis leerer Felder fragen.\n${filledLines.join('\n')}\n</READ_ONLY_STATE>`
       : ''
-
-    // L1 — Slot-Target: Ein einzelner Pflicht-Slot wird gezielt erfragt.
-    // Verhindert depth-first starvation (Talker fragt nach "wie genau" statt "wie lange").
-    // Nur ein Slot pro Turn — minimiert observable-goal-pull auf andere Felder.
-    const target = computeWalkthroughSlotTarget(ctx.stepTracker)
-    if (target) {
-      const hint = SLOT_PROMPT_HINT[target.slot]
-      const isLowConf = target.reason === 'low_confidence'
-      const targetLabel = isLowConf
-        ? `Unsicher belegt (estimate/unknown): ${target.slot} — ${hint}. Kurze Bestätigung einholen, kein vollständiger Neu-Anlauf.`
-        : `Noch fehlend: ${target.slot} — ${hint}.`
-      stepTrackerSection += `\n\n## Slot-Target (PFLICHT — diesen Turn adressieren)\nAktiver Schritt: "${sanitizeForPrompt(target.step_title)}"\n${targetLabel}\nStelle in diesem Turn eine offene Frage die genau diesen Slot erfasst. Keine Zahlen-Vorgabe, kein Anker.`
-    }
   } else {
     stepTrackerSection = `\n## Schritt-Tracker (aktueller Slot-Filling-Stand)\n${formatStepTracker(ctx.stepTracker)}`
   }
-
-  // Few-shot examples only in explore
-  const fewShotSection = ctx.phase === 'explore' ? WALKTHROUGH_EXAMPLES : ''
 
   // Phase methodology injected per-turn (not in static prompt)
   const hasExploringSteps = ctx.stepTracker.some(s => s.status === 'exploring')
@@ -374,20 +345,10 @@ ${farewellMethodology}`
     ? `\n- Profil-Framing: Sprachtiefe und Fachbegriffe an "${ctx.employeeRole}" (${ctx.department}) anpassen. Fachfremde Rollen → alltagsnahe Sprache; Fach-/IT-Rollen → Domänen-Terminologie spiegeln.`
     : ''
 
-  // Conversation signals — single entry point (PROJ-35 / ADR-017).
-  const s = analyzeConversationSignals(ctx, briefing)
-
-  // Analyst briefing section — advisory, not binding.
-  // Talker may adapt the suggested question if it was already answered in the current turn.
-  // Pt7: When suggested_question contains numeric values, inject an explicit no-anchor reminder
-  // to prevent the Talker from re-quoting analyst-extracted numbers back to the user.
-  const suggestedQ = briefing?.suggested_question ?? ''
-  const anchorWarning = s.anchorNumbers.length > 0
-    ? `\n⚠️ ANKER-SPERRE: Diese Zahlen stammen aus der Analyst-Extraktion — NICHT in einer Frage nennen: ${s.anchorNumbers.join(', ')}. Frage offen: "Wie oft?" / "Wie lange?" ohne Vorgabe.`
-    : ''
-  const briefingSection = briefing && (briefing.next_focus || briefing.suggested_question)
-    ? `\n\n## NÄCHSTER TURN — Analyst-Empfehlung\nFokus: ${sanitizeForPrompt(briefing.next_focus ?? '—')}\nEmpfohlene Frage (anpassen wenn bereits beantwortet): "${sanitizeForPrompt(suggestedQ)}"${anchorWarning}`
-    : ''
+  // PROJ-46 (ADR-023 D1/D3): the binding target — replaces the old advisory
+  // "NÄCHSTER TURN — Analyst-Empfehlung" block (no formulated question crosses
+  // the Analyst→Talker bridge anymore).
+  const zielBlock = buildZielBlock(ctx, briefing)
 
   // Filler avoidance: inject list of already-used opening phrases (Pt13)
   const recentFillers = ctx.usedFillerPhrases?.slice(-8) ?? []
@@ -395,37 +356,13 @@ ${farewellMethodology}`
     ? `\nVARIANZ-GEBOT: Diese Einstiegsphrasen wurden bereits genutzt — NICHT wiederholen: ${recentFillers.map(p => `"${p}"`).join(' | ')}`
     : ''
 
-  // F1: Drill-Stop — break retry storms on unanswerable quant slots.
-  const drillStopSection = s.drillWarnings.length > 0
-    ? `\n\n## ⛔ DRILL-STOP (PFLICHT)\n${s.drillWarnings.map(w => `- ${w}`).join('\n')}`
-    : ''
+  // Conversation signals — single remaining provisional detector (PROJ-46/ADR-023 D5).
+  const s = analyzeConversationSignals(ctx.recentAssistantTurns)
 
   // KI-15: same question-stem fired twice in a row reads as a form, not a conversation
   // (dialog_naturalness judge feedback, eval 2026-06-24/25/26: "repetitive Frage-Struktur").
   const questionStemSection = s.repeatedQuestionStem
     ? `\nVARIANZ-GEBOT: Frage-Einstieg "${s.repeatedQuestionStem}" wurde in den letzten 2 Turns bereits genutzt — diesen Turn anders einsteigen (z.B. konkretes Beispiel erfragen, Aussage aufgreifen, oder andere Frageform wählen statt erneut "${s.repeatedQuestionStem}...").`
-    : ''
-
-  // E3.1 — Ambiguity: conflicting factual statements (additive to drill-stop/missing-slot)
-  const ambiguitySection = s.ambiguity
-    ? `\n\n## ⚠️ AMBIGUITÄT-KLÄRUNG (PFLICHT — dieser Turn)\nWidersprüchliche Aussagen erkannt:\n- Früher: "${s.ambiguity.phraseA}"\n- Jetzt: "${s.ambiguity.phraseB}"\nSpreche beide Aussagen explizit an: "Du hast vorhin [A] erwähnt — jetzt sagst du [B]. Was ist der Unterschied?" Keine Lücken-Nachfrage in diesem Turn — Ambiguität hat Vorrang.`
-    : ''
-
-  // E3.2 — Exception: special-case mention → deepen before moving on
-  const exceptionSection = s.exception
-    ? `\n\n## ⚠️ AUSNAHME ERKANNT\nDer Mitarbeiter hat einen Sonderfall oder eine Ausnahme erwähnt. Vertiefe diesen mit einer gezielten Nachfrage bevor du weitergehst. Ausnahmen die eigenständige Schritte sind → register_step nach 1–2 Vertiefungsfragen.`
-    : ''
-
-  // E3.2 re-context cap: suppress re-contextualization when already used in last 3 turns
-  const recontextCapSection = s.recentlyRecontextualized
-    ? `\n\n## Re-Kontext-Sperre (E3.2)\nRe-Kontextualisierung wurde in den letzten Turns bereits eingesetzt — diesen Turn NICHT erneut re-kontextualisieren. Stelle stattdessen eine direkte thematische Nachfrage.`
-    : ''
-
-  // E3.4 — Laddering: blockade detection + two-turn drop rule
-  const ladderiungSection = s.ladderingStreak >= 2
-    ? `\n\n## ⛔ LADDERING-ABBRUCH (PFLICHT)\nNach ${s.ladderingStreak} aufeinanderfolgenden Blockade-Turns: Thema jetzt fallen lassen. Gehe direkt zum nächsten Aspekt oder Schritt über — keine weitere Nachfrage zu diesem Thema.`
-    : s.blockade
-    ? `\n\n## ⚠️ LADDERING — Frametechnik wechseln\nBlockade-Signal erkannt. Stelle KEINE strukturell identische Folgefrage. Wechsle Frametechnik:\n- Perspektivwechsel: "Wie würde ein Kollege das beschreiben?"\n- Beispiel-Einladung: "Kannst du ein konkretes Beispiel aus der letzten Woche nennen?"\n- Vereinfachende Reformulierung der Frage`
     : ''
 
   return `## Interview-Kontext
@@ -434,5 +371,5 @@ ${farewellMethodology}`
 - ${focusLine}
 - Phase: ${ctx.phase}
 - Verstrichene Zeit: ${ctx.timerMinutes} / ${ctx.maxDurationMinutes} Minuten${shortModeHint}${profileFraming}
-${coverageCheckSection}${methodologySection}${stepTrackerSection}${fewShotSection}${briefingSection}${fillerAvoidance}${questionStemSection}${drillStopSection}${ambiguitySection}${exceptionSection}${recontextCapSection}${ladderiungSection}`
+${methodologySection}${stepTrackerSection}${zielBlock}${fillerAvoidance}${questionStemSection}`
 }

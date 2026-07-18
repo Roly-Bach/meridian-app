@@ -55,11 +55,17 @@ export function ChatInterface({ token, employeeName, existingTurns, openerText, 
     }
   }, [showReconnectBanner])
 
-  // Auto-greet: cold start (no turns) → /start, returning employee → /reconnect.
-  // Neither writes the greeting as a turn in the DB.
+  // Cold start (no turns) → /start greets via a streamed bubble. Returning
+  // employee → /reconnect (PROJ-46/ADR-023 D6: validation-only ping, no
+  // assistant text — the rendered history already shows the open question,
+  // so no greeting bubble is created here).
   useEffect(() => {
     const isColdStart = status === 'created' && existingTurns.length === 0
-    const greetFn = isColdStart ? start : reconnect
+
+    if (!isColdStart) {
+      reconnect(() => {}).catch(() => {})
+      return
+    }
 
     const agentMsgId = `greet-${Date.now()}`
     setMessages((prev) => [
@@ -67,7 +73,7 @@ export function ChatInterface({ token, employeeName, existingTurns, openerText, 
       { id: agentMsgId, role: 'agent', content: '', isStreaming: true },
     ])
 
-    greetFn((chunk) => {
+    start((chunk) => {
       setMessages((prev) =>
         prev.map((m) => (m.id === agentMsgId ? { ...m, content: m.content + chunk } : m))
       )

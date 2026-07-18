@@ -7,7 +7,7 @@ vi.mock('@/lib/supabase-admin', () => ({
   getSupabaseAdmin: vi.fn(),
 }))
 
-import { buildAnalystSystemPrompt, computeNextBriefing } from './interviewAnalyst'
+import { buildAnalystSystemPrompt, computeNextBriefing, AnalystBriefingSchema } from './interviewAnalyst'
 import type { InterviewContext, AnalystBriefing } from './interviewTypes'
 
 function baseContext(overrides: Partial<InterviewContext> = {}): InterviewContext {
@@ -123,15 +123,15 @@ describe('interviewAnalyst — WP5 system-prompt prefix stability', () => {
 // conversation stalls. Extracted as a pure function so the bridging semantics are
 // testable without mocking generateText/turnStore.
 
-const emptyBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
+const emptyBriefing: AnalystBriefing = {}
 
 describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
   it('resets the streak to 0 when a knowledge tool call was actually applied this pass', () => {
     const result = computeNextBriefing(
-      { next_focus: 'X', suggested_question: 'Y' },
+      { target_o_field: 'ausnahmen' },
       true,
       [{ toolName: 'record_slot', args: {}, applied: true }],
-      { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
+      { target_o_field: 'inputs', noNewExtractionStreak: 2 },
     )
     expect(result.noNewExtractionStreak).toBe(0)
   })
@@ -145,7 +145,7 @@ describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
       emptyBriefing,
       true,
       [{ toolName: 'record_slot', args: {}, applied: false }],
-      { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
+      { target_o_field: 'inputs', noNewExtractionStreak: 2 },
     )
     expect(result.noNewExtractionStreak).toBe(3)
   })
@@ -155,7 +155,7 @@ describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
       emptyBriefing,
       true,
       [{ toolName: 'produce_briefing', args: {}, applied: true }], // bookkeeping only — not an extraction tool
-      { next_focus: 'old', suggested_question: 'old', noNewExtractionStreak: 2 },
+      { target_o_field: 'inputs', noNewExtractionStreak: 2 },
     )
     expect(result.noNewExtractionStreak).toBe(3)
   })
@@ -165,31 +165,60 @@ describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
     expect(result.noNewExtractionStreak).toBe(1)
   })
 
-  it('keeps the model-authored next_focus/suggested_question when produce_briefing was called', () => {
+  it('keeps the model-authored target_o_field when produce_briefing was called', () => {
     const result = computeNextBriefing(
-      { next_focus: 'neuer Fokus', suggested_question: 'Neue Frage?' },
+      { target_o_field: 'ausnahmen' },
       true,
       [{ toolName: 'record_slot', args: {}, applied: true }],
-      { next_focus: 'alt', suggested_question: 'Alte Frage?' },
+      { target_o_field: 'inputs' },
     )
-    expect(result.next_focus).toBe('neuer Fokus')
-    expect(result.suggested_question).toBe('Neue Frage?')
+    expect(result.target_o_field).toBe('ausnahmen')
   })
 
   it('carries the previous briefing forward unchanged (besides the streak) when produce_briefing was NOT called', () => {
     // The analyst prompt's own instruction: skip produce_briefing on a turn with
     // no substantial change — "das vorherige next_briefing bleibt gültig".
-    const previous: AnalystBriefing = { next_focus: 'alt', suggested_question: 'Alte Frage?', clarification_cards: [] }
+    const previous: AnalystBriefing = { target_o_field: 'inputs', clarification_cards: [] }
     const result = computeNextBriefing(emptyBriefing, false, [], previous)
-    expect(result.next_focus).toBe('alt')
-    expect(result.suggested_question).toBe('Alte Frage?')
+    expect(result.target_o_field).toBe('inputs')
     expect(result.noNewExtractionStreak).toBe(1)
   })
 
   it('falls back to an empty briefing (not a crash) when produce_briefing was not called and there is no previous briefing', () => {
     const result = computeNextBriefing(emptyBriefing, false, [], null)
-    expect(result.next_focus).toBe('')
-    expect(result.suggested_question).toBe('')
+    expect(result.target_o_field).toBeUndefined()
     expect(result.noNewExtractionStreak).toBe(1)
+  })
+})
+
+// ─── H-2 regression (PROJ-46 / ADR-023 D1/I1): no briefing field can express a
+// question, farewell, or termination ──────────────────────────────────────────
+// Root cause of H-2 (PROJ-44 QA): the Analyst wrote farewell text into
+// suggested_question while the orchestrator state was still 'explore' — a
+// Schatten-Lifecycle-Modell running parallel to the deterministic state
+// machine. The structural fix is that the LLM-authored schema has no
+// free-text field left to (mis)use this way — verified directly against the
+// zod schema so a future field addition can't silently reopen the channel.
+
+describe('AnalystBriefingSchema — H-2 structural regression (Invariante I1)', () => {
+  it('has no next_focus or suggested_question field', () => {
+    expect(AnalystBriefingSchema.shape).not.toHaveProperty('next_focus')
+    expect(AnalystBriefingSchema.shape).not.toHaveProperty('suggested_question')
+  })
+
+  it('target_o_field is constrained to the O2–O6 enum — not free text', () => {
+    const shape = AnalystBriefingSchema.shape
+    expect(shape.target_o_field).toBeDefined()
+    // A free-text farewell/question string must fail validation — only the
+    // seven O2–O6 field names are valid values.
+    const rejected = AnalystBriefingSchema.safeParse({ target_o_field: 'Verabschiede dich kurz und herzlich.' })
+    expect(rejected.success).toBe(false)
+    const accepted = AnalystBriefingSchema.safeParse({ target_o_field: 'ausnahmen' })
+    expect(accepted.success).toBe(true)
+  })
+
+  it('the only string-shaped fields are step_advance_ready (boolean) and clarification_cards (structured, UI-only) — no other free-text channel', () => {
+    const keys = Object.keys(AnalystBriefingSchema.shape)
+    expect(keys.sort()).toEqual(['clarification_cards', 'step_advance_ready', 'target_o_field'])
   })
 })

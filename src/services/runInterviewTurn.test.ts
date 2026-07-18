@@ -15,6 +15,10 @@ vi.mock('@/services/interviewTalker', () => ({
     toTextStreamResponse: vi.fn().mockReturnValue(new Response('stream', { status: 200 })),
     text: Promise.resolve('agent response text'),
   }),
+  createOffTopicRedirectStream: vi.fn().mockReturnValue({
+    toTextStreamResponse: vi.fn().mockReturnValue(new Response('redirect stream', { status: 200 })),
+    text: Promise.resolve('Dazu kann ich leider nichts sagen — zurück zum Thema.'),
+  }),
 }))
 
 vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
@@ -29,8 +33,22 @@ vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
 // PROJ-44/ADR-021: the three analyst entrypoints (runAnalystOnline/Catchup/FailureRetry)
 // collapsed into one runAnalyst — mode selection + the closing-mode two-sub-pass split
 // are interviewAnalyst.ts-internal details, not observable from runInterviewTurn.ts.
+// PROJ-46: hasAppliedExtraction is hand-mocked (not importOriginal) to keep this file's
+// isolation from interviewAnalyst.ts's real AI SDK / server-only dependency chain — same
+// EXTRACTION_TOOL_NAMES set as the real implementation (interviewAnalyst.ts).
+const EXTRACTION_TOOL_NAMES = new Set([
+  'register_step',
+  'record_slot',
+  'record_governance',
+  'record_dependency',
+  'update_walkthrough_data',
+  'link_bottleneck',
+])
 vi.mock('@/services/interviewAnalyst', () => ({
   runAnalyst: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [] }),
+  hasAppliedExtraction: vi.fn((toolCalls: { toolName: string; applied: boolean }[]) =>
+    toolCalls.some((tc) => tc.applied && EXTRACTION_TOOL_NAMES.has(tc.toolName)),
+  ),
 }))
 
 vi.mock('@/services/extraction', () => ({
@@ -52,16 +70,12 @@ vi.mock('@/services/processClustering', () => ({
 // gets its own dedicated tests further down, overriding the mock per-test.
 vi.mock('@/services/roleGuard', () => ({
   checkRoleGuard: vi.fn().mockResolvedValue({ checked: false }),
-  buildOffTopicRedirect: vi.fn().mockReturnValue('Dazu kann ich als Interviewer leider nichts beitragen — bleiben wir beim Prozessgespräch. Wo waren wir stehengeblieben?'),
 }))
 
 import type { StepEntry } from '@/services/interviewSemantic'
 import { runInterviewTurn } from './runInterviewTurn'
-import { createTalkerStream } from '@/services/interviewTalker'
-import {
-  resolveTurnLifecycle,
-  CLOSING_PROBE_TEXT,
-} from '@/services/interviewOrchestrator'
+import { createTalkerStream, createOffTopicRedirectStream } from '@/services/interviewTalker'
+import { resolveTurnLifecycle } from '@/services/interviewOrchestrator'
 import { runAnalyst } from '@/services/interviewAnalyst'
 import { checkRoleGuard } from '@/services/roleGuard'
 
@@ -239,61 +253,59 @@ describe('runInterviewTurn', () => {
     expect(result.meta.analyst).toEqual({ briefing: {}, toolCalls: [], stepTracker: [] })
   })
 
-  // T2: missingSlotsForCoverageCheck computed when phase is 'closing', using the
-  // ANALYST's fresh stepTracker (not the stale state-loaded one — quick-extract is gone).
-  it('T2: computes missingSlotsForCoverageCheck for closing phase from the analyst result', async () => {
-    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'closing' as never, complete: false, reason: null })
+  // T2: Ziel-Block threading (PROJ-46 / ADR-023 D1) — focusStepId + transitionReason
+  // are derived from the analyst's fresh oDrought and threaded into the Talker context.
+  it('T2: threads focusStepId and transitionReason (step_switch) from the analyst\'s oDrought into the Talker context', async () => {
+    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'explore' as never, complete: false, reason: null })
 
     const step = makeStepEntry('Rechnungsprüfung', 'walkthrough')
-    vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [step] })
-
-    // The closing probe must already be in history — otherwise shouldInjectClosingProbe
-    // fires first and short-circuits the turn before it ever reaches createTalkerStream.
-    const priorTurn = { turn_number: 1, user_input: 'Ich glaube das war alles.', agent_response: CLOSING_PROBE_TEXT, created_at: new Date().toISOString() }
-    // phase transitions from 'intro' (stateRow default) to 'closing' — include phase update mock
-    setupSupabaseMocks({
-      stateRow: makeStateRow('intro', []),
-      turnsData: [priorTurn],
-      includePhaseUpdate: true,
+    vi.mocked(runAnalyst).mockResolvedValue({
+      briefing: { target_o_field: 'ausnahmen', oDrought: { stepId: 'S001', streak: 0, exhaustedStepIds: [] } },
+      toolCalls: [],
+      stepTracker: [step],
     })
+    // next_briefing is null (default makeInterviewRow) → previousLockedStepId=null,
+    // so the fresh lock 'S001' reads as a step_switch, not a no-op.
+    setupSupabaseMocks({ stateRow: makeStateRow('explore', []) })
 
     await runInterviewTurn({
       interviewId: INTERVIEW_ID,
       userInput: 'Ein Satz.',
-      timerMinutes: 20,
+      timerMinutes: 5,
+    })
+
+    expect(createTalkerStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          focusStepId: 'S001',
+          transitionReason: 'step_switch',
+        }),
+      })
+    )
+  })
+
+  // T2b: transitionReason is closing_entry on the turn Explore first resolves into Closing.
+  it('T2b: transitionReason is closing_entry when the phase newly resolves into closing', async () => {
+    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'closing' as never, complete: false, reason: null })
+
+    vi.mocked(runAnalyst).mockResolvedValue({
+      briefing: { oDrought: { stepId: null, streak: 0, exhaustedStepIds: [] } },
+      toolCalls: [],
+      stepTracker: [],
+    })
+    setupSupabaseMocks({ stateRow: makeStateRow('explore', []), includePhaseUpdate: true })
+
+    await runInterviewTurn({
+      interviewId: INTERVIEW_ID,
+      userInput: 'Ein Satz.',
+      timerMinutes: 24,
     })
 
     expect(createTalkerStream).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
           phase: 'closing',
-          missingSlotsForCoverageCheck: expect.arrayContaining([
-            expect.objectContaining({ step_title: 'Rechnungsprüfung' }),
-          ]),
-        }),
-      })
-    )
-  })
-
-  // T2b: missingSlotsForCoverageCheck is undefined outside closing
-  it('T2b: does NOT compute missingSlotsForCoverageCheck during explore', async () => {
-    vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'explore' as never, complete: false, reason: null })
-
-    const step = makeStepEntry('Monatsabschluss', 'walkthrough')
-    vi.mocked(runAnalyst).mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [step] })
-    setupSupabaseMocks({ stateRow: makeStateRow('explore', []) })
-
-    await runInterviewTurn({
-      interviewId: INTERVIEW_ID,
-      userInput: 'Ein Satz.',
-      timerMinutes: 15,
-    })
-
-    expect(createTalkerStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({
-          phase: 'explore',
-          missingSlotsForCoverageCheck: undefined,
+          transitionReason: 'closing_entry',
         }),
       })
     )
@@ -316,12 +328,12 @@ describe('runInterviewTurn', () => {
     expect(result.meta.reason).toBe('soft_confirm')
     // Exactly one synchronous analyst call for the whole turn — no separate KI-12 recheck anymore.
     expect(runAnalyst).toHaveBeenCalledTimes(1)
-    expect(createTalkerStream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({ phase: 'closing', isCompletionFarewell: true }),
-        briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
-      })
-    )
+    // PROJ-46 (ADR-023 D1/H-2): no briefing is passed on the farewell call — there is
+    // no briefing field that could express a farewell, and buildDynamicContext
+    // short-circuits on isCompletionFarewell before ever reading one.
+    const farewellCall = vi.mocked(createTalkerStream).mock.calls.at(-1)![0]
+    expect(farewellCall.context).toMatchObject({ phase: 'closing', isCompletionFarewell: true })
+    expect(farewellCall.briefing).toBeUndefined()
   })
 
   // ─── Fail-Safe (ADR-021 D4) ─────────────────────────────────────────────────
@@ -331,7 +343,7 @@ describe('runInterviewTurn', () => {
       const freshStep = makeStepEntry('Neu entdeckter Prozess', 'exploring')
       vi.mocked(runAnalyst)
         .mockRejectedValueOnce(new Error('transient network blip'))
-        .mockResolvedValueOnce({ briefing: { next_focus: 'frisch' }, toolCalls: [], stepTracker: [freshStep] })
+        .mockResolvedValueOnce({ briefing: { target_o_field: 'ausnahmen' }, toolCalls: [], stepTracker: [freshStep] })
       setupSupabaseMocks({})
 
       const result = await runInterviewTurn({
@@ -341,10 +353,10 @@ describe('runInterviewTurn', () => {
       })
 
       expect(runAnalyst).toHaveBeenCalledTimes(2)
-      expect(result.meta.analyst).toEqual({ briefing: { next_focus: 'frisch' }, toolCalls: [], stepTracker: [freshStep] })
+      expect(result.meta.analyst).toEqual({ briefing: { target_o_field: 'ausnahmen' }, toolCalls: [], stepTracker: [freshStep] })
       expect(createTalkerStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          briefing: expect.objectContaining({ next_focus: 'frisch' }),
+          briefing: expect.objectContaining({ target_o_field: 'ausnahmen' }),
           context: expect.objectContaining({ stepTracker: [freshStep] }),
         })
       )
@@ -370,11 +382,6 @@ describe('runInterviewTurn', () => {
       expect(createTalkerStream).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.not.objectContaining({ isCompletionFarewell: true }),
-        })
-      )
-      expect(createTalkerStream).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          briefing: expect.objectContaining({ next_focus: 'Verabschiedung' }),
         })
       )
     })
@@ -474,8 +481,8 @@ describe('runInterviewTurn', () => {
       // BUG-6 (ADR-022/H-3: terminal evaluation against the RESOLVED phase, not
       // ctx.phase) is unit-tested directly on resolveTurnLifecycle itself in
       // interviewOrchestrator.test.ts, since resolveTurnLifecycle is mocked here.
-      const staleBriefing = { next_focus: 'veraltet', suggested_question: 'Alte Frage?' }
-      const freshBriefing = { next_focus: 'aktuell', suggested_question: 'Neue Frage?', clarification_cards: [] }
+      const staleBriefing = { target_o_field: 'inputs' as const }
+      const freshBriefing = { target_o_field: 'ausnahmen' as const, clarification_cards: [] }
       vi.mocked(runAnalyst).mockResolvedValue({ briefing: freshBriefing, toolCalls: [], stepTracker: [] })
       setupSupabaseMocks({ interviewRow: makeInterviewRow({ next_briefing: staleBriefing }) })
 
@@ -492,49 +499,12 @@ describe('runInterviewTurn', () => {
     })
   })
 
-  // T5: Closing-probe injection → stream returns CLOSING_PROBE_TEXT, no createTalkerStream
-  it('T5: closing-probe injection — stream returns CLOSING_PROBE_TEXT text', async () => {
+  // T5 (PROJ-46 / ADR-023 D4): the scripted closing-probe injection is gone — a
+  // turn resolving into 'closing' (not yet complete) always reaches createTalkerStream,
+  // which formulates a fresh discovery question itself. No static text, no bypass.
+  it('T5: a turn resolving into closing (not complete) still calls createTalkerStream — no scripted probe bypass', async () => {
     vi.mocked(resolveTurnLifecycle).mockReturnValue({ phase: 'closing' as never, complete: false, reason: null })
-
-    // For shouldInjectClosingProbe to return true:
-    // - orchestratedPhase === 'closing'  ✓ (from mock)
-    // - no CLOSING_PROBE_TEXT in history ✓ (empty turns)
-    // - last message is user ✓ (we add user_input to history)
-
-    const turnInsert = {
-      from: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'turn-wq' }, error: null }),
-    }
-    mockAdminFrom.mockReset()
-    // interview fetch
-    mockAdminFrom.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: makeInterviewRow(), error: null }),
-    })
-    // state fetch
-    mockAdminFrom.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: makeStateRow('explore'), error: null }),
-    })
-    // turns fetch — empty so history ends with user message
-    mockAdminFrom.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: [], error: null }),
-    })
-    // analyst_status='processing' write (now BEFORE the phase update)
-    mockAdminFrom.mockReturnValueOnce(makeProcessingWriteMock())
-    // Phase update (explore → closing)
-    mockAdminFrom.mockReturnValueOnce({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-    })
-    // Turn insert for closing probe
-    mockAdminFrom.mockReturnValueOnce(turnInsert)
+    setupSupabaseMocks({ stateRow: makeStateRow('explore', []), includePhaseUpdate: true })
 
     const result = await runInterviewTurn({
       interviewId: INTERVIEW_ID,
@@ -544,11 +514,9 @@ describe('runInterviewTurn', () => {
 
     expect(result.meta.phase).toBe('closing')
     expect(result.meta.completed).toBe(false)
-    const text = await result.stream.text
-    expect(text).toBe(CLOSING_PROBE_TEXT)
-    expect(createTalkerStream).not.toHaveBeenCalled()
-    // finalize is a no-op for this deterministic, non-Talker turn — must not throw.
-    await expect(result.finalize()).resolves.toBeUndefined()
+    expect(createTalkerStream).toHaveBeenCalledWith(
+      expect.objectContaining({ context: expect.objectContaining({ phase: 'closing' }) })
+    )
   })
 
   // ─── finalize() (ADR-021 D5 — replaces background()) ───────────────────────
@@ -577,7 +545,7 @@ describe('runInterviewTurn', () => {
   // ─── Role Guard (PROJ-42 / KI-24) ───────────────────────────────────────────
 
   describe('Role Guard early-return', () => {
-    it('T14: off_topic classification ends the turn — no synchronous analyst call, no Talker call', async () => {
+    it('T14: off_topic classification ends the turn via a Talker-formulated redirect (PROJ-46/ADR-023 D6) — no synchronous analyst call, no main Talker call', async () => {
       vi.mocked(checkRoleGuard).mockResolvedValue({ checked: true, classification: 'off_topic' })
 
       const turnInsert = {
@@ -612,8 +580,13 @@ describe('runInterviewTurn', () => {
 
       expect(result.meta.completed).toBe(false)
       expect(result.meta.analyst).toBeNull()
+      expect(createOffTopicRedirectStream).toHaveBeenCalledWith(
+        expect.objectContaining({ interviewId: INTERVIEW_ID })
+      )
       expect(createTalkerStream).not.toHaveBeenCalled()
       expect(runAnalyst).not.toHaveBeenCalled()
+      const text = await result.stream.text
+      expect(text).toBe('Dazu kann ich leider nichts sagen — zurück zum Thema.')
       await expect(result.finalize()).resolves.toBeUndefined()
     })
 

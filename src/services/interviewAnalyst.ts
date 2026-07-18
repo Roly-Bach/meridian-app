@@ -8,9 +8,11 @@ import {
   OPTIONAL_SLOTS,
   TAZITE_SLOT_NAMES,
   POTENZIAL_SLOT_NAMES,
+  O_SLOT_FIELDS,
   groupSemanticSteps,
   type StepEntry,
   type SlotName,
+  type OSlotField,
 } from './interviewSemantic'
 import type {
   InterviewContext,
@@ -50,6 +52,18 @@ const EXTRACTION_TOOL_NAMES = new Set([
 ])
 
 /**
+ * True iff at least one knowledge tool call this pass actually applied
+ * (`tc.applied`, not merely attempted — see computeNextBriefing's doc comment
+ * for why attempts don't count). Shared primitive: computeNextBriefing's
+ * no-new-extraction streak AND runInterviewTurn.ts's M7-b closing-reentry veto
+ * (PROJ-46/ADR-023 D4 — "jede in diesem Closing-Turn angewendete Wissens-
+ * Extraktion routet zurück nach explore") both read the same signal.
+ */
+export function hasAppliedExtraction(toolCalls: AnalystToolCallRecord[]): boolean {
+  return toolCalls.some(tc => tc.applied && EXTRACTION_TOOL_NAMES.has(tc.toolName))
+}
+
+/**
  * Pure, deterministic (no LLM involved) — computes the next produce_briefing
  * payload for this pass. Extracted so the bridging logic (streak reset/increment
  * + carry-forward-when-not-called) is independently unit-testable without
@@ -64,7 +78,7 @@ const EXTRACTION_TOOL_NAMES = new Set([
  *   streak just like a real write, making the safety net practically
  *   unreachable — 53 record_slot attempts vs. 17 real writes in one QA sample) →
  *   streak resets to 0.
- * - modelCalledBriefing=true → the LLM's own next_focus/suggested_question/
+ * - modelCalledBriefing=true → the LLM's own target_o_field/step_advance_ready/
  *   clarification_cards win, streak is merged in.
  * - modelCalledBriefing=false → the analyst prompt's own "skip on a boring turn"
  *   instruction was followed: carry the PREVIOUS briefing forward unchanged
@@ -78,13 +92,13 @@ export function computeNextBriefing(
   toolCalls: AnalystToolCallRecord[],
   previousBriefing: AnalystBriefing | null | undefined,
 ): AnalystBriefing {
-  const hadExtraction = toolCalls.some(tc => tc.applied && EXTRACTION_TOOL_NAMES.has(tc.toolName))
+  const hadExtraction = hasAppliedExtraction(toolCalls)
   const prevStreak = previousBriefing?.noNewExtractionStreak ?? 0
   const noNewExtractionStreak = hadExtraction ? 0 : prevStreak + 1
 
   return modelCalledBriefing
     ? { ...capturedBriefing, noNewExtractionStreak }
-    : { ...(previousBriefing ?? { next_focus: '', suggested_question: '' }), noNewExtractionStreak }
+    : { ...(previousBriefing ?? {}), noNewExtractionStreak }
 }
 
 export interface AnalystRunOptions {
@@ -95,7 +109,7 @@ export interface AnalystRunOptions {
   currentUserInput: string
   /**
    * The briefing as persisted from the PREVIOUS turn (interviews.next_briefing).
-   * Used to (a) carry next_focus/suggested_question/clarification_cards forward
+   * Used to (a) carry target_o_field/clarification_cards forward
    * unchanged when this pass makes no substantial change (the analyst prompt's
    * own "don't call produce_briefing on a boring turn" instruction), and (b) as
    * the base for the deterministic noNewExtractionStreak computed in code below.
@@ -119,7 +133,7 @@ export interface AnalystRunOptions {
    * PROJ-44 Remediation (M-3 Fokus-Lock): this turn's pre-computed focus lock —
    * see interviewOrchestrator.ts's computeFocusLock, run by the caller against
    * the pre-Analyst tracker + the previous turn's persisted oDrought state.
-   * Steers the Online sub-pass's next_focus/suggested_question toward this
+   * Steers the Online sub-pass's target_o_field toward this
    * step (buildAnalystSystemPrompt) and seeds the O-Drought streak the Online
    * sub-pass updates before persisting it on the returned briefing.
    */
@@ -134,6 +148,15 @@ export interface AnalystRunOptions {
    * staged), only the import edge moves to the caller.
    */
   updateODrought: (lock: ODroughtState, beforeTracker: StepEntry[], afterTracker: StepEntry[]) => ODroughtState
+  /**
+   * PROJ-46 (ADR-023 D1): deterministic fallback for target_o_field when the
+   * LLM omits it — "erstes leeres O2–O6-Feld des gelockten Schritts". Pure
+   * function, injected by the caller (runInterviewTurn.ts, which imports it
+   * from interviewOrchestrator.ts) rather than statically imported here — same
+   * ballast-avoidance pattern as `updateODrought` (keeps this LLM layer from
+   * depending on the deterministic orchestration layer).
+   */
+  computeTargetOFieldFallback: (step: StepEntry | undefined) => OSlotField | null
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -147,12 +170,17 @@ const ClarificationCardSchema = z.object({
   answer_type: z.enum(['single', 'multi']).optional().default('single').describe('single for slot/open-item cards, multi for qualitative cards'),
 })
 
-const AnalystBriefingSchema = z.object({
-  next_focus: z.string().describe('Which topic or slot should the next Talker turn prioritize'),
-  suggested_question: z.string().describe(
-    'A concrete follow-up question for the interviewer to use. ' +
-    'MUST be an open question. MUST NOT contain specific numbers, time values, system names, ' +
-    'or any data point the employee has not yet stated in this conversation.'
+// PROJ-46 (ADR-023 D1): target_o_field enum — the 7 O2–O6 fields of the
+// locked step. z.enum needs a literal tuple, not the readonly array type.
+const O_FIELD_ENUM_VALUES = O_SLOT_FIELDS as unknown as [OSlotField, ...OSlotField[]]
+
+// Exported for testability (H-2 regression: no field can express a question/farewell/termination).
+export const AnalystBriefingSchema = z.object({
+  target_o_field: z.enum(O_FIELD_ENUM_VALUES).optional().describe(
+    'Which O2–O6 field of the focus-locked step (see FOKUS-LOCK in the system prompt) ' +
+    'the next Talker turn should target — the conversationally most salient still-open ' +
+    'field first. This is an INTENT, not a question — the Talker formulates its own ' +
+    'wording. Omit only when no step is locked.'
   ),
   clarification_cards: z.array(ClarificationCardSchema).max(8).optional().describe('Only generate when phase=closing and mandatory slots are empty'),
   step_advance_ready: z.boolean().optional().describe(
@@ -197,7 +225,7 @@ export function buildAnalystSystemPrompt(ctx: InterviewContext, mode: 'online' |
   // is lockable, so this line never widens the STUFE-0-4 prefix's byte-identity (WP5).
   const focusStep = focusStepId ? ctx.stepTracker.find(s => s.id === focusStepId) : undefined
   const focusLockLine = focusStep
-    ? `\nFOKUS-LOCK (gesperrter aktiver Schritt): "${focusStep.title}" (${focusStep.id}). Richte next_focus und suggested_question PRIMÄR auf diesen Schritt, solange er qualitativ noch nicht ausreichend vertieft ist (O2–O6: Entscheidungslogik, tazite Cues, Ausnahmen, Inputs, Outputs, Hilfsmittel, Abhängigkeiten). Wechsle den Fokus NICHT eigenständig — das System sperrt/entsperrt automatisch, sobald dieser Schritt ausgeschöpft ist. Beiläufig genannte Werte anderer Schritte trotzdem opportunistisch erfassen (record_slot bleibt unabhängig vom Fokus).`
+    ? `\nFOKUS-LOCK (gesperrter aktiver Schritt): "${focusStep.title}" (${focusStep.id}). Wähle target_o_field PRIMÄR aus den noch offenen O2–O6-Feldern dieses Schritts (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, abhaengigkeiten) — das gesprächslogisch salienteste zuerst, solange er qualitativ noch nicht ausreichend vertieft ist. Wechsle den Fokus NICHT eigenständig — das System sperrt/entsperrt automatisch, sobald dieser Schritt ausgeschöpft ist. Beiläufig genannte Werte anderer Schritte trotzdem opportunistisch erfassen (record_slot bleibt unabhängig vom Fokus).`
     : ''
 
   const stepIdList = ctx.stepTracker.length > 0
@@ -231,7 +259,6 @@ Wenn dies der ERSTE Mitarbeiter-Turn ist (history.user-Turns.length === 1) UND d
 STUFE 1 — NEUE SCHRITTE (höchste Priorität):
 Beschreibt der Mitarbeiter in diesem Turn einen neuen, eigenständigen Prozess?
   → register_step SOFORT, vor allen anderen Tool-Calls
-  → produce_briefing.next_focus = dieser neue Schritt
   → Kein Backfill-Briefing für andere Schritte in diesem Turn
 EIGENSTÄNDIGKEITS-TEST: Hat ein als Sub-Aktivität geframtes Vorgehen eine eigene Frequenz ODER eigene Dauer ODER einen eigenen Output/Auslöser der sich vom Eltern-Schritt unterscheidet → eigenständiger register_step, auch wenn die Persona es als Teil eines anderen Prozesses framt. Beispiel: 'Im Rahmen des Monatsabschlusses prüfe ich täglich Rechnungen' → Rechnungsprüfung hat eigene Frequenz (täglich vs. monatlich) → separater Step. Anti-Fragmentation bleibt: Sub-Aktivitäten ohne eigene Frequenz/Dauer/Output bleiben Sub-Prozesse.
 
@@ -245,15 +272,19 @@ Hat der Mitarbeiter in diesem Turn einen Slot-Wert EXPLIZIT genannt (Zahl, Syste
 STUFE 3 — WALKTHROUGH-DATEN (ergänzend zu Stufe 2):
 Ein Schritt ist aktiv im Walkthrough UND kein neuer Schritt in Stufe 1?
   → update_walkthrough_data für Prozessschritte, Reibungspunkte, Systeme.
-  → produce_briefing.next_focus = aktiver Schritt-Titel.
 
-STUFE 4 — ADVANCE-SIGNAL (PROJ-42, jeden Turn mit aktivem Schritt prüfen):
-Ist der AKTUELL AKTIVE Schritt (walkthrough oder exploring) für jetzt ausreichend erhoben —
-Ablauf, Treiber, taziter Kontext vorhanden, auch wenn nicht jeder optionale Slot gefüllt ist?
-  → produce_briefing.step_advance_ready = true setzen.
-Noch spürbar unerforscht (kaum Ablauf/Kontext bekannt)? → step_advance_ready weglassen oder false.
-Dies ist der PRIMÄRE Treiber für den Phasenübergang Explore → Closing — nicht Turn-Anzahl.
-Setze es NICHT nur weil ein Turn vergangen ist — nur wenn der Schritt selbst ausreichend abgedeckt wirkt.
+STUFE 4 — ZIEL-O-FELD + ADVANCE-SIGNAL (jeden Turn mit aktivem/gesperrtem Schritt prüfen):
+  → produce_briefing.target_o_field = das gesprächslogisch salienteste noch offene O2–O6-Feld
+    des FOKUS-LOCK-Schritts (siehe oben). Das ist eine Absicht (worüber als Nächstes geredet
+    werden soll), keine Frage — der Talker formuliert selbst.
+  → Ist der AKTUELL AKTIVE Schritt (walkthrough oder exploring) für jetzt ausreichend erhoben —
+    Ablauf, Treiber, taziter Kontext vorhanden, auch wenn nicht jeder optionale Slot gefüllt ist?
+    → produce_briefing.step_advance_ready = true setzen. Dies ist ein Hinweis für den
+    deterministischen Fortschritts-Boden, KEIN eigener Phasenübergangs-Treiber — der Boden
+    kann das Signal vetoen solange ein Schritt qualitativ noch nicht ausgeschöpft ist.
+    Noch spürbar unerforscht (kaum Ablauf/Kontext bekannt)? → weglassen oder false.
+    Setze es NICHT nur weil ein Turn vergangen ist — nur wenn der Schritt selbst ausreichend
+    abgedeckt wirkt.
 
 STUFE 5 — CLARIFICATION CARDS (ab Phase=closing): Für verbleibende Slot-Lücken
 
@@ -290,7 +321,7 @@ den zurückgegebenen matched_title als step_title verwenden.
 **link_bottleneck**: Wenn Pain Point klar an einem registrierten Schritt verortet werden kann.
 
 **produce_briefing**: Als LETZTEN Tool-Call aufrufen — exakt EINMAL pro Turn, NIEMALS mehrfach.
-produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER step_advance_ready wechselt auf true. Wenn der Turn keine neue extrahierbare Information enthielt (reine Rückfrage, Smalltalk, Wiederholung, Persona weicht aus) → produce_briefing NICHT aufrufen; das vorherige next_focus/suggested_question bleibt gültig (der No-New-Extraction-Zähler wird unabhängig davon deterministisch im Code weitergeführt).
+produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER step_advance_ready wechselt auf true. Wenn der Turn keine neue extrahierbare Information enthielt (reine Rückfrage, Smalltalk, Wiederholung, Persona weicht aus) → produce_briefing NICHT aufrufen; das vorherige target_o_field bleibt gültig (der No-New-Extraction-Zähler wird unabhängig davon deterministisch im Code weitergeführt).
 Wenn du produce_briefing bereits einmal aufgerufen hast: Tool-Sequenz sofort beenden — kein weiterer produce_briefing-Call unter keinen Umständen.
 
 ## Clarification Cards (ab Phase=closing)
@@ -314,10 +345,6 @@ Wenn alle Pflicht-Slots gefüllt sind: leeres Array zurückgeben.
 
 ## Halluzinations-Guard
 Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fakten setzen.
-produce_briefing.suggested_question darf KEINE konkreten Zahlen, Zeitangaben, Prozentwerte
-oder Systembezeichnungen enthalten die der Mitarbeiter noch nicht selbst genannt hat.
-Falsch: "Kannst du bestätigen dass du 8 Stunden aufwendest?"
-Richtig: "Wie viele Stunden wendest du pro Monat dafür auf?"
 
 ## Aktueller Kontext
 - Interview ID: ${ctx.interviewId}
@@ -526,6 +553,8 @@ interface OnlinePassOptions {
   preTurnTracker: StepEntry[]
   /** PROJ-44 Remediation Runde 2 (Fix 3): injected O-Drought updater, forwarded from AnalystRunOptions — see its doc comment. */
   updateODrought: (lock: ODroughtState, beforeTracker: StepEntry[], afterTracker: StepEntry[]) => ODroughtState
+  /** PROJ-46 (ADR-023 D1): injected target_o_field fallback, forwarded from AnalystRunOptions — see its doc comment. */
+  computeTargetOFieldFallback: (step: StepEntry | undefined) => OSlotField | null
 }
 
 /**
@@ -570,7 +599,7 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
   const systemPrompt = buildAnalystSystemPrompt(opts.context, 'online', opts.focusLock.stepId)
   const messages = opts.history.map((t) => ({ role: t.role, content: t.content }))
 
-  let capturedBriefing: AnalystBriefing = { next_focus: '', suggested_question: '' }
+  let capturedBriefing: AnalystBriefing = {}
 
   const knowledgeTools = buildTools(session, opts.currentUserInput, { source: 'analyst_online' })
 
@@ -640,6 +669,15 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
   // always staged exactly once here regardless of whether the model called
   // produce_briefing this pass — see computeNextBriefing for the bridging logic.
   capturedBriefing = computeNextBriefing(capturedBriefing, modelCalledBriefing, capturedToolCalls, opts.previousBriefing)
+  // PROJ-46 (ADR-023 D1): deterministic target_o_field fallback — "erstes leeres
+  // O2–O6-Feld des gelockten Schritts" when the LLM omitted (or never set) it.
+  if (capturedBriefing.target_o_field == null && opts.focusLock.stepId != null) {
+    const lockedStep = session.snapshot().stepTracker.find((s) => s.id === opts.focusLock.stepId)
+    const fallback = opts.computeTargetOFieldFallback(lockedStep)
+    if (fallback != null) {
+      capturedBriefing = { ...capturedBriefing, target_o_field: fallback }
+    }
+  }
   // PROJ-44 Remediation (M-1/M-3): deterministic O-Drought streak update — did the
   // locked step gain a new O2–O6 field this pass? session.snapshot() here reflects
   // everything staged so far this pass (merge + backfill sub-pass + this online sub-pass).
@@ -810,6 +848,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
         focusLock: opts.focusLock,
         preTurnTracker: preTurnTrackerForDrought,
         updateODrought: opts.updateODrought,
+        computeTargetOFieldFallback: opts.computeTargetOFieldFallback,
       })
       allToolCalls.push(...online.toolCalls)
       briefing = online.briefing
@@ -824,6 +863,7 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
         focusLock: opts.focusLock,
         preTurnTracker: preTurnTrackerForDrought,
         updateODrought: opts.updateODrought,
+        computeTargetOFieldFallback: opts.computeTargetOFieldFallback,
         onTokenUsage: opts.onTokenUsage,
       })
       allToolCalls.push(...online.toolCalls)

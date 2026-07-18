@@ -11,22 +11,19 @@ type InterviewRow = Database['public']['Tables']['interviews']['Row']
 // Public endpoint — authenticated via token only.
 // Called when a returning employee opens an active interview. NOT saved as a turn.
 //
-// PROJ-44/ADR-021 D6: the LLM path is deleted without replacement (was already
-// unreachable in practice — KI-22, see below). Always returns a static
-// re-engagement line — no LLM call, no interview_state read needed.
+// PROJ-46/ADR-023 D6: validation-only — no assistant text returned at all (not
+// even a static line). The endpoint's job is now purely to confirm the token is
+// valid/not-expired/not-completed/has-turns; the frontend renders the
+// persisted history and does not inject a greeting bubble on reconnect.
 //
 // KI-22 (2026-07-11): turns are persisted as atomic (user_input, agent_response)
 // pairs (store.insertTurn writes both together, only after the agent has
-// responded), so the agent is always mid-question on reconnect — there is no
-// history shape where the LLM path would ever have fired a different reply.
-// Previously this always went through the LLM anyway with a synthetic "Ich bin
-// wieder da, können wir weitermachen?" nudge — the model's natural response was
-// to re-pose the still-open question, which rendered as a near-verbatim
-// duplicate of the already-visible last chat bubble (reproduced live, manual UI
-// test 2026-07-07 — "Du hast vorhin 180 Rechnungen..." shown twice in a row).
-// The pending question is already fully visible in the rendered history, so no
-// LLM call is needed (also saves a cost+latency hit on every page reload, since
-// the frontend fires /reconnect on every mount).
+// responded), so the agent is always mid-question on reconnect — the pending
+// question is already fully visible in the rendered history. PROJ-44/ADR-021 D6
+// first deleted the LLM path in favor of a static re-engagement line (avoiding a
+// near-verbatim duplicate of the last chat bubble — reproduced live, manual UI
+// test 2026-07-07); PROJ-46 goes one step further and drops the static line too,
+// since the rendered history already shows the open question without it.
 
 export async function POST(
   req: Request,
@@ -83,5 +80,9 @@ export async function POST(
     )
   }
 
-  return new Response('Willkommen zurück — lass uns da weitermachen, wo wir aufgehört haben.')
+  // Empty 200 (not 204): useInterviewStream.ts's streamRequest reads
+  // res.body.getReader() unconditionally — a 204's null body would throw
+  // "Keine Antwort vom Server" there. An empty string body yields a valid,
+  // immediately-closed stream instead.
+  return new Response('', { status: 200 })
 }

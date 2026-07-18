@@ -391,6 +391,9 @@ export const O_SLOT_FIELDS = COVERAGE_FIELDS.filter(
   (f): f is Exclude<CoverageField, 'bezeichnung' | 'reihenfolge'> => f !== 'bezeichnung' && f !== 'reihenfolge',
 )
 
+/** The 7 O2–O6 field names as a type (PROJ-46: Analyst's target_o_field enum). */
+export type OSlotField = (typeof O_SLOT_FIELDS)[number]
+
 /** Count of filled O2–O6 fields for a step — the "depth" signal the O-Drought streak tracks. */
 export function countFilledOFields(step: StepEntry): number {
   return O_SLOT_FIELDS.filter((f) => isCoverageFieldFilled(step, f)).length
@@ -596,86 +599,6 @@ export function groupSemanticSteps(tracker: StepEntry[], threshold = 0.4): StepE
     else groups.push([step])
   }
   return groups
-}
-
-// ---------------------------------------------------------------------------
-// Slot-Compute helpers (moved from interviewAgent.ts — PROJ-35)
-// ---------------------------------------------------------------------------
-
-export interface MissingSlot {
-  step_title: string
-  slot: TaziteSlotName | PotenzialSlotName
-  /** 'missing' = null gap; 'low_confidence' = estimate/unknown value needs confirmation (PROJ-28/BL-E2.2) */
-  reason?: 'missing' | 'low_confidence'
-}
-
-export function computeMissingMandatorySlots(stepTracker: StepEntry[]): MissingSlot[] {
-  const missing: MissingSlot[] = []
-  for (const step of stepTracker) {
-    // Potenzial (quantitative) slots — explicit filled check (PROJ-28/BL-E2.1)
-    for (const slot of POTENZIAL_SLOT_NAMES) {
-      const sv = step.potenzial[slot]
-      const filled = sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
-      if (!filled) {
-        missing.push({ step_title: step.title, slot, reason: 'missing' })
-      }
-    }
-    // Tazite (qualitative) slots
-    for (const slot of TAZITE_SLOT_NAMES) {
-      const sv = step.slots[slot]
-      const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
-      if (!filled) {
-        missing.push({ step_title: step.title, slot, reason: 'missing' })
-      }
-    }
-  }
-  return missing
-}
-
-// L1 — Slot-Targeting für die explore Phase (PROJ-42: vormals walkthrough_step).
-// Wählt deterministisch genau EINEN missing slot für den aktuell aktiven
-// Step (walkthrough > exploring). Zwei-Pass-Priorität (PROJ-28/BL-E2.2):
-//   Pass 1: echte Lücken (null-Slots) — potenzial zuerst, dann tazite
-//   Pass 2: unsicher belegte Slots (estimate/unknown) — für Bestätigungs-Rückfrage
-// Volle Gesprächsführungs-Revision ist PROJ-29.
-export function computeWalkthroughSlotTarget(stepTracker: StepEntry[]): MissingSlot | null {
-  const active =
-    stepTracker.find((s) => s.status === 'walkthrough') ??
-    stepTracker.find((s) => s.status === 'exploring')
-  if (!active) return null
-
-  // Pass 1: real gaps — potenzial null-Lücken first
-  for (const slot of POTENZIAL_SLOT_NAMES) {
-    const sv = active.potenzial[slot]
-    const filled = sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
-    if (!filled) {
-      return { step_title: active.title, slot, reason: 'missing' }
-    }
-  }
-  // Pass 1 cont: tazite null-Lücken
-  for (const slot of TAZITE_SLOT_NAMES) {
-    const sv = active.slots[slot]
-    const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
-    if (!filled) {
-      return { step_title: active.title, slot, reason: 'missing' }
-    }
-  }
-
-  // Pass 2: low-confidence slots need confirmation (estimate/unknown)
-  for (const slot of POTENZIAL_SLOT_NAMES) {
-    const sv = active.potenzial[slot]
-    if (sv != null && sv.value != null && (sv.confidence === 'estimate' || sv.confidence === 'unknown')) {
-      return { step_title: active.title, slot, reason: 'low_confidence' }
-    }
-  }
-  for (const slot of TAZITE_SLOT_NAMES) {
-    const sv = active.slots[slot]
-    if (sv != null && sv.value != null && (sv.confidence === 'estimate' || sv.confidence === 'unknown')) {
-      return { step_title: active.title, slot, reason: 'low_confidence' }
-    }
-  }
-
-  return null
 }
 
 // ---------------------------------------------------------------------------

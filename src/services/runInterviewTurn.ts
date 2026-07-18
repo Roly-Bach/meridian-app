@@ -8,12 +8,14 @@
  * ADR-021 (Timing-Amendment): the Analyst (interviewAnalyst.ts's runAnalyst) now
  * runs synchronously, once per turn, BEFORE the phase/completion decision and
  * before the Talker — not after/parallel to the Talker as ADR-011 D2 had it.
- * `resolveTurnLifecycle`/`shouldInjectClosingProbe` (ADR-022 merged the former
- * `checkLifecycle`+`decideNextPhaseWithMeta` into one call) therefore read state
- * INCLUDING the current turn, not "end of previous turn". The old two-stage
- * `soft_confirm` recheck (KI-12) and the pre-Talker Quick-Extract
- * (interviewQuickExtract.ts) are gone — the single synchronous Analyst pass
- * subsumes both.
+ * `resolveTurnLifecycle` (ADR-022 merged the former `checkLifecycle`+
+ * `decideNextPhaseWithMeta` into one call) therefore reads state INCLUDING the
+ * current turn, not "end of previous turn". The old two-stage `soft_confirm`
+ * recheck (KI-12) and the pre-Talker Quick-Extract (interviewQuickExtract.ts)
+ * are gone — the single synchronous Analyst pass subsumes both.
+ *
+ * PROJ-46 (ADR-023): the closing-probe injection branch is gone — Closing is a
+ * Talker-formulated discovery continuation now, no scripted probe turn.
  *
  * The Prod Route and the Eval Runner are thin adapters around this function.
  * Neither `import { after } from 'next/server'` belongs here — `after()` remains
@@ -28,7 +30,6 @@
  */
 
 import {
-  computeMissingMandatorySlots,
   normalizeStepEntry,
   type Phase,
   type StepEntry,
@@ -37,16 +38,15 @@ import {
 import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
 import {
   resolveTurnLifecycle,
-  shouldInjectClosingProbe,
-  CLOSING_PROBE_TEXT,
   computeFocusLock,
   updateODrought,
-  hasNewStepThisTurn,
+  computeTargetOFieldFallback,
+  computeTransitionReason,
   type OrchestratorContext,
 } from '@/services/interviewOrchestrator'
-import { checkRoleGuard, buildOffTopicRedirect } from '@/services/roleGuard'
-import { createTalkerStream } from '@/services/interviewTalker'
-import { runAnalyst, type AnalystRunResult } from '@/services/interviewAnalyst'
+import { checkRoleGuard } from '@/services/roleGuard'
+import { createTalkerStream, createOffTopicRedirectStream } from '@/services/interviewTalker'
+import { runAnalyst, hasAppliedExtraction, type AnalystRunResult } from '@/services/interviewAnalyst'
 import type { InterviewStore } from '@/services/turnStore/port'
 import type { OnTokenUsage } from '@/services/_telemetry'
 
@@ -154,16 +154,6 @@ const SEED_FILLERS = [
   'Interessant', 'Gut,', 'Alles klar',
 ]
 
-/** Shim for a deterministic, non-LLM turn (closing probe / off-topic redirect). */
-function makeStaticStream(text: string): TurnStream {
-  return {
-    toTextStreamResponse: () => new Response(text, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    }),
-    text: Promise.resolve(text),
-  }
-}
-
 /** No-op finalize for turns that never reached the Talker (nothing to extract/complete). */
 async function noopFinalize(): Promise<void> {}
 
@@ -213,6 +203,8 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   }
   history.push({ role: 'user', content: userInput })
 
+  const resolvedTraceCtx = traceCtx ?? { interviewId, environment: 'prod' as const }
+
   // ── Role Guard (PROJ-42 / KI-24) ────────────────────────────────────────────
   // Earliest gate, phase-agnostic — runs before the synchronous Analyst. Class
   // off_topic ends the turn here: the Analyst never runs for this turn, the
@@ -221,7 +213,17 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
   const talkerModelString = process.env.INTERVIEW_TALKER_MODEL ?? process.env.INTERVIEW_MODEL ?? 'google/gemini-3.1-flash-lite'
   const roleGuard = await checkRoleGuard(userInput, history, talkerModelString, traceCtx, input.onTokenUsage)
   if (roleGuard.classification === 'off_topic') {
-    const redirectText = buildOffTopicRedirect(history)
+    // PROJ-46 (ADR-023 D6): the redirect wording is now Talker-formulated (a
+    // schlanker call, no buildDynamicContext/grounding guard/filler tracking)
+    // instead of a fixed string — state stays unaffected, off_topic still
+    // short-circuits before the Analyst.
+    const redirectStream = await createOffTopicRedirectStream({
+      interviewId,
+      history,
+      traceCtx: resolvedTraceCtx,
+      onTokenUsage: input.onTokenUsage,
+    })
+    const redirectText = await redirectStream.text
     await store.insertTurn({
       interviewId,
       turnNumber: nextTurnNumber,
@@ -229,7 +231,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       agentResponse: redirectText,
     })
     return {
-      stream: makeStaticStream(redirectText),
+      stream: redirectStream,
       finalize: noopFinalize,
       meta: {
         phase: currentPhase,
@@ -263,8 +265,9 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
   // PROJ-44 Remediation (M-3 Fokus-Lock): computed BEFORE the Analyst runs, from
   // the pre-turn tracker + the previous turn's persisted drought state — steers
-  // this turn's next_focus/suggested_question and seeds the streak the Analyst
-  // updates (see interviewAnalyst.ts's runOnlinePass).
+  // this turn's target_o_field and seeds the streak the Analyst updates (see
+  // interviewAnalyst.ts's runOnlinePass).
+  const previousLockedStepId = analystBriefing?.oDrought?.stepId ?? null
   const focusLockThisTurn = computeFocusLock(preTurnTracker, analystBriefing?.oDrought ?? null)
 
   // Failure-window (ADR-021 D2/D4): the previous turn's synchronous Analyst call
@@ -276,8 +279,6 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     : undefined
 
   void store.setAnalystStatus(interviewId, 'processing').then(() => {}, () => {})
-
-  const resolvedTraceCtx = traceCtx ?? { interviewId, environment: 'prod' as const }
 
   let analystResult: AnalystRunResult | null = null
   for (let attempt = 0; attempt <= ANALYST_RETRIES; attempt++) {
@@ -294,6 +295,7 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         onTokenUsage: input.onTokenUsage,
         focusLock: focusLockThisTurn,
         updateODrought,
+        computeTargetOFieldFallback,
       })
       break
     } catch (err) {
@@ -335,11 +337,10 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     timerMinutes,
     maxDurationMinutes: contextBase.maxDurationMinutes,
     historyLength: history.length,
-    history,
-    // PROJ-44 Remediation (H-1): tracker-diff by id, before vs. after the
-    // synchronous Analyst — catches a step registered+slotted THIS turn even
-    // when its status already advanced past 'exploring' in the same pass.
-    newStepThisTurn: hasNewStepThisTurn(preTurnTracker, stepTracker),
+    // PROJ-46 (ADR-023 D4, M7-b): any applied knowledge-tool write this turn —
+    // generalizes the former newStepThisTurn veto (a new step always applies a
+    // register_step, so this subsumes it).
+    hadExtractionThisTurn: hasAppliedExtraction(analystResult?.toolCalls ?? []),
     // PROJ-44 Remediation (M-1/M-3): the fresh (this-turn) O-Drought state —
     // runOnlinePass always attaches it before staging produce_briefing when the
     // Analyst ran; on a terminal Analyst failure analystBriefing stays the
@@ -393,11 +394,11 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
 
     console.log('[runInterviewTurn] lifecycle complete:', lifecycle.reason)
 
-    const farewellBriefing: AnalystBriefing = {
-      next_focus: 'Verabschiedung',
-      suggested_question: 'Verabschiede dich kurz und herzlich.',
-    }
-
+    // PROJ-46 (ADR-023 D1/H-2): no briefing is passed — Invariante I1, there is
+    // no briefing field that can express a farewell/termination, and
+    // buildDynamicContext short-circuits on isCompletionFarewell before it
+    // would ever read one anyway. The farewell wording is entirely the
+    // Talker's own, driven only by the isCompletionFarewell flag + phase.
     const farewellStream = await createTalkerStream({
       context: {
         ...contextBase,
@@ -408,7 +409,6 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
         isCompletionFarewell: true,
       },
       history,
-      briefing: farewellBriefing,
       onFinish: async (agentText) => {
         if (!agentText) return
         const newTurn = await store.insertTurn({
@@ -442,37 +442,12 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     await store.updatePhase(interviewId, orchestratedPhase)
   }
 
-  // ── Closing probe injection ─────────────────────────────────────────────────
-  if (shouldInjectClosingProbe(orchestratedPhase, history)) {
-    const agentText = CLOSING_PROBE_TEXT
-    await store.insertTurn({
-      interviewId,
-      turnNumber: nextTurnNumber,
-      userInput,
-      agentResponse: agentText,
-    })
-
-    return {
-      stream: makeStaticStream(agentText),
-      finalize: noopFinalize,
-      meta: {
-        phase: 'closing' as Phase,
-        completed: false,
-        reason: null,
-        stepTracker,
-        analyst: analystResult,
-      },
-    }
-  }
-
-  // ── Missing slots ───────────────────────────────────────────────────────────
-  // PROJ-42: coverage_check/slot_completion no longer exist as phases — the
-  // equivalent "surface remaining gaps" moment is 'closing', right before
-  // Clarification Cards take over the rest (unchanged PROJ-23 mechanism).
-  const missingSlotsForCoverageCheck =
-    orchestratedPhase === 'closing'
-      ? computeMissingMandatorySlots(stepTracker)
-      : undefined
+  // ── Binding Absicht for the Talker (PROJ-46 / ADR-023 D1/D3) ────────────────
+  // Ziel-Schritt is the fresh (this-turn) O-Drought lock; Übergang-Grund is
+  // code-computed, per-turn ephemeral (never persisted) — compares this turn's
+  // lock against what was persisted at turn start.
+  const currentLockedStepId = orchestratorCtx.oDrought.stepId
+  const transitionReason = computeTransitionReason(previousLockedStepId, currentLockedStepId, currentPhase, orchestratedPhase)
 
   // ── Talker stream ───────────────────────────────────────────────────────────
   const stream = await createTalkerStream({
@@ -481,8 +456,9 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
       phase: orchestratedPhase,
       timerMinutes,
       stepTracker,
-      missingSlotsForCoverageCheck,
       usedFillerPhrases,
+      focusStepId: currentLockedStepId,
+      transitionReason,
     },
     history,
     briefing: analystBriefing,

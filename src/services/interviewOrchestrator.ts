@@ -1,5 +1,7 @@
-import { type Phase, type StepEntry, countFilledOFields } from './interviewSemantic'
-import type { AnalystBriefing, ODroughtState } from './interviewTypes'
+import { type Phase, type StepEntry, type OSlotField, countFilledOFields, O_SLOT_FIELDS, isCoverageFieldFilled } from './interviewSemantic'
+import type { AnalystBriefing, ODroughtState, TransitionReason } from './interviewTypes'
+
+export type { TransitionReason }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -10,17 +12,14 @@ export interface OrchestratorContext {
   maxDurationMinutes: number
   /** Total number of messages in history including the current user turn */
   historyLength: number
-  history: { role: 'user' | 'assistant'; content: string }[]
   /**
-   * PROJ-44 Remediation (H-1): true iff a step whose id was NOT present in the
-   * pre-Analyst tracker appears in the post-Analyst (this turn's) tracker —
-   * i.e. a genuinely new process was registered THIS turn, regardless of the
-   * status the synchronous Analyst already advanced it to (register_step +
-   * an immediate record_slot bumps exploring→walkthrough in the same pass,
-   * which the older hasStepInStatus('exploring')-only reentry guard misses).
-   * See runInterviewTurn.ts's hasNewStepThisTurn call.
+   * PROJ-46 (ADR-023 D4): true iff at least one knowledge-tool call actually
+   * applied this turn (interviewAnalyst.ts's hasAppliedExtraction over
+   * analystResult.toolCalls) — generalizes the former newStepThisTurn veto
+   * (a new step always applies a register_step) to "any new content, even on
+   * an existing step". Used by the Closing→Explore M7-b reentry.
    */
-  newStepThisTurn: boolean
+  hadExtractionThisTurn: boolean
   /**
    * PROJ-44 Remediation (M-1/M-3): this turn's fresh O-Drought state (after
    * updateODrought ran inside the synchronous Analyst pass) — read by
@@ -77,33 +76,34 @@ function hasStepInStatus(tracker: StepEntry[], status: 'exploring' | 'walkthroug
 }
 
 /**
- * PROJ-44 Remediation (H-1): tracker-diff by stable id, not by status. Catches
- * a newly-registered step that the SAME synchronous Analyst pass already
- * advanced past 'exploring' (register_step + an immediate record_slot bumps
- * exploring→walkthrough — see applyIntent.ts) — the status-only
- * hasStepInStatus('exploring') reentry guard misses exactly this case.
- * computeMergedSteps never invents new ids for a merge of pre-existing steps
- * (the canonical member keeps its id), so a genuinely new id here always means
- * register_step ran this turn, not a merge artifact.
+ * PROJ-46 (ADR-023 D3): a step is exhausted independent of its drought streak
+ * once every O2–O6 field is filled (value OR nicht_befund_typ — same threshold
+ * countFilledOFields uses). Without this, a step whose 7th field fills on the
+ * SAME turn its streak resets to 0 stays locked for up to K more turns with no
+ * empty field left to target (flat circling). Shared by computeFocusLock
+ * (which step to lock) and hasUnexhaustedStep (is Explore still premature).
  */
-export function hasNewStepThisTurn(beforeTracker: StepEntry[], afterTracker: StepEntry[]): boolean {
-  const beforeIds = new Set(beforeTracker.map((s) => s.id).filter((id): id is string => id != null))
-  return afterTracker.some((s) => s.id != null && !beforeIds.has(s.id))
+function isFullyCovered(step: StepEntry): boolean {
+  return countFilledOFields(step) >= O_SLOT_FIELDS.length
 }
 
 /**
  * PROJ-44 Remediation (M-3 Fokus-Lock): determines which registered, non-done
  * step's question-direction is "locked" for this turn — computed from the
  * tracker + the previous turn's persisted drought state, BEFORE the
- * synchronous Analyst runs (so it can steer next_focus/suggested_question).
- * A step whose drought already fired is never re-locked; the lock advances to
- * the next non-exhausted step. Returns stepId=null when nothing is lockable
- * (empty tracker, or every step done/exhausted).
+ * synchronous Analyst runs (so it can steer target_o_field). A step whose
+ * drought already fired, or whose O2–O6 coverage is already complete
+ * (PROJ-46/ADR-023 D3), is never re-locked; the lock advances to the next
+ * non-exhausted step. Returns stepId=null when nothing is lockable (empty
+ * tracker, or every step done/exhausted).
  */
 export function computeFocusLock(stepTracker: StepEntry[], previous: ODroughtState | null): ODroughtState {
   const limit = oDroughtLimit()
   const exhausted = new Set(previous?.exhaustedStepIds ?? [])
   if (previous?.stepId != null && previous.streak >= limit) exhausted.add(previous.stepId)
+  for (const s of stepTracker) {
+    if (s.id != null && s.status !== 'done' && isFullyCovered(s)) exhausted.add(s.id)
+  }
 
   const candidates = stepTracker.filter((s) => s.status !== 'done' && s.id != null && !exhausted.has(s.id))
   if (candidates.length === 0) {
@@ -118,6 +118,36 @@ export function computeFocusLock(stepTracker: StepEntry[], previous: ODroughtSta
     streak: stillLocked ? (previous?.streak ?? 0) : 0,
     exhaustedStepIds: [...exhausted],
   }
+}
+
+/**
+ * PROJ-46 (ADR-023 D1): deterministic fallback for the Analyst's
+ * target_o_field when the LLM omits it — the first still-open O2–O6 field of
+ * the locked step, in COVERAGE_FIELDS order. Pure, injected into
+ * interviewAnalyst.ts's runAnalyst (ballast-avoidance, same pattern as
+ * updateODrought). Returns null when there is no locked step or it's already
+ * fully covered (D3 would have already advanced the lock past it).
+ */
+export function computeTargetOFieldFallback(step: StepEntry | undefined): OSlotField | null {
+  if (!step) return null
+  return O_SLOT_FIELDS.find((f) => !isCoverageFieldFilled(step, f)) ?? null
+}
+
+/**
+ * PROJ-46 (ADR-023 D1): why the Talker's binding target changed this turn —
+ * code-computed, per-turn ephemeral (never persisted). closing_entry takes
+ * priority: on the turn Explore first resolves into Closing there is no
+ * locked step to compare against, and it is unambiguously a transition.
+ */
+export function computeTransitionReason(
+  previousLockedStepId: string | null,
+  currentLockedStepId: string | null,
+  previousPhase: Phase,
+  resolvedPhase: Phase,
+): TransitionReason {
+  if (previousPhase !== 'closing' && resolvedPhase === 'closing') return 'closing_entry'
+  if (currentLockedStepId != null && currentLockedStepId !== previousLockedStepId) return 'step_switch'
+  return null
 }
 
 /**
@@ -143,68 +173,15 @@ export function updateODrought(lock: ODroughtState, beforeTracker: StepEntry[], 
  * breadth check — "gibt es einen registrierten Prozess, der qualitativ noch
  * nicht erschöpft ist?" (tracker-derived, not topicsOpen-derived). `lock` must
  * be this turn's POST-update O-Drought state (after updateODrought ran).
+ * PROJ-46 (ADR-023 D3): a step whose O2–O6 coverage is already complete
+ * counts as exhausted here too, independent of its streak — mirrors
+ * computeFocusLock's isFullyCovered check so the two never disagree.
  */
 function hasUnexhaustedStep(stepTracker: StepEntry[], lock: ODroughtState): boolean {
   const limit = oDroughtLimit()
   const exhausted = new Set(lock.exhaustedStepIds)
   if (lock.stepId != null && lock.streak >= limit) exhausted.add(lock.stepId)
-  return stepTracker.some((s) => s.status !== 'done' && !exhausted.has(s.id ?? ''))
-}
-
-/**
- * Deterministic catch-all closing probe. Injected verbatim by the orchestrator
- * when the interview transitions into 'closing' — successor to the pre-PROJ-42
- * WRAP_UP_QUESTION_TEXT, same mechanism: replaces LLM-generated wording so
- * callers (route handler, eval runner) can write it as the agent_response of
- * the question-turn without invoking the Talker.
- */
-export const CLOSING_PROBE_TEXT =
-  'Wenn du an deine letzte Arbeitswoche denkst — gibt es etwas Wiederkehrendes, das wir heute noch nicht erwähnt haben?'
-
-/**
- * True iff the deterministic closing probe has been written to history.
- * Match is exact (substring containment) on the constant above.
- */
-export function closingProbeAlreadyAsked(
-  history: { role: 'user' | 'assistant'; content: string }[],
-): boolean {
-  const marker = CLOSING_PROBE_TEXT.slice(0, 60) // tolerate trailing decoration
-  return history.some((t) => t.role === 'assistant' && t.content.includes(marker))
-}
-
-/**
- * Decision whether the next turn should be a deterministic closing-probe
- * injection (no Talker call) or a normal Talker stream.
- *
- * Returns true iff:
- *   - the resolved next phase is 'closing'
- *   - the deterministic probe has NOT yet been written to history
- *   - the most recent message in history is a user message (we owe a response)
- */
-export function shouldInjectClosingProbe(
-  nextPhase: Phase,
-  history: { role: 'user' | 'assistant'; content: string }[],
-): boolean {
-  if (nextPhase !== 'closing') return false
-  if (closingProbeAlreadyAsked(history)) return false
-  if (history.length === 0) return false
-  return history[history.length - 1].role === 'user'
-}
-
-/**
- * True iff the deterministic closing probe has been asked AND the user has
- * since replied — i.e. a completion/clarification decision is owed this turn.
- * Used by resolveTurnLifecycle's terminal evaluation (both the phase-transition
- * and the completion verdict).
- */
-export function closingProbeAnswerReceived(
-  history: { role: 'user' | 'assistant'; content: string }[],
-): boolean {
-  return (
-    closingProbeAlreadyAsked(history) &&
-    history.length > 0 &&
-    history[history.length - 1].role === 'user'
-  )
+  return stepTracker.some((s) => s.status !== 'done' && !exhausted.has(s.id ?? '') && !isFullyCovered(s))
 }
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
@@ -267,10 +244,11 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
     case 'closing': {
       // A newly-discovered process during Closing is first-class — back to
       // Explore in full (no more 2-turn clarification-only cap for late finds).
-      // PROJ-44 Remediation (H-1): newStepThisTurn catches the case the
-      // status-only check misses — a step registered THIS turn that the same
-      // synchronous Analyst pass already slotted past 'exploring'.
-      if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.newStepThisTurn) return 'explore'
+      // PROJ-46 (ADR-023 D4, M7-b): hadExtractionThisTurn generalizes the
+      // former newStepThisTurn veto — a new step always applies a
+      // register_step, so this subsumes it — to ANY applied knowledge write
+      // this turn, not just a brand-new step.
+      if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.hadExtractionThisTurn) return 'explore'
       return 'closing'
     }
 
@@ -308,8 +286,17 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
  *
  * PROJ-42: the previous phase-agnostic farewell-loop escape valve (regex
  * FAREWELL_MARKERS string matching) is removed entirely — termination is
- * deterministic in state (the closing probe + its answer), not guessed from
- * text heuristics (KI-23).
+ * deterministic in state, not guessed from text heuristics (KI-23).
+ *
+ * PROJ-46 (ADR-023 D4): the closing terminal evaluation no longer depends on
+ * a scripted probe having been asked+answered (that whole injection machinery
+ * — CLOSING_PROBE_TEXT/shouldInjectClosingProbe/closingProbeAnswerReceived —
+ * is deleted). Closing is now a Talker-formulated discovery continuation;
+ * completion binds to ctx.phase (the phase LOADED at turn start) already
+ * being 'closing' AND the no-new-extraction streak having reached the limit.
+ * The explore→closing ENTRY turn therefore always has ctx.phase==='explore'
+ * and can never soft-confirm-complete on the same turn — it always asks at
+ * least one more discovery question first.
  *
  * Fail-safe: runInterviewTurn.ts vetoes a soft_confirm result when the
  * synchronous Analyst call failed this turn (ADR-021 D4) — hard_stop is
@@ -337,14 +324,16 @@ export function resolveTurnLifecycle(ctx: OrchestratorContext, analystSuggestion
   // below — no separate "don't complete out from under it" check needed, since
   // a non-closing target can never complete (D2).
   if (target === 'closing') {
-    if (closingProbeAnswerReceived(ctx.history)) {
+    const noNewExtractionStreak = analystSuggestion?.noNewExtractionStreak ?? 0
+    if (ctx.phase === 'closing' && noNewExtractionStreak >= noNewExtractionLimit()) {
       const cards = analystSuggestion?.clarification_cards
       if (cards && cards.length > 0) {
         return { phase: 'clarification', complete: false, reason: null }
       }
       return { phase: 'closing', complete: true, reason: 'soft_confirm' }
     }
-    // Fresh entry into Closing, probe not yet answered — injected downstream.
+    // Fresh entry into Closing, OR streak still below the limit — the Talker
+    // asks another freshly-formulated discovery question (ADR-023 D4).
     return { phase: 'closing', complete: false, reason: null }
   }
 
