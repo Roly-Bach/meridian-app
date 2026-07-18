@@ -1,11 +1,11 @@
 # PROJ-46: Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst)
 
-## Status: Architected
+## Status: In Review
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** XL
-**Bugs:** —
+**Bugs:** 2:0:1
 **Created:** 2026-07-18
 **Last Updated:** 2026-07-18
 **ADR:** [ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md) (Rollen-Vertrag-Amendment)
@@ -251,8 +251,115 @@ Provisorisch erhalten, mit klarer Löschbedingung (Nutzer-Vorgabe: Löschkandida
 - **Tests:** Ziel-O-Feld-Wahl am Lock (O2–O6-Priorität + Fallback), M7-b-`hadExtraction`-Veto, ≥1-Entdeckungsfrage-Garantie (Eintritts-Turn schließt nie ab), Erschöpfung bei voller O-Deckung (Lock rückt ohne K-Turn-Nachlauf, konvergiert mit `step_advance_ready`), Regressionstest „kein Briefing-Feld drückt Farewell/Terminierung aus" (H-2), Wegfall der gelöschten Symbole (keine Rest-Referenzen). `tsc --noEmit` + volle Suite grün.
 - **Verifikation (Pflicht-Gate, general.md):** `/eval:interview` mit ≥1 PASS je Persona (buchhalter, it-support), gleiche Config/Seed wie PROJ-44-Runde-3, Judge-Key-Preflight mit echtem `generateText`-Call; Transkript-für-Transkript-Lektüre gegen die Runde-3-Baseline (H-2/BUG-4/M-6/M-7/L-1 nicht mehr reproduzierbar); manueller adversarialer (Tim-artiger) Durchlauf; Latenz unverändert (keine neue Naht auf dem Haupt-Pfad).
 
-## QA Test Results
-_To be added by /qa_
+## Backend Implementation Notes
+
+Gebaut 2026-07-18 (`/backend`), 1:1 nach Design (kein Abweichen). Alle sieben Ströme umgesetzt:
+
+- **interviewSemantic.ts:** `OSlotField`-Typ exportiert; `computeWalkthroughSlotTarget` (Strom C/D3) und der jetzt ungenutzte `computeMissingMandatorySlots`/`MissingSlot` (Folge von Strom C's `coverageCheckSection`-Streichung) gelöscht.
+- **interviewTypes.ts:** `AnalystBriefing.next_focus`/`suggested_question` raus, `target_o_field?: OSlotField` rein; `InterviewContext` um `focusStepId`/`transitionReason` (neuer `TransitionReason`-Typ) erweitert, `missingSlotsForCoverageCheck`, `lastUserTurn`, `recentUserTurns` entfernt.
+- **interviewAnalyst.ts:** `AnalystBriefingSchema` trägt nur noch `target_o_field` (Enum, mit deterministischem Fallback), `step_advance_ready`, `clarification_cards` — exportiert für den H-2-Regressionstest. STUFE 4 umgeframt ("ist der Schritt gedeckt" statt "PRIMÄRER Treiber"). Neuer `computeTargetOFieldFallback`-Injection-Parameter (ballast-vermeidendes Muster wie `updateODrought`); `hasAppliedExtraction` exportiert (Basis für M7-b, geteilt mit `computeNextBriefing`).
+- **interviewOrchestrator.ts:** `computeFocusLock`/`hasUnexhaustedStep` erschöpfen jetzt auch bei voller O2–O6-Deckung (D3); `computeTargetOFieldFallback` + `computeTransitionReason` neu; Probe-Maschinerie (`CLOSING_PROBE_TEXT` + Freunde) und `hasNewStepThisTurn` gelöscht; `resolveTurnLifecycle`s Closing-Zweig läuft rein über `ctx.phase==='closing' ∧ Streak≥K` statt Sonden-Antwort; `hadExtractionThisTurn` (M7-b) ersetzt `newStepThisTurn`.
+- **talkerPrompt.ts:** `WALKTHROUGH_EXAMPLES`, Tool-Syntax-Verbot, `coverageCheckSection`, altes Briefing-/Anker-Sperre-Rendering entfernt; neuer `buildZielBlock` (bindender Ziel-Schritt + O-Feld-Hint, inkl. `abhaengigkeiten`); Closing-Methodik = Entdeckungs-Fortsetzung; Anker-Pflicht → Anker-Option.
+- **conversationSignals.ts:** auf `repeatedQuestionStem` (question-stem) eingedampft; `exception`, numerische `ambiguity`, `recentlyRecontextualized`, Drill-Stop, Laddering, `extractNumericTokens`/`anchorNumbers` gelöscht. Signatur vereinfacht auf `analyzeConversationSignals(recentAssistantTurns)`.
+- **interviewTalker.ts:** `detectNumberAnchoring` + totes `isReconnect`-Flag gelöscht; neue `createOffTopicRedirectStream` (schlanker Call, kein `buildDynamicContext`/Guard/Filler-Tracking).
+- **roleGuard.ts:** `buildOffTopicRedirect` gelöscht (Redirect-Text jetzt Talker-formuliert).
+- **runInterviewTurn.ts:** Off-Topic-Zweig ruft `createOffTopicRedirectStream`; Closing-Sonden-Injektionszweig entfernt; `farewellBriefing`-Konstrukt entfernt (kein Briefing-Feld kann Farewell ausdrücken, I1); `focusStepId`/`transitionReason` berechnet und in den Talker-Kontext durchgereicht.
+- **reconnect/route.ts:** validierungs-only, leerer 200-Body (kein 204, da `useInterviewStream.ts`s `res.body.getReader()` bei 204 auf `null` liefe).
+- **ChatInterface.tsx:** Reconnect-Zweig feuert `/reconnect` nur noch als Ping (`reconnect(() => {})`), erzeugt keine Greeting-Bubble mehr.
+
+**Tests:** 12 Testdateien angepasst/neu, u.a. dedizierte Coverage für D1 (Ziel-O-Feld-Fallback + -Priorität), D3 (Erschöpfung bei voller O-Deckung, in `computeFocusLock` UND `hasUnexhaustedStep`), M7-b (`hadExtractionThisTurn`-Veto), die ≥1-Entdeckungsfrage-Garantie (Entry-Turn schließt nie ab) und die H-2-Strukturinvariante (`AnalystBriefingSchema.shape` hat nachweislich kein Freitext-Feld). `interviewSemantic.test.ts` komplett entfernt (deckte ausschließlich die beiden gelöschten Funktionen ab). `tsc --noEmit` grün, volle Suite 839/840 grün (1 Skip vorbestehend).
+
+**Abweichungen vom Design:** keine.
+
+**Noch offen (gehört zu `/qa`):** Pflicht-Eval-Gate (≥1 `/eval:interview`-PASS je Persona, Judge-Key-Preflight mit echtem `generateText`-Call), Transkript-für-Transkript-Lektüre gegen die PROJ-44-Runde-3-Baseline, manueller adversarialer (Tim-artiger) Durchlauf, Latenz-Vergleich, `anchoringViolationRate`-Scorer-Verhalten am echten Lauf verifizieren (Scorer selbst unverändert — er liest `turn.agentText`-Muster, nicht `suggested_question`, daher kein Code-Risiko, aber am Live-Transkript zu bestätigen).
+
+## QA Test Results (2026-07-18)
+
+**Produktionsreif: NEIN.** Pflicht-Eval-Gate (general.md, Interview-Engine) **rot**: 0 von 6 Läufen PASS; `completion_correctness` von R3-`true` auf `false` regrediert (beide Personas, alle Läufe, 35-Turn-Cap, Status bleibt `active`). Status bleibt **In Review**. Bugs: **2:0:1**.
+
+### Automatisierte Tests
+- `tsc --noEmit` grün.
+- Volle Suite **839 passed / 1 skipped** (Skip vorbestehend). Deckt die neuen Ströme (D1-Ziel-O-Feld, D3-Erschöpfung, M7-b-Veto, H-2-Strukturinvariante) ab.
+
+### Statische AC-Verifikation (bestanden)
+- **Deletion-Tests (Strom C/E/F):** null Live-Referenzen auf alle gelöschten Symbole (`computeWalkthroughSlotTarget`, `CLOSING_PROBE_TEXT`, `WALKTHROUGH_EXAMPLES`, `buildOffTopicRedirect`, `detectNumberAnchoring`, `hasNewStepThisTurn`/`newStepThisTurn`, numerische `ambiguity`, `exception`, `recentlyRecontextualized`, `coverageCheckSection`); Rest-Treffer sind ausschließlich erklärende Kommentare.
+- **H-2-Strukturinvariante (Strom A/D):** `AnalystBriefingSchema.shape` = exakt `{target_o_field (Enum), clarification_cards (strukturiert), step_advance_ready (boolean)}`, kein Freitext-Farewell-Kanal — direkt gegen die zod-Shape getestet.
+- **M-6 (Lock bindend):** `buildZielBlock` rendert Ziel-Schritt aus `focusStepId` + `target_o_field`-Hint, Thema/O-Feld bindend, Wortlaut frei; `closing_entry`/`step_switch` tragen Übergangssatz (L-1).
+- **Reconnect (Strom E):** validierungs-only, leerer 200-Body, token-authentifiziert via `access_token` + Rate-Limit, kein Cross-Workspace-Surface. ChatInterface feuert nur noch einen Ping.
+- **Judge-Key-Preflight (KI-28-Lehre):** echter `generateText`-Call gegen beide Provider (Google Flash-Lite + Anthropic Haiku), beide OK — nicht nur `/v1/models`.
+
+### Eval-Gate (Pflicht) — Konfiguration
+Identisch zur PROJ-44-Runde-3-Baseline für saubere Attribuierung: alle Komponenten `google/gemini-3.1-flash-lite`, Judge `anthropic/claude-haiku-4-5`, `--store supabase --seed 42`, `--runs 3` je Persona. Artefakte: `docs/evals/interview/2026-07-18/*-{buchhalter,it-support}-{run1,run2,run3,aggregate}.md`.
+
+| Metrik (Median) | R3-Baseline (2026-07-17) | PROJ-46 buchhalter | PROJ-46 it-support | Bewertung |
+|---|---|---|---|---|
+| dialog_naturalness | 0.67 / 0.67 | **0.67** | **0.67** | ✅ gehalten — Ent-Dichtung ohne KI-18-Regression (Kernrisiko) |
+| dedup_slot_coverage | 0.56 / 0.56 | **0.67** | **0.69** (max 0.78) | ✅ deutlich verbessert — O-Feld-Tiefe durch bindenden Lock (M-6) |
+| talker_grounding_violations | 0 / 0 | 0 (max 2) | 0 (max 1) | 🟡 Median gehalten, vereinzelt >0 (KI-18-Klasse, Guard-Backstop) |
+| hallucination_rate | 0 | 0 | 0 | ✅ |
+| step_registration_coverage | 1 | 1 | 1 | ✅ |
+| anchoring_violation_rate | 0 | 0 | 0 | ✅ Scorer verkraftet Wegfall von `suggested_question` sauber (F-Note) |
+| **completion_correctness** | **true** | **false** (3/3) | **false** (3/3) | ❌ **regrediert — Gate-Blocker** |
+| turnsToCompletion | 14–33 | 35 (Cap) | 35 (Cap) | ❌ läuft in den 35-Turn-Sicherheits-Cap |
+
+**PROJ-46-eigene Ziele erreicht:** `dialog_naturalness` gehalten (die Ent-Dichtung hat das lite-Modell nicht geschadet — das explizite KI-18-Risiko), `dedup_slot_coverage` klar über Baseline (bindender Fokus-Lock hebt O-Feld-Tiefe messbar, it-support run1 sogar 0.78 > grünes Gate). Grounding-Median 0.
+
+### H-1 (High) — Interview terminiert nicht; `completion_correctness` true→false, 6/6 Läufe
+`scoreCompletionCorrectness` = `status === 'completed'`. Alle sechs Läufe enden auf `active` im 35-Turn-Cap. **Doppelte Ursache:**
+
+> **Korrektur nach Nutzer-Transkript-Review (2026-07-18):** die erste Fassung hier benannte das Eval-Timer-Artefakt als *primäre* Ursache. Das ist falsch — der Timer ist nur der Letzt-Boden. Die primäre Ursache ist, dass es für ein realistisches Interview **keinen erreichbaren graziösen Completion-Pfad** gibt. Beleg: run1 **t23** und run3 **t32** sagt der Agent „Damit sind alle meine Fragen beantwortet" — **bei phase=`explore` und 4 aktiven `record_slot`-Calls**. Der Agent hält sich für fertig; die State-Machine ist nicht mal in `closing`.
+
+1. **Agent-Urteil ist kausal wirkungslos (Kern).** PROJ-46s H-2-Design verbietet Analyst/Talker jede Terminierung — Completion ist zu 100% deterministisch aus `phase` + Streak. Wenn der Agent „alle Fragen beantwortet" formuliert (run1 t23, run3 t32), gibt es **keinen Pfad**, der dieses korrekte Urteil in einen Abschluss übersetzt. Der gestrichene sonden-basierte Pfad (PROJ-42, KI-23-Fix) hatte genau das geleistet: Sonde beantwortet → complete.
+2. **Die deterministische Completion ist für ein normales Interview unerreichbar.** Ein Schritt gilt erst als erschöpft/`done`, wenn **alle** O-Felder **und** die optionalen Potenzial-Slots (`error_rate_percent`, `media_breaks`) gefüllt sind (Auto-`done` in [applyIntent.ts:223](../../src/services/turnStore/applyIntent.ts#L223) + `isFullyCovered`) — die **KI-23-„praktisch-nie-true"-Bedingung**. Reale Personas liefern nicht jeden Slot (run1-Schritte: O2–O6 nur 3–4/6, Potenzial 2–3/4 — keiner vollständig). Also bleiben `hasUnexhaustedStep`/`hasActiveStep` dauerhaft true → die Phase ist in `explore` festgenagelt und erreicht nie ein stabiles `closing`. (Jenseits des Soft-Ankers, 80%≈24min, hält der Grace-Block [interviewOrchestrator.ts:205](../../src/services/interviewOrchestrator.ts#L205) `explore`, solange `hasActiveStep` — und das ist immer.)
+3. **Die zwei „Böden" feuern beide nicht.** Der No-New-Extraction-Streak (K=3) erreicht 3 nie, weil jede angewendete Extraktion ihn auf 0 setzt ([interviewAnalyst.ts:97](../../src/services/interviewAnalyst.ts#L97)) und M7-b (`hadExtractionThisTurn`) closing→explore routet — und Extraktion passiert quasi jeden Turn (auch aus Floskeln + konfabulierten Schritten, s. H-2). Der Hard-Timer ist im Eval-Harness zusätzlich unerreichbar (`floor((turn/35)*30)` = max 29 < 30, [runner.ts:827](../../src/services/__evals__/interview/runner.ts#L827); in Prod würde er bei echter Wall-Clock irgendwann greifen, aber als Force-Ende bei 100%, nicht als graziöser Abschluss).
+
+**Damit verfehlt PROJ-46 seine eigene Strom-D-AC** („Terminierung … kann nicht endlos laufen"): für ein realistisches (nicht voll-abgedecktes) Interview terminiert es faktisch nie außer per Wall-Clock-Force. Das ist die **KI-23-Completion-Regression** — PROJ-42 hatte sie via Sonden-Pfad gelöst, PROJ-46 hat den Pfad entfernt (Strom D) und durch Böden ersetzt, die für den Normalfall nicht greifen.
+
+**Fix-Richtung (Entwickler-Entscheidung, nicht QA):** ein erreichbarer graziöser Abschluss — entweder ein Disengagement-/Agent-Urteil-Signal, das Completion auslösen darf, oder ein gelockerteres Erschöpfungs-Kriterium (Schritt „gedeckt genug" ohne jeden optionalen Slot), sodass `hasActiveStep`/`hasUnexhaustedStep` mit der O-Coverage-Erschöpfung (D3) konvergieren statt mit der KI-23-Alles-Slots-Bedingung. Der Timer-Artefakt gehört ebenfalls gefixt (damit der Eval den Boden überhaupt prüfen kann), ist aber **sekundär**.
+
+### H-2 (High) — Extraktions-Rausch im Closing (Floskel-Slots + unbegrenzte Schritt-Registrierung)
+> **Reframing nach Nutzer-Diskussion (2026-07-18):** die erste Fassung nannte das „Konfabulation" und Mit-Ursache der Non-Termination. Beides zu scharf — Prüfung gegen Persona + Transkript:
+- **Mahnprozess/Mahnlauf ist korrektes Nachhaken, kein Fehler.** Die Persona hat einen versteckten 3. Prozess (`additionalContext: "Monatlicher Mahnprozess … im Interview aber noch nicht aktiv angesprochen"`). run1 und run2 haben ihn korrekt aufgedeckt — Beleg **für** die Elicitation.
+- **Stammdatenpflege / sachkontenabstimmung (run2):** plausible eigenständige Buchhalter-Aufgaben, von der Tester-Persona-LLM improvisiert (die Persona-Definition hat `expectedProcessCount: 2` + nur den einen Mahnprozess-Hint). Die Ground-Truth hat für sie keine Soll-Slots → die Coverage-Metriken werden verzerrt. **Das ist primär eine Eval-Instrument-Grenze, kein Agent-Bug.** In Prod wären real herausgeholte Zusatzprozesse legitim.
+- **Non-Termination ist NICHT hierdurch verursacht:** **run1 hat ausschließlich persona-gegroundete Schritte** (Rechnungsprüfung, Monatsabschluss, Mahnlauf) und terminierte trotzdem nicht. H-1 ist unabhängig.
+
+Der reale, prod-relevante Kern von H-2: **Extraktions-Rausch** — `record_slot` aus reinen Höflichkeitsfloskeln (run1 t34: **16 `record_slot`-Calls** auf „Auf Wiedersehen und ebenso alles Gute für die weitere Dokumentation") und, im Closing, **unbegrenzte neue Schritt-Registrierung**. Beides resettet den globalen `noNewExtractionStreak` (`hasAppliedExtraction` = jeder Write) → der deterministische Abschluss-Boden feuert nicht (koppelt eng an H-1/Fix D) und die Wissensbasis bekommt Floskel-Slots. Der 9-Turn-Farewell-Loop (run1 ab t27) ist **Symptom**, nicht Ursache: der State kann nicht terminieren (H-1), also spiegelt der Talker endlos die Abschiede.
+
+### L-1 (Low) — vereinzelte `talker_grounding_violations` > 0
+Median 0 beide Personas, aber Max 2 (buchhalter run1) / 1 (it-support run1). KI-18-Klasse, dokumentiert offen, Guard bleibt Backstop; die Anker-Pflicht→Option-Relaxierung (Strom F) hat den Median nicht verschlechtert. Kein PROJ-46-Regressions-Blocker, als Leitindikator (Strom G) protokolliert.
+
+### Nicht reproduzierbar / bestätigt behoben (Transkript-Level)
+- **M-6 (Ping-Pong gegen den Lock):** kein Themen-Ping-Pong gegen den Fokus-Lock beobachtet; die Tiefe (dedup 0.56→0.67/0.69) belegt den bindenden Lock. ✅
+- **BUG-4 (wortgleiche statische Sonde):** kein wiederholter statischer `CLOSING_PROBE_TEXT` — Closing-Fragen sind Talker-formuliert und variieren (run2 t30-t35: durchweg frische, spezifische Fragen). ✅
+- **Off-Topic-Redirect / Reconnect:** kein Off-Topic-Fall in diesen Personas ausgelöst (Personas bleiben im Thema); Reconnect-Pfad statisch verifiziert (s.o.), kein Live-Reconnect im Eval-Harness.
+
+### Offene Verifikation (nicht durchgeführt, blockiert durch H-1)
+Der geforderte manuelle adversariale (Tim-artige) Durchlauf und die Latenz-Delta-Messung sind erst nach H-1-Fix sinnvoll — solange das Interview nicht terminiert, misst ein manueller Durchlauf dasselbe Nicht-Abschluss-Verhalten.
+
+### Fix-Plan für `/backend` (Nutzer-Entscheidung 2026-07-18)
+
+**Reihenfolge: A+D zuerst (rein deterministisch). Wenn der nächste Eval-Lauf zeigt, dass A+D nicht greift → B/C testen.**
+
+Grundprinzip „gut genug" (deterministisch, kein LLM): ein Schritt ist **erschöpft**, wenn (1) alle **7** O2–O6-Felder gefüllt sind (`isFullyCovered`) ODER (2) der O-Drought feuert = **K=3** Turns in Folge kein neues O-Feld (`updateODrought`). Terminierungs-Garantie: pro Schritt gibt es 7 O-Felder, jedes geht nur leer→voll (Monotonie) → ein Schritt kann seinen Drought höchstens 7× resetten → nach ≤~10 Fokus-Turns zwingend erschöpft → bei endlich vielen Schritten terminiert das Interview. K ist env-tunbar (`O_DROUGHT_LIMIT` / `NO_NEW_EXTRACTION_LIMIT`).
+
+Die Garantie existiert schon (`updateODrought`/`hasUnexhaustedStep`), drei Lecks umgehen sie:
+
+- **Fix A (Konsistenz, Phasenübergang):** `hasActiveStep` ([interviewOrchestrator.ts:205](../../src/services/interviewOrchestrator.ts#L205)) liest rohen `status` (`exploring`/`walkthrough`) statt Erschöpfung → nagelt `explore` fest. An dieselbe Erschöpfungs-Logik koppeln wie der Fokus-Lock (`hasUnexhaustedStep`/`isFullyCovered`+Drought). Dann lässt ein O-erschöpfter Schritt die Phase tatsächlich los. Hält ADR-023 D2 („Analyst terminiert nicht") intakt.
+- **Fix D (Rausch-Robustheit, Abschluss-Terminator):** der globale `noNewExtractionStreak` ([interviewAnalyst.ts:97](../../src/services/interviewAnalyst.ts#L97)) zählt via `hasAppliedExtraction` **jeden** angewendeten Write (Floskel-Slots, Re-Records, Potenzial). Auf „echtes neues O-Feld" umstellen — denselben O-Feld-Diff wie `updateODrought`. Schließt das run1-Floskel-Leck (t34: 16 Slots auf „Auf Wiedersehen").
+- **Fix D2 (Schritt-Registrierung im Closing begrenzen):** unbegrenzte neue Top-Level-Schritte im Closing brechen die „endlich viele Schritte"-Prämisse. Begrenzen bzw. spurious Registrierung verhindern (H-2-Teil).
+- **Sekundär (Eval-Instrument, KEIN Primär-Fix):** der Harness-Timer `floor((turn/35)*30)` erreicht max 29 < 30, der Hard-Stop-Boden ist im Eval nie prüfbar. Fixen (z.B. `((turn+1)/MAX_TURNS)*30`), damit der Letzt-Boden im Eval sichtbar wird — aber A+D sind der eigentliche Fix.
+
+**Fallback B/C (nur falls A+D im Eval nicht greifen):** dem Analyst ein **strukturiertes** „Interview inhaltlich abgeschlossen"-Boolean geben, das Completion **auslösen** darf, mit den zwei deterministischen Böden (Timer + Mindest-Coverage) als Guard. Kein Freitext-Farewell (das war H-2/Split-Brain). Reskaliert ADR-023 von „Analyst darf nicht terminieren" zu „Analyst darf Completion-Readiness signalisieren, terminiert aber nicht selbst". Nutzt die im Transkript belegte Fähigkeit des Agenten, plausibel abzuschließen (run1 t23, run3 t32).
+
+**Follow-up (nach grünem Gate, separat):** `status`-Feld ganz auf Coverage vereinheitlichen (löschen). Ist die logische Fortsetzung von A, aber ein Refactor mit Schema-/Persistenz-Folgen + einem Downstream-Konsumenten ([processEnrichment.ts:119](../../src/services/processEnrichment.ts#L119) enricht nur `status !== 'exploring'` → braucht Coverage-Ersatz für „enrichment-reif") — nicht der minimale Gate-Fix.
+
+### Re-Verifikation (nach `/backend`, in frischem `/qa`)
+- `/eval:interview` erneut, **gleiche Config** (buchhalter+it-support, flash-lite, Haiku-Judge, `--store supabase --seed 42 --runs 3`) — direkt gegen die heutigen 2026-07-18-Artefakte vergleichbar.
+- **Primär-Gate:** `completion_correctness` = true (kein 35-Turn-Cap), Transkript-Lektüre: kein Farewell-Loop, sauberer Abschluss zum Zeitpunkt des Agent-„fertig"-Urteils.
+- **Halten:** `dialog_naturalness` ≥ 0.67, `dedup_slot_coverage` ≥ 0.67/0.69 (nicht durch die Fixes verschlechtern), Grounding-Median 0.
+- Der noch offene manuelle adversariale (Tim-artige) Durchlauf + Latenz-Delta.
+
+Bis dahin bleiben **PROJ-42, PROJ-44, PROJ-46** gemeinsam **In Review** (gemeinsame Gate-Entscheidung laut Spec).
 
 ## Deployment
 _To be added by /deploy_

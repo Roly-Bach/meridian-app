@@ -1,0 +1,5259 @@
+{
+  "evalRunId": "2d07302d-e736-4ace-b09a-324e9b44bff9",
+  "interviewId": "bcdfb65e-4442-4e9a-9392-73f5c4b85b20",
+  "model": "google/gemini-3.1-flash-lite",
+  "persona": "it-support",
+  "testerModel": "google/gemini-3.1-flash-lite",
+  "disclosureMode": "withhold_numbers_only",
+  "status": "active",
+  "turns": [
+    {
+      "turnNumber": 1,
+      "userInput": "Hauptsächlich Ticket-Bearbeitung via Jira und regelmäßiger Hardware-Tausch. Störungssuche per Remote Desktop oder direkt vor Ort. Dokumentation im Wiki inklusive.",
+      "agentText": "Du hast Jira und die Dokumentation im Wiki als Rahmen genannt. Wie viele Tickets bearbeitest du durchschnittlich pro Woche?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Annahme und Bearbeitung"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Austausch von Endgeräten"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Störungssuche: Remote und Vor-Ort-Analyse"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Dokumentation: Wissensdatenbank und Wiki"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Störungssuche"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Dokumentation"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "systeme": [
+              "Jira"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Störungssuche",
+            "systeme": [
+              "Remote Desktop"
+            ]
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Dokumentation",
+            "systeme": [
+              "Wiki"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Dokumentation"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 2,
+      "userInput": "Etwa 75 bis 100 Tickets. Wöchentlich. Je nach Aufkommen.",
+      "agentText": "Folgst du bei der Störungssuche festen Diagnose-Protokollen oder entscheidest du individuell nach Einschätzung der Situation?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_span": "75 bis 100 Tickets. Wöchentlich",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 75 bis 100 pro Woche, umgerechnet auf Monat: 300 bis 400",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": false,
+            "target_o_field": "duration_minutes"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "entscheidungslogik",
+            "step_advance_ready": false
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 3,
+      "userInput": "Kommt drauf an. Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+      "agentText": "Welche Anzeichen deuten bei einem Ticket darauf hin, dass die Wiki-Dokumentation nicht ausreicht und eine individuelle Analyse nötig ist?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": [
+              "Wiki-Lösungsbuch für Standards",
+              "individuelle Analyse"
+            ],
+            "evidence_span": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "tazite_cues"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Nutzung von Wiki-Lösungsbuch für Standards, ansonsten individuelle Analyse.",
+            "evidence_span": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 4,
+      "userInput": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+      "agentText": "Welche konkreten Schritte unternimmst du bei einer solchen individuellen Analyse, wenn das Wiki nicht weiterhilft?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "tazite_cues",
+            "source_turn": 7,
+            "confidence": "confirmed",
+            "step_id": "S001",
+            "evidence_span": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen nicht im Asset-Management-System gelistet",
+              "Fehlerbilder nicht im Lösungsbuch gelistet"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "inputs",
+            "confidence": "confirmed",
+            "source_turn": 7,
+            "step_id": "S001",
+            "value": [
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Hardware-Störungen im Asset-Management-System nicht gelistet sind."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": false
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen nicht im Asset-Management-System gelistet",
+              "Fehlerbilder nicht im Lösungsbuch gelistet"
+            ],
+            "evidence_span": "Abweichungen von Standardvorgaben.",
+            "confidence": "confirmed",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "inputs",
+            "value": [
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Asset-Management-System nicht gelistet",
+            "confidence": "confirmed",
+            "source_turn": 7
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 5,
+      "userInput": "Eigenständige Fehleranalyse. Eventuell direkt vor Ort. Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+      "agentText": "Welche Erfahrungswerte oder Faustregeln helfen dir bei der Entscheidung, ob eine Störung direkt remote gelöst werden kann oder ein Vor-Ort-Termin zwingend erforderlich ist?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Individuelle Analyse durch eigenständige Fehleranalyse bei Abweichungen vom Standard oder fehlenden Lösungsbeschreibungen.",
+            "evidence_span": "Eigenständige Fehleranalyse",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools"
+            ],
+            "evidence_span": "Asset-Management-System. Manchmal Imaging-Tools",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": true
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Störungssuche",
+            "process_steps": [
+              "Eigenständige Fehleranalyse (Remote oder vor Ort)",
+              "Prüfung der Hardware-Bestände über Asset-Management-System",
+              "Einsatz von Imaging-Tools (bei Bedarf)"
+            ]
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "tazite_cues",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 6,
+      "userInput": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin. Manchmal kurzzeitig unklar. Kommt drauf an.",
+      "agentText": "An welchen Anzeichen erkennst du während einer Remote-Sitzung sofort, dass deine Bemühungen dort nicht zum Ziel führen werden und ein Vor-Ort-Termin unumgänglich ist?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "confidence": "confirmed",
+            "source_turn": 6,
+            "evidence_span": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "slot": "entscheidungslogik",
+            "value": [
+              "Software-Probleme remote via Remote Desktop",
+              "Hardware-Defekte erfordern Vor-Ort-Termin"
+            ],
+            "step_id": "S001"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "tazite_cues"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": [
+              "Software-Probleme remote via Remote Desktop",
+              "Hardware-Defekte erfordern Vor-Ort-Termin"
+            ],
+            "evidence_span": "Software-Probleme remote via Remote Desktop",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "entscheidungslogik",
+            "source_turn": 6,
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "evidence_span": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "value": "Software-Probleme remote via Remote Desktop, bei Hardware-Defekten Vor-Ort-Termin.",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "confidence": "confirmed",
+            "value": "Software-Probleme remote via Remote Desktop, bei Hardware-Defekten Vor-Ort-Termin.",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "source_turn": 6,
+            "evidence_span": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Software-Probleme remote via Remote Desktop, bei Hardware-Defekten Vor-Ort-Termin.",
+            "evidence_span": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort.",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Software-Probleme remote via Remote Desktop, Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "evidence_span": "Software-Probleme remote via Remote Desktop.",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 7,
+      "userInput": "Defekte Hardware. Keine Reaktion per Remote Desktop. Wenn Nutzerdatenmigrierung nötig wird.",
+      "agentText": "Wenn die Störungssuche einen Hardware-Tausch ergibt: Welche Vorbereitungen im Asset-Management-System sind zwingend erforderlich, bevor du den Tausch physisch durchführst?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Defekte Hardware",
+              "Keine Reaktion per Remote Desktop",
+              "Nutzerdatenmigrierung nötig"
+            ],
+            "evidence_span": "Defekte Hardware. Keine Reaktion per Remote Desktop.",
+            "confidence": "confirmed",
+            "source_turn": 9
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 8,
+      "userInput": "Prüfung der Bestandsdaten im Asset-Management-System. Ersatzgerät aus dem Bestand ziehen. Imaging-Software zur Einrichtung verwenden. Ist oft mühsam, da Systemdaten und Realität manchmal nicht übereinstimmen.",
+      "agentText": "Du hast erwähnt, dass die Daten im Asset-Management oft nicht mit der Realität übereinstimmen — wie verfährst du in solchen Fällen konkret, um den Tausch dennoch erfolgreich abzuschließen?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "process_steps": [
+              "Prüfung der Bestandsdaten im Asset-Management-System",
+              "Ersatzgerät aus dem Bestand ziehen",
+              "Imaging-Software zur Einrichtung verwenden"
+            ],
+            "friction_points": [
+              "Systemdaten und Realität stimmen oft nicht überein"
+            ]
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Software"
+            ],
+            "slot": "hilfsmittel",
+            "evidence_span": "Asset-Management-System. ... Imaging-Software"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "description": "Systemdaten und Realität stimmen oft nicht überein",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Software"
+            ],
+            "evidence_span": "Asset-Management-System"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 9,
+      "userInput": "Suche vor Ort. Abgleich der Komponenten. Manuelle Korrektur der Bestandsdaten. Individuelle Problemlösung bei Diskrepanzen.",
+      "agentText": "Welche anderen Systeme oder Datenquellen ziehst du neben dem Asset-Management-System für den Abgleich der Komponenten heran, wenn die Daten dort nicht mit der Realität übereinstimmen?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "tazite_cues",
+            "value": [
+              "Manuelle Korrektur der Bestandsdaten bei Diskrepanzen"
+            ],
+            "evidence_span": "Manuelle Korrektur der Bestandsdaten",
+            "confidence": "confirmed"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "friction_points": [
+              "Systemdaten und Realität stimmen nicht überein"
+            ]
+          },
+          "applied": true
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "description": "Diskrepanz zwischen Asset-Management-System und realem Bestand führt zu manuellem Korrekturaufwand.",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "hilfsmittel",
+            "step_advance_ready": false
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 10,
+      "userInput": "Nur das interne Wiki. Oft reicht das nicht. Ansonsten eigenständige Analyse vor Ort. Mehr Quellen gibt es nicht.",
+      "agentText": "Was genau macht den Einsatz der Imaging-Software bei einem Gerätetausch in der Praxis so mühsam?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "entscheidungslogik",
+            "value": "Abgleich der physischen Komponenten mit dem System; manuelle Korrektur bei Diskrepanz zwischen System und Realität",
+            "evidence_span": "Suche vor Ort. Abgleich der Komponenten. Manuelle Korrektur der Bestandsdaten.",
+            "confidence": "confirmed",
+            "source_turn": 10
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Wiki",
+              "Imaging-Software"
+            ],
+            "evidence_span": "Nur das interne Wiki.",
+            "confidence": "confirmed",
+            "source_turn": 10
+          },
+          "applied": true
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "friction_points": [
+              "Diskrepanz zwischen Systemdaten und Realität im Asset-Management führt zu manuellem Korrekturaufwand"
+            ]
+          },
+          "applied": true
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "description": "Diskrepanz zwischen Asset-Management-System und realem Hardware-Bestand erfordert manuelle Korrektur und Vor-Ort-Suche.",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "tazite_cues",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 11,
+      "userInput": "Aufwendige Nutzerdatenmigration. Zudem die Zeit für die Einrichtung des Austauschgeräts aus dem Bestand. Oft muss ich zwischen Systemen wie Jira und dem Imaging-Tool hin- und herwechseln.",
+      "agentText": "Welche administrativen Tätigkeiten fallen im Jira-Ticket an, sobald die physische Einrichtung und die Datenmigration abgeschlossen sind?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Software",
+              "Jira",
+              "Wiki"
+            ],
+            "evidence_span": "zwischen Systemen wie Jira und dem Imaging-Tool hin- und herwechseln",
+            "confidence": "confirmed",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "friction_tools": [
+              "Jira",
+              "Imaging-Tool"
+            ]
+          },
+          "applied": true
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "description": "Aufwendiges Wechseln zwischen Jira und dem Imaging-Tool während der Geräte-Einrichtung",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 12,
+      "userInput": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+      "agentText": "Löst dieser Abschluss des Hardware-Tauschs im System automatisch Folgeprozesse aus, etwa im Einkauf oder bei der Inventarisierung, oder bleibt die Bearbeitung damit für dich vollständig abgeschlossen?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Wiki",
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "evidence_span": "Imaging-Tool, Wiki, Asset-Management-System, Jira",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "value": [
+              "abgeschlossenes Jira-Ticket"
+            ],
+            "step_title": "Hardware-Tausch",
+            "evidence_span": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+            "slot": "outputs",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "update_walkthrough_data",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "friction_tools": [
+              "Jira",
+              "Imaging-Tool"
+            ]
+          },
+          "applied": true
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "description": "Systemdaten und Realität im Asset-Management stimmen oft nicht überein, was manuelle Korrekturen erforderlich macht.",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "outputs",
+            "value": [
+              "abgeschlossenes Jira-Ticket"
+            ],
+            "evidence_span": "Ticket im Jira finalisieren",
+            "confidence": "confirmed"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 13,
+      "userInput": "Kommt drauf an. Meist manueller Abschluss. Keine automatisierten Prozesse im Einkauf oder Inventar durch mich.",
+      "agentText": "Wie viel Zeit investierst du wöchentlich in das Erstellen oder Aktualisieren der Einträge im Wiki?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Wiki",
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "source_turn": 13
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "entscheidungslogik",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "entscheidungslogik",
+            "value": "Manuelle Abschlussbearbeitung, keine automatisierten Prozesse im Einkauf oder Inventar.",
+            "evidence_span": "Keine automatisierten Prozesse",
+            "source_turn": 13
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 14,
+      "userInput": "Keine feste Vorgabe. Je nach Ticketaufkommen. Schwankt stark.",
+      "agentText": "Notieren wir das als variabel. Woran erkennst du bei einem Gerät vor Ort sofort, ob es sich um eine Standard-Konfiguration handelt oder ob hier Anpassungen vorgenommen wurden, die bei der Einrichtung Probleme bereiten könnten?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "evidence_span": "Schwankt stark",
+            "confidence": "estimate",
+            "qualifier": "keine feste Vorgabe, schwankt stark",
+            "source_turn": 16
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Schwankt stark",
+            "source_turn": 16
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "tazite_cues",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 15,
+      "userInput": "Abgleich mit Standardvorgaben. Prüfung der verbauten Hardware-Komponenten. Diskrepanzen zwischen Systemstatus und sichtbarer Hardware vor Ort. Kommt drauf an.",
+      "agentText": "Ist die Entnahme eines Ersatzgeräts aus dem Bestand an eine formelle Freigabe oder eine vorherige Buchung in einem anderen System gebunden?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "tazite_cues",
+            "value": [
+              "Diskrepanzen zwischen Systemstatus und sichtbarer Hardware vor Ort"
+            ],
+            "evidence_span": "Diskrepanzen zwischen Systemstatus und sichtbarer Hardware vor Ort",
+            "confidence": "confirmed"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "entscheidungslogik",
+            "value": "Prüfung der verbauten Hardware-Komponenten gegen Standardvorgaben zur Identifikation von Anpassungen.",
+            "evidence_span": "Prüfung der verbauten Hardware-Komponenten.",
+            "confidence": "confirmed"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 16,
+      "userInput": "Keine explizite Freigabe. Buchung erfolgt primär über das Asset-Management-System. Kommt drauf an.",
+      "agentText": "Welche weiteren, regelmäßig wiederkehrenden Aufgaben fallen neben der Ticket-Bearbeitung und dem Hardware-Tausch in deinen Arbeitsalltag, die wir bisher noch nicht betrachtet haben?",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "entscheidungslogik",
+            "value": "Keine explizite Freigabe erforderlich",
+            "evidence_span": "Keine explizite Freigabe"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System"
+            ],
+            "evidence_span": "Buchung erfolgt primär über das Asset-Management-System"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 17,
+      "userInput": "Gibt keine weiteren zentralen Aufgaben. Ticket-Bearbeitung und Hardware-Tausch dominieren den Alltag. Alles andere läuft unter Support.",
+      "agentText": "Wie gehst du bei der Ticket-Bearbeitung vor, wenn du merkst, dass ein Problem trotz deiner Analyse nicht lösbar ist — gibt es hier eine definierte Eskalationsstufe oder ein Team, an das du solche Fälle übergibst?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_quote": "Etwa 75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "confirmed",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse. Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse. Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen im Asset-Management-System nicht gelistet",
+              "Fehlerbilder nicht im Lösungsbuch"
+            ],
+            "evidence_quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "confidence": "confirmed",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "ausnahmen",
+            "value": [
+              "Defekte Hardware",
+              "Keine Reaktion per Remote Desktop",
+              "Nutzerdatenmigrierung nötig"
+            ],
+            "evidence_quote": "Defekte Hardware. Keine Reaktion per Remote Desktop. Wenn Nutzerdatenmigrierung nötig wird.",
+            "confidence": "confirmed",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "inputs",
+            "value": [
+              "Jira",
+              "Asset-Management-System",
+              "internes Wiki"
+            ],
+            "evidence_quote": "Jira und regelmäßiger Hardware-Tausch. ... Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen. Nur das interne Wiki.",
+            "confidence": "confirmed",
+            "source_turn": 1
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "outputs",
+            "value": [
+              "Ticket im Jira finalisiert",
+              "Lösungsansatz dokumentiert"
+            ],
+            "evidence_quote": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools",
+              "internes Wiki"
+            ],
+            "evidence_quote": "Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen. Nur das interne Wiki.",
+            "confidence": "confirmed",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "media_breaks",
+            "value": 1,
+            "evidence_quote": "Oft muss ich zwischen Systemen wie Jira und dem Imaging-Tool hin- und herwechseln.",
+            "confidence": "confirmed",
+            "source_turn": 11
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "frequency_per_month",
+            "step_id": "S001",
+            "source_turn": 2,
+            "value": 350,
+            "confidence": "estimate",
+            "evidence_span": "75 bis 100 Tickets. Wöchentlich."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 4,
+            "step_id": "S001",
+            "slot": "entscheidungslogik",
+            "confidence": "confirmed",
+            "value": "Standard (Wiki) vs. individuell bei Abweichungen/Fehlern",
+            "evidence_span": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Störungssuche",
+                "question": "Wie lange dauert eine durchschnittliche Störungssuche (in Minuten)?",
+                "options": [
+                  "10-30 min",
+                  "30-60 min",
+                  "1-2 h",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie oft führst du durchschnittlich einen Hardware-Tausch pro Monat durch?",
+                "options": [
+                  "1-5 mal pro Monat",
+                  "5-10 mal pro Monat",
+                  "10-20 mal pro Monat",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "frequency_per_month",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie hoch ist der durchschnittliche Zeitaufwand pro Hardware-Tausch (in Minuten)?",
+                "options": [
+                  "30-60 min",
+                  "1-2 h",
+                  "2-4 h",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              }
+            ],
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_span": "75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "estimate",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Standard (Wiki) vs. individuell bei Abweichungen/Fehlern",
+            "evidence_span": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed",
+            "source_turn": 4
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_quote": "75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "estimate",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Standard (Wiki) vs. individuell bei Abweichungen/Fehlern",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed",
+            "source_turn": 4
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 18,
+      "userInput": "Kommt drauf an. Meist Eigenrecherche im Wiki. Bei Bedarf Eskalation an IT-Management für Software-Freigaben. Sonst individuelle Problemlösung.",
+      "agentText": "Die Eskalation an das Management für Software-Freigaben ist damit klar. Gibt es abseits von Tickets und Hardware-Tausch noch regelmäßige Wartungsaufgaben oder administrative Routinen, die du beispielsweise monatlich oder quartalsweise durchführst?",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "evidence_span": "Eskalation an IT-Management für Software-Freigaben",
+            "step_id": "S001",
+            "confidence": "confirmed",
+            "slot": "entscheidungslogik"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "evidence_span": "IT-Management",
+            "confidence": "confirmed",
+            "slot": "inputs"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "evidence_span": "Eskalation an IT-Management für Software-Freigaben",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "inputs",
+            "evidence_span": "IT-Management",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Eskalation an IT-Management für Software-Freigaben",
+            "evidence_span": "Eskalation an IT-Management für Software-Freigaben",
+            "confidence": "confirmed"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "inputs",
+            "value": [
+              "IT-Management"
+            ],
+            "evidence_span": "IT-Management",
+            "confidence": "confirmed"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 19,
+      "userInput": "Keine weiteren Routinen. Mein Alltag fokussiert sich rein auf die Ticket-Bearbeitung und den Hardware-Tausch. Mehr ist nicht vorgesehen.",
+      "agentText": "Damit sind alle Punkte geklärt. Wir sind am Ende des Gesprächs.",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "source_turn": 6,
+            "is_correction": true
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Remote Desktop",
+              "direkt vor Ort"
+            ],
+            "source_turn": 1
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen im Asset-Management-System nicht gelistet",
+              "Fehlerbilder nicht im Lösungsbuch"
+            ],
+            "source_turn": 4
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Defekte Hardware",
+              "Keine Reaktion per Remote Desktop",
+              "Nutzerdatenmigrierung nötig"
+            ],
+            "source_turn": 7
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Wiki"
+            ],
+            "source_turn": 1
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools"
+            ],
+            "source_turn": 5
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "evidence_quote": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "source_turn": 6,
+            "is_correction": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Remote Desktop",
+              "direkt vor Ort"
+            ],
+            "evidence_quote": "Störungssuche per Remote Desktop oder direkt vor Ort.",
+            "source_turn": 1
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen im Asset-Management-System nicht gelistet",
+              "Fehlerbilder nicht im Lösungsbuch stehen"
+            ],
+            "evidence_quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Defekte Hardware",
+              "Keine Reaktion per Remote Desktop",
+              "Nutzerdatenmigrierung nötig"
+            ],
+            "evidence_quote": "Defekte Hardware. Keine Reaktion per Remote Desktop. Wenn Nutzerdatenmigrierung nötig wird.",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Wiki"
+            ],
+            "evidence_quote": "Ticket-Bearbeitung via Jira und regelmäßiger Hardware-Tausch. Störungssuche per Remote Desktop oder direkt vor Ort. Dokumentation im Wiki inklusive.",
+            "source_turn": 1
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools"
+            ],
+            "evidence_quote": "Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "value": 0,
+            "confidence": "confirmed",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "source_turn": 22,
+            "evidence_span": "Mein Alltag fokussiert sich rein auf die Ticket-Bearbeitung und den Hardware-Tausch."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true,
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "slot_key": "duration_minutes",
+                "step_title": "Störungssuche",
+                "answer_type": "single",
+                "options": [],
+                "question": "Wie lange dauert im Durchschnitt eine Störungssuche?"
+              },
+              {
+                "question": "Wie lange dauert im Durchschnitt ein Hardware-Tausch?",
+                "options": [],
+                "step_title": "Hardware-Tausch",
+                "answer_type": "single",
+                "slot_key": "duration_minutes",
+                "process_step_id": "S002"
+              }
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 0,
+            "evidence_span": "Alltag fokussiert sich auf Ticket-Bearbeitung",
+            "confidence": "confirmed",
+            "source_turn": 22
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "Störungssuche",
+                "question": "Wie lange dauert im Durchschnitt eine Störungssuche?",
+                "options": [
+                  "Unter 30 Minuten",
+                  "30-60 Minuten",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie lange dauert im Durchschnitt ein Hardware-Tausch?",
+                "options": [
+                  "Unter 1 Stunde",
+                  "1-2 Stunden",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              }
+            ],
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 20,
+      "userInput": "Alles klar. Weiterarbeiten.",
+      "agentText": "Vielen Dank für deine Zeit und die Einblicke in deine tägliche Arbeit. Damit sind wir am Ende.",
+      "phase": "closing",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 21,
+      "userInput": "Kein Problem. Gerne. Tschüss.",
+      "agentText": "Alles klar, dann viel Erfolg bei der weiteren Arbeit. Tschüss.",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_quote": "Etwa 75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "estimate",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Wiki-Lösungsbuch für Standards, sonst individuelle Analyse.",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen nicht im Asset-Management gelistet",
+              "Fehlerbilder nicht im Lösungsbuch"
+            ],
+            "evidence_quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "confidence": "confirmed",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Wiki",
+              "Asset-Management-System",
+              "Imaging-Tools",
+              "Remote Desktop"
+            ],
+            "evidence_quote": "Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+            "confidence": "confirmed",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Software-Probleme remote, Hardware-Defekte vor Ort.",
+            "evidence_quote": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Defekte Hardware",
+              "Keine Reaktion Remote Desktop",
+              "Nutzerdatenmigrierung nötig"
+            ],
+            "evidence_quote": "Defekte Hardware. Keine Reaktion per Remote Desktop. Wenn Nutzerdatenmigrierung nötig wird.",
+            "confidence": "confirmed",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "media_breaks",
+            "value": 2,
+            "evidence_quote": "Oft muss ich zwischen Systemen wie Jira und dem Imaging-Tool hin- und herwechseln.",
+            "confidence": "confirmed",
+            "source_turn": 11
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "outputs",
+            "value": [
+              "Finalisiertes Jira-Ticket",
+              "Dokumentierter Lösungsansatz",
+              "Systemabschluss"
+            ],
+            "evidence_quote": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 22,
+      "userInput": "Bis später. Danke.",
+      "agentText": "Um die Störungssuche noch genauer einzuordnen: Wie lange dauert ein typischer Remote-Fall im Durchschnitt?",
+      "phase": "closing",
+      "toolCalls": []
+    },
+    {
+      "turnNumber": 23,
+      "userInput": "Kommt drauf an. Lässt sich schwer pauschal sagen.",
+      "agentText": "Eher 15 Minuten oder eher eine Stunde pro Remote-Fall?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "duration_minutes",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_quote": "Kommt drauf an. Lässt sich schwer pauschal sagen.",
+            "confidence": "unknown",
+            "source_turn": 23
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "duration_minutes",
+            "nicht_befund_typ": "unbekannt",
+            "evidence_span": "Kommt drauf an. Lässt sich schwer pauschal sagen.",
+            "confidence": "unknown",
+            "source_turn": 28
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true,
+            "clarification_cards": [
+              {
+                "step_title": "Hardware-Tausch",
+                "question": "Wie lange dauert durchschnittlich ein Hardware-Tausch (in Minuten)?",
+                "answer_type": "single",
+                "options": [],
+                "slot_key": "duration_minutes",
+                "process_step_id": "S002"
+              },
+              {
+                "answer_type": "single",
+                "question": "Ist der Hardware-Tausch regelbasiert oder individuell?",
+                "step_title": "Hardware-Tausch",
+                "options": [],
+                "slot_key": "rule_based",
+                "process_step_id": "S002"
+              }
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "clarification_cards": [
+              {
+                "process_step_id": "S002",
+                "step_title": "Hardware-Tausch",
+                "question": "Wie lange dauert durchschnittlich ein Hardware-Tausch (in Minuten)?",
+                "options": [
+                  "Unter 30 Minuten",
+                  "30 bis 60 Minuten",
+                  "Über 60 Minuten",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "duration_minutes",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "Hardware-Tausch",
+                "question": "Folgt der Hardware-Tausch einer festen Regel (z.B. Lösungsbuch) oder entscheidest du individuell?",
+                "options": [
+                  "Regelbasiert (nach Prozessvorgaben)",
+                  "Individuell (nach Situation)",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "rule_based",
+                "answer_type": "single"
+              }
+            ],
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 24,
+      "userInput": "Kommt drauf an. Meist eher kürzer. Hängt vom Fehler ab.",
+      "agentText": "Lassen wir das so stehen. Wie viele Hardware-Tausch-Vorgänge fallen im Durchschnitt pro Monat an?",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 25,
+      "userInput": "Etwa 12 bis 20 Vorgänge. Monatlich. Je nach Bedarf.",
+      "agentText": "Vielen Dank für die Informationen. Damit sind alle Punkte erfasst.",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "source_turn": 25
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12-20",
+            "source_turn": 22
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 26,
+      "userInput": "Alles klar. Ticket-Stapel wartet. Tschüss.",
+      "agentText": "Alles klar, dann viel Erfolg bei der weiteren Arbeit. Tschüss.",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": 16,
+            "evidence_span": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "source_turn": 32,
+            "qualifier": "Spanne: 12 bis 20 Vorgänge monatlich",
+            "step_id": "S002",
+            "slot": "frequency_per_month",
+            "confidence": "estimate"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20 Vorgänge monatlich",
+            "source_turn": 32
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20 Vorgänge monatlich",
+            "source_turn": 32
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20 Vorgänge monatlich",
+            "source_turn": 32
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 27,
+      "userInput": "Danke. Wiedersehen.",
+      "agentText": "Du hast erwähnt, dass neben der Ticket-Bearbeitung und dem Hardware-Tausch alles Weitere unter den Begriff \"Support\" fällt. Welche Tätigkeiten, die nicht direkt in einem Jira-Ticket erfasst werden, nehmen in diesem Support-Bereich den größten zeitlichen Anteil ein?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich. Je nach Bedarf.",
+            "confidence": "confirmed",
+            "source_turn": 25
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Wiki-Lösungsbuch für Standards, ansonsten individuelle Analyse",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen nicht im Asset-Management-System gelistet",
+              "Fehlerbilder nicht im Lösungsbuch vorhanden"
+            ],
+            "evidence_quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "confidence": "confirmed",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "inputs",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools"
+            ],
+            "evidence_quote": "Eigenständige Fehleranalyse. Eventuell direkt vor Ort. Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+            "confidence": "confirmed",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "internes Wiki"
+            ],
+            "evidence_quote": "Nur das interne Wiki.",
+            "confidence": "confirmed",
+            "source_turn": 10
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "ausnahmen",
+            "value": [
+              "Software-Probleme remote via Remote Desktop",
+              "Hardware-Defekte Vor-Ort-Termin"
+            ],
+            "evidence_quote": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "confidence": "confirmed",
+            "source_turn": 6
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "outputs",
+            "value": [
+              "Jira Ticket finalisieren",
+              "Lösungsansatz dokumentieren",
+              "Abschluss im System hinterlegen"
+            ],
+            "evidence_quote": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_span": "75 bis 100 Tickets. Wöchentlich",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 75-100 pro Woche auf Monat hochgerechnet",
+            "source_turn": 26
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12-20 pro Monat",
+            "source_turn": 26
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_quote": "Etwa 75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 75-100 pro Woche auf Monat hochgerechnet",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12-20 pro Monat",
+            "source_turn": 24
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 28,
+      "userInput": "Gibt es nicht. Alles läuft über Jira. Keine weiteren Support-Tätigkeiten abseits der Prozesse.",
+      "agentText": "Alles klar. Dann sind wir am Ende. Auf Wiedersehen.",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "confidence": "estimate",
+            "value": 350,
+            "source_turn": 2,
+            "evidence_span": "75 bis 100 Tickets",
+            "qualifier": "Spanne: 75 bis 100 pro Woche, umgerechnet auf Monat (~350)",
+            "step_id": "S001",
+            "slot": "frequency_per_month"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "confidence": "estimate",
+            "evidence_span": "12 bis 20 Vorgänge",
+            "source_turn": 15,
+            "value": 16,
+            "qualifier": "Spanne: 12 bis 20 pro Monat (Mittelwert 16)",
+            "slot": "frequency_per_month",
+            "step_id": "S002"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_span": "75 bis 100 Tickets",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 75 bis 100 pro Woche, umgerechnet auf Monat (~350)",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20 pro Monat (Mittelwert 16)",
+            "source_turn": 15
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_quote": "75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 75 bis 100 pro Woche, umgerechnet auf Monat (~350)",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20 pro Monat (Mittelwert 16)",
+            "source_turn": 15
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 29,
+      "userInput": "Tschüss. Bis dann.",
+      "agentText": "Wiedersehen.",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "source_turn": 25
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "source_turn": 25
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools"
+            ],
+            "evidence_quote": "Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools",
+              "internes Wiki"
+            ],
+            "evidence_quote": "Nur das interne Wiki.",
+            "source_turn": 10
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen im Asset-Management-System nicht gelistet",
+              "Fehlerbilder nicht im Lösungsbuch"
+            ],
+            "evidence_quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "evidence_quote": "Software-Probleme remote via Remote Desktop. Hardware-Defekte erfordern Vor-Ort-Termin.",
+            "source_turn": 6
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen im Asset-Management-System nicht gelistet",
+              "Fehlerbilder nicht im Lösungsbuch",
+              "Defekte Hardware",
+              "Keine Reaktion per Remote Desktop",
+              "Nutzerdatenmigrierung nötig"
+            ],
+            "evidence_quote": "Defekte Hardware. Keine Reaktion per Remote Desktop. Wenn Nutzerdatenmigrierung nötig wird.",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "outputs",
+            "value": [
+              "Ticket finalisiert",
+              "Lösungsansatz dokumentiert",
+              "Abschluss hinterlegt"
+            ],
+            "evidence_quote": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "ausnahmen",
+            "value": [
+              "Problem trotz Analyse nicht lösbar"
+            ],
+            "evidence_quote": "Eigenrecherche im Wiki. Bei Bedarf Eskalation an IT-Management für Software-Freigaben. Sonst individuelle Problemlösung.",
+            "source_turn": 18
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "qualifier": "Spanne: 12 bis 20",
+            "slot": "frequency_per_month",
+            "step_id": "S002",
+            "source_turn": 32,
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich",
+            "confidence": "estimate",
+            "value": 16
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 32
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich. Je nach Bedarf.",
+            "confidence": "estimate",
+            "source_turn": 32
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 30,
+      "userInput": "Schönen Tag noch. Wiedersehen.",
+      "agentText": "Wie läuft dieser Eskalationsprozess an das IT-Management für Software-Freigaben konkret ab, wenn eine Standard-Lösung nicht greift?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 31,
+      "userInput": "Anfrage für Genehmigung stellen. Wartezeit oft bis zu drei Tage. IT-Management entscheidet. Danach erst Installation.",
+      "agentText": "Wie stellst du diesen Antrag beim IT-Management — erfolgt das per E-Mail, über ein spezifisches Ticket-Formular oder auf anderem Weg?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Störungssuche: Eskalation an IT-Management"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche: Eskalation an IT-Management",
+            "slot": "duration_minutes",
+            "value": 2160,
+            "evidence_span": "Wartezeit oft bis zu drei Tage",
+            "confidence": "estimate"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche: Eskalation an IT-Management",
+            "slot": "inputs",
+            "value": [
+              "Ticket Informationen",
+              "Software Anforderung"
+            ],
+            "evidence_span": "Anfrage für Genehmigung stellen"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_governance",
+          "args": {
+            "step_title": "Störungssuche: Eskalation an IT-Management",
+            "rolle": "IT-Manager",
+            "organisationseinheit": "IT-Management",
+            "evidence_span": "IT-Management entscheidet"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 32,
+      "userInput": "Kommt drauf an. Meist per Mail. Manchmal direktes Ticket-Update. Hängt von der Dringlichkeit ab.",
+      "agentText": "Wie oft kommt es vor, dass eine solche Anfrage aufgrund unvollständiger Angaben im ersten Anlauf vom IT-Management abgelehnt oder zur Nachbesserung zurückgesendet wird?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "E-Mail",
+              "Jira"
+            ],
+            "evidence_span": "Meist per Mail. Manchmal direktes Ticket-Update.",
+            "source_turn": 63
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 33,
+      "userInput": "Kommt drauf an. Passiert gelegentlich. Hängt von der Fehlerbeschreibung im Antrag ab.",
+      "agentText": "Die Qualität der Fehlerbeschreibung scheint also den Genehmigungsprozess direkt zu beeinflussen. Welche weiteren wiederkehrenden Aufgaben oder Prozesse, die wir noch nicht besprochen haben, nehmen regelmäßig Zeit in deinem Arbeitsalltag in Anspruch?",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Software-Freigabeprozess: Eskalation an IT-Management"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "confidence": "estimate",
+            "evidence_span": "75 bis 100 Tickets. Wöchentlich.",
+            "step_id": "S001",
+            "value": 350,
+            "source_turn": 2,
+            "slot": "frequency_per_month"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "confidence": "confirmed",
+            "evidence_span": "Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "step_id": "S001",
+            "value": "Wiki-Lösungsbuch/Individuelle Analyse",
+            "source_turn": 3,
+            "slot": "rule_based"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "value": 16,
+            "source_turn": 19,
+            "slot": "frequency_per_month"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": "Anfrage IT-Management (Mail/Ticket), Wartezeit ca. 3 Tage",
+            "step_id": "S003",
+            "evidence_span": "Anfrage für Genehmigung stellen. Wartezeit oft bis zu drei Tage.",
+            "confidence": "confirmed",
+            "slot": "entscheidungslogik",
+            "source_turn": 28
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Software-Freigabeprozess: Eskalation an IT-Management"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_span": "75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "estimate",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "source_turn": 19
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Software-Freigabeprozess: Eskalation an IT-Management",
+            "slot": "entscheidungslogik",
+            "value": "Anfrage IT-Management (Mail/Ticket), Wartezeit ca. 3 Tage",
+            "evidence_span": "Anfrage für Genehmigung stellen. Wartezeit oft bis zu drei Tage.",
+            "confidence": "confirmed",
+            "source_turn": 28
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 350,
+            "evidence_quote": "75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "estimate",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "source_turn": 19
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Software-Freigabeprozess: Eskalation an IT-Management",
+            "slot": "entscheidungslogik",
+            "value": "Anfrage IT-Management (Mail/Ticket), Wartezeit ca. 3 Tage",
+            "evidence_quote": "Anfrage für Genehmigung stellen. Wartezeit oft bis zu drei Tage.",
+            "confidence": "confirmed",
+            "source_turn": 28
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Software-Freigabeprozess: Eskalation an IT-Management"
+          },
+          "applied": false
+        }
+      ]
+    },
+    {
+      "turnNumber": 34,
+      "userInput": "Keine weiteren Prozesse. Mein Alltag besteht aus Ticket-Bearbeitung und Hardware-Tausch. Mehr gibt es nicht.",
+      "agentText": "Dann sind wir damit am Ende unseres Gesprächs. Vielen Dank für deine Mitarbeit.",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "evidence_quote": "Etwa 75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "confirmed",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed",
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "evidence_quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "confidence": "confirmed",
+            "source_turn": 4
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "evidence_quote": "Eigenständige Fehleranalyse. Eventuell direkt vor Ort. Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+            "confidence": "confirmed",
+            "source_turn": 5
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "outputs",
+            "evidence_quote": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "confirmed",
+            "source_turn": 25
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 300,
+            "evidence_quote": "Etwa 75 bis 100 Tickets. Wöchentlich.",
+            "confidence": "confirmed",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "entscheidungslogik",
+            "value": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "evidence_quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+            "confidence": "confirmed",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "tazite_cues",
+            "value": [
+              "Abweichungen von Standardvorgaben",
+              "Hardware-Störungen im Asset-Management-System nicht gelistet",
+              "Fehlerbilder nicht im Lösungsbuch"
+            ],
+            "evidence_quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+            "confidence": "confirmed",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tools"
+            ],
+            "evidence_quote": "Eigenständige Fehleranalyse. Eventuell direkt vor Ort. Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+            "confidence": "confirmed",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "outputs",
+            "value": [
+              "Jira-Ticket finalisieren",
+              "Lösungsansatz dokumentieren",
+              "Abschluss des Vorgangs hinterlegen"
+            ],
+            "evidence_quote": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+            "confidence": "confirmed",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "confirmed",
+            "source_turn": 25
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "qualifier": "Spanne: 12 bis 20",
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich",
+            "source_turn": 46,
+            "slot": "frequency_per_month",
+            "confidence": "estimate",
+            "value": 16,
+            "step_id": "S002"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "duration_minutes",
+            "confidence": "confirmed",
+            "source_turn": 48,
+            "evidence_span": "Anfrage für Genehmigung stellen. Wartezeit oft bis zu drei Tage.",
+            "step_id": "S001",
+            "value": 2160
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_span": "12 bis 20 Vorgänge. Monatlich",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 12 bis 20",
+            "source_turn": 46
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "duration_minutes",
+            "value": 2160,
+            "evidence_span": "Anfrage für Genehmigung stellen. Wartezeit oft bis zu drei Tage.",
+            "confidence": "confirmed",
+            "source_turn": 48
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "Hardware-Tausch",
+            "slot": "frequency_per_month",
+            "value": 16,
+            "evidence_quote": "12 bis 20 Vorgänge. Monatlich.",
+            "confidence": "estimate",
+            "source_turn": 46
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Störungssuche",
+            "slot": "duration_minutes",
+            "value": 2160,
+            "evidence_quote": "Wartezeit oft bis zu drei Tage.",
+            "confidence": "confirmed",
+            "source_turn": 48
+          },
+          "applied": false
+        }
+      ]
+    },
+    {
+      "turnNumber": 35,
+      "userInput": "Gerne. Ticket-Stapel wartet. Tschüss.",
+      "agentText": "Alles klar, dann viel Erfolg bei der weiteren Arbeit. Tschüss.",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "duration_minutes",
+            "value": 1440,
+            "evidence_span": "Drei Tage. IT-Management entscheidet",
+            "confidence": "estimate",
+            "qualifier": "Wartezeit: bis zu drei Tage",
+            "source_turn": 46
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Störungssuche",
+            "slot": "hilfsmittel",
+            "value": [
+              "E-Mail",
+              "Jira-Ticket-Update"
+            ],
+            "evidence_span": "Meist per Mail. Manchmal direktes Ticket-Update",
+            "confidence": "confirmed",
+            "source_turn": 48
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    }
+  ],
+  "finalStepTracker": [
+    {
+      "id": "S001",
+      "slots": {
+        "inputs": {
+          "quote": "Anfrage für Genehmigung stellen.",
+          "value": [
+            "Ticket Informationen",
+            "Software Anforderung"
+          ],
+          "nicht_befund_typ": null
+        },
+        "outputs": {
+          "quote": "Ticket im Jira finalisieren. Den Lösungsansatz kurz dokumentieren. Abschluss des Vorgangs im System hinterlegen.",
+          "value": [
+            "Jira-Ticket finalisieren",
+            "Lösungsansatz dokumentieren",
+            "Abschluss des Vorgangs hinterlegen"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "ausnahmen": {
+          "quote": "Eigenrecherche im Wiki. Bei Bedarf Eskalation an IT-Management für Software-Freigaben. Sonst individuelle Problemlösung.",
+          "value": [
+            "Problem trotz Analyse nicht lösbar"
+          ],
+          "nicht_befund_typ": null
+        },
+        "hilfsmittel": {
+          "quote": "Eigenständige Fehleranalyse. Eventuell direkt vor Ort. Prüfung der Hardware-Bestände über Asset-Management-System. Manchmal Imaging-Tools nutzen.",
+          "value": [
+            "Asset-Management-System",
+            "Imaging-Tools"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": {
+          "quote": "Abweichungen von Standardvorgaben. Wenn Hardware-Störungen im Asset-Management-System nicht gelistet sind. Oder Fehlerbilder nicht im Lösungsbuch stehen.",
+          "value": [
+            "Abweichungen von Standardvorgaben",
+            "Hardware-Störungen im Asset-Management-System nicht gelistet",
+            "Fehlerbilder nicht im Lösungsbuch"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "entscheidungslogik": {
+          "quote": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+          "value": "Meist Wiki-Lösungsbuch für Standards. Sonst individuelle Analyse.",
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "Störungssuche",
+      "status": "walkthrough",
+      "embedding": [
+        0.09527697,
+        -0.06748526,
+        0.05932222,
+        0.04140716,
+        0.08511991,
+        -0.03755932,
+        -0.12001534,
+        0.1217601,
+        -0.0789509,
+        0.01950405,
+        -0.06066196,
+        0.06234441,
+        -0.02263529,
+        0.11677505,
+        0.06246904,
+        -0.04287152,
+        -0.07577293,
+        0.01044137,
+        -0.05125265,
+        0.09253519,
+        -0.08306357,
+        0.02984805,
+        -0.06443191,
+        0.02735552,
+        -0.0599142,
+        0.13970631,
+        -0.02066463,
+        0.0859923,
+        -0.15528464,
+        0.03036214,
+        0.1663764,
+        -0.02626504,
+        -0.00113138,
+        -0.03445923,
+        -0.0495702,
+        0.02622609,
+        0.01304684,
+        -0.04642338,
+        -0.1043124,
+        0.01101776,
+        -0.01356628,
+        -0.00740864,
+        -0.02617157,
+        -0.00542904,
+        -0.09147587,
+        0.05396328,
+        0.02759698,
+        0.0474827,
+        0.01514894,
+        -0.06234441,
+        -0.10200681,
+        0.0156971,
+        0.03101642,
+        -0.03252752,
+        0.00117519,
+        -0.03096969,
+        0.01545369,
+        0.01596388,
+        -0.02978574,
+        -0.07689456,
+        -0.05418138,
+        0.02347652,
+        0.00746591,
+        0.05471104,
+        0.01497952,
+        0.07197181,
+        0.02078926,
+        -0.04776311,
+        -0.09833032,
+        0.01089508,
+        -0.05888603,
+        -0.00816535,
+        -0.03832265,
+        0.01227571,
+        0.02857063,
+        -0.02687259,
+        -0.00715824,
+        -0.09415533,
+        -0.00481078,
+        -0.01719456,
+        0.04453451,
+        0.02504604,
+        -0.00540178,
+        0.03366474,
+        0.0063949,
+        0.07739307,
+        -0.03888347,
+        -0.03907041,
+        -0.00179248,
+        -0.0006465,
+        0.02156428,
+        -0.02399839,
+        -0.05240545,
+        -0.01680316,
+        -0.04408663,
+        0.02941575,
+        -0.02438006,
+        0.04019205,
+        0.0211242,
+        -0.02903019,
+        -0.0071115,
+        0.01098271,
+        0.01021743,
+        -0.0288744,
+        -0.04502133,
+        0.03322855,
+        0.07116174,
+        -0.03023751,
+        -0.04109559,
+        0.02818117,
+        -0.03502784,
+        0.00144878,
+        0.00228125,
+        0.02701669,
+        0.03542509,
+        -0.00370569,
+        0.06636362,
+        0.02970785,
+        0.05558343,
+        -0.01974162,
+        -0.02523687,
+        0.020688,
+        0.03720101,
+        -0.02756193,
+        -0.03586128,
+        -0.00203486,
+        0.0273711,
+        -0.00110217,
+        0.00467155,
+        -0.06876268,
+        -0.04651685,
+        -0.0331156,
+        -0.02144355,
+        0.05975841,
+        -0.03075159,
+        -0.01082693,
+        0.04636106,
+        -0.0139572,
+        0.00564714,
+        -0.06200169,
+        -0.05196926,
+        0.02426323,
+        -0.02250287,
+        0.0186083,
+        -0.06985316,
+        -0.00531805,
+        0.01075683,
+        -0.03981817,
+        -0.04069056,
+        0.02617936,
+        0.04776311,
+        -0.04519269,
+        -0.01285211,
+        -0.00393645,
+        -0.00515642,
+        0.05368287,
+        -0.01208488,
+        -0.01764244,
+        0.03265215,
+        -0.02609368,
+        0.03161716,
+        -0.03294814,
+        -0.00097559,
+        0.01909895,
+        -0.04069056,
+        -0.01111513,
+        -0.00708424,
+        0.01140333,
+        0.03981817,
+        -0.01605345,
+        0.03969355,
+        0.0148695,
+        0.02602357,
+        -0.01956636,
+        0.01696478,
+        -0.00176035,
+        0.02599242,
+        0.12425264,
+        0.10026203,
+        0.0109204,
+        0.01690052,
+        0.03903925,
+        -0.03731006,
+        -0.00310787,
+        0.00954951,
+        -0.04746712,
+        0.07994791,
+        0.07733075,
+        0.01987793,
+        -0.01598286,
+        -0.04318309,
+        -0.03230942,
+        -0.0632168,
+        -0.05083204,
+        -0.01390815,
+        -0.00700245,
+        0.04530174,
+        -0.04015895,
+        -0.02970785,
+        -0.06555355,
+        0.04522385,
+        -0.01351224,
+        0.0554588,
+        -0.00282746,
+        0.04009858,
+        0.03171745,
+        -0.00412813,
+        -0.01642733,
+        0.00229001,
+        -0.02631177,
+        -0.01909901,
+        0.06885615,
+        -0.00789821,
+        0.00026483,
+        -0.00963519,
+        0.00974789,
+        0.0053901,
+        -0.0124977,
+        0.01636502,
+        0.0238504,
+        0.01715951,
+        0.06586511,
+        0.01074125,
+        0.0325392,
+        0.0242087,
+        -0.01063999,
+        0.07733075,
+        0.04174988,
+        0.04766964,
+        -0.02459816,
+        -0.05598846,
+        -0.03670251,
+        -0.0214046,
+        0.01567568,
+        0.01506423,
+        -0.06387109,
+        -0.0051991,
+        -0.00832381,
+        -0.02350378,
+        -0.0018509,
+        -0.0217707,
+        0.01756455,
+        0.01419574,
+        0.01065362,
+        0.02540823,
+        -0.0451148,
+        -0.00159483,
+        -0.03453712,
+        -0.03905484,
+        -0.00252235,
+        0.01800074,
+        -0.00585793,
+        0.01173631,
+        0.00050143,
+        0.01547511,
+        -0.01002112,
+        0.03545624,
+        -0.00188352,
+        0.04421126,
+        -0.02682586,
+        -0.01490845,
+        0.02439564,
+        0.07533673,
+        0.02192453,
+        0.02892893,
+        -0.03012846,
+        -0.01200309,
+        -0.02430217,
+        -0.0497883,
+        -0.02405292,
+        -0.04396201,
+        0.01491429,
+        0.00114409,
+        -0.0043629,
+        -0.00290682,
+        -0.01934048,
+        0.02481625,
+        -0.01833568,
+        0.03928851,
+        0.01768528,
+        -0.01741656,
+        0.02964553,
+        -0.01323183,
+        -0.0366402,
+        0.00365701,
+        0.00297546,
+        -0.05240545,
+        0.02873107,
+        0.03006615,
+        -0.04284037,
+        0.06399572,
+        -0.00183045,
+        0.02509569,
+        0.01864724,
+        -0.02540823,
+        0.06293639,
+        -0.01096519,
+        0.00441645,
+        -0.00079449,
+        -0.00986838,
+        0.02617157,
+        0.08113186,
+        0.03011288,
+        -0.00582805,
+        0.01600319,
+        -0.0686069,
+        -0.02874199,
+        -0.01725688,
+        -0.03456828,
+        0.02573538,
+        -0.02469163,
+        -0.0173153,
+        -0.01356287,
+        -0.02200437,
+        0.04056593,
+        -0.00965466,
+        0.01366687,
+        0.00926131,
+        0.04128253,
+        0.02021286,
+        0.04960135,
+        0.00376606,
+        -0.05548996,
+        0.02123324,
+        -0.01797969,
+        0.01290663,
+        0.04352581,
+        0.00640512,
+        -0.02317274,
+        0.01877187,
+        -0.00711345,
+        0.01611528,
+        0.01878355,
+        0.03684271,
+        0.0036278,
+        -0.01016485,
+        -0.01005872,
+        0.02588337,
+        0.04866666,
+        0.00062532,
+        0.03601706,
+        0.01500971,
+        -0.01210046,
+        -0.00323639,
+        0.01550042,
+        0.04076845,
+        -0.00699856,
+        -0.02216794,
+        -0.03255868,
+        -0.00752627,
+        -0.04315193,
+        0.02666618,
+        -0.02362451,
+        -0.03149935,
+        -0.03294814,
+        0.02732437,
+        -0.00076139,
+        0.00990781,
+        -0.01807084,
+        -0.01799928,
+        0.00489743,
+        -0.02159154,
+        -0.0364221,
+        0.01819937,
+        -0.0024088,
+        0.01794232,
+        -0.036204,
+        0.00989612,
+        0.00660813,
+        0.00944825,
+        -0.00057542,
+        -0.02422428,
+        -0.00751994,
+        0.00614078,
+        0.04788774,
+        -0.00036938,
+        0.0497883,
+        0.00680772,
+        0.01145201,
+        0.02755804,
+        0.00325003,
+        -0.01778265,
+        -0.00266,
+        0.04056593,
+        -0.02098399,
+        -0.02810328,
+        0.08455909,
+        -0.02649092,
+        -0.0138647,
+        -0.03223153,
+        0.0211242,
+        -0.03710755,
+        -0.01183952,
+        0.04016089,
+        0.00517541,
+        -0.0155861,
+        -0.02050496,
+        0.00195897,
+        0.01174994,
+        -0.01942616,
+        0.02275992,
+        0.01427753,
+        0.02389714,
+        -0.01055431,
+        0.01539137,
+        0.03030761,
+        -0.00292629,
+        -0.01061078,
+        0.00012657,
+        0.00256945,
+        0.02377251,
+        0.03604822,
+        -0.02308706,
+        -0.03271446,
+        -0.00235622,
+        -0.00786705,
+        -0.0249253,
+        0.02397503,
+        -0.02117872,
+        0.01022911,
+        -0.0293807,
+        -0.02543939,
+        -0.04851087,
+        -0.04209261,
+        0.00542904,
+        0.01642539,
+        -0.00699466,
+        0.01518886,
+        0.00871023,
+        -0.00787654,
+        0.02400618,
+        -0.00051214,
+        0.01227182,
+        -0.00799168,
+        -0.01480329,
+        0.01336035,
+        -0.00938593,
+        -0.00250866,
+        -0.00292385,
+        0.00485118,
+        -0.02114367,
+        -0.00565298,
+        -0.02409186,
+        -0.07994791,
+        -0.0083344,
+        -0.01244707,
+        0.04598719,
+        0.01910291,
+        -0.05701663,
+        0.00944241,
+        -0.02682586,
+        0.013078,
+        -0.03420998,
+        0.00857781,
+        -0.00160408,
+        -0.02445017,
+        0.02139049,
+        0.01791506,
+        -0.03301045,
+        0.0639334,
+        0.02153313,
+        -0.00983771,
+        -0.02875757,
+        0.00203102,
+        -0.02680346,
+        0.02210563,
+        0.00709203,
+        0.01650133,
+        -0.02487273,
+        -0.01949626,
+        0.0164507,
+        0.03931966,
+        0.01322988,
+        -0.04500575,
+        -0.0231338,
+        -0.05200041,
+        -0.01610798,
+        0.01802022,
+        0.00693624,
+        -0.00976979,
+        -0.04754502,
+        -0.04414894,
+        0.04333887,
+        0.01361155,
+        -0.02370241,
+        -0.00584722,
+        0.07306229,
+        -0.0201895,
+        0.03162398,
+        0.04442935,
+        -0.01080472,
+        0.01028948,
+        -0.03732564,
+        0.04025436,
+        0.01893934,
+        -0.00563351,
+        0.01804748,
+        0.01610019,
+        -0.01576526,
+        -0.05636234,
+        -0.02243862,
+        -0.04312078,
+        0.01375955,
+        -0.00997402,
+        -0.01236529,
+        0.00710761,
+        -0.04009858,
+        0.05362056,
+        -0.02216794,
+        0.01133712,
+        0.01598335,
+        -0.00230559,
+        -0.03897694,
+        -0.01390994,
+        0.00991754,
+        0.00941806,
+        0.03279235,
+        0.00120732,
+        -0.0443982,
+        0.00435024,
+        0.03179534,
+        -0.01240813,
+        0.00193755,
+        -0.00406886,
+        0.04109559,
+        0.0082974,
+        0.00575984,
+        -0.02121766,
+        -0.01133322,
+        -0.05234314,
+        -0.02145134,
+        -0.03632863,
+        -0.00982992,
+        -0.05904181,
+        -0.02732437,
+        -0.00055206,
+        0.04305846,
+        -0.00384005,
+        -0.00418862,
+        -0.00958261,
+        0.04975713,
+        -0.03801109,
+        -0.02939628,
+        -0.0121433,
+        -0.01442357,
+        -0.02319611,
+        -0.0042743,
+        0.01871734,
+        0.00739191,
+        0.01509441,
+        -0.0212644,
+        0.01680121,
+        -0.0072186,
+        0.00758859,
+        0.01484613,
+        0.01290663,
+        0.01208098,
+        -0.03592359,
+        -0.0186083,
+        0.0218408,
+        0.00207678,
+        0.01836878,
+        -0.00033493,
+        0.02254182,
+        0.0415941,
+        -0.01411882,
+        0.02149807,
+        0.03967797,
+        0.03045171,
+        -0.0100227,
+        -0.01675448,
+        0.01448004,
+        0.00404257,
+        -0.01969099,
+        -0.03551856,
+        -0.01449562,
+        -0.00705941,
+        0.07695687,
+        -0.01263353,
+        -0.01480719,
+        -0.01272919,
+        0.00561793,
+        0.00175256,
+        -0.00056861,
+        0.02807212,
+        -0.00971697,
+        -0.01106352,
+        -0.05813827,
+        -0.03458386,
+        0.03258983,
+        0.01802022,
+        -0.03879,
+        -0.03436576,
+        0.00728676,
+        -0.04355697,
+        0.05097224,
+        0.00820198,
+        0.03928851,
+        -0.00590223,
+        0.0077423,
+        0.00298568,
+        -0.01624818,
+        0.00966488,
+        0.04056593,
+        0.02149029,
+        -0.01071788,
+        0.02847716,
+        0.03188881,
+        0.04771638,
+        -0.01457351,
+        -0.02851611,
+        0.01051536,
+        0.03517583,
+        -0.01543811,
+        0.02962996,
+        -0.02371019,
+        0.00419057,
+        0.00801894,
+        -0.01269438,
+        0.02146692,
+        0.0070414,
+        0.00739337,
+        0.00717381,
+        -0.00236596,
+        -0.00315753,
+        0.03157724,
+        -0.02719584,
+        0.04268458,
+        0.03531604,
+        0.00691677,
+        -0.01601451,
+        0.04916516,
+        -0.03416324,
+        -0.04047246,
+        0.04969482,
+        0.03508237,
+        0.00195118,
+        0.024567,
+        0.04156294,
+        0.00384005,
+        0.0418122,
+        -0.00137771,
+        0.00514863,
+        0.02595347,
+        0.04904054,
+        -0.00837529,
+        -0.00109535,
+        0.01314591,
+        -0.00404549,
+        0.00920873,
+        -0.02857063,
+        0.01744771,
+        0.01258728,
+        0.01252497,
+        -0.02409965,
+        -0.04140716,
+        -0.05212504,
+        0.00137533,
+        -0.01110052,
+        0.01001101,
+        -0.05013102,
+        0.00151304,
+        0.04470976,
+        0.01080648,
+        -0.04084634,
+        -0.00328922,
+        0.03427229,
+        0.0004284,
+        0.01897439,
+        -0.00002726,
+        0.01881081,
+        0.02796307,
+        0.00073997,
+        -0.00116058,
+        -0.00552762,
+        -0.00755159,
+        0.02085936,
+        -0.00341944,
+        -0.01540695,
+        0.01415923,
+        0.01755676,
+        -0.01522001,
+        0.00654101,
+        -0.00694793,
+        -0.00421393,
+        -0.04022321,
+        -0.05206273,
+        -0.01633776,
+        0.04932095,
+        0.03109431,
+        0.00511711,
+        0.01331848,
+        -0.00258989,
+        0.02595347,
+        -0.01384133,
+        0.02075031,
+        -0.01056599,
+        -0.06324796,
+        0.01924701,
+        -0.02704785,
+        0.01557442,
+        0.00014799,
+        -0.02268982,
+        0.05343362,
+        0.02606252,
+        0.01816431,
+        -0.0028041,
+        0.00320913,
+        0.01631049,
+        -0.02043875,
+        -0.01259507,
+        -0.01160974,
+        -0.02970785,
+        -0.01308773,
+        -0.03084506,
+        -0.03863422,
+        -0.00132805,
+        0.00243411,
+        0.00830129,
+        0.00490327,
+        0.06947928,
+        0.01735424,
+        -0.02379977,
+        0.02232372,
+        0.00537452,
+        -0.00688245,
+        0.06243788,
+        0.00527156,
+        0.03673366,
+        0.04100212,
+        0.02900682,
+        -0.0175256,
+        0.01232634,
+        0.00919121,
+        0.02308706,
+        -0.01543421,
+        0.05583268,
+        -0.02967669,
+        -0.0014982,
+        -0.00323445,
+        0.01533296,
+        0.07240801,
+        -0.02540823,
+        0.03449039,
+        -0.00429183,
+        -0.00691872,
+        -0.00090354,
+        0.00169073,
+        0.02116314,
+        -0.0064134,
+        -0.01446446,
+        -0.01144811,
+        0.01491624,
+        0.04690631,
+        -0.01419963,
+        0.0120508,
+        -0.00724392,
+        -0.02650261,
+        0.0275113,
+        -0.04533289,
+        0.02325842,
+        0.02045433,
+        -0.00917319,
+        0.02634293,
+        0.01370113,
+        -0.00988639,
+        -0.03050234,
+        -0.00221212,
+        -0.02059064,
+        0.02355441,
+        -0.020762,
+        -0.00720935,
+        -0.02314938,
+        0.00351291,
+        0.00443982,
+        0.04333887,
+        0.01251718,
+        -0.01612356,
+        -0.00116448,
+        -0.03029982,
+        -0.03020246,
+        0.00264211,
+        -0.000131,
+        -0.03763721,
+        0.00983284,
+        -0.01105403,
+        0.02827464,
+        0.01203425,
+        -0.01600477,
+        0.00472412,
+        0.01281511,
+        0.00498409,
+        0.0029112,
+        -0.00312345,
+        -0.01213161,
+        0.00278462,
+        -0.04433588,
+        -0.0081202,
+        0.0011158,
+        0.02945859,
+        0.01111513,
+        0.0024458,
+        0.01643512,
+        -0.00373149,
+        0.00714266,
+        -0.00009931,
+        0.03593917,
+        -0.041376,
+        0.01302737,
+        -0.03779299,
+        -0.00505808,
+        -0.03508237,
+        0.00930804,
+        0.00478741,
+        -0.00266292,
+        -0.00074441,
+        -0.02280665,
+        -0.04446051,
+        -0.02648314,
+        0.00475139,
+        0.02860958,
+        -0.01530569,
+        -0.01500971,
+        -0.01269243,
+        0.00615343,
+        0.00009493,
+        -0.00630143,
+        -0.01509831,
+        0.00738412,
+        -0.00878228,
+        0.00895753,
+        0.05362056,
+        -0.002198,
+        0.01500192,
+        0.00806762,
+        -0.03746585,
+        -0.01698036,
+        0.00176814,
+        -0.00506879,
+        0.02774693,
+        0.01203814,
+        0.00492542,
+        -0.00591197,
+        -0.04754502,
+        0.00856418,
+        0.02436448,
+        0.00229488,
+        -0.00901936,
+        -0.01640786,
+        -0.0186784,
+        -0.01455794,
+        -0.00757106,
+        0.00262105,
+        -0.01221535,
+        0.0034876,
+        -0.02598463,
+        0.00922723,
+        -0.00367259,
+        -0.02793971,
+        -0.01145396,
+        -0.02391271,
+        -0.01331556,
+        0.00511918,
+        0.01223287,
+        -0.00890301,
+        -0.00071271,
+        -0.0110791,
+        -0.03277677,
+        -0.04467861,
+        -0.00901984,
+        -0.01367387,
+        -0.0326833,
+        0.03308834,
+        0.02290012,
+        -0.0088553,
+        0.00891859,
+        0.001367,
+        -0.0283759,
+        -0.0286641,
+        -0.01071399,
+        0.03567434,
+        0.0127898,
+        -0.00729674,
+        -0.01417578,
+        -0.00419349,
+        -0.01370113,
+        0.03168629,
+        0.00758274,
+        -0.01133712,
+        0.02160712,
+        -0.00258503,
+        -0.00487991,
+        0.00895656,
+        -0.02779171,
+        0.00011124,
+        -0.01197778,
+        -0.00255238,
+        -0.00285911,
+        0.01305073,
+        0.02006487,
+        -0.01563284,
+        -0.00717771,
+        0.01346356,
+        -0.00852134,
+        0.01116186,
+        -0.03181092,
+        0.00186161,
+        0.00686614,
+        -0.00300856,
+        0.01327272,
+        0.00720497,
+        -0.03380494,
+        -0.01114044,
+        0.00814746,
+        -0.02268203,
+        -0.01056405,
+        -0.02441122,
+        0.06468116,
+        -0.00315071,
+        0.01037516,
+        0.00741333,
+        0.02782287,
+        0.00188984,
+        -0.02769824,
+        0.01664153,
+        0.02199658,
+        0.00142542,
+        0.02885104,
+        0.00186161,
+        -0.01810979,
+        0.02863294,
+        -0.01800658,
+        -0.01831231,
+        0.03296371,
+        -0.00350707,
+        -0.00476891,
+        -0.0448967,
+        -0.01223677,
+        -0.00260158,
+        0.02184859,
+        -0.01906786,
+        0.00910942,
+        -0.03665577,
+        0.02353104,
+        0.01777486,
+        0.01645849,
+        0.03098527,
+        -0.01427753,
+        -0.02187195,
+        -0.01970657,
+        0.00147994,
+        -0.01370892,
+        -0.03698292,
+        -0.01487145,
+        0.00780084,
+        -0.00968387,
+        0.0264364,
+        0.02165386,
+        -0.04819931,
+        -0.02575095,
+        0.00879785,
+        -0.00803062,
+        0.02394387,
+        0.04146947,
+        0.00256847,
+        -0.03054908,
+        -0.0145112,
+        0.03435018,
+        -0.01120081,
+        -0.00299883,
+        -0.00176424,
+        -0.01720625,
+        -0.02732437,
+        0.03539393,
+        0.03425672,
+        -0.00421393,
+        0.00224522,
+        -0.01165647,
+        0.0037349,
+        0.00932752,
+        -0.06704906,
+        0.03550298,
+        0.01352587,
+        -0.02049327,
+        -0.01564063,
+        -0.02072646,
+        -0.01054457,
+        -0.01662206,
+        0.04143832,
+        -0.04667263,
+        -0.00495098,
+        -0.00594702,
+        0.00214883,
+        0.00557363,
+        -0.05483567,
+        -0.01062441,
+        0.00425775,
+        -0.00895656,
+        -0.0060366,
+        0.00854182,
+        0.0075438,
+        0.00327923,
+        0.02947417,
+        -0.00087433,
+        0.00372711,
+        0.01836683,
+        0.00613591,
+        -0.01216277,
+        -0.00143287,
+        0.00141373,
+        0.00347591,
+        -0.00817083,
+        0.01506423,
+        0.01778654,
+        0.03573665,
+        -0.01258338,
+        -0.02638188,
+        -0.0301752,
+        0.0042261,
+        0.0423107,
+        -0.03308834,
+        0.0082178,
+        -0.00362975,
+        0.00055303
+      ],
+      "potenzial": {
+        "media_breaks": {
+          "quote": "Oft muss ich zwischen Systemen wie Jira und dem Imaging-Tool hin- und herwechseln.",
+          "value": 1,
+          "confidence": "confirmed",
+          "writeSource": "analyst_catchup"
+        },
+        "duration_minutes": {
+          "quote": "Kommt drauf an. Lässt sich schwer pauschal sagen.",
+          "value": null,
+          "writeSource": "analyst_catchup",
+          "nicht_befund_typ": "unbekannt"
+        },
+        "error_rate_percent": null,
+        "frequency_per_month": {
+          "quote": "Etwa 12 bis 20 Vorgänge. Monatlich.",
+          "value": 16,
+          "confidence": "confirmed",
+          "writeSource": "analyst_catchup"
+        }
+      },
+      "governance": {
+        "rolle": "IT-Manager",
+        "systeme": [
+          "Remote Desktop"
+        ],
+        "nicht_befund_typ": null,
+        "organisationseinheit": "IT-Management"
+      },
+      "reihenfolge": 1,
+      "process_steps": [
+        "Eigenständige Fehleranalyse (Remote oder vor Ort)",
+        "Prüfung der Hardware-Bestände über Asset-Management-System",
+        "Einsatz von Imaging-Tools (bei Bedarf)"
+      ],
+      "friction_tools": [],
+      "abhaengigkeiten": null,
+      "friction_points": [],
+      "pain_point_primary": null
+    },
+    {
+      "id": "S002",
+      "slots": {
+        "inputs": null,
+        "outputs": {
+          "quote": "Ticket im Jira finalisieren.",
+          "value": [
+            "abgeschlossenes Jira-Ticket"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "ausnahmen": null,
+        "hilfsmittel": {
+          "quote": "Buchung erfolgt primär über das Asset-Management-System.",
+          "value": [
+            "Asset-Management-System"
+          ],
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": {
+          "quote": "Diskrepanzen zwischen Systemstatus und sichtbarer Hardware vor Ort.",
+          "value": [
+            "Diskrepanzen zwischen Systemstatus und sichtbarer Hardware vor Ort"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "entscheidungslogik": {
+          "quote": "Keine explizite Freigabe.",
+          "value": "Keine explizite Freigabe erforderlich",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "Hardware-Tausch",
+      "status": "walkthrough",
+      "embedding": [
+        0.17368259,
+        -0.0663904,
+        0.06369161,
+        0.04872828,
+        0.09811626,
+        0.07772535,
+        -0.01823562,
+        0.17716104,
+        -0.05535533,
+        0.00513896,
+        -0.05169696,
+        0.08774089,
+        -0.03803805,
+        0.00441928,
+        -0.00378206,
+        -0.08192348,
+        -0.08528198,
+        -0.02037592,
+        0.00020991,
+        0.0917591,
+        -0.023562,
+        0.05946349,
+        0.08000433,
+        0.12498429,
+        -0.08930019,
+        0.04716897,
+        -0.01075114,
+        0.04974782,
+        -0.04863832,
+        0.07856498,
+        0.16504642,
+        0.07280755,
+        -0.02734781,
+        -0.11718776,
+        -0.04228115,
+        -0.04991275,
+        -0.06785975,
+        -0.00754351,
+        -0.05546778,
+        -0.07232776,
+        0.01538314,
+        0.03893014,
+        -0.04545974,
+        -0.08954009,
+        -0.00489298,
+        0.00098956,
+        0.0025074,
+        0.00987029,
+        -0.00812263,
+        0.02093067,
+        0.01585918,
+        0.00535004,
+        -0.00402196,
+        0.00274401,
+        0.05331624,
+        0.02817244,
+        -0.03199574,
+        0.01211647,
+        -0.04390043,
+        0.01835182,
+        -0.00551192,
+        0.02881716,
+        0.02000858,
+        0.03826294,
+        -0.0511572,
+        0.01645517,
+        -0.02157538,
+        -0.0134715,
+        -0.02098502,
+        -0.024478,
+        -0.04333068,
+        0.02305972,
+        0.03069132,
+        0.00991011,
+        0.00283561,
+        0.04833845,
+        0.11700785,
+        -0.02329809,
+        0.01595664,
+        -0.03556415,
+        0.09337838,
+        -0.01431393,
+        -0.03752827,
+        0.01139398,
+        -0.01604285,
+        0.08870047,
+        -0.0697789,
+        0.03154594,
+        -0.09403808,
+        -0.0139138,
+        0.05142708,
+        -0.05775426,
+        0.0262533,
+        -0.03361502,
+        0.02171407,
+        0.02818744,
+        -0.03758825,
+        0.02445668,
+        -0.04572962,
+        -0.04486,
+        -0.08156364,
+        0.02594593,
+        -0.03923751,
+        0.00961072,
+        -0.04018209,
+        0.09823621,
+        0.03704099,
+        0.00977939,
+        -0.03625572,
+        0.01045315,
+        -0.02770765,
+        -0.01940323,
+        -0.03670364,
+        0.00529264,
+        0.04893818,
+        -0.03291033,
+        0.04029079,
+        -0.0661805,
+        0.03446963,
+        -0.02243375,
+        -0.01314539,
+        0.00554003,
+        -0.01362143,
+        0.03937245,
+        0.0061229,
+        0.03018155,
+        -0.04815853,
+        0.03725839,
+        -0.00616038,
+        -0.07184798,
+        0.00104813,
+        -0.019496,
+        -0.04430525,
+        -0.02701795,
+        -0.04806858,
+        -0.00316546,
+        -0.00136627,
+        -0.04917808,
+        -0.06896926,
+        -0.00790054,
+        0.00343816,
+        0.01451728,
+        0.0158142,
+        -0.03872774,
+        0.03154594,
+        -0.02427418,
+        -0.07019871,
+        -0.06726002,
+        0.01178849,
+        -0.05712454,
+        0.04929803,
+        -0.01500831,
+        -0.0237794,
+        -0.02499761,
+        0.01212608,
+        0.01093762,
+        0.03922252,
+        0.04683912,
+        -0.01864419,
+        0.01944258,
+        -0.05532534,
+        0.00226774,
+        0.015281,
+        -0.05037754,
+        -0.05962842,
+        -0.00759693,
+        0.01782705,
+        -0.00094645,
+        -0.0068455,
+        -0.01922893,
+        -0.0117,
+        0.02740778,
+        0.09793635,
+        0.00408427,
+        0.04794863,
+        -0.00408568,
+        -0.00333834,
+        0.09763648,
+        0.05379602,
+        0.02538369,
+        -0.00590362,
+        -0.07340728,
+        -0.03306026,
+        0.01276306,
+        0.02084821,
+        0.00427684,
+        0.03142599,
+        0.05826403,
+        -0.03366,
+        0.01708489,
+        0.02449533,
+        0.01452103,
+        -0.0001955,
+        0.02935316,
+        -0.01174352,
+        0.0244541,
+        0.01182973,
+        0.02323215,
+        -0.02260992,
+        -0.06633043,
+        0.08192348,
+        0.03180083,
+        -0.03916254,
+        -0.01054311,
+        -0.04181636,
+        0.06429134,
+        0.02293228,
+        0.02194272,
+        -0.01078019,
+        -0.0062747,
+        0.00913843,
+        -0.00668702,
+        0.02473335,
+        -0.00602731,
+        -0.05055746,
+        0.02632827,
+        0.0188466,
+        0.05466563,
+        0.00437219,
+        -0.02993416,
+        -0.05958344,
+        0.02356949,
+        0.01521072,
+        -0.00801768,
+        0.01376199,
+        0.00923963,
+        0.02708543,
+        -0.00738983,
+        0.02183027,
+        -0.00551567,
+        -0.03988222,
+        0.01021584,
+        0.03779815,
+        -0.06105279,
+        -0.00612477,
+        0.0114727,
+        -0.00928461,
+        -0.0150383,
+        0.02313469,
+        -0.01784954,
+        -0.00391326,
+        -0.01775115,
+        -0.03303028,
+        -0.0462094,
+        -0.01984787,
+        -0.0164889,
+        0.0374533,
+        0.00939144,
+        -0.02572103,
+        -0.02896709,
+        -0.01672504,
+        -0.0367936,
+        -0.02563107,
+        0.07094838,
+        0.00432135,
+        0.04938799,
+        0.04515987,
+        0.01925142,
+        -0.01884168,
+        0.00358809,
+        0.00140188,
+        0.06027313,
+        0.0005257,
+        0.03524929,
+        -0.00344542,
+        0.00699813,
+        -0.0093071,
+        0.00199599,
+        0.02234004,
+        -0.05694462,
+        -0.04953792,
+        0.02301474,
+        -0.03620886,
+        0.01606909,
+        -0.00528889,
+        -0.03730337,
+        0.04596951,
+        -0.01406233,
+        0.04656924,
+        0.00547818,
+        0.005183,
+        -0.03238557,
+        -0.02698797,
+        0.07274757,
+        -0.01172196,
+        -0.0019079,
+        0.0036791,
+        0.02229694,
+        0.0214367,
+        -0.01488649,
+        0.00003373,
+        0.00458233,
+        -0.00358621,
+        0.0054913,
+        -0.05499548,
+        0.03013657,
+        -0.01683187,
+        -0.00370429,
+        0.00783401,
+        -0.02703295,
+        -0.02818744,
+        0.07166805,
+        0.02676307,
+        -0.00603106,
+        0.04932801,
+        -0.05247661,
+        0.02784259,
+        -0.00811115,
+        -0.02382438,
+        0.00936333,
+        -0.0121071,
+        -0.01718984,
+        -0.03042144,
+        0.02730283,
+        -0.01158234,
+        0.0361189,
+        0.00708013,
+        0.04842841,
+        0.06591062,
+        0.01823187,
+        0.035894,
+        0.01322268,
+        -0.01566802,
+        0.0363438,
+        -0.01620965,
+        -0.02521126,
+        -0.0266881,
+        -0.02439225,
+        -0.01373575,
+        0.00857993,
+        0.0320857,
+        -0.00248139,
+        0.0015237,
+        -0.00883106,
+        0.0587738,
+        0.01131316,
+        -0.05409589,
+        0.01958127,
+        0.01168354,
+        0.01644017,
+        -0.01816066,
+        0.02830738,
+        -0.00503916,
+        -0.0035403,
+        -0.01615155,
+        0.0150383,
+        0.02165597,
+        -0.03460458,
+        -0.00657457,
+        -0.00339692,
+        -0.0480086,
+        0.00451299,
+        -0.02030282,
+        -0.00026988,
+        -0.00080402,
+        -0.00381018,
+        -0.04818852,
+        -0.03428972,
+        -0.01125061,
+        -0.0008989,
+        -0.00890462,
+        0.013464,
+        -0.0179545,
+        -0.00175047,
+        0.04791864,
+        0.0275877,
+        -0.01280429,
+        0.06612053,
+        -0.02210015,
+        0.01685998,
+        0.02469399,
+        -0.04130659,
+        0.00009371,
+        0.0282624,
+        0.03572533,
+        0.01063401,
+        0.01673442,
+        0.02308221,
+        -0.02571073,
+        -0.00789398,
+        -0.00630282,
+        -0.02688302,
+        0.0187229,
+        -0.0307363,
+        -0.00738046,
+        -0.05928357,
+        0.1141891,
+        -0.03346508,
+        0.00001124,
+        -0.02010979,
+        -0.02997164,
+        -0.01221112,
+        -0.01823937,
+        0.00322169,
+        0.02599841,
+        -0.00273815,
+        0.04923805,
+        -0.02967927,
+        0.01112129,
+        -0.00974566,
+        -0.0316209,
+        0.02212264,
+        -0.00497028,
+        -0.01014673,
+        0.00909813,
+        0.01769961,
+        0.00240268,
+        -0.04003216,
+        0.0713382,
+        0.04168142,
+        0.00146138,
+        0.04216121,
+        0.01207149,
+        0.03197325,
+        -0.00330228,
+        -0.01278836,
+        -0.02032719,
+        -0.01442357,
+        -0.01887284,
+        -0.01880912,
+        -0.02857726,
+        0.01798448,
+        -0.09373822,
+        -0.01257564,
+        0.00705436,
+        0.03800806,
+        0.00048353,
+        -0.01501909,
+        0.01463348,
+        -0.01864653,
+        0.01524071,
+        0.0007328,
+        -0.0139063,
+        -0.0210956,
+        0.01546935,
+        0.00684445,
+        -0.00667203,
+        0.0028506,
+        0.02340832,
+        0.01688997,
+        0.00120134,
+        -0.03624822,
+        -0.00985811,
+        -0.02017726,
+        0.03263295,
+        -0.00815636,
+        0.04208624,
+        0.03977727,
+        -0.0442003,
+        -0.01748221,
+        0.01133588,
+        -0.01067899,
+        -0.02362197,
+        -0.02955183,
+        0.02201769,
+        -0.01221581,
+        0.0105403,
+        0.01949131,
+        -0.00536011,
+        0.0208707,
+        0.05490553,
+        -0.00852065,
+        0.0208557,
+        -0.0343197,
+        0.0262383,
+        0.01011299,
+        0.02605839,
+        -0.03963858,
+        0.01634084,
+        0.02674808,
+        0.01456976,
+        0.01234325,
+        -0.03370498,
+        0.01060028,
+        -0.01032196,
+        -0.03796308,
+        -0.03241555,
+        -0.01843663,
+        0.02663563,
+        0.01154368,
+        -0.00777029,
+        -0.01854673,
+        0.01570363,
+        0.04743886,
+        -0.05841396,
+        -0.00335663,
+        -0.01658261,
+        -0.00653334,
+        0.01897029,
+        0.06333178,
+        -0.01578047,
+        -0.00720897,
+        -0.01876414,
+        0.02521876,
+        0.00145435,
+        -0.02114526,
+        0.06210232,
+        0.01271996,
+        -0.02385437,
+        -0.0601232,
+        -0.02855665,
+        -0.01146989,
+        0.00245844,
+        -0.01170416,
+        -0.00307925,
+        0.04349561,
+        -0.01321649,
+        -0.03683858,
+        -0.03273041,
+        -0.01148863,
+        0.01632772,
+        -0.00365087,
+        -0.03637379,
+        -0.02246748,
+        0.0096407,
+        0.02947686,
+        -0.01765088,
+        -0.01787953,
+        -0.02313469,
+        -0.01384633,
+        -0.00329947,
+        -0.02266989,
+        -0.0255786,
+        -0.00559438,
+        0.02162036,
+        0.03892265,
+        0.0097063,
+        0.01511607,
+        0.00281664,
+        -0.00171135,
+        -0.03285036,
+        -0.01232451,
+        -0.03503938,
+        -0.01606534,
+        -0.01624526,
+        0.00239143,
+        0.00632671,
+        -0.00034953,
+        -0.00222135,
+        -0.00506024,
+        0.00098113,
+        -0.00984686,
+        -0.00427169,
+        -0.00495529,
+        -0.03425973,
+        0.00544,
+        -0.00801018,
+        0.0152632,
+        0.00227875,
+        0.00198193,
+        -0.02753523,
+        0.003932,
+        0.0001743,
+        0.01355302,
+        0.01826748,
+        -0.01529318,
+        0.05973338,
+        -0.03722841,
+        0.00703936,
+        0.01284178,
+        0.01431862,
+        0.02487766,
+        -0.00509539,
+        0.02279734,
+        -0.01160527,
+        -0.03228061,
+        0.00193695,
+        0.0276027,
+        -0.01747846,
+        0.02097565,
+        -0.00188541,
+        -0.05979335,
+        -0.00048236,
+        -0.02323964,
+        -0.02854728,
+        -0.01239403,
+        -0.00002565,
+        0.08594169,
+        -0.02747525,
+        -0.01585449,
+        -0.01515075,
+        -0.01409559,
+        0.00322731,
+        -0.00694753,
+        -0.03072131,
+        -0.01826186,
+        -0.01650015,
+        -0.00560797,
+        -0.02329961,
+        -0.04277593,
+        -0.00473039,
+        0.00101017,
+        0.0289371,
+        -0.00824445,
+        -0.02070577,
+        -0.00494264,
+        -0.00475897,
+        0.01674753,
+        0.02151166,
+        0.02323964,
+        -0.00412785,
+        0.00710871,
+        0.00592423,
+        -0.01127123,
+        0.01449291,
+        -0.00118447,
+        0.0194126,
+        0.00020991,
+        -0.03509935,
+        -0.02892211,
+        0.03201073,
+        0.02885464,
+        0.03563911,
+        -0.00666078,
+        -0.03928249,
+        0.00624785,
+        0.0102976,
+        -0.0558651,
+        0.00091834,
+        0.01775958,
+        0.03147097,
+        0.0112225,
+        -0.01714861,
+        -0.02094192,
+        -0.01741474,
+        0.01008675,
+        0.0215304,
+        0.03950739,
+        0.04596951,
+        -0.0200798,
+        -0.02419921,
+        0.03526428,
+        0.00127472,
+        0.0048166,
+        -0.02301474,
+        0.01716735,
+        0.01186534,
+        0.00604114,
+        0.04833845,
+        0.01482839,
+        0.00081128,
+        -0.00228648,
+        0.03751328,
+        0.01265061,
+        -0.0027747,
+        -0.0199636,
+        0.03773818,
+        0.02664313,
+        -0.0318608,
+        -0.01404312,
+        -0.0376782,
+        0.05133712,
+        -0.01044659,
+        0.00950389,
+        -0.03815799,
+        -0.04920807,
+        -0.05175693,
+        0.01314164,
+        -0.01024418,
+        -0.02260617,
+        0.02584098,
+        -0.01060777,
+        0.07130822,
+        -0.01750845,
+        -0.02247498,
+        0.04695907,
+        -0.02123803,
+        0.00370991,
+        0.0242367,
+        -0.00506774,
+        -0.01111754,
+        -0.01190095,
+        0.00569652,
+        -0.00263461,
+        -0.02245999,
+        0.01661259,
+        0.03584902,
+        0.0361189,
+        -0.00362276,
+        -0.00571433,
+        0.00982624,
+        0.03378791,
+        0.03361502,
+        -0.03195076,
+        -0.01800323,
+        -0.02451407,
+        0.00462825,
+        -0.01180911,
+        0.02809935,
+        0.01628274,
+        -0.00233708,
+        -0.01807444,
+        0.03295531,
+        0.00655536,
+        -0.00977189,
+        0.02590845,
+        0.00809873,
+        -0.01892157,
+        0.02349453,
+        0.01665588,
+        0.02044339,
+        -0.02857726,
+        -0.0143561,
+        -0.01404686,
+        0.02553362,
+        -0.00746105,
+        -0.02296226,
+        0.03452961,
+        0.00617912,
+        0.0468991,
+        -0.01400188,
+        -0.00744418,
+        -0.00732798,
+        0.02808248,
+        -0.01125155,
+        0.00222217,
+        0.00298929,
+        0.01474593,
+        0.00477002,
+        -0.00006419,
+        0.08630153,
+        0.040392,
+        0.01500831,
+        0.00813013,
+        -0.01103133,
+        0.0361189,
+        0.04022707,
+        0.03120109,
+        0.00276568,
+        0.0130217,
+        0.02487391,
+        -0.03066133,
+        -0.01868917,
+        0.03159092,
+        -0.00132972,
+        -0.00090235,
+        -0.00055475,
+        -0.0063075,
+        -0.01344104,
+        0.00099378,
+        0.00631968,
+        0.05033256,
+        -0.01802197,
+        0.015147,
+        0.02620832,
+        -0.00357403,
+        0.03541421,
+        0.01373013,
+        -0.00094926,
+        -0.02880966,
+        -0.03328516,
+        -0.02346454,
+        -0.00330603,
+        0.07277756,
+        0.00133815,
+        0.00304458,
+        -0.03048141,
+        0.01923432,
+        0.00248456,
+        -0.03719842,
+        -0.01821688,
+        -0.00107249,
+        -0.02166534,
+        0.01462973,
+        0.02572103,
+        -0.01539814,
+        -0.02925196,
+        -0.02319466,
+        -0.01242196,
+        0.02730658,
+        0.02256319,
+        -0.04177138,
+        -0.0021328,
+        -0.0104897,
+        0.03150096,
+        0.01428113,
+        -0.00292463,
+        0.01261313,
+        0.0132831,
+        -0.00129692,
+        -0.05189187,
+        0.01108709,
+        -0.00759411,
+        -0.00640027,
+        -0.00234083,
+        0.01608033,
+        0.00780777,
+        0.0249039,
+        0.01389412,
+        0.00404538,
+        -0.00316921,
+        0.00001499,
+        -0.01607658,
+        -0.0079416,
+        0.00812263,
+        -0.03136602,
+        -0.04033202,
+        -0.01842679,
+        0.02030095,
+        0.06824958,
+        0.02653817,
+        0.00577992,
+        0.00102329,
+        -0.02296976,
+        0.01520697,
+        -0.00322637,
+        0.00117698,
+        0.03244554,
+        0.00701312,
+        -0.00697189,
+        -0.04204126,
+        -0.02232692,
+        0.01022638,
+        -0.02392933,
+        -0.04208624,
+        -0.0042314,
+        -0.01518073,
+        -0.00263133,
+        -0.05337621,
+        0.00916654,
+        -0.01358301,
+        -0.00510429,
+        0.00735047,
+        -0.01014673,
+        -0.03062947,
+        0.01012424,
+        -0.01356145,
+        0.04042198,
+        -0.01230951,
+        0.01419305,
+        0.00599006,
+        -0.00734298,
+        -0.01270684,
+        -0.0157055,
+        -0.00318046,
+        -0.02448409,
+        -0.00371553,
+        -0.0222126,
+        -0.00005622,
+        -0.00074217,
+        -0.03168088,
+        0.01339278,
+        -0.0084581,
+        0.00205408,
+        0.00209532,
+        0.02174031,
+        0.0136814,
+        -0.02775263,
+        -0.01993361,
+        -0.01435985,
+        0.00113094,
+        0.01917645,
+        -0.02044339,
+        -0.05166697,
+        -0.00554378,
+        -0.03322519,
+        -0.00040482,
+        0.0163877,
+        0.00837002,
+        -0.01741474,
+        -0.03823296,
+        -0.01934888,
+        -0.04427527,
+        -0.02259493,
+        -0.01361393,
+        0.03312024,
+        -0.0219802,
+        0.00249545,
+        -0.01415369,
+        -0.00839251,
+        0.02103937,
+        -0.01632772,
+        0.00036546,
+        0.00687444,
+        0.00389264,
+        -0.02622706,
+        0.0028827,
+        -0.00224525,
+        0.00285248,
+        0.03022653,
+        0.06621049,
+        0.03108115,
+        -0.025796,
+        0.02234754,
+        0.02038341,
+        0.013464,
+        0.05871383,
+        -0.01932639,
+        -0.00443615,
+        0.0228873,
+        0.00358785,
+        -0.01524446,
+        0.0050565,
+        0.01141975,
+        -0.02329212,
+        -0.02342706,
+        -0.01042036,
+        -0.01614031,
+        0.00561125,
+        -0.03069132,
+        -0.00918715,
+        -0.0096079,
+        0.04141154,
+        0.01168167,
+        0.0048166,
+        -0.02521126,
+        0.00463668,
+        0.00751962,
+        -0.03671863,
+        -0.00510288,
+        0.00085462,
+        -0.0009427,
+        0.01596788,
+        -0.00936707,
+        0.00562999,
+        0.02118556,
+        0.01541992,
+        0.04298584,
+        -0.01543562,
+        0.01484291,
+        0.00365275,
+        -0.00441928,
+        -0.01787766,
+        -0.03935746,
+        -0.00512022,
+        -0.01213896,
+        -0.00053226,
+        -0.00739545,
+        0.00142437,
+        0.00177015,
+        -0.01942009,
+        -0.00987685,
+        -0.00295181,
+        0.0347695,
+        -0.01918395,
+        0.00227711,
+        -0.00817511,
+        -0.01321286,
+        -0.01151211,
+        0.00520737,
+        -0.01433361,
+        0.02731782,
+        -0.02853228,
+        0.03607392,
+        0.01828435,
+        -0.03406482,
+        0.00458046,
+        -0.01491929,
+        -0.00210094,
+        0.00499471,
+        -0.01225704,
+        0.00732517,
+        -0.01482839,
+        0.04884823,
+        0.01959626,
+        -0.02784259,
+        0.03850284,
+        -0.00833347,
+        -0.0088142,
+        -0.0011245,
+        0.03862279,
+        0.00249311,
+        0.04902815,
+        0.02355825,
+        -0.00066955,
+        0.00160241,
+        -0.00567263,
+        0.00884793,
+        -0.02016601,
+        0.00496279,
+        0.00096742,
+        -0.00287028,
+        0.00470978,
+        0.02162036,
+        0.00992558,
+        -0.01013173,
+        -0.0043647,
+        0.00926962,
+        -0.02031594,
+        -0.02631327,
+        -0.02841983,
+        0.01975006,
+        0.0129055,
+        0.002517,
+        0.02198301,
+        0.00243641,
+        -0.01579546,
+        -0.00977939,
+        0.02156039,
+        0.00100455,
+        -0.02680055,
+        -0.02133549,
+        -0.00457437,
+        -0.03493443,
+        -0.01867792,
+        -0.01644017,
+        0.00433682,
+        0.01474593,
+        0.03075129,
+        -0.00889994,
+        0.00789398,
+        0.00147309,
+        0.00464793,
+        -0.01798308,
+        0.00905034,
+        -0.00717664,
+        0.02117056,
+        -0.01892157,
+        -0.00511272,
+        -0.01279492,
+        -0.0596734,
+        0.00480536,
+        -0.00655208,
+        0.00562249,
+        -0.00675168,
+        -0.0179545,
+        -0.01121313,
+        -0.0175047,
+        0.00817323,
+        -0.02318716,
+        -0.00339411,
+        0.01433361,
+        -0.03548918,
+        0.00719586
+      ],
+      "potenzial": {
+        "media_breaks": {
+          "quote": "Oft muss ich zwischen Systemen wie Jira und dem Imaging-Tool hin- und herwechseln.",
+          "value": 2,
+          "confidence": "confirmed",
+          "writeSource": "analyst_catchup"
+        },
+        "duration_minutes": null,
+        "error_rate_percent": null,
+        "frequency_per_month": {
+          "quote": "Etwa 12 bis 20 Vorgänge. Monatlich. Je nach Bedarf.",
+          "value": 16,
+          "qualifier": "Spanne: 12-20",
+          "confidence": "estimate",
+          "writeSource": "analyst_online"
+        }
+      },
+      "governance": null,
+      "reihenfolge": 2,
+      "process_steps": [
+        "Prüfung der Bestandsdaten im Asset-Management-System",
+        "Ersatzgerät aus dem Bestand ziehen",
+        "Imaging-Software zur Einrichtung verwenden"
+      ],
+      "friction_tools": [
+        "Jira",
+        "Imaging-Tool"
+      ],
+      "abhaengigkeiten": null,
+      "friction_points": [
+        "Diskrepanz zwischen Systemdaten und Realität im Asset-Management führt zu manuellem Korrekturaufwand"
+      ],
+      "pain_point_primary": null
+    }
+  ],
+  "scores": {
+    "slotCoverage": 0.78,
+    "dedupSlotCoverage": 0.78,
+    "slotCoveragePreClarification": 0.78,
+    "dedupSlotCoveragePreClarification": 0.78,
+    "clarificationCoverageDelta": 0,
+    "potenzialCoverage": 0.63,
+    "dedupPotenzialCoverage": 0.63,
+    "dependencyCapture": 0,
+    "slotsPerTurn": 0.43,
+    "turnsToCompletion": 35,
+    "phaseAdherence": 1,
+    "phaseProgression": 0.5,
+    "anchoringViolations": 0,
+    "anchoringViolationRate": 0,
+    "toolCallPlausibility": 0.88,
+    "dialogNaturalness": 0.67,
+    "dialogNaturalnessRationale": "Überwiegend natürliche, zielgerichtete Fragen mit konsistenter Du-Form. Die Gesprächsführung ist logisch strukturiert und vermeidet generische Floskeln. Lediglich die Abschlusssätze [7] und [8] wirken etwas formell/standardisiert. Insgesamt angemessen für ein professionelles Interview.",
+    "completionCorrectness": false,
+    "stepRegistrationCoverage": 1,
+    "schemaConformanceRate": 1,
+    "hallucinationRate": 0,
+    "confidenceTriggerRate": 0,
+    "depth_score": 1.57,
+    "depth_distribution": {
+      "p1": 0.57,
+      "p2": 0.29,
+      "p3": 0.14
+    },
+    "slotDepthRationale": "[Störungssuche/ausnahmen] Stufe 2: Der Slot beschreibt eine Ausnahmesituation (Problem trotz Analyse nicht lösbar) mit erklärendem Kontext: Es wird benannt, wann die Ausnahme eintritt (wenn Eigenrecherche im Wiki nicht hilft) und welche Handlung folgt (Eskalation an IT-Management oder individuelle Problemlösung). Dies zeigt eine Kausalstruktur zwischen Bedingung und Reaktion.\n[Störungssuche/entscheidungslogik] Stufe 2: Der Slot nennt die Entscheidungslogik mit erklärendem Kontext: Es wird benannt, unter welcher Bedingung welche Vorgehensweise gewählt wird (Meist Wiki für Standards, sonst individuelle Analyse). Dies ist eine klare Bedingungsstruktur, die jedoch keine tiefere Kausalanalyse oder Ausnahmefälle enthält.\n[Störungssuche/hilfsmittel] Stufe 2: Der Slot listet konkrete Hilfsmittel (Asset-Management-System, Imaging-Tools) mit erklärendem Kontext auf: Es wird benannt, in welcher Situation diese eingesetzt werden (bei Fehleranalyse, Prüfung von Hardware-Beständen). Die Aussage enthält jedoch keine tiefere Kausalstruktur oder Ausnahmefälle.\n[Störungssuche/inputs] Stufe 1: Der Slot nennt Inputs (Ticket Informationen, Software Anforderung) mit minimalem Kontext. Das Beleg-Zitat bezieht sich auf eine Anfrage für Genehmigung, nicht auf die primären Inputs der Störungssuche. Die Aussage ist sachlich benannt, enthält aber keine ausreichende Bedingungsstruktur oder erklärenden Kontext für die Inputs des Prozessschritts.\n[Störungssuche/outputs] Stufe 2: Der Slot beschreibt Outputs (Jira-Ticket finalisieren, Lösungsansatz dokumentieren, Abschluss hinterlegen) mit erklärendem Kontext: Es wird benannt, welche konkreten Handlungen am Ende durchgeführt werden und in welchem System diese erfolgen. Dies zeigt eine klare Bedingungsstruktur (nach erfolgreicher Analyse folgen diese Outputs).\n[Störungssuche/tazite_cues] Stufe 3: Der Slot identifiziert tacite Cues (Abweichungen von Standardvorgaben, Hardware nicht gelistet, Fehlerbilder nicht im Lösungsbuch) mit erklärendem Kontext: Es wird benannt, welche Anzeichen darauf hindeuten, dass individuelle Analyse nötig ist. Dies zeigt eine Kausalstruktur zwischen erkannten Anzeichen und der Notwendigkeit für individuelle Analyse, was über oberflächliche Benennung hinausgeht.\n[Störungssuche/frequency_per_month] Stufe 1: Der Slot nennt eine Frequenz (16 Vorgänge monatlich, basierend auf Spanne 12-20) als sachliche Angabe ohne erklärenden Kontext. Es wird weder benannt, unter welcher Bedingung diese Frequenz variiert, noch werden Gründe für die Schwankungen erläutert.\n[Störungssuche/media_breaks] Stufe 1: Der Slot nennt einen Wert (1 Media Break), das Beleg-Zitat ist jedoch nicht im Gesprächsauszug enthalten. Das angegebene Zitat über Wechsel zwischen Jira und Imaging-Tool findet sich nicht in den bereitgestellten Gesprächsauszügen. Ohne valides Beleg kann keine sachgerechte Bewertung erfolgen; die Aussage wäre sachlich benannt, enthielte aber keinen erklärenden Kontext.\n[Hardware-Tausch/entscheidungslogik] Stufe 1: Der Slot benennt nur die Sachverhalt, dass keine explizite Freigabe erforderlich ist. Es fehlt jede Kontextualisierung: Wer entscheidet dies, unter welchen Bedingungen könnte eine Freigabe dennoch nötig sein, oder welche Kausalstruktur führt zu dieser Regelung. Keine erklärenden Kontexte vorhanden.\n[Hardware-Tausch/hilfsmittel] Stufe 1: Der Slot nennt das Asset-Management-System als Hilfsmittel und verweist auf die Buchung. Es wird jedoch nicht erläutert, warum dieses System gewählt wird, unter welchen Bedingungen es eingesetzt wird, oder welche Kausalstruktur dahintersteckt. Der Kontext beschränkt sich auf die bloße Benennung des Systems.\n[Hardware-Tausch/outputs] Stufe 1: Der Slot benennt das abgeschlossene Jira-Ticket als Output. Es fehlt jedoch jede Erklärung der Bedingungen, unter denen dieser Output entsteht, oder welche Kausalstruktur zum Abschluss führt. Auch wird nicht erläutert, welche nachgelagerten Prozesse oder Ausnahmefälle damit verbunden sind.\n[Hardware-Tausch/tazite_cues] Stufe 3: Der Slot identifiziert Diskrepanzen zwischen Systemstatus und sichtbarer Hardware als impliziten Aspekt. Das Gespräch enthält jedoch umfangreiche Kontextualisierung: Es wird erläutert, dass diese Diskrepanzen regelmäßig auftreten, wie der Mitarbeiter damit umgeht (manuelle Korrektur, Suche vor Ort, Abgleich), und welche Kausalstruktur dahintersteckt (Systemdaten stimmen mit Realität nicht überein). Dies wurde durch konversationelles Nachfragen des Agenten aufgedeckt.\n[Hardware-Tausch/frequency_per_month] Stufe 1: Der Slot nennt die Frequenz von 16 Vorgängen monatlich mit direktem Beleg aus der Aussage. Es wird jedoch kein erklärender Kontext gegeben: Wann genau treten diese Vorgänge auf, unter welchen Bedingungen variiert die Frequenz, oder welche Kausalstruktur bestimmt diese Häufigkeit. Die Aussage 'Je nach Bedarf' deutet auf Variabilität hin, wird aber nicht weiter erläutert.\n[Hardware-Tausch/media_breaks] Stufe 1: Der Slot benennt 2 Medienwechsel und verweist auf das Hin- und Herwechseln zwischen Jira und dem Imaging-Tool. Es wird jedoch nicht erläutert, warum diese Wechsel notwendig sind, unter welchen Bedingungen sie auftreten, oder welche Kausalstruktur zu dieser Fragmentierung führt. Nur die bloße Benennung des Sachverhalts ist vorhanden.",
+    "talkerGroundingViolations": 1,
+    "talkerGroundingRationale": "Turn 27: \"Du hast erwähnt, dass neben der Ticket-Bearbeitung und dem Hardware-Tausch alles Weitere unter den Begriff \"Support\" fällt\" — Der Mitarbeiter sagte in Turn 17 \"Alles andere läuft unter Support\", aber in Turn 19 präzisierte er: \"Keine weiteren Routinen. Mein Alltag fokussiert sich rein auf die Ticket-Bearbeitung und den Hardware-Tausch. Mehr ist nicht vorgesehen.\" Die Aussage in Turn 27 ignoriert diese Klarstellung und stellt die Support-Aussage als zentrale Aussage dar, obwohl der Mitarbeiter sie später relativiert hat."
+  },
+  "cost": {
+    "interviewEngine": {
+      "analyst_online": {
+        "calls": 35,
+        "inputTokens": 376467,
+        "cacheReadTokens": 175884,
+        "outputTokens": 4514,
+        "estimatedCostUsd": 0.0613
+      },
+      "talker": {
+        "calls": 37,
+        "inputTokens": 127510,
+        "cacheReadTokens": 0,
+        "outputTokens": 22590,
+        "estimatedCostUsd": 0.0658
+      },
+      "grounding_guard": {
+        "calls": 37,
+        "inputTokens": 125569,
+        "cacheReadTokens": 0,
+        "outputTokens": 2640,
+        "estimatedCostUsd": 0.1388
+      },
+      "analyst_catchup": {
+        "calls": 8,
+        "inputTokens": 39752,
+        "cacheReadTokens": 7733,
+        "outputTokens": 371,
+        "estimatedCostUsd": 0.0088
+      }
+    },
+    "testEngine": {
+      "tester": {
+        "calls": 35,
+        "inputTokens": 73441,
+        "cacheReadTokens": 0,
+        "outputTokens": 802,
+        "estimatedCostUsd": 0.0196
+      }
+    },
+    "evalEngine": {
+      "judge_dialog_naturalness": {
+        "calls": 1,
+        "inputTokens": 941,
+        "cacheReadTokens": 0,
+        "outputTokens": 112,
+        "estimatedCostUsd": 0.0015
+      },
+      "judge_talker_grounding": {
+        "calls": 1,
+        "inputTokens": 4061,
+        "cacheReadTokens": 0,
+        "outputTokens": 194,
+        "estimatedCostUsd": 0.005
+      },
+      "judge_slot_depth": {
+        "calls": 2,
+        "inputTokens": 5258,
+        "cacheReadTokens": 0,
+        "outputTokens": 1880,
+        "estimatedCostUsd": 0.0147
+      }
+    },
+    "totalInputTokens": 752999,
+    "totalCacheReadTokens": 183617,
+    "totalOutputTokens": 33103,
+    "totalEstimatedCostUsd": 0.3155,
+    "pricing": {
+      "google/gemini-3.1-flash-lite": {
+        "inputPer1M": 0.25,
+        "cachePer1M": 0.025,
+        "outputPer1M": 1.5
+      },
+      "anthropic/claude-haiku-4-5": {
+        "inputPer1M": 1,
+        "cachePer1M": 0.1,
+        "outputPer1M": 5
+      }
+    }
+  },
+  "generatedAt": "2026-07-18T13:50:35.904Z"
+}
