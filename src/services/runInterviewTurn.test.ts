@@ -33,22 +33,12 @@ vi.mock('@/services/interviewOrchestrator', async (importOriginal) => {
 // PROJ-44/ADR-021: the three analyst entrypoints (runAnalystOnline/Catchup/FailureRetry)
 // collapsed into one runAnalyst — mode selection + the closing-mode two-sub-pass split
 // are interviewAnalyst.ts-internal details, not observable from runInterviewTurn.ts.
-// PROJ-46: hasAppliedExtraction is hand-mocked (not importOriginal) to keep this file's
-// isolation from interviewAnalyst.ts's real AI SDK / server-only dependency chain — same
-// EXTRACTION_TOOL_NAMES set as the real implementation (interviewAnalyst.ts).
-const EXTRACTION_TOOL_NAMES = new Set([
-  'register_step',
-  'record_slot',
-  'record_governance',
-  'record_dependency',
-  'update_walkthrough_data',
-  'link_bottleneck',
-])
+// PROJ-46 QA H-1 Fix D: hadExtractionThisTurn is now computed via interviewSemantic.ts's
+// hasNewOField (pure, NOT mocked here — runs for real against this file's StepEntry
+// fixtures) instead of interviewAnalyst.ts's hasAppliedExtraction, so this mock no
+// longer needs to stand in for it.
 vi.mock('@/services/interviewAnalyst', () => ({
   runAnalyst: vi.fn().mockResolvedValue({ briefing: {}, toolCalls: [], stepTracker: [] }),
-  hasAppliedExtraction: vi.fn((toolCalls: { toolName: string; applied: boolean }[]) =>
-    toolCalls.some((tc) => tc.applied && EXTRACTION_TOOL_NAMES.has(tc.toolName)),
-  ),
 }))
 
 vi.mock('@/services/extraction', () => ({

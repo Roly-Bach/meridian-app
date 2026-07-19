@@ -824,7 +824,13 @@ async function runInterview(
 
     // Simulate elapsed time: eval runs in seconds so real timerMinutes stays ~0.
     // Proportional to turn count so time-based urgency and hard-stop fire correctly.
-    const simulatedTimerMinutes = Math.floor((turn / MAX_TURNS) * 30)
+    // PROJ-46 QA H-1 (Eval-Timer-Artefakt): was `Math.floor((turn / MAX_TURNS) * 30)` —
+    // with turn 0-indexed, the LAST iteration (turn=34) only reached floor(34/35*30)=29,
+    // one short of maxDurationMinutes=30, so resolveTurnLifecycle's hard-stop floor
+    // (ctx.timerMinutes >= ctx.maxDurationMinutes) could never fire within the eval's
+    // 35-turn cap — the deterministic last-resort termination floor was untestable.
+    // (turn+1)/MAX_TURNS reaches exactly 30 on the last turn.
+    const simulatedTimerMinutes = Math.floor(((turn + 1) / MAX_TURNS) * 30)
 
     // BUG-5 (PROJ-42 QA, 2026-07-16): this loop used to precompute the phase
     // decision itself and, on 'clarification', jump straight to

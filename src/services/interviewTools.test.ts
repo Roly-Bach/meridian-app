@@ -113,6 +113,28 @@ describe('Tool Handlers', () => {
       expect(result.step_tracker).toHaveLength(2)
       expect(session.snapshot().stepTracker).toHaveLength(2)
     })
+
+    // PROJ-46 QA H-1 Fix D2: unbounded step registration (observed unbounded
+    // during Closing) breaks the termination guarantee's "finite steps" premise
+    // — the prompt already advertised a "Hard Cap: 5" but nothing enforced it in
+    // code. Six genuinely distinct titles (no dedup-layer overlap) so this
+    // exercises the cap itself, not the dedup path.
+    it('rejects a 6th genuinely distinct step once the hard cap (5) is reached', async () => {
+      const seeded = [
+        makeStep({ title: 'Rechnungsprüfung' }),
+        makeStep({ title: 'Monatsabschluss' }),
+        makeStep({ title: 'Mahnwesen' }),
+        makeStep({ title: 'Reisekostenabrechnung' }),
+        makeStep({ title: 'Sachkontenabstimmung' }),
+      ]
+      const { tools, session } = await setup(seeded)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.register_step as any).execute({ title: 'Anlagenbuchhaltung' })
+
+      expect(result.success).toBe(false)
+      expect(result.hard_cap_reached).toBe(true)
+      expect(session.snapshot().stepTracker).toHaveLength(5)
+    })
   })
 
   // ── record_slot ─────────────────────────────────────────────────────────────

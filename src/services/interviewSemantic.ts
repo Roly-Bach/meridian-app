@@ -399,6 +399,26 @@ export function countFilledOFields(step: StepEntry): number {
   return O_SLOT_FIELDS.filter((f) => isCoverageFieldFilled(step, f)).length
 }
 
+/**
+ * PROJ-46 QA H-1 Fix D: true iff the total count of filled O2–O6 fields across
+ * the WHOLE tracker increased between before/after — "real new process depth",
+ * as opposed to "any applied knowledge-tool write" (interviewAnalyst.ts's former
+ * hasAppliedExtraction), which also fired on re-records, potenzial-only writes
+ * (frequency/duration/error_rate/media_breaks) and floskel-triggered slots (run1
+ * t34: 16 record_slot calls on a goodbye courtesy phrase). That over-broad signal
+ * powered both the No-New-Extraction streak (interviewAnalyst.ts's
+ * computeNextBriefing) and the M7-b closing-reentry veto
+ * (runInterviewTurn.ts's hadExtractionThisTurn) — noise on either kept resetting
+ * the streak AND kept bouncing Closing back to Explore every turn, so the two
+ * deterministic termination floors (O-Drought exhaustion, no-new-extraction
+ * streak) never actually got a chance to fire. Sum-based (not id-matched) so a
+ * same-pass step merge (computeMergedSteps) can't spuriously flip the result.
+ */
+export function hasNewOField(beforeTracker: StepEntry[], afterTracker: StepEntry[]): boolean {
+  const sumFilled = (tracker: StepEntry[]) => tracker.reduce((sum, s) => sum + countFilledOFields(s), 0)
+  return sumFilled(afterTracker) > sumFilled(beforeTracker)
+}
+
 const STEP_STOPWORDS = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
 
 export function normalizeToken(t: string): string {

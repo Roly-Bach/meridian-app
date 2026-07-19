@@ -126,42 +126,40 @@ describe('interviewAnalyst — WP5 system-prompt prefix stability', () => {
 const emptyBriefing: AnalystBriefing = {}
 
 describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
-  it('resets the streak to 0 when a knowledge tool call was actually applied this pass', () => {
+  // PROJ-46 QA H-1 Fix D: the 3rd param used to be the pass's toolCalls[], reset
+  // on ANY applied knowledge-tool write (hasAppliedExtraction). Now it's the
+  // caller-computed hadNewOField boolean (interviewSemantic.ts's hasNewOField,
+  // diffed pre-/post-pass) — "real new O2–O6 depth", not "a tool call succeeded".
+  // The old applied:true/applied:false toolCalls distinction is now the CALLER's
+  // job (runOnlinePass diffs the tracker), not this function's.
+  it('resets the streak to 0 when hadNewOField is true', () => {
     const result = computeNextBriefing(
       { target_o_field: 'ausnahmen' },
       true,
-      [{ toolName: 'record_slot', args: {}, applied: true }],
+      true,
       { target_o_field: 'inputs', noNewExtractionStreak: 2 },
     )
     expect(result.noNewExtractionStreak).toBe(0)
   })
 
-  // PROJ-44 Remediation Runde 2 (Fix 2/H-2): a record_slot call the evidence_span/
-  // priority/step-lookup guard rejected (applied:false) must NOT reset the streak —
-  // this is the exact mechanism that made the safety net practically unreachable
-  // (53 record_slot attempts vs. 17 real writes in one QA sample).
-  it('does NOT reset the streak when the only knowledge tool call was rejected by the guard (applied:false)', () => {
+  // PROJ-44 Remediation Runde 2 (Fix 2/H-2) / PROJ-46 Fix D: neither a guard-
+  // rejected write nor a re-record/potenzial-only/floskel-triggered write (none
+  // of which grow the O-field count) resets the streak — this is the exact
+  // mechanism that made the safety net practically unreachable (53 record_slot
+  // attempts vs. 17 real writes in one QA sample; later, 16 floskel record_slot
+  // calls on a goodbye courtesy phrase in another).
+  it('does NOT reset the streak when hadNewOField is false', () => {
     const result = computeNextBriefing(
       emptyBriefing,
       true,
-      [{ toolName: 'record_slot', args: {}, applied: false }],
-      { target_o_field: 'inputs', noNewExtractionStreak: 2 },
-    )
-    expect(result.noNewExtractionStreak).toBe(3)
-  })
-
-  it('increments the streak when no knowledge tool was called this pass', () => {
-    const result = computeNextBriefing(
-      emptyBriefing,
-      true,
-      [{ toolName: 'produce_briefing', args: {}, applied: true }], // bookkeeping only — not an extraction tool
+      false,
       { target_o_field: 'inputs', noNewExtractionStreak: 2 },
     )
     expect(result.noNewExtractionStreak).toBe(3)
   })
 
   it('starts the streak at 1 when there is no previous briefing', () => {
-    const result = computeNextBriefing(emptyBriefing, true, [], null)
+    const result = computeNextBriefing(emptyBriefing, true, false, null)
     expect(result.noNewExtractionStreak).toBe(1)
   })
 
@@ -169,7 +167,7 @@ describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
     const result = computeNextBriefing(
       { target_o_field: 'ausnahmen' },
       true,
-      [{ toolName: 'record_slot', args: {}, applied: true }],
+      true,
       { target_o_field: 'inputs' },
     )
     expect(result.target_o_field).toBe('ausnahmen')
@@ -179,13 +177,13 @@ describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
     // The analyst prompt's own instruction: skip produce_briefing on a turn with
     // no substantial change — "das vorherige next_briefing bleibt gültig".
     const previous: AnalystBriefing = { target_o_field: 'inputs', clarification_cards: [] }
-    const result = computeNextBriefing(emptyBriefing, false, [], previous)
+    const result = computeNextBriefing(emptyBriefing, false, false, previous)
     expect(result.target_o_field).toBe('inputs')
     expect(result.noNewExtractionStreak).toBe(1)
   })
 
   it('falls back to an empty briefing (not a crash) when produce_briefing was not called and there is no previous briefing', () => {
-    const result = computeNextBriefing(emptyBriefing, false, [], null)
+    const result = computeNextBriefing(emptyBriefing, false, false, null)
     expect(result.target_o_field).toBeUndefined()
     expect(result.noNewExtractionStreak).toBe(1)
   })

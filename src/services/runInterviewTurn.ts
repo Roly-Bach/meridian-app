@@ -31,6 +31,7 @@
 
 import {
   normalizeStepEntry,
+  hasNewOField,
   type Phase,
   type StepEntry,
   type RawExtraction,
@@ -46,7 +47,7 @@ import {
 } from '@/services/interviewOrchestrator'
 import { checkRoleGuard } from '@/services/roleGuard'
 import { createTalkerStream, createOffTopicRedirectStream } from '@/services/interviewTalker'
-import { runAnalyst, hasAppliedExtraction, type AnalystRunResult } from '@/services/interviewAnalyst'
+import { runAnalyst, type AnalystRunResult } from '@/services/interviewAnalyst'
 import type { InterviewStore } from '@/services/turnStore/port'
 import type { OnTokenUsage } from '@/services/_telemetry'
 
@@ -337,10 +338,20 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     timerMinutes,
     maxDurationMinutes: contextBase.maxDurationMinutes,
     historyLength: history.length,
-    // PROJ-46 (ADR-023 D4, M7-b): any applied knowledge-tool write this turn —
-    // generalizes the former newStepThisTurn veto (a new step always applies a
-    // register_step, so this subsumes it).
-    hadExtractionThisTurn: hasAppliedExtraction(analystResult?.toolCalls ?? []),
+    // PROJ-46 (ADR-023 D4, M7-b): generalizes the former newStepThisTurn veto (a
+    // new step always applies a register_step, so this subsumes it) — but a
+    // genuinely NEW step is already caught separately by
+    // hasStepInStatus(...'exploring') in resolvePhaseTransition's closing case,
+    // so this signal's remaining job is "an EXISTING step gained real depth".
+    // PROJ-46 QA H-1 Fix D: was hasAppliedExtraction(toolCalls) — ANY applied
+    // knowledge-tool write, including re-records/potenzial-only/floskel-triggered
+    // slots. That bounced Closing back to Explore on almost every turn (backfill
+    // alone reliably finds something on the closing-entry turn), so ctx.phase
+    // could never stay 'closing' for the consecutive turns the no-new-extraction
+    // streak's soft_confirm completion requires. Narrowed to the same O-field-diff
+    // signal Fix D applies to the streak (interviewSemantic.ts's hasNewOField) —
+    // a potenzial-only or re-record write no longer re-opens Explore.
+    hadExtractionThisTurn: hasNewOField(preTurnTracker, stepTracker),
     // PROJ-44 Remediation (M-1/M-3): the fresh (this-turn) O-Drought state —
     // runOnlinePass always attaches it before staging produce_briefing when the
     // Analyst ran; on a terminal Analyst failure analystBriefing stays the

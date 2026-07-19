@@ -187,6 +187,30 @@ describe('resolveTurnLifecycle — explore (content-driven, PROJ-42)', () => {
       const ctx = baseCtx({ phase: 'explore', timerMinutes: 9, maxDurationMinutes: 10, stepTracker: tracker })
       expect(resolveTurnLifecycle(ctx, null).phase).toBe('explore')
     })
+
+    // PROJ-46 QA H-1 Fix A: hasActiveStep used to read raw status
+    // (hasStepInStatus(...'exploring'|'walkthrough')), which practically never
+    // leaves those statuses (applyIntent.ts's auto-'done' transition requires
+    // every potenzial slot filled too — the KI-23 "praktisch nie true"
+    // condition). That bought a status='walkthrough' step up to
+    // MAX_GRACE_MINUTES of extra explore time at the soft anchor even once it
+    // was already O-exhausted. Now coupled to the same exhaustion check the
+    // Fokus-Lock uses (hasUnexhaustedStep) — an exhausted step releases the
+    // phase immediately instead of waiting out the grace window.
+    it('does not grant a grace period to a step whose drought already fired, even though it is still status=walkthrough', () => {
+      const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', emptySlots, { id: 'S001' })]
+      const oDrought: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+      // 30-min budget: soft anchor=24min, grace window would be 24-27min for an ACTIVE step
+      const ctx = baseCtx({ phase: 'explore', timerMinutes: 25, maxDurationMinutes: 30, stepTracker: tracker, oDrought })
+      expect(resolveTurnLifecycle(ctx, null).phase).toBe('closing')
+    })
+
+    it('does not grant a grace period to a step whose O2–O6 coverage is already full, even with a fresh (low) streak', () => {
+      const fullyCovered = makeStep('Mahnwesen: Bearbeitung', 'walkthrough', fullSlots, { id: 'S001', abhaengigkeiten: fullAbhaengigkeiten })
+      const oDrought: ODroughtState = { stepId: 'S001', streak: 0, exhaustedStepIds: [] }
+      const ctx = baseCtx({ phase: 'explore', timerMinutes: 25, maxDurationMinutes: 30, stepTracker: [fullyCovered], oDrought })
+      expect(resolveTurnLifecycle(ctx, null).phase).toBe('closing')
+    })
   })
 })
 

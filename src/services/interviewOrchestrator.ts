@@ -13,11 +13,17 @@ export interface OrchestratorContext {
   /** Total number of messages in history including the current user turn */
   historyLength: number
   /**
-   * PROJ-46 (ADR-023 D4): true iff at least one knowledge-tool call actually
-   * applied this turn (interviewAnalyst.ts's hasAppliedExtraction over
-   * analystResult.toolCalls) — generalizes the former newStepThisTurn veto
-   * (a new step always applies a register_step) to "any new content, even on
-   * an existing step". Used by the Closing→Explore M7-b reentry.
+   * PROJ-46 (ADR-023 D4): true iff the tracker's total filled-O2–O6-field count
+   * grew this turn (interviewSemantic.ts's hasNewOField, diffed pre- vs.
+   * post-Analyst — see runInterviewTurn.ts) — generalizes the former
+   * newStepThisTurn veto (a new step always applies a register_step) to
+   * "existing content deepened, even on an already-registered step". Used by
+   * the Closing→Explore M7-b reentry. PROJ-46 QA H-1 Fix D: narrowed from "any
+   * applied knowledge-tool write" (interviewAnalyst.ts's former
+   * hasAppliedExtraction) — that fired on re-records/potenzial-only/floskel
+   * writes too, bouncing Closing back to Explore almost every turn and starving
+   * the no-new-extraction streak of the consecutive closing turns it needs to
+   * reach its limit.
    */
   hadExtractionThisTurn: boolean
   /**
@@ -202,7 +208,16 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
       return ctx.historyLength >= 2 ? 'explore' : 'intro'
 
     case 'explore': {
-      const hasActiveStep = hasStepInStatus(ctx.stepTracker, 'exploring') || hasStepInStatus(ctx.stepTracker, 'walkthrough')
+      // PROJ-46 QA H-1 Fix A: was hasStepInStatus(...'exploring') || hasStepInStatus(...'walkthrough')
+      // — raw status, which practically never leaves 'exploring'/'walkthrough' (the
+      // applyIntent.ts auto-'done' transition requires EVERY potenzial slot filled
+      // too, including the two optional ones — the KI-23 "praktisch nie true"
+      // condition). That nailed the soft-anchor grace window open even for a step
+      // whose O2–O6 coverage was already exhausted. Coupled to the same exhaustion
+      // logic the Fokus-Lock already uses (hasUnexhaustedStep: isFullyCovered OR
+      // drought-fired) so an O-exhausted step actually releases the grace window
+      // instead of buying up to MAX_GRACE_MINUTES more explore time it doesn't need.
+      const hasActiveStep = hasUnexhaustedStep(ctx.stepTracker, ctx.oDrought)
 
       // Wall-clock soft anchor (~80% of budget): "whichever comes first" between
       // content coverage and the anchor. Deliberately content-blind (that's the

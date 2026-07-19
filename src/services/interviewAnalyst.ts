@@ -10,6 +10,7 @@ import {
   POTENZIAL_SLOT_NAMES,
   O_SLOT_FIELDS,
   groupSemanticSteps,
+  hasNewOField,
   type StepEntry,
   type SlotName,
   type OSlotField,
@@ -38,46 +39,20 @@ import type { TurnSnapshot } from './turnStore/intents'
 export const ANALYST_THINKING_BUDGET = 2048
 
 /**
- * PROJ-42: tool names that count as "new extraction" for the deterministic
- * No-New-Extraction-Zähler (interviewOrchestrator.ts). Deliberately excludes
- * produce_briefing itself (bookkeeping, not new knowledge).
- */
-const EXTRACTION_TOOL_NAMES = new Set([
-  'register_step',
-  'record_slot',
-  'record_governance',
-  'record_dependency',
-  'update_walkthrough_data',
-  'link_bottleneck',
-])
-
-/**
- * True iff at least one knowledge tool call this pass actually applied
- * (`tc.applied`, not merely attempted — see computeNextBriefing's doc comment
- * for why attempts don't count). Shared primitive: computeNextBriefing's
- * no-new-extraction streak AND runInterviewTurn.ts's M7-b closing-reentry veto
- * (PROJ-46/ADR-023 D4 — "jede in diesem Closing-Turn angewendete Wissens-
- * Extraktion routet zurück nach explore") both read the same signal.
- */
-export function hasAppliedExtraction(toolCalls: AnalystToolCallRecord[]): boolean {
-  return toolCalls.some(tc => tc.applied && EXTRACTION_TOOL_NAMES.has(tc.toolName))
-}
-
-/**
  * Pure, deterministic (no LLM involved) — computes the next produce_briefing
  * payload for this pass. Extracted so the bridging logic (streak reset/increment
  * + carry-forward-when-not-called) is independently unit-testable without
  * mocking generateText/turnStore.
  *
- * - hadExtraction=true (any knowledge tool call ACTUALLY APPLIED this pass —
- *   PROJ-44 Remediation Runde 2/H-2 Fix 2: a call the evidence_span/priority/
- *   step-lookup guard rejected, or an idempotent no-op re-write of an already-
- *   filled slot, does NOT count — only `tc.applied` does. Before this fix the
- *   streak counted ATTEMPTS, not applied writes: a guard-rejected record_slot
- *   (e.g. re-extracting an old value from a courtesy-phrase turn) reset the
- *   streak just like a real write, making the safety net practically
- *   unreachable — 53 record_slot attempts vs. 17 real writes in one QA sample) →
- *   streak resets to 0.
+ * - hadNewOField=true (PROJ-46 QA H-1 Fix D: the tracker's total filled-O2–O6-
+ *   field count grew this pass — interviewSemantic.ts's hasNewOField, the SAME
+ *   before/after diff updateODrought uses for the locked step, just summed
+ *   across the whole tracker) → streak resets to 0. Replaces the former
+ *   "any applied knowledge-tool write" signal (hasAppliedExtraction): that one
+ *   also fired on re-records, potenzial-only writes and floskel-triggered slots
+ *   (run1 t34: 16 record_slot calls on a goodbye courtesy phrase) — noise that
+ *   kept resetting the streak so the no-new-extraction safety net never reached
+ *   its limit. "Real new process depth", not "a tool call succeeded".
  * - modelCalledBriefing=true → the LLM's own target_o_field/step_advance_ready/
  *   clarification_cards win, streak is merged in.
  * - modelCalledBriefing=false → the analyst prompt's own "skip on a boring turn"
@@ -89,12 +64,11 @@ export function hasAppliedExtraction(toolCalls: AnalystToolCallRecord[]): boolea
 export function computeNextBriefing(
   capturedBriefing: AnalystBriefing,
   modelCalledBriefing: boolean,
-  toolCalls: AnalystToolCallRecord[],
+  hadNewOField: boolean,
   previousBriefing: AnalystBriefing | null | undefined,
 ): AnalystBriefing {
-  const hadExtraction = hasAppliedExtraction(toolCalls)
   const prevStreak = previousBriefing?.noNewExtractionStreak ?? 0
-  const noNewExtractionStreak = hadExtraction ? 0 : prevStreak + 1
+  const noNewExtractionStreak = hadNewOField ? 0 : prevStreak + 1
 
   return modelCalledBriefing
     ? { ...capturedBriefing, noNewExtractionStreak }
@@ -668,7 +642,12 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
   // PROJ-42: deterministic (code-computed, not LLM-guessed) noNewExtractionStreak,
   // always staged exactly once here regardless of whether the model called
   // produce_briefing this pass — see computeNextBriefing for the bridging logic.
-  capturedBriefing = computeNextBriefing(capturedBriefing, modelCalledBriefing, capturedToolCalls, opts.previousBriefing)
+  // PROJ-46 QA H-1 Fix D: diffed against opts.preTurnTracker (turn start, before
+  // merge/backfill/this online pass) vs. the snapshot right now (everything
+  // staged so far this pass) — same before/after pair updateODrought diffs
+  // below, just summed across the whole tracker instead of the locked step alone.
+  const hadNewOField = hasNewOField(opts.preTurnTracker, session.snapshot().stepTracker)
+  capturedBriefing = computeNextBriefing(capturedBriefing, modelCalledBriefing, hadNewOField, opts.previousBriefing)
   // PROJ-46 (ADR-023 D1): deterministic target_o_field fallback — "erstes leeres
   // O2–O6-Feld des gelockten Schritts" when the LLM omitted (or never set) it.
   if (capturedBriefing.target_o_field == null && opts.focusLock.stepId != null) {
