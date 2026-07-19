@@ -10,7 +10,6 @@ import {
   POTENZIAL_SLOT_NAMES,
   O_SLOT_FIELDS,
   groupSemanticSteps,
-  hasNewOField,
   type StepEntry,
   type SlotName,
   type OSlotField,
@@ -40,39 +39,27 @@ export const ANALYST_THINKING_BUDGET = 2048
 
 /**
  * Pure, deterministic (no LLM involved) — computes the next produce_briefing
- * payload for this pass. Extracted so the bridging logic (streak reset/increment
- * + carry-forward-when-not-called) is independently unit-testable without
- * mocking generateText/turnStore.
+ * payload for this pass. Extracted so the carry-forward-when-not-called logic
+ * is independently unit-testable without mocking generateText/turnStore.
  *
- * - hadNewOField=true (PROJ-46 QA H-1 Fix D: the tracker's total filled-O2–O6-
- *   field count grew this pass — interviewSemantic.ts's hasNewOField, the SAME
- *   before/after diff updateODrought uses for the locked step, just summed
- *   across the whole tracker) → streak resets to 0. Replaces the former
- *   "any applied knowledge-tool write" signal (hasAppliedExtraction): that one
- *   also fired on re-records, potenzial-only writes and floskel-triggered slots
- *   (run1 t34: 16 record_slot calls on a goodbye courtesy phrase) — noise that
- *   kept resetting the streak so the no-new-extraction safety net never reached
- *   its limit. "Real new process depth", not "a tool call succeeded".
  * - modelCalledBriefing=true → the LLM's own target_o_field/step_advance_ready/
- *   clarification_cards win, streak is merged in.
- * - modelCalledBriefing=false → the analyst prompt's own "skip on a boring turn"
- *   instruction was followed: carry the PREVIOUS briefing forward unchanged
- *   ("das vorherige next_briefing bleibt gültig") — only the streak advances,
- *   so the safety-net counter still sees every turn, including the ones judged
- *   non-substantial.
+ *   discovery_exhausted/clarification_cards win outright.
+ * - modelCalledBriefing=false → the analyst prompt's own "skip on a boring
+ *   turn" instruction was followed: carry the PREVIOUS briefing forward
+ *   unchanged ("das vorherige next_briefing bleibt gültig").
+ *
+ * PROJ-46/ADR-024 (B/C, D4): used to also compute the deterministic
+ * noNewExtractionStreak (a code-side safety-net counter) alongside the
+ * carry-forward. That streak — and the whole no-new-extraction completion
+ * path it fed — is replaced by the Analyst's own discovery_exhausted
+ * Readiness judgment; this function is now pure carry-forward.
  */
 export function computeNextBriefing(
   capturedBriefing: AnalystBriefing,
   modelCalledBriefing: boolean,
-  hadNewOField: boolean,
   previousBriefing: AnalystBriefing | null | undefined,
 ): AnalystBriefing {
-  const prevStreak = previousBriefing?.noNewExtractionStreak ?? 0
-  const noNewExtractionStreak = hadNewOField ? 0 : prevStreak + 1
-
-  return modelCalledBriefing
-    ? { ...capturedBriefing, noNewExtractionStreak }
-    : { ...(previousBriefing ?? {}), noNewExtractionStreak }
+  return modelCalledBriefing ? capturedBriefing : (previousBriefing ?? {})
 }
 
 export interface AnalystRunOptions {
@@ -83,10 +70,9 @@ export interface AnalystRunOptions {
   currentUserInput: string
   /**
    * The briefing as persisted from the PREVIOUS turn (interviews.next_briefing).
-   * Used to (a) carry target_o_field/clarification_cards forward
-   * unchanged when this pass makes no substantial change (the analyst prompt's
-   * own "don't call produce_briefing on a boring turn" instruction), and (b) as
-   * the base for the deterministic noNewExtractionStreak computed in code below.
+   * Used to carry target_o_field/clarification_cards/discovery_exhausted
+   * forward unchanged when this pass makes no substantial change (the analyst
+   * prompt's own "don't call produce_briefing on a boring turn" instruction).
    */
   previousBriefing?: AnalystBriefing | null
   /**
@@ -164,6 +150,16 @@ export const AnalystBriefingSchema = z.object({
     'step no longer needs dedicated depth and Explore can move on (to the next ' +
     'topic, or to Closing if none remain). Do NOT set true merely because a turn ' +
     'passed — only when the active step itself is judged sufficiently covered.'
+  ),
+  discovery_exhausted: z.boolean().optional().describe(
+    'PROJ-46/ADR-024 (B/C): true iff YOU judge discovery itself as exhausted — the ' +
+    'registered processes are covered AND the employee has nothing substantial left ' +
+    'to add (repeating themselves, giving only courtesy/closing remarks, explicitly ' +
+    'saying there is nothing more). This is a Completion-Readiness SIGNAL, not a ' +
+    'command — the orchestrator decides, guarded against an empty/barely-started ' +
+    'interview. It can NEVER express a farewell or instruct the Talker to say ' +
+    'goodbye — only your own judgment that discovery is done. Set it false or omit ' +
+    'it whenever there is more to explore, even if the current turn itself was thin.'
   ),
 })
 
@@ -260,6 +256,17 @@ STUFE 4 — ZIEL-O-FELD + ADVANCE-SIGNAL (jeden Turn mit aktivem/gesperrtem Schr
     Setze es NICHT nur weil ein Turn vergangen ist — nur wenn der Schritt selbst ausreichend
     abgedeckt wirkt.
 
+STUFE 4b — COMPLETION-READINESS (jeden Turn prüfen, PROJ-46/ADR-024):
+  → produce_briefing.discovery_exhausted = true setzen, wenn DU urteilst: die Entdeckung ist
+    erschöpft — alle genannten Prozesse sind erfasst UND der Mitarbeiter liefert nichts
+    Substanzielles mehr (wiederholt sich, weicht aus, gibt nur noch Höflichkeits-/
+    Abschiedsfloskeln, sagt explizit "das war's" oder "mir fällt nichts mehr ein").
+    Dies ist NUR ein Signal für das System — du beendest das Interview NICHT selbst und
+    formulierst KEINE Verabschiedung. Das System entscheidet, geguardet gegen ein leeres/
+    kaum begonnenes Interview.
+  → Setze es NICHT, solange noch erkennbar Substanzielles zu entdecken ist, auch wenn der
+    AKTUELLE Turn für sich genommen dünn war — nur wenn das Gespräch insgesamt leerläuft.
+
 STUFE 5 — CLARIFICATION CARDS (ab Phase=closing): Für verbleibende Slot-Lücken
 
 **register_step** — ANTI-FRAGMENTATION PFLICHT VOR JEDEM AUFRUF: Lies den Schritt-Tracker. Gibt es einen Schritt mit demselben Hauptbegriff oder Prozessgegenstand? Wenn ja → record_slot mit dem EXAKTEN bestehenden Titel.
@@ -295,7 +302,7 @@ den zurückgegebenen matched_title als step_title verwenden.
 **link_bottleneck**: Wenn Pain Point klar an einem registrierten Schritt verortet werden kann.
 
 **produce_briefing**: Als LETZTEN Tool-Call aufrufen — exakt EINMAL pro Turn, NIEMALS mehrfach.
-produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER step_advance_ready wechselt auf true. Wenn der Turn keine neue extrahierbare Information enthielt (reine Rückfrage, Smalltalk, Wiederholung, Persona weicht aus) → produce_briefing NICHT aufrufen; das vorherige target_o_field bleibt gültig (der No-New-Extraction-Zähler wird unabhängig davon deterministisch im Code weitergeführt).
+produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Änderung stattfand: neuer Step registriert ODER Step-Status gewechselt ODER mindestens ein neuer Slot befüllt ODER step_advance_ready wechselt auf true ODER discovery_exhausted trifft zu (STUFE 4b) — GERADE ein inhaltlich leerer/ausweichender Turn ist der typische Auslöser für discovery_exhausted, hier also aufrufen statt überspringen. Nur bei einer reinen Rückfrage/Smalltalk-Wiederholung OHNE dass discovery_exhausted zutrifft → produce_briefing NICHT aufrufen; das vorherige target_o_field bleibt gültig.
 Wenn du produce_briefing bereits einmal aufgerufen hast: Tool-Sequenz sofort beenden — kein weiterer produce_briefing-Call unter keinen Umständen.
 
 ## Clarification Cards (ab Phase=closing)
@@ -326,7 +333,7 @@ Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fa
 - Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
 - Abteilung: ${ctx.department}
 - Fokusthemen: ${ctx.focusTopics ?? 'keine spezifischen'}
-- Step-Tracker: ${ctx.stepTracker.length} Steps registriert (Hard Cap: 5 — keinen neuen register_step wenn bereits 5 existieren)
+- Step-Tracker: ${ctx.stepTracker.length} Steps registriert
 - ${activeStepLine}${focusLockLine}
 
 Schritt-IDs (nutze step_id in record_slot statt step_title):
@@ -578,8 +585,9 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
   const knowledgeTools = buildTools(session, opts.currentUserInput, { source: 'analyst_online' })
 
   // PROJ-42: staging moved out of this tool's execute (see post-generateText
-  // block below) — the deterministic noNewExtractionStreak needs the FULL set
-  // of tool calls made this pass, which isn't known until generateText returns.
+  // block below) — computeNextBriefing's carry-forward decision needs to know
+  // whether produce_briefing was called at all this pass, which isn't settled
+  // until generateText returns.
   let modelCalledBriefing = false
   const produceBriefingTool = tool({
     description: 'Generates the briefing for the next Talker turn. Call LAST, after all knowledge tools. Called exactly once.',
@@ -639,15 +647,9 @@ async function runOnlinePass(opts: OnlinePassOptions): Promise<{ briefing: Analy
     })
   }
 
-  // PROJ-42: deterministic (code-computed, not LLM-guessed) noNewExtractionStreak,
-  // always staged exactly once here regardless of whether the model called
-  // produce_briefing this pass — see computeNextBriefing for the bridging logic.
-  // PROJ-46 QA H-1 Fix D: diffed against opts.preTurnTracker (turn start, before
-  // merge/backfill/this online pass) vs. the snapshot right now (everything
-  // staged so far this pass) — same before/after pair updateODrought diffs
-  // below, just summed across the whole tracker instead of the locked step alone.
-  const hadNewOField = hasNewOField(opts.preTurnTracker, session.snapshot().stepTracker)
-  capturedBriefing = computeNextBriefing(capturedBriefing, modelCalledBriefing, hadNewOField, opts.previousBriefing)
+  // PROJ-46/ADR-024 (B/C): carry the previous briefing forward unchanged when
+  // the model skipped produce_briefing this pass (see computeNextBriefing).
+  capturedBriefing = computeNextBriefing(capturedBriefing, modelCalledBriefing, opts.previousBriefing)
   // PROJ-46 (ADR-023 D1): deterministic target_o_field fallback — "erstes leeres
   // O2–O6-Feld des gelockten Schritts" when the LLM omitted (or never set) it.
   if (capturedBriefing.target_o_field == null && opts.focusLock.stepId != null) {

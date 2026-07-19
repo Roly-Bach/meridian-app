@@ -15,18 +15,6 @@ import {
 // buildStaticPrompt path). buildTools is now a Deep-Module-internal detail of the
 // Analyst (interviewAnalyst.ts is the only remaining consumer).
 
-/**
- * PROJ-46 QA H-1 Fix D2: the Analyst's own system prompt already advertises this
- * as a "Hard Cap" (interviewAnalyst.ts's buildAnalystSystemPrompt footer), but it
- * was advisory-only — nothing in register_step actually enforced it. Unbounded
- * step registration (observed unbounded specifically during Closing, H-2) breaks
- * the termination guarantee's "finite steps" premise: the O-Drought floor only
- * guarantees convergence because each step's drought can reset at most 7 times
- * (once per O2–O6 field) before it's exhausted — an unbounded step count means
- * an unbounded number of drought cycles to exhaust them all.
- */
-const MAX_REGISTERED_STEPS = 5
-
 // Normalize step title for substring-based dedup — strips whole-string
 // process noun suffix. Used only inside register_step for title dedup.
 function normalizeStepTitleForDedup(title: string): string {
@@ -214,18 +202,6 @@ export function buildTools(
                 message: `Ähnliche Schritte gefunden: ${softSimilar.map(t => `"${t}"`).join(', ')}. Nutze record_slot mit einem dieser Titel wenn es derselbe Prozess ist. Nur fortfahren wenn dieser Schritt einen anderen Hauptprozess beschreibt.`,
                 existing_step_titles: current.map((s) => s.title),
               }
-            }
-          }
-
-          // Fix D2: no dedup layer matched — this would register a genuinely new,
-          // distinct step. Enforce the hard cap here (deterministically), not just
-          // in the prompt text.
-          if (current.length >= MAX_REGISTERED_STEPS) {
-            return {
-              success: false,
-              hard_cap_reached: true,
-              message: `Hard Cap von ${MAX_REGISTERED_STEPS} Schritten erreicht — keinen weiteren register_step-Aufruf. Nutze record_slot auf einem der bestehenden Schritte für weitere Details.`,
-              existing_step_titles: current.map((s) => s.title),
             }
           }
 

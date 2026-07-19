@@ -1,6 +1,6 @@
 # ADR-024: Analyst-Completion-Readiness — geguardetes Boolean, Orchestrator bleibt Autorität (Amendment zu ADR-023 D2/D4)
 
-**Status:** Proposed (2026-07-19 — via `/architecture` PROJ-46 QA-Runde 2)
+**Status:** Accepted (2026-07-19 — via `/architecture` PROJ-46 QA-Runde 2; angenommen vor `/backend` B/C)
 **Author:** lyas53
 **Repository:** Roly-Bach/meridian-app
 **Auslöser:** PROJ-46 QA-Runde 2 (2026-07-18/19). QA-Runde 1 fand H-1: für ein realistisches (nicht voll-abgedecktes) Interview feuert die deterministische Completion faktisch nie außer per Wall-Clock-Force (KI-23-Completion-Regression). Fix-Runde-1 (A+D+D2) holte die Terminierung deterministisch zurück, aber flach; ein K-Experiment in Runde 2 zeigte: das Anheben von K holt die Tiefe zurück, reintroduziert aber den Farewell-Loop (Loop-Länge ≈ K). K ist der falsche Hebel.

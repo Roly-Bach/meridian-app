@@ -21,10 +21,11 @@ import type { AnalystBriefing } from './interviewTypes'
  *
  * PROJ-46 (ADR-023 D4) note: the scripted CLOSING_PROBE_TEXT injection this test
  * originally pinned is gone — Closing is a Talker-formulated discovery continuation
- * now, and completion binds to ctx.phase already being 'closing' plus the
- * no-new-extraction streak, not a scripted probe having been asked+answered. The
+ * now. PROJ-46/ADR-024 (B/C) note: completion now binds to ctx.phase already being
+ * 'closing' plus the Analyst's own discovery_exhausted Readiness judgment
+ * (Coverage-Sanity-guarded) — the former no-new-extraction streak is gone. The
  * turn-by-turn narrative below is preserved for its historical context; assertions
- * are updated to the new completion mechanism.
+ * are updated to the current completion mechanism.
  *
  * This test reconstructs a plausible per-turn state trace using the REAL user inputs,
  * REAL timestamps and the REAL final step_tracker pulled from Supabase — it is not a
@@ -103,8 +104,8 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
     const tracker = [makeStep('Softwareentwicklung', 'walkthrough', { id: 'S001' })]
     const ctx = ctxAt({ phase: 'explore', stepTracker: tracker, timerMinutes: 2, historyLength: 14 })
 
-    // No advance signal, no streak exhaustion, well under the 80% soft anchor (8min) → stays explore.
-    expect(resolveTurnLifecycle(ctx, { noNewExtractionStreak: 0 }).phase).toBe('explore')
+    // No advance signal, no discovery_exhausted judgment, well under the 80% soft anchor (8min) → stays explore.
+    expect(resolveTurnLifecycle(ctx, {}).phase).toBe('explore')
   })
 
   it('turn 9 (real elapsed ~3min): advances to closing once the Analyst judges the process sufficiently covered — content-driven, and never completes on this entry turn', () => {
@@ -145,16 +146,17 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
     // FAREWELL_MARKERS regex ("wünsche ich dir" — substring "wünsche dir" required,
     // never matched). The new mechanism does not use text heuristics at all — it is
     // irrelevant here too, since resolveTurnLifecycle never inspects assistant text
-    // for farewell language. By this point several consecutive turns produced no new
-    // extraction (Meetings' slots got filled turn 10-11, then only farewell exchanges
-    // 12-14) — the streak reaches the default limit K=3 while already in closing.
+    // for farewell language. By this point several consecutive turns produced only
+    // farewell exchanges (12-14) — the Analyst judges discovery exhausted while
+    // already in closing, Coverage-Sanity satisfied by REAL_FINAL_TRACKER's real
+    // (non-empty, non-full) O-field coverage (PROJ-46/ADR-024 B/C).
     const ctx = ctxAt({
       phase: 'closing',
       stepTracker: REAL_FINAL_TRACKER, // real final tracker — neither step is 'done'
       timerMinutes: 4,
       historyLength: 14,
     })
-    const analystSuggestion: AnalystBriefing = { noNewExtractionStreak: 3 }
+    const analystSuggestion: AnalystBriefing = { discovery_exhausted: true }
 
     const lifecycle = resolveTurnLifecycle(ctx, analystSuggestion)
     expect(lifecycle.phase).toBe('closing')

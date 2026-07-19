@@ -96,17 +96,23 @@ export interface AnalystBriefing {
    */
   step_advance_ready?: boolean
   /**
-   * PROJ-42 No-New-Extraction-Zähler: deterministically computed in code (NOT by
-   * the LLM) from whether the analyst pass made any knowledge-tool calls this
-   * turn. Threaded through the same next_briefing bridge as usedFillerPhrases.
-   * Safety-net escalation to 'closing' when this reaches the configured limit.
+   * PROJ-46/ADR-024 (B/C, D1): the Analyst's own geguardetes Completion-
+   * Readiness-Urteil — "Entdeckung erschöpft, die Person bietet nichts
+   * Substanzielles mehr". LLM-authored (AnalystBriefingSchema), read by
+   * resolveTurnLifecycle: explore+Guard opens Closing (stellt weiterhin
+   * mindestens eine Entdeckungsfrage — nie im selben Turn abgeschlossen, da
+   * ctx.phase zu diesem Zeitpunkt noch 'explore' ist), closing+Guard
+   * schließt ab. A structured boolean, never a farewell/termination channel
+   * (Invariante I1/I2 aus ADR-023 bleiben wahr) — the Talker still only says
+   * goodbye once resolveTurnLifecycle has actually decided complete:true.
+   * Replaces the removed noNewExtractionStreak safety net (ADR-024 D4).
    */
-  noNewExtractionStreak?: number
+  discovery_exhausted?: boolean
   /**
    * PROJ-44 Remediation (M-1/M-3 shared primitive): deterministic O-field
    * drought state for the currently focus-locked step. Threaded through
-   * next_briefing like noNewExtractionStreak/usedFillerPhrases — see
-   * interviewOrchestrator.ts's computeFocusLock/updateODrought.
+   * next_briefing like usedFillerPhrases — see interviewOrchestrator.ts's
+   * computeFocusLock/updateODrought.
    */
   oDrought?: ODroughtState
 }

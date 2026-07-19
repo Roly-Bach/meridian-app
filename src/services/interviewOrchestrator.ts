@@ -44,35 +44,47 @@ export interface TurnLifecycle {
  * PROJ-42 (KI-23 fix): the previous turn-count escalation ladder
  * (computeTurnBudget: 40/56/64/80% thresholds across six phases) was
  * content-blind and the root cause of the Tim bug — it escalated after ~9
- * turns regardless of how much had actually been covered. Replaced by two
- * signals within a single 'explore' phase:
- *   1. Content-driven: the Analyst's stepAdvanceReady signal + open-topics check.
- *   2. Safety nets: a deterministic no-new-extraction streak counter (content-
- *      aware but code-computed, not LLM-guessed) and a wall-clock soft anchor
- *      at ~80% of the interview's time budget (protects the interviewee's
- *      agreed time, not conversation quality — that's the streak counter's job).
- * "Whichever comes first" between full coverage and the soft anchor decides
- * the move to 'closing'.
+ * turns regardless of how much had actually been covered. Replaced by signals
+ * within a single 'explore' phase:
+ *   1. Content-driven: the Analyst's stepAdvanceReady signal + tracker-derived
+ *      O-Drought exhaustion check.
+ *   2. PROJ-46/ADR-024 (B/C): the Analyst's own discovery_exhausted Readiness
+ *      judgment (Coverage-Sanity-guarded) — replaces the former deterministic
+ *      no-new-extraction streak counter, which was breadth-blind and produced
+ *      a K-turn Farewell-Loop once the Analyst had already judged itself done.
+ *   3. Upper bound: a wall-clock soft anchor at ~80% of the interview's time
+ *      budget (protects the interviewee's agreed time, not conversation
+ *      quality — that's discovery_exhausted's job).
+ * "Whichever comes first" between content-driven readiness and the soft
+ * anchor decides the move to 'closing'.
  */
 const SOFT_ANCHOR_RATIO = 0.8
 const MAX_GRACE_MINUTES = 3
-const DEFAULT_NO_NEW_EXTRACTION_LIMIT = 3
 const DEFAULT_O_DROUGHT_LIMIT = 3
-
-/** Eval-tunable via NO_NEW_EXTRACTION_LIMIT env var (AC: "Startwert K=3, eval-tunbar"). */
-function noNewExtractionLimit(): number {
-  const env = Number(process.env.NO_NEW_EXTRACTION_LIMIT)
-  return Number.isFinite(env) && env > 0 ? env : DEFAULT_NO_NEW_EXTRACTION_LIMIT
-}
+/**
+ * PROJ-46/ADR-024 (B/C, D3 Coverage-Sanity): the Analyst's discovery_exhausted
+ * Readiness is only honored once at least one registered step has been
+ * substantially drilled — guards against an empty/barely-started interview
+ * completing on a premature Readiness judgment ("nie leer abschließen").
+ */
+const MIN_SUBSTANTIAL_O_FIELDS = 2
 
 /**
  * PROJ-44 Remediation (M-1/M-3): consecutive turns without a new O-field for the
- * locked step before its drought fires. Eval-tunable via O_DROUGHT_LIMIT env var,
- * same pattern as NO_NEW_EXTRACTION_LIMIT — measure-first, no fixed threshold.
+ * locked step before its drought fires. Eval-tunable via O_DROUGHT_LIMIT env var
+ * — measure-first, no fixed threshold.
  */
 function oDroughtLimit(): number {
   const env = Number(process.env.O_DROUGHT_LIMIT)
   return Number.isFinite(env) && env > 0 ? env : DEFAULT_O_DROUGHT_LIMIT
+}
+
+/**
+ * PROJ-46/ADR-024 (B/C, D3): Coverage-Sanity guard for discovery_exhausted —
+ * see MIN_SUBSTANTIAL_O_FIELDS above.
+ */
+function hasSubstantialCoverage(stepTracker: StepEntry[]): boolean {
+  return stepTracker.some((s) => countFilledOFields(s) >= MIN_SUBSTANTIAL_O_FIELDS)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -220,9 +232,9 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
       const hasActiveStep = hasUnexhaustedStep(ctx.stepTracker, ctx.oDrought)
 
       // Wall-clock soft anchor (~80% of budget): "whichever comes first" between
-      // content coverage and the anchor. Deliberately content-blind (that's the
-      // no-new-extraction counter's job below) — protects the interviewee's
-      // agreed time budget, not conversation quality.
+      // content coverage and the anchor. Deliberately content-blind (that's
+      // discovery_exhausted's job below) — protects the interviewee's agreed
+      // time budget, not conversation quality.
       const softAnchorMinutes = ctx.maxDurationMinutes * SOFT_ANCHOR_RATIO
       if (ctx.timerMinutes >= softAnchorMinutes) {
         // A step freshly/actively being explored gets a short, capped grace
@@ -235,11 +247,18 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
         return 'closing'
       }
 
-      // Safety net: content-blind escalation after K consecutive turns with zero
-      // new extraction — catches disengaged/unproductive conversations without
-      // reproducing the old pure turn-count ladder (KI-23).
-      const noNewExtractionStreak = analystSuggestion?.noNewExtractionStreak ?? 0
-      if (noNewExtractionStreak >= noNewExtractionLimit()) return 'closing'
+      // PROJ-46/ADR-024 (B/C, D1/D2): the Analyst's own Completion-Readiness
+      // judgment ("discovery is exhausted, nothing substantial left") may open
+      // Closing directly — replaces the former no-new-extraction streak safety
+      // net, which was breadth-blind and K-turn-delayed (QA-Runde 2's Farewell-
+      // Loop). Coverage-Sanity-guarded so it can never fire on an empty/barely-
+      // started interview. This turn's ctx.phase is still 'explore' here, so
+      // resolveTurnLifecycle's terminal check below can never complete on the
+      // SAME turn Closing opens — at least one more discovery question is
+      // always asked first (the D2 guarantee).
+      if (analystSuggestion?.discovery_exhausted === true && hasSubstantialCoverage(ctx.stepTracker)) {
+        return 'closing'
+      }
 
       // Primary driver — content-based advance: the active process is judged
       // sufficiently explored (Analyst signal) AND no registered step remains
@@ -306,12 +325,16 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
  * PROJ-46 (ADR-023 D4): the closing terminal evaluation no longer depends on
  * a scripted probe having been asked+answered (that whole injection machinery
  * — CLOSING_PROBE_TEXT/shouldInjectClosingProbe/closingProbeAnswerReceived —
- * is deleted). Closing is now a Talker-formulated discovery continuation;
- * completion binds to ctx.phase (the phase LOADED at turn start) already
- * being 'closing' AND the no-new-extraction streak having reached the limit.
- * The explore→closing ENTRY turn therefore always has ctx.phase==='explore'
- * and can never soft-confirm-complete on the same turn — it always asks at
- * least one more discovery question first.
+ * is deleted). Closing is now a Talker-formulated discovery continuation.
+ *
+ * PROJ-46/ADR-024 (B/C, D2/D4): completion binds to ctx.phase (the phase
+ * LOADED at turn start) already being 'closing' AND the Analyst's own
+ * discovery_exhausted Readiness judgment (Coverage-Sanity-guarded) — replaces
+ * the former no-new-extraction streak, which was breadth-blind and reliably
+ * produced a K-turn Farewell-Loop once the Analyst had already judged itself
+ * done (QA-Runde 2). The explore→closing ENTRY turn therefore always has
+ * ctx.phase==='explore' and can never soft-confirm-complete on the same
+ * turn — it always asks at least one more discovery question first.
  *
  * Fail-safe: runInterviewTurn.ts vetoes a soft_confirm result when the
  * synchronous Analyst call failed this turn (ADR-021 D4) — hard_stop is
@@ -339,16 +362,19 @@ export function resolveTurnLifecycle(ctx: OrchestratorContext, analystSuggestion
   // below — no separate "don't complete out from under it" check needed, since
   // a non-closing target can never complete (D2).
   if (target === 'closing') {
-    const noNewExtractionStreak = analystSuggestion?.noNewExtractionStreak ?? 0
-    if (ctx.phase === 'closing' && noNewExtractionStreak >= noNewExtractionLimit()) {
+    const readyToComplete = ctx.phase === 'closing'
+      && analystSuggestion?.discovery_exhausted === true
+      && hasSubstantialCoverage(ctx.stepTracker)
+    if (readyToComplete) {
       const cards = analystSuggestion?.clarification_cards
       if (cards && cards.length > 0) {
         return { phase: 'clarification', complete: false, reason: null }
       }
       return { phase: 'closing', complete: true, reason: 'soft_confirm' }
     }
-    // Fresh entry into Closing, OR streak still below the limit — the Talker
-    // asks another freshly-formulated discovery question (ADR-023 D4).
+    // Fresh entry into Closing, OR the Analyst hasn't judged discovery
+    // exhausted yet — the Talker asks another freshly-formulated discovery
+    // question (ADR-023 D4).
     return { phase: 'closing', complete: false, reason: null }
   }
 

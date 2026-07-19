@@ -45,6 +45,19 @@ const fullSlots: StepEntry['slots'] = {
   hilfsmittel: { value: ['SAP'], quote: 'in SAP', nicht_befund_typ: null },
 }
 
+// PROJ-46/ADR-024 (B/C, D3 Coverage-Sanity): exactly 2 filled O2–O6 fields —
+// satisfies MIN_SUBSTANTIAL_O_FIELDS so discovery_exhausted can be honored,
+// without being fully covered (isolates the Coverage-Sanity guard from D3's
+// separate "full coverage exhausts a step" behavior).
+const substantiallyCoveredSlots: StepEntry['slots'] = {
+  entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
+  tazite_cues: { value: ['SAP-Wissen'], quote: 'SAP', nicht_befund_typ: null },
+  ausnahmen: null,
+  inputs: null,
+  outputs: null,
+  hilfsmittel: null,
+}
+
 // Full O2–O6 coverage (7 fields: 6 tazite + abhaengigkeiten) but streak still low —
 // the D3 "exhaustion fires on full coverage" scenario. Potenzial is irrelevant to
 // O-coverage (O2–O6 only), left empty on purpose.
@@ -132,28 +145,27 @@ describe('resolveTurnLifecycle — explore (content-driven, PROJ-42)', () => {
     expect(resolveTurnLifecycle(ctx, { step_advance_ready: true }).phase).toBe('closing')
   })
 
-  describe('no-new-extraction safety net', () => {
-    it('stays in explore below the default streak limit (K=3)', () => {
-      const ctx = baseCtx({ phase: 'explore' })
-      expect(resolveTurnLifecycle(ctx, { noNewExtractionStreak: 2 }).phase).toBe('explore')
+  // PROJ-46/ADR-024 (B/C, D1/D2): replaces the former no-new-extraction streak
+  // safety net — the Analyst's own discovery_exhausted Readiness judgment may
+  // open Closing directly, Coverage-Sanity-guarded against an empty/barely-
+  // started interview.
+  describe('discovery_exhausted Readiness (PROJ-46/ADR-024 B/C)', () => {
+    it('stays in explore when discovery_exhausted is true but no step is substantially covered yet (Coverage-Sanity guard)', () => {
+      const ctx = baseCtx({ phase: 'explore', stepTracker: [] })
+      expect(resolveTurnLifecycle(ctx, { discovery_exhausted: true }).phase).toBe('explore')
     })
 
-    it('advances to closing once the streak reaches the default limit (K=3)', () => {
-      const ctx = baseCtx({ phase: 'explore' })
-      expect(resolveTurnLifecycle(ctx, { noNewExtractionStreak: 3 }).phase).toBe('closing')
+    it('opens closing when discovery_exhausted is true and at least one step is substantially covered', () => {
+      const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+      const ctx = baseCtx({ phase: 'explore', stepTracker: tracker })
+      expect(resolveTurnLifecycle(ctx, { discovery_exhausted: true }).phase).toBe('closing')
     })
 
-    it('respects NO_NEW_EXTRACTION_LIMIT env override', () => {
-      const prev = process.env.NO_NEW_EXTRACTION_LIMIT
-      process.env.NO_NEW_EXTRACTION_LIMIT = '5'
-      try {
-        const ctx = baseCtx({ phase: 'explore' })
-        expect(resolveTurnLifecycle(ctx, { noNewExtractionStreak: 3 }).phase).toBe('explore')
-        expect(resolveTurnLifecycle(ctx, { noNewExtractionStreak: 5 }).phase).toBe('closing')
-      } finally {
-        if (prev === undefined) delete process.env.NO_NEW_EXTRACTION_LIMIT
-        else process.env.NO_NEW_EXTRACTION_LIMIT = prev
-      }
+    it('stays in explore when discovery_exhausted is false/omitted, even with substantial coverage', () => {
+      const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+      const ctx = baseCtx({ phase: 'explore', stepTracker: tracker })
+      expect(resolveTurnLifecycle(ctx, {}).phase).toBe('explore')
+      expect(resolveTurnLifecycle(ctx, { discovery_exhausted: false }).phase).toBe('explore')
     })
   })
 
@@ -220,35 +232,48 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
   // The explore→closing ENTRY turn: ctx.phase is still 'explore' (loaded state),
   // even though resolvePhaseTransition resolves to 'closing' this turn — must
   // never soft-confirm-complete on this same turn (≥1 discovery question guarantee).
-  it('never completes on the explore→closing entry turn, even with the streak already at the limit', () => {
-    const ctx = baseCtx({ phase: 'explore', timerMinutes: 24, maxDurationMinutes: 30, stepTracker: [] })
-    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 99 })
+  it('never completes on the explore→closing entry turn, even with discovery_exhausted already true', () => {
+    // Well under the soft anchor (timerMinutes=5 vs. 24) so the transition is
+    // driven by discovery_exhausted itself, not the wall-clock branch.
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+    const ctx = baseCtx({ phase: 'explore', timerMinutes: 5, maxDurationMinutes: 30, stepTracker: tracker })
+    const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
     expect(result.phase).toBe('closing')
     expect(result.complete).toBe(false)
     expect(result.reason).toBe(null)
   })
 
-  it('stays in closing, not yet complete, when already in closing but the streak is below the limit', () => {
-    const ctx = baseCtx({ phase: 'closing', stepTracker: [] })
-    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 1 })
+  it('stays in closing, not yet complete, when already in closing but discovery_exhausted is false/omitted', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+    const ctx = baseCtx({ phase: 'closing', stepTracker: tracker })
+    const result = resolveTurnLifecycle(ctx, {})
     expect(result.phase).toBe('closing')
     expect(result.complete).toBe(false)
   })
 
-  it('completes once already in closing AND the no-new-extraction streak reaches the limit, no cards', () => {
-    const ctx = baseCtx({ phase: 'closing', stepTracker: [] })
-    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 3 })
+  it('completes once already in closing AND discovery_exhausted is true, Coverage-Sanity satisfied, no cards', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+    const ctx = baseCtx({ phase: 'closing', stepTracker: tracker })
+    const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
     expect(result.phase).toBe('closing')
     expect(result.complete).toBe(true)
     expect(result.reason).toBe('soft_confirm')
   })
 
+  it('does NOT complete when discovery_exhausted is true but no step is substantially covered (Coverage-Sanity guard, nie leer abschließen)', () => {
+    const ctx = baseCtx({ phase: 'closing', stepTracker: [] })
+    const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
+    expect(result.phase).toBe('closing')
+    expect(result.complete).toBe(false)
+  })
+
   it('advances to clarification instead of completing when the Analyst provided clarification_cards', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
     const analystSuggestion = {
-      noNewExtractionStreak: 3,
+      discovery_exhausted: true,
       clarification_cards: [{ process_step_id: 'uuid-1', step_title: 'Rechnungsprüfung', question: 'Wie oft?', options: ['Täglich', 'Wöchentlich', 'Andere'], slot_key: 'frequency' }],
     }
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: [] }), analystSuggestion)
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: tracker }), analystSuggestion)
     expect(result.phase).toBe('clarification')
     expect(result.complete).toBe(false)
   })
@@ -267,7 +292,7 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
     it('routes back to explore when a knowledge write was applied this turn, even with no exploring step', () => {
       const doneStep = makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S001' })
       const ctx = baseCtx({ phase: 'closing', stepTracker: [doneStep], hadExtractionThisTurn: true })
-      const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 5 })
+      const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
       expect(result.phase).toBe('explore')
       expect(result.complete).toBe(false)
     })
@@ -275,15 +300,15 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
     it('stays in closing (and can complete) when no knowledge write was applied this turn', () => {
       const doneStep = makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S001' })
       const ctx = baseCtx({ phase: 'closing', stepTracker: [doneStep], hadExtractionThisTurn: false })
-      const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 3 })
+      const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
       expect(result.phase).toBe('closing')
       expect(result.complete).toBe(true)
     })
   })
 
-  it('does not rely on text-heuristic farewell-loop detection (removed, KI-23) — repeated goodbyes alone do not complete', () => {
+  it('does not rely on text-heuristic farewell-loop detection (removed, KI-23) — repeated goodbyes alone do not complete without discovery_exhausted', () => {
     const ctx = baseCtx({ phase: 'closing', stepTracker: [] })
-    const result = resolveTurnLifecycle(ctx, { noNewExtractionStreak: 2 })
+    const result = resolveTurnLifecycle(ctx, {})
     expect(result.complete).toBe(false)
   })
 })
@@ -342,12 +367,13 @@ describe('resolveTurnLifecycle — D2 terminination invariant', () => {
     expect(result.reason).toBe(null)
   })
 
-  it('does NOT complete when clarification_cards are pending, even with the streak at the limit', () => {
+  it('does NOT complete when clarification_cards are pending, even with discovery_exhausted true', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
     const analystSuggestion = {
-      noNewExtractionStreak: 3,
+      discovery_exhausted: true,
       clarification_cards: [{ process_step_id: 'x', step_title: 'Test', question: 'Wie oft?', options: ['A', 'B'], slot_key: 'frequency' }],
     }
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: [] }), analystSuggestion)
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: tracker }), analystSuggestion)
     expect(result.complete).toBe(false)
   })
 
@@ -360,11 +386,11 @@ describe('resolveTurnLifecycle — D2 terminination invariant', () => {
 
   // PROJ-46 (ADR-023 D4, M7-b): same scenario, but via the generalized
   // hadExtractionThisTurn veto instead of a still-exploring step.
-  it('does NOT complete when a knowledge write was applied this turn (M7-b), even with the streak at the limit', () => {
-    const tracker = [makeStep('Reisekostenabrechnung', 'walkthrough', undefined, { id: 'S002' })]
+  it('does NOT complete when a knowledge write was applied this turn (M7-b), even with discovery_exhausted true', () => {
+    const tracker = [makeStep('Reisekostenabrechnung', 'walkthrough', substantiallyCoveredSlots, { id: 'S002' })]
     const result = resolveTurnLifecycle(
       baseCtx({ phase: 'closing', stepTracker: tracker, hadExtractionThisTurn: true }),
-      { noNewExtractionStreak: 3 },
+      { discovery_exhausted: true },
     )
     expect(result.complete).toBe(false)
     expect(result.reason).toBe(null)

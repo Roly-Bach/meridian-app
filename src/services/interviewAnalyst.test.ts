@@ -117,75 +117,37 @@ describe('interviewAnalyst — WP5 system-prompt prefix stability', () => {
   })
 })
 
-// ─── PROJ-42: computeNextBriefing — deterministic No-New-Extraction-Zähler ───────
-// This is the code-computed (not LLM-guessed) bridging logic behind the safety-net
-// counter interviewOrchestrator.ts reads to escalate Explore → Closing when a
-// conversation stalls. Extracted as a pure function so the bridging semantics are
-// testable without mocking generateText/turnStore.
+// ─── PROJ-46/ADR-024 (B/C): computeNextBriefing — pure carry-forward ─────────────
+// Used to also compute the deterministic no-new-extraction streak (PROJ-42);
+// that streak — and the whole safety-net completion path it fed — is replaced
+// by the Analyst's own discovery_exhausted Readiness judgment (D4). This is now
+// pure carry-forward-when-skipped logic, extracted as a pure function so the
+// bridging semantics are testable without mocking generateText/turnStore.
 
 const emptyBriefing: AnalystBriefing = {}
 
-describe('computeNextBriefing — PROJ-42 deterministic streak', () => {
-  // PROJ-46 QA H-1 Fix D: the 3rd param used to be the pass's toolCalls[], reset
-  // on ANY applied knowledge-tool write (hasAppliedExtraction). Now it's the
-  // caller-computed hadNewOField boolean (interviewSemantic.ts's hasNewOField,
-  // diffed pre-/post-pass) — "real new O2–O6 depth", not "a tool call succeeded".
-  // The old applied:true/applied:false toolCalls distinction is now the CALLER's
-  // job (runOnlinePass diffs the tracker), not this function's.
-  it('resets the streak to 0 when hadNewOField is true', () => {
+describe('computeNextBriefing — PROJ-46/ADR-024 pure carry-forward', () => {
+  it('keeps the model-authored briefing outright when produce_briefing was called', () => {
     const result = computeNextBriefing(
-      { target_o_field: 'ausnahmen' },
-      true,
-      true,
-      { target_o_field: 'inputs', noNewExtractionStreak: 2 },
-    )
-    expect(result.noNewExtractionStreak).toBe(0)
-  })
-
-  // PROJ-44 Remediation Runde 2 (Fix 2/H-2) / PROJ-46 Fix D: neither a guard-
-  // rejected write nor a re-record/potenzial-only/floskel-triggered write (none
-  // of which grow the O-field count) resets the streak — this is the exact
-  // mechanism that made the safety net practically unreachable (53 record_slot
-  // attempts vs. 17 real writes in one QA sample; later, 16 floskel record_slot
-  // calls on a goodbye courtesy phrase in another).
-  it('does NOT reset the streak when hadNewOField is false', () => {
-    const result = computeNextBriefing(
-      emptyBriefing,
-      true,
-      false,
-      { target_o_field: 'inputs', noNewExtractionStreak: 2 },
-    )
-    expect(result.noNewExtractionStreak).toBe(3)
-  })
-
-  it('starts the streak at 1 when there is no previous briefing', () => {
-    const result = computeNextBriefing(emptyBriefing, true, false, null)
-    expect(result.noNewExtractionStreak).toBe(1)
-  })
-
-  it('keeps the model-authored target_o_field when produce_briefing was called', () => {
-    const result = computeNextBriefing(
-      { target_o_field: 'ausnahmen' },
-      true,
+      { target_o_field: 'ausnahmen', discovery_exhausted: true },
       true,
       { target_o_field: 'inputs' },
     )
     expect(result.target_o_field).toBe('ausnahmen')
+    expect(result.discovery_exhausted).toBe(true)
   })
 
-  it('carries the previous briefing forward unchanged (besides the streak) when produce_briefing was NOT called', () => {
+  it('carries the previous briefing forward unchanged when produce_briefing was NOT called', () => {
     // The analyst prompt's own instruction: skip produce_briefing on a turn with
     // no substantial change — "das vorherige next_briefing bleibt gültig".
     const previous: AnalystBriefing = { target_o_field: 'inputs', clarification_cards: [] }
-    const result = computeNextBriefing(emptyBriefing, false, false, previous)
-    expect(result.target_o_field).toBe('inputs')
-    expect(result.noNewExtractionStreak).toBe(1)
+    const result = computeNextBriefing(emptyBriefing, false, previous)
+    expect(result).toEqual(previous)
   })
 
   it('falls back to an empty briefing (not a crash) when produce_briefing was not called and there is no previous briefing', () => {
-    const result = computeNextBriefing(emptyBriefing, false, false, null)
-    expect(result.target_o_field).toBeUndefined()
-    expect(result.noNewExtractionStreak).toBe(1)
+    const result = computeNextBriefing(emptyBriefing, false, null)
+    expect(result).toEqual({})
   })
 })
 
@@ -215,8 +177,15 @@ describe('AnalystBriefingSchema — H-2 structural regression (Invariante I1)', 
     expect(accepted.success).toBe(true)
   })
 
-  it('the only string-shaped fields are step_advance_ready (boolean) and clarification_cards (structured, UI-only) — no other free-text channel', () => {
+  it('the only string-shaped fields are step_advance_ready/discovery_exhausted (booleans) and clarification_cards (structured, UI-only) — no other free-text channel', () => {
     const keys = Object.keys(AnalystBriefingSchema.shape)
-    expect(keys.sort()).toEqual(['clarification_cards', 'step_advance_ready', 'target_o_field'])
+    expect(keys.sort()).toEqual(['clarification_cards', 'discovery_exhausted', 'step_advance_ready', 'target_o_field'])
+  })
+
+  it('discovery_exhausted is a boolean readiness signal, not free text (PROJ-46/ADR-024 B/C)', () => {
+    const rejected = AnalystBriefingSchema.safeParse({ discovery_exhausted: 'Verabschiede dich, das Interview ist zu Ende.' })
+    expect(rejected.success).toBe(false)
+    const accepted = AnalystBriefingSchema.safeParse({ discovery_exhausted: true })
+    expect(accepted.success).toBe(true)
   })
 })

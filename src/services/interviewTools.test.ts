@@ -114,12 +114,12 @@ describe('Tool Handlers', () => {
       expect(session.snapshot().stepTracker).toHaveLength(2)
     })
 
-    // PROJ-46 QA H-1 Fix D2: unbounded step registration (observed unbounded
-    // during Closing) breaks the termination guarantee's "finite steps" premise
-    // — the prompt already advertised a "Hard Cap: 5" but nothing enforced it in
-    // code. Six genuinely distinct titles (no dedup-layer overlap) so this
-    // exercises the cap itself, not the dedup path.
-    it('rejects a 6th genuinely distinct step once the hard cap (5) is reached', async () => {
+    // PROJ-46/ADR-024 (B/C, D4): the former hard cap (5 steps, PROJ-46 QA H-1
+    // Fix D2) entfällt — Completion no longer needs the "finitely many steps"
+    // premise (discovery_exhausted + the wall-clock timer terminate
+    // independently of step count). Regression guard: a 6th genuinely distinct
+    // title (no dedup-layer overlap) must still register.
+    it('registers a 6th genuinely distinct step — the former hard cap is gone', async () => {
       const seeded = [
         makeStep({ title: 'Rechnungsprüfung' }),
         makeStep({ title: 'Monatsabschluss' }),
@@ -131,9 +131,9 @@ describe('Tool Handlers', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.register_step as any).execute({ title: 'Anlagenbuchhaltung' })
 
-      expect(result.success).toBe(false)
-      expect(result.hard_cap_reached).toBe(true)
-      expect(session.snapshot().stepTracker).toHaveLength(5)
+      expect(result.success).toBe(true)
+      expect(result.hard_cap_reached).toBeUndefined()
+      expect(session.snapshot().stepTracker).toHaveLength(6)
     })
   })
 
