@@ -361,6 +361,125 @@ Die Garantie existiert schon (`updateODrought`/`hasUnexhaustedStep`), drei Lecks
 
 Bis dahin bleiben **PROJ-42, PROJ-44, PROJ-46** gemeinsam **In Review** (gemeinsame Gate-Entscheidung laut Spec).
 
+### Fix-Runde 1 (`/backend`, 2026-07-18) — A+D+D2 + Eval-Timer-Artefakt
+
+Alle vier im Fix-Plan genannten Punkte umgesetzt (A, D, D2, Eval-Timer-Artefakt) — B/C-Fallback bewusst nicht angefasst (Nutzer-Reihenfolge: erst A+D im Eval prüfen).
+
+- **Fix A** ([interviewOrchestrator.ts](../../src/services/interviewOrchestrator.ts)): `hasActiveStep` in der `explore`-Soft-Anchor-Grace-Logik liest jetzt `hasUnexhaustedStep(ctx.stepTracker, ctx.oDrought)` statt des rohen `status`-Checks (`hasStepInStatus(...'exploring'|'walkthrough')`). Ein O-erschöpfter Schritt (volle O2–O6-Deckung oder Drought gefeuert) kauft sich am Soft-Anchor (~80% Budget) keine zusätzliche `MAX_GRACE_MINUTES`-Gnadenfrist mehr.
+- **Fix D** ([interviewSemantic.ts](../../src/services/interviewSemantic.ts), [interviewAnalyst.ts](../../src/services/interviewAnalyst.ts), [runInterviewTurn.ts](../../src/services/runInterviewTurn.ts)): neue geteilte Primitive `hasNewOField(before, after)` (Summe der gefüllten O2–O6-Felder über den GESAMTEN Tracker, vorher/nachher) ersetzt `hasAppliedExtraction` (jeder angewendete Tool-Write) als Reset-Signal — sowohl für `computeNextBriefing`s `noNewExtractionStreak` als AUCH für `runInterviewTurn.ts`s `hadExtractionThisTurn` (M7-b-Veto). **Bewusste Erweiterung über den wörtlichen Fix-Plan-Wortlaut hinaus** (der nur `interviewAnalyst.ts:97` nannte): Analyse ergab, dass beide Konsumenten denselben zu breiten `hasAppliedExtraction`-Signal-Ursprung teilen (H-1-Befund Punkt 3 nennt explizit beide als gemeinsame Blockade) — mit nur dem Streak gefixt hätte M7-b weiterhin auf JEDEN Write (auch Potenzial-only/Re-Records) mit einem Bounce Closing→Explore reagiert, sodass `ctx.phase` nie zwei aufeinanderfolgende Turns in `closing` bleibt, was die `ctx.phase==='closing' && streak>=limit`-Completion-Bedingung strukturell unerreichbar hält. Eine genuine Neu-Entdeckung während Closing bleibt unverändert über `hasStepInStatus(...'exploring')` abgefangen (nicht von der Signal-Verengung betroffen). `hasAppliedExtraction`/`EXTRACTION_TOOL_NAMES` komplett gelöscht (nach der Verengung ungenutzt).
+- **Fix D2** ([interviewTools.ts](../../src/services/interviewTools.ts)): der bisher nur prompt-seitig behauptete „Hard Cap: 5" ist jetzt in `register_step` selbst durchgesetzt (nach allen Dedup-Layern, vor dem Anlegen eines genuinen neuen Eintrags) — schließt die „endlich viele Schritte"-Prämisse der Terminierungs-Garantie.
+- **Eval-Timer-Artefakt** ([runner.ts](../../src/services/__evals__/interview/runner.ts)): `simulatedTimerMinutes` von `Math.floor((turn/MAX_TURNS)*30)` auf `Math.floor(((turn+1)/MAX_TURNS)*30)` — erreicht jetzt exakt 30 auf dem letzten Turn, der Hard-Stop-Boden ist damit im 35-Turn-Eval-Cap überhaupt erreichbar/prüfbar.
+
+**Tests:** neue `interviewSemantic.test.ts` (6 Tests für `hasNewOField`, inkl. Potenzial-only/Re-Record-Nichtauslösung), 2 neue Fix-A-Regressionstests (`interviewOrchestrator.test.ts`), 1 neuer Fix-D2-Test (`interviewTools.test.ts`), `computeNextBriefing`-Tests auf die neue `hadNewOField`-Boolean-Signatur umgestellt (`interviewAnalyst.test.ts`), `runInterviewTurn.test.ts`-Mock bereinigt (kein `hasAppliedExtraction`-Stand-in mehr nötig — `hasNewOField` läuft ungemockt gegen die Test-Fixtures). `tsc --noEmit` grün, volle Suite **847 passed / 1 skipped** (vorher 839/1 — 8 neue Tests, kein Regressions-Fail).
+
+**Abweichungen vom Fix-Plan:** M7-b (`hadExtractionThisTurn`) zusätzlich zum Streak auf `hasNewOField` umgestellt (siehe Fix-D-Begründung oben) — der Fix-Plan-Text nannte wörtlich nur den Streak, die Erweiterung auf M7-b ist notwendig, damit der Fix überhaupt wirkt (sonst bleibt die vom H-1-Befund selbst benannte zweite Bounce-Quelle offen). D2 als globaler (nicht nur Closing-scoped) Cap umgesetzt — deckungsgleich mit dem bereits prompt-seitig global geltenden „Hard Cap: 5", einfacher als eine Phasen-Schranke.
+
+**Noch offen:** Re-Eval via `/eval:interview` (gleiche Config wie Runde-3-Baseline: buchhalter+it-support, flash-lite, Haiku-Judge, `--store supabase --seed 42 --runs 3`) — gehört zu `/qa`, nicht Teil dieser Backend-Runde. Bis dahin bleibt Status **In Review**.
+
+### QA-Runde 2 (Re-Eval, 2026-07-18/19) — A+D+D2 verifiziert, Wurzel identifiziert, B/C beschlossen
+
+Konfiguration identisch zur Baseline (flash-lite, Haiku-Judge, `--store supabase --seed 42`). Judge-Preflight mit echtem `generateText`-Call gegen beide Provider grün (KI-28-Lehre). Alle Läufe n=1 (Smoke, kostenschonend vor 3+3), gleicher Seed 42, direkt vergleichbar.
+
+**Primär-Gate (H-1) erholt.** Fix-Runde-1 (A+D+D2, K=3, cap=5) bringt `completion_correctness` auf **true bei beiden Personas** (Runde 1 war `false`, 6/6 im 35-Cap). `dialog_naturalness` 0.67 gehalten, `talker_grounding_violations` Median 0, `anchoring_violation_rate` 0.
+
+| Zustand | dedup buch/it | completion | buchhalter-Abschluss | it-support-Abschluss |
+|---|---|---|---|---|
+| PROJ-46 R1 (ohne A/D/D2) | 0.67 / 0.69 | false | 35-Cap | 35-Cap |
+| **Fix-Runde-1** (K3, cap5) | 0.56 / 0.62 | **true** | Turn 10, grazil | Turn 35, Timer-Force |
+| Experiment (K5, cap8) | 0.70 / 0.64 | true | Turn 30, **6-Turn-Farewell-Loop** | Turn 35, Timer, kein Loop |
+
+**Die „dedup-Regression" gegen 0.67/0.69 ist ein Phantom.** Diese Werte stammen aus dem **nicht-terminierenden** R1-Lauf (ein Interview, das bis 35 läuft, füllt mehr Slots). Gegen die legitime **R3-Baseline (0.56/0.56)** hält Fix-Runde-1 (0.56/0.62): buchhalter gleichauf, it-support besser. Der grüne Tiefen-Gate (≥0.75) ist laut Strom G ohnehin nicht PROJ-46-eigen (PROJ-43/PROJ-40). Fix-Runde-1 erfüllt PROJ-46s eigenes Tiefen-Kriterium („≥ R3-Baseline, Trend hoch") knapp.
+
+**Zwei Restbefunde in Fix-Runde-1:**
+- buchhalter terminiert bei Turn 10 (kürzer als R3-Baseline 14–33), möglicherweise verfrüht (dünnere Tiefe).
+- it-support terminiert nur per Hard-Timer bei Turn 35, nicht grazil. Residual: 2-Turn-Doppel-Verabschiedung (Runde 1: 9-Turn-Loop, also stark verbessert).
+
+**K-Experiment (Nutzer-Entscheidung „Cap anheben + Wurzel testen"): K ist der falsche Hebel.** K=5 holt die Tiefe zurück (dedup 0.70/0.64, `potenzial_coverage` + `dependency_capture` steigen), **reintroduziert aber den Farewell-Loop** (buchhalter Turns 25–30, sechs Verabschiedungen). Mechanisch: die Loop-Länge ist ≈ K. Läuft der Agent im Closing content-arm trocken, verabschiedet er sich K-mal, bis der Streak nachzieht. Höheres K = tiefer, aber längerer Loop; niedrigeres = kürzerer Loop, aber flacher. **Kein K-Wert gewinnt beides.** it-support zeigte den Loop nicht (content-reich genug, bleibt bis zum Timer produktiv). Der Cap=8 wurde nie geprüft: K=5 hält jeden Schritt länger, also weniger Schritte (it-support 5→4), der Cap band nie.
+
+**Wurzel:** der content-basierte Terminator (No-New-O-Field-Streak) zählt neue O-Felder (breiten-blind gegen Tiefe) UND feuert K trockene Turns nachdem der Agent leergelaufen ist. Beide Symptome (flacher Abschluss bei K3, Farewell-Loop bei K5) sind dasselbe fehlende Stück: das „ich bin inhaltlich fertig"-Urteil des Agenten kann Completion nicht auslösen.
+
+**Beschluss (Nutzer, 2026-07-19): Fallback B/C bauen, via `/architecture` zuerst.** Der Analyst signalisiert strukturierte Completion-Readiness, die Completion auslösen darf, geguardet durch Timer + Mindest-Coverage. Kollabiert den Farewell-Loop auf 0 (Abschluss genau wenn der Agent fertig ist) und erlaubt Tiefe (der Agent bohrt bis er wirklich fertig ist, nicht bis ein breiten-blinder Streak ihn abschneidet). Scope-Konsequenz für die zwei Böden (im /architecture zu schärfen):
+
+| | unter B/C |
+|---|---|
+| Hard Cap (`MAX_REGISTERED_STEPS`) | entfernbar (Termination geht an B/C + Timer; Fragmentierung bleibt an den Dedup-Schichten, nicht am Cap) |
+| `NO_NEW_EXTRACTION_LIMIT` (Completion-Streak) | entfernbar (von B/C ersetzt; optional als billiger Disengagement-Guard) |
+| `O_DROUGHT_LIMIT` (Fokus-Lock) | **behalten** — orthogonaler Fortschritts-Boden (Anti-Ping-Pong M-6), B/C fasst ihn nicht an |
+
+B/C reshaped nur den **Terminierungs**-Boden; der **Fortschritts**-Boden bleibt. Braucht ein ADR-023-Amendment („Analyst darf Completion-Readiness signalisieren, terminiert aber nicht selbst"). Working Tree nach diesem Experiment auf Fix-Runde-1 zurückgesetzt (Cap=5, K-Env entfernt), damit der B/C-Diff sauber ansetzt. Experiment-Eval-Artefakte behalten (`docs/evals/interview/2026-07-18/2026-07-18-23-{34,49}-*`) als Design-Evidenz.
+
+**Status:** weiter **In Review**. PROJ-42, PROJ-44, PROJ-46 bleiben gemeinsam In Review bis zum grünen Re-Eval nach B/C. Bugs-Feld unverändert 2:0:1 (die H-1-Regression aus Runde 1 ist adressiert, aber erst nach B/C-Re-Eval final zu bewerten).
+
+## Tech Design Amendment: Fallback B/C (Completion-Readiness)
+
+> Erarbeitet via `/architecture` (2026-07-19) nach QA-Runde 2. Festgehalten in **[ADR-024](../../docs/adr/ADR-024-analyst-completion-readiness-geguardetes-boolean.md)** (Amendment zu ADR-023 D2/D4, Status Proposed). Keine DB-Migration, kein neues npm-Paket, rein serverseitig.
+
+### Entscheidung: Design 2 (Analyst-Readiness darf Closing eröffnen UND besiegeln)
+
+Design 1 (Readiness besiegelt nur aus Closing) wurde verworfen: es lässt die H-1-Diskrepanz offen (der Agent urteilt „fertig" während `explore`, das Signal bleibt wirkungslos, bis die Phasenmaschine mechanisch Closing erreicht, siehe H-1 run1 t23 / run3 t32). Design 2 gibt dem Agenten-Urteil einen Kausalpfad.
+
+### Split-Brain-Auflösung (Kern der Entscheidung)
+
+Es gibt genau **eine Autorität**: die deterministische Phasenmaschine (`resolveTurnLifecycle`). Der Analyst schreibt nie Phase oder Completion. Er liefert **ein strukturiertes Boolean** `discovery_exhausted` als **Input**. Die Maschine konsumiert es und entscheidet:
+
+- `explore` + `discovery_exhausted` + Guard → **Closing eröffnen** (Wrap-up einleiten), Entdeckungs-Sonde stellen, noch **nicht** abschließen (die Sonde ist die „mindestens eine Frage vor dem Ende"-Garantie).
+- `closing` + `discovery_exhausted` + Guard → **abschließen**.
+
+Analyst und Maschine können sich damit nicht widersprechen: der Analyst schlägt vor, die Maschine verfügt. Der H-1-Split-Brain existierte, weil das Agenten-Urteil keinen Eingangskanal zur Maschine hatte. B/C fügt genau diesen Kanal hinzu, als geguardetes Boolean. Urteil und Maschine konvergieren.
+
+### H-2-Invariante bleibt intakt
+
+`discovery_exhausted` ist ein **Boolean**, kein Freitext. Es kann nur „ich beurteile die Entdeckung als erschöpft" ausdrücken, nie „verabschiede dich". Der Freitext-Farewell-Kanal, den ADR-023 strukturell ausschloss (H-2), entsteht nicht. Die Verabschiedung formuliert weiter der Talker, ausgelöst allein vom aufgelösten Completion-State (`isCompletionFarewell`, unverändert).
+
+### Warum das den Farewell-Loop kollabiert
+
+Der Loop entstand, weil zwischen „Agent läuft trocken" und „Streak erreicht K" K Turns lagen. Readiness feuert im selben Turn, in dem der Analyst „fertig" urteilt. Kein Warte-Fenster, keine Verabschiedungs-Wiederholung.
+
+### Guards (leicht, measure-first)
+
+Weil Readiness Closing eröffnen darf, braucht es eine Untergrenze gegen verfrühten/flachen Abschluss. Bewusst minimal gehalten, um zu testen, ob eine Analyst-geführte Entscheidung funktioniert:
+
+- **Inhärent:** mindestens eine Closing-Entdeckungs-Sonde muss durchlaufen sein (aus dem Zwei-Schritt-Fluss).
+- **Coverage-Sanity:** Readiness wird erst gehonoriert, wenn mindestens ein registrierter Schritt substanziell gedrillt ist (nie leer abschließen).
+- **Upper-Bound:** der Hard-Timer bei 100% Budget bleibt unverändert der Letzt-Boden.
+- **Kein harter Zeit-Floor** zu Beginn. Zeigt der Eval verfrühte Abschlüsse, wird der Floor angezogen.
+
+### Fail-Safe
+
+Analyst-Call schlägt fehl → `discovery_exhausted` = false → kein Readiness-Abschluss → Hard-Timer bleibt Backstop. Deckungsgleich mit dem bestehenden ADR-021-D4-Veto (Fail-Safe vetoet `soft_confirm`).
+
+### Was entfällt / bleibt
+
+| | unter B/C |
+|---|---|
+| `NO_NEW_EXTRACTION_LIMIT` (Completion-Streak) | **entfällt** (von Readiness ersetzt) |
+| Hard Cap (`MAX_REGISTERED_STEPS`) | **entfällt** (Completion braucht keine „endlich viele Schritte" mehr; Fragmentierung bleibt an den Dedup-Schichten) |
+| `O_DROUGHT_LIMIT` (Fokus-Lock) | **bleibt** bei 3 — orthogonaler Fortschritts-Boden (Anti-Ping-Pong M-6), B/C fasst ihn nicht an |
+| Wall-Clock Soft-Anchor + Hard-Timer | **bleiben** unverändert (Upper-Bound) |
+| M7-b Reentry (neuer Inhalt in Closing → explore) | **bleibt** unverändert |
+
+**Disengagement-Notiz:** der Streak fing auch disengagierte Gespräche vor dem Wall-Clock ab. Unter B/C soll der Analyst Disengagement erkennen und via Readiness früh abschließen. Falls der Eval zeigt, dass disengagierte Personas zu lange laufen, kann ein leichter deterministischer Disengagement-Escalator nachgezogen werden (measure-first).
+
+**Tiefe (O_DROUGHT):** bleibt in diesem Increment bei 3. Die Loop-Entkopplung erlaubt später ein Anheben für mehr O-Feld-Tiefe (dedup) ohne Farewell-Kosten. Separater measure-first-Schritt nach verifiziertem B/C (Nutzer-Entscheidung). Dieser Increment misst mit, ob die Analyst-geführte Completion überhaupt sauber greift.
+
+### Betroffene Bausteine (kein neues Paket, keine DB-Migration)
+
+| Datei | Änderung |
+|-------|----------|
+| [interviewTypes.ts](../../src/services/interviewTypes.ts) | `AnalystBriefing` um `discovery_exhausted: boolean` erweitern (strukturiert, H-2-invariant) |
+| [interviewAnalyst.ts](../../src/services/interviewAnalyst.ts) | Prompt: wann `discovery_exhausted` setzen (Entdeckung erschöpft, Persona bietet nichts Substanzielles mehr); Schema; Streak-Berechnung (`computeNextBriefing`/`hasNewOField`-Reset) entfällt |
+| [interviewOrchestrator.ts](../../src/services/interviewOrchestrator.ts) | `resolveTurnLifecycle`: Readiness treibt `explore→closing` (mit Sonde) + `closing→complete`; Streak-Completion + `NO_NEW_EXTRACTION_LIMIT` raus; Coverage-Sanity-Guard; `O_DROUGHT`-Lock unangetastet |
+| [interviewTools.ts](../../src/services/interviewTools.ts) | Hard Cap (`MAX_REGISTERED_STEPS`) entfernen |
+| [runInterviewTurn.ts](../../src/services/runInterviewTurn.ts) | `discovery_exhausted` in den Orchestrator-Context durchreichen; `hadExtractionThisTurn`/M7-b bleibt |
+
+### ADR
+
+Festgehalten in **[ADR-024](../../docs/adr/ADR-024-analyst-completion-readiness-geguardetes-boolean.md)** (Status **Proposed**, 2026-07-19): „Der Analyst darf geguardete Completion-Readiness (strukturiertes Boolean `discovery_exhausted`) signalisieren; er terminiert und formuliert die Verabschiedung nicht selbst. Die deterministische Phasenmaschine bleibt alleinige Autorität und konsumiert das Signal als Input." Amendmentet ADR-023 D2 („Analyst terminiert nicht") + D4 (Streak-Terminierung); die Invarianten I1 (kein Freitext-Farewell) und I2 (Terminierungs-Hoheit beim Orchestrator) sowie der Fortschritts-Boden (O_DROUGHT) bleiben strukturell wahr. **Vor `/backend` auf Accepted setzen** (ADR ist immutable nach Accepted).
+
+### Eval-Plan (Re-Verifikation nach Bau)
+
+Gleiche Config wie die Baseline (flash-lite, Haiku-Judge, `--store supabase --seed 42`), erst 1+1 Smoke, dann 3+3. Prüfen: `completion_correctness` = true **via Readiness** (nicht nur Timer); buchhalter **kein** Farewell-Loop UND Abschluss zum Zeitpunkt des Agenten-„fertig"-Urteils (nicht verfrüht); it-support grazil-oder-Timer; `dialog_naturalness` ≥ 0.67; `dedup_slot_coverage` ≥ 0.56/0.62; Grounding-Median 0. Transkript-Level: der H-1-Fall „Agent fertig während explore" konvergiert jetzt (Readiness → Closing → Abschluss).
+
 ## Deployment
 _To be added by /deploy_
 
