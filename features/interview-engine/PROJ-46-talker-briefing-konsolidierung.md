@@ -5,10 +5,10 @@
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** XL
-**Bugs:** 2:0:1
+**Bugs:** 0:1:1
 **Created:** 2026-07-18
-**Last Updated:** 2026-07-18
-**ADR:** [ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md) (Rollen-Vertrag-Amendment)
+**Last Updated:** 2026-07-19 (QA-Runde 3: B/C Re-Eval — Non-Termination behoben; flacher Abschluss = PROJ-43-Wurzel, nächster Schritt PROJ-43)
+**ADR:** [ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md) (Rollen-Vertrag-Amendment), [ADR-024](../../docs/adr/ADR-024-analyst-completion-readiness-geguardetes-boolean.md) (Completion-Readiness-Amendment, Accepted)
 
 ## Context
 
@@ -474,11 +474,106 @@ Analyst-Call schlägt fehl → `discovery_exhausted` = false → kein Readiness-
 
 ### ADR
 
-Festgehalten in **[ADR-024](../../docs/adr/ADR-024-analyst-completion-readiness-geguardetes-boolean.md)** (Status **Proposed**, 2026-07-19): „Der Analyst darf geguardete Completion-Readiness (strukturiertes Boolean `discovery_exhausted`) signalisieren; er terminiert und formuliert die Verabschiedung nicht selbst. Die deterministische Phasenmaschine bleibt alleinige Autorität und konsumiert das Signal als Input." Amendmentet ADR-023 D2 („Analyst terminiert nicht") + D4 (Streak-Terminierung); die Invarianten I1 (kein Freitext-Farewell) und I2 (Terminierungs-Hoheit beim Orchestrator) sowie der Fortschritts-Boden (O_DROUGHT) bleiben strukturell wahr. **Vor `/backend` auf Accepted setzen** (ADR ist immutable nach Accepted).
+Festgehalten in **[ADR-024](../../docs/adr/ADR-024-analyst-completion-readiness-geguardetes-boolean.md)** (Status **Accepted**, 2026-07-19 — vor `/backend` B/C angenommen): „Der Analyst darf geguardete Completion-Readiness (strukturiertes Boolean `discovery_exhausted`) signalisieren; er terminiert und formuliert die Verabschiedung nicht selbst. Die deterministische Phasenmaschine bleibt alleinige Autorität und konsumiert das Signal als Input." Amendmentet ADR-023 D2 („Analyst terminiert nicht") + D4 (Streak-Terminierung); die Invarianten I1 (kein Freitext-Farewell) und I2 (Terminierungs-Hoheit beim Orchestrator) sowie der Fortschritts-Boden (O_DROUGHT) bleiben strukturell wahr.
 
 ### Eval-Plan (Re-Verifikation nach Bau)
 
 Gleiche Config wie die Baseline (flash-lite, Haiku-Judge, `--store supabase --seed 42`), erst 1+1 Smoke, dann 3+3. Prüfen: `completion_correctness` = true **via Readiness** (nicht nur Timer); buchhalter **kein** Farewell-Loop UND Abschluss zum Zeitpunkt des Agenten-„fertig"-Urteils (nicht verfrüht); it-support grazil-oder-Timer; `dialog_naturalness` ≥ 0.67; `dedup_slot_coverage` ≥ 0.56/0.62; Grounding-Median 0. Transkript-Level: der H-1-Fall „Agent fertig während explore" konvergiert jetzt (Readiness → Closing → Abschluss).
+
+## Backend Implementation Notes (B/C, 2026-07-19)
+
+Gebaut 1:1 nach dem Tech Design Amendment oben, keine Abweichung. ADR-024 vor Baubeginn auf Accepted gesetzt.
+
+- **interviewTypes.ts:** `AnalystBriefing.noNewExtractionStreak` entfernt, `discovery_exhausted?: boolean` neu (dokumentiert als geguardetes Completion-Readiness-Signal, kein Freitext-Kanal — I1/I2 bleiben wahr).
+- **interviewAnalyst.ts:** `AnalystBriefingSchema` trägt `discovery_exhausted` (zod boolean, optional); neue STUFE 4b im System-Prompt mit expliziten Trigger-Bedingungen (Wiederholung, Ausweichen, Höflichkeits-/Abschiedsfloskeln, explizites „nichts mehr"). Die `produce_briefing`-Aufruf-Bedingung wurde erweitert: ein inhaltlich leerer/ausweichender Turn (bisher der Grund, den Call zu überspringen) ist jetzt genau der typische Auslöser für `discovery_exhausted` und MUSS den Call triggern — sonst hätte STUFE 4b nie einen Weg zum Orchestrator gehabt. `computeNextBriefing` auf pure Carry-Forward reduziert (3 statt 4 Parameter, keine Streak-Berechnung mehr); `hasNewOField`-Import entfernt (in dieser Datei nur noch für die Streak gebraucht). „Hard Cap: 5" aus dem Kontext-Footer des Prompts entfernt.
+- **interviewOrchestrator.ts:** `noNewExtractionLimit()`/`DEFAULT_NO_NEW_EXTRACTION_LIMIT`/`NO_NEW_EXTRACTION_LIMIT`-Env entfernt. Neue Coverage-Sanity-Guard `hasSubstantialCoverage` (≥2 gefüllte O2–O6-Felder auf mindestens einem Schritt, `MIN_SUBSTANTIAL_O_FIELDS=2`) — verhindert ein leeres/kaum begonnenes Interview per Readiness abzuschließen. `resolvePhaseTransition`s `explore`-Fall: neuer `discovery_exhausted`-Zweig (Guard-gated) öffnet Closing, ersetzt den alten Streak-Zweig; der bestehende `step_advance_ready`-getriebene Primary-Driver-Pfad bleibt unverändert daneben bestehen (orthogonal, nicht Teil von B/C). `resolveTurnLifecycle`s Closing-Terminal-Check: `discovery_exhausted && Coverage-Sanity` statt Streak — `ctx.phase==='closing'` (die VORTURN-geladene Phase) bleibt der Mechanismus, der ein Complete im selben Turn wie die Closing-Eröffnung strukturell verhindert (Design 2 „mindestens eine Frage zuerst" fällt aus dieser bestehenden Prüfung heraus, kein zusätzlicher Code nötig). `O_DROUGHT_LIMIT`/`computeFocusLock`/`updateODrought`/`hasUnexhaustedStep` unangetastet (Fortschritts-Boden, D5).
+- **interviewTools.ts:** `MAX_REGISTERED_STEPS`-Hard-Cap (PROJ-46 QA H-1 Fix D2) + die zugehörige `register_step`-Prüfung ersatzlos entfernt (ADR-024 D4 — Completion braucht die „endlich viele Schritte"-Prämisse nicht mehr; Fragmentierung bleibt an den Dedup-Schichten).
+- **runInterviewTurn.ts:** keine Änderung nötig — `discovery_exhausted` erreicht `resolveTurnLifecycle` bereits strukturell über den unverändert durchgereichten `analystBriefing`-Parameter (derselbe Pfad wie zuvor `step_advance_ready`/`noNewExtractionStreak`). Der bestehende ADR-021-D4-Fail-Safe (vetoet `soft_confirm` bei einem in diesem Turn fehlgeschlagenen Analyst-Call) deckt die ADR-024-Fail-Safe-Anforderung bereits ab, ohne Änderung — der Veto-Check greift phasen-/grund-agnostisch an jedem `soft_confirm`.
+
+**Tests:** `computeNextBriefing`-Tests auf die neue 3-Parameter-Signatur umgestellt (kein Streak mehr). `resolveTurnLifecycle`-Tests: der „no-new-extraction safety net"-Block ersetzt durch einen `discovery_exhausted`-Readiness-Block (Coverage-Sanity-Guard positiv/negativ getestet); die `closing`-Testgruppe und die D2-Terminierungs-Invariante-Gruppe auf `discovery_exhausted` umgestellt (neue Fixture `substantiallyCoveredSlots`, exakt 2 gefüllte O-Felder — isoliert die Coverage-Sanity-Guard von D3s „volle Deckung erschöpft sofort"). `interviewOrchestrator.tim-regression.test.ts`: die reale Tim-Sequenz-Assertion nutzt jetzt `discovery_exhausted: true` statt `noNewExtractionStreak: 3` (Coverage-Sanity durch den echten `REAL_FINAL_TRACKER` erfüllt, der bereits mehrere O-Felder gefüllt hat). `interviewTools.test.ts`: der Hard-Cap-Test invertiert zu einer Regression („ein 6. Schritt registriert erfolgreich"). H-2-Strukturinvariante erweitert: `discovery_exhausted` ist Boolean, keine Freitext-Terminierung möglich (zod-Shape-Test). `tsc --noEmit` grün, volle Suite **846 passed / 1 skipped** (vorher 847/848 mit Fix-Runde-1 — Netto 1 Test weniger: die `NO_NEW_EXTRACTION_LIMIT`-Env-Override-Testfall entfällt ersatzlos, da die Env-Variable selbst entfällt).
+
+**Abweichungen vom Design:** keine. Der `step_advance_ready`-getriebene explore→closing-Pfad wurde bewusst NICHT angetastet — das Tech-Design-Amendment nennt nur den Streak (D4) als „entfällt", nicht diesen orthogonalen Pfad.
+
+**Noch offen (gehört zu `/qa`):** Re-Eval via `/eval:interview` (gleiche Config wie die R3-Baseline: buchhalter+it-support, flash-lite, Haiku-Judge, `--store supabase --seed 42`, erst 1+1 Smoke dann 3+3) — Primär-Gate `completion_correctness=true` **via Readiness**, kein Farewell-Loop, kein verfrühter Abschluss; `dialog_naturalness`/`dedup_slot_coverage`/Grounding-Median halten; Transkript-Lektüre des H-1-Falls (Agent-„fertig"-Urteil während explore konvergiert jetzt über Closing zum Abschluss); manueller adversarialer Durchlauf; Latenz-Delta.
+
+## QA-Runde 3 (B/C Re-Eval, 2026-07-19) — H-1 (Non-Termination) behoben; flacher Abschluss = PROJ-43-Wurzel; Bugs 0:1:1
+
+**PROJ-46-eigenes Gate: erfüllt (kein High). Interview-Engine als Ganzes: noch nicht ship-reif — Elicitation-Tiefe fehlt (PROJ-43).** Das Termination-Gate (H-1: terminiert überhaupt, via Readiness) ist behoben und konsistent über 8 Läufe; dialog 0.67 + Grounding 0 gehalten. Die Transkript-Lektüre (Nutzer-Redirect, [[feedback_transcript_level_qa_verification]]) deckt einen flachen Abschluss auf (run2 t14 „alle Fragen beantwortet" bei `outputs` leer auf allen Schritten) — dessen Wurzel ist aber die **Elicitation-Tiefe (PROJ-43)**, nicht PROJ-46s Completion-Mechanismus (siehe Re-Attribution unten). Status bleibt **In Review**. Bugs: **0:1:1** (war 2:0:1 — die zwei R1-High der Non-Termination sind aufgelöst; der flache Abschluss H-1b wird PROJ-43 zugeordnet, nicht PROJ-46).
+
+### H-1b (PROJ-43-Wurzel, in PROJ-46-Eval beobachtet) — flacher Abschluss: `discovery_exhausted` breiten-blind, Elicitation metrik-lastig
+Die B/C-Completion ist bewusst von der Coverage entkoppelt: `discovery_exhausted` ist ein **Breiten-/Disengagement-Urteil** („die Person bietet nichts Neues mehr an" — wiederholt sich, weicht aus, Höflichkeitsfloskeln), **kein Tiefen-Signal**. Der einzige Tiefen-Guard `hasSubstantialCoverage` verlangt bloß `MIN_SUBSTANTIAL_O_FIELDS=2` auf **EINEM** Schritt — quasi trivial. Folge: der Agent schließt ab, während offensichtlich drillbare Slots leer sind.
+
+**Belege (Transkript-Slot-Matrix zum Abschluss-Zeitpunkt):**
+- **run2 (dedup 0.53, t14 „alle Fragen beantwortet"):** `outputs` auf allen 4 Schritten leer, `abhaengigkeiten` überall leer, 4. Schritt „Abgleich offener Posten" mit 3/9 kaum gedrillt. Der Agent behauptet Vollständigkeit, hat aber die Outputs *keines* Prozesses erfasst.
+- **run1 (dedup 0.44, 14 Turns):** `tazite_cues`, `inputs`, `outputs`, `abhaengigkeiten` auf allen 3 Schritten leer — 4 von 9 Dimensionen nie erfragt. Natürlicher Dialog (0.67), aber flach.
+- **run3 (dedup 0.75, 18 Turns):** Gegenbeispiel — inputs/outputs/tazite_cues/entscheidungslogik fast überall erfasst; nur `ausnahmen`+`abhaengigkeiten` systematisch leer (Instrument-Ceiling). Zeigt, dass tiefe Erfassung möglich ist, wenn der Agent länger drillt.
+
+**Perverser Anreiz:** eine ausweichende Persona („kommt drauf an") **triggert** `discovery_exhausted` — Mauern bringt den Agenten dazu, *früher* aufzugeben statt tiefer zu bohren. Rückwärts zum Erfassungsziel.
+
+**RE-ATTRIBUTION (Nutzer-Einwand 2026-07-19, kritisch geprüft) — H-1b ist PROJ-43-Wurzel, KEIN PROJ-46-Mechanismus-Defekt.** Die erste Fassung nannte H-1b „PROJ-46-attribuierbar (Guard zu permissiv)". Das ist falsch, zwei Belege:
+1. **Kein Regressions-Nachweis:** die PROJ-44-R3-Baseline schloss bei derselben Tiefe (dedup 0.56) über den alten Streak-Pfad ab — flacher Abschluss existierte **vor** B/C. PROJ-46 hat ihn nicht verursacht, nur sichtbar gemacht (der Agent *verbalisiert* jetzt „alle Fragen beantwortet").
+2. **Der Guard-Fix wäre falsch sequenziert:** Completion an O-Felder binden (z.B. `outputs` auf jedem Schritt), die die Elicitation nicht zuverlässig erfragt, würde die **Non-Termination wieder einführen** (exakt H-1). Man kann Completion nicht an Inhalt binden, den der Agent nicht verfolgt.
+
+Die Frage-Klassifikation über 4 buchhalter-Läufe (58 Fragen): 59% O-Feld, **33% Potenzial-Metrik** (frequency/duration/Forced-Choice), 9% Discovery — und der flache run1 hatte den höchsten Potenzial-Anteil (~50/50), der tiefe run3 den niedrigsten (2:1 O-Feld). Die ~33% Metrik-Turns sind genau das, was **PROJ-43** in Clarification Cards verschiebt und auf Treiber/WHY-Fragen (O2/O3-füllend) umlenkt. Damit wird `discovery_exhausted` erst ein tiefen-korreliertes Signal.
+
+**Wurzel = Elicitation-Tiefe (PROJ-43), nicht der Completion-Mechanismus (PROJ-46, der terminiert korrekt).** → H-1b wird **PROJ-43-attribuiert** (cross-cutting Interview-Engine-Reife); PROJ-46s eigenes Bugs-Feld geht zurück auf **0:1:1** (Abschieds-Schwanz M + Floskel-Rausch L). PROJ-46 bleibt In Review, aber H-1b zählt nicht gegen seinen Mechanismus.
+
+**Deferred (nach PROJ-43, measure-first):** re-messen, ob nach der Elicitation-Reorientierung ein leichter PROJ-46-Completion-Guard-Recheck nötig ist. Caveat: PROJ-43 fixt `outputs` (O4) und `abhaengigkeiten` (O6) **nicht** vollständig — nicht „Treiber/WHY"; `abhaengigkeiten` ist PROJ-26/Schema, `outputs` braucht eigene O4-Aufmerksamkeit.
+
+### Automatisierte Tests
+- `tsc --noEmit` grün. Volle Suite **846 passed / 1 skipped** (Skip vorbestehend) auf dem B/C-Working-Tree.
+- Judge-Key-Preflight (KI-28-Lehre): echter `generateText`-Call gegen **beide** Provider grün — Google Flash-Lite (Interview+Tester) UND Anthropic Haiku (Judge), tatsächlicher Token-Verbrauch bestätigt (nicht nur `/v1/models`).
+
+### Eval-Gate — Konfiguration
+Identisch zur R3-Baseline: alle Komponenten `google/gemini-3.1-flash-lite`, Judge `anthropic/claude-haiku-4-5`, `--store supabase --seed 42`. Ablauf: 1+1 Smoke, dann 3+3. Insgesamt **8 Läufe**. Artefakte: `docs/evals/interview/2026-07-19/*-{buchhalter,it-support}-{,run1,run2,run3,aggregate}.md`.
+
+**Nebenbefund (kein Eval-Fehler):** it-support-3-run zeigte 3× `[embeddings] Jina API error: 429 Concurrency limit` — das ist der **Jina-Embedding**-Provider (post-Completion-Wissensbank-Pipeline, Concurrency 2/2), NICHT das Google-Interview-Modell und kein Guthaben-Problem. Betrifft die bewerteten Kern-Scores nicht (der `step_tracker` ist die Bewertungsgrundlage). Alle 3 Läufe vollständig terminiert.
+
+### Primär-Gate (H-1): behoben, 8/8 via Readiness
+
+| | buchhalter (4 Läufe) | it-support (4 Läufe) |
+|---|---|---|
+| `completion_correctness` | **4/4 true** | **4/4 true** |
+| Terminierungs-Pfad | 4/4 **Readiness** (soft_confirm) | 4/4 **Readiness** (soft_confirm + clarification) |
+| turnsToCompletion | 14–18 | 15–21 |
+| Timer-Force (35-Cap) | **0** | **0** |
+
+R1 war 6/6 Nicht-Terminierung im 35-Cap. Der H-1-Divergenzfall (Agent urteilt „fertig" während `explore`, run1 t23 / run3 t32) konvergiert jetzt strukturell: `discovery_exhausted` (Analyst) → `resolveTurnLifecycle` öffnet Closing (mit ≥1 Sonde) → nächster Turn Abschluss. **Die KI-23-Completion-Regression ist aufgelöst.** Der Hard-Cap-Wegfall (`MAX_REGISTERED_STEPS`) verursachte **keine** Fragmentierung — alle 8 End-Tracker sauber 3 Schritte (Dedup-Schichten halten allein, wie ADR-024 vorhergesagt).
+
+### Halte-Kriterien (3-run-Aggregate-Median)
+
+| Metrik | buchhalter | it-support | R3-Baseline | Bewertung |
+|---|---|---|---|---|
+| dialog_naturalness | 0.67 (min=max) | 0.67 (min=max) | 0.67 | ✅ exakt gehalten — **keine KI-18-Regression** trotz Talker-Ent-Dichtung (Kernrisiko) |
+| talker_grounding_violations | 0 (min=max) | 0 (min=max) | 0 | ✅ durchgehend 0, besser als R1 (max 2) |
+| dedup_slot_coverage | 0.53 (0.44–0.75) | 0.59 (0.58–0.60) | 0.56 / 0.56 | 🟡 ~0.03 unter dem B/C-Smoke-Ziel (0.56/0.62), aber ≈/über R3-Baseline; hohe buchhalter-Varianz. **Nicht PROJ-46-eigenes Gate** (Strom G: grün ≥0.75 = PROJ-43/40) |
+| hallucination / anchoring_rate | 0 / 0 | 0 / 0 | 0 / 0 | ✅ |
+| step_registration_coverage | 1 | 1 | 1 | ✅ |
+
+Runner-`status: FAIL` in allen Läufen beruht **ausschließlich** auf dedup < 0.75 (grünes Gate) — laut Strom G nicht PROJ-46-attribuierbar. PROJ-46s eigene Kriterien (Completion via Readiness, dialog ≥ 0.67, Grounding 0) sind erfüllt.
+
+### Transkript-Level-Verifikation (Strom G — Aggregat-Scores verdecken Konversationsfehler)
+- **H-1 (Konvergenz):** verifiziert. Beispiel buchhalter-Smoke: t16 Talker sagt „fertig" während `explore` (alte Divergenz) → t17 Analyst setzt `discovery_exhausted` → Closing → t18 `soft_confirm`. Kein 35-Cap-Hänger mehr. ✅
+- **BUG-4 (wortgleiche Sonde):** kein statischer `CLOSING_PROBE_TEXT`; Closing-Fragen Talker-formuliert und variabel. ✅
+- **M-6 (Ping-Pong):** kein Themenwechsel gegen den Fokus-Lock; Prozesse werden vor Wechsel ausgedrillt. ✅
+- **M-7 / Neu-Inhalt im Closing:** M7-b routet neuen Inhalt zurück nach explore (it-support-Smoke t11→t12 Bounce belegt). ✅
+
+### Residuen
+
+**BUG (Medium) — intermittierender Abschieds-Schwanz (2–3 Turns).** In 2 von 4 buchhalter-Läufen (Smoke t16–t18, run2 t14–t16) verabschiedet sich der Talker 2–3× hintereinander: er windet im explore/closing-Eintritt runter (z.B. run2 t14 „Damit sind alle meine Fragen beantwortet", t15 „dann sind wir an dieser Stelle fertig", t16 „Wir sind damit am Ende"), statt am Closing-Eintritt eine frische Entdeckungsfrage zu stellen. buchhalter run1/run3 und **alle 4 it-support-Läufe** schließen sauber mit **einem** Abschieds-Turn. Root Cause: Talker-Formulierungs-Inkonsistenz — die Closing-als-Entdeckungs-Fortsetzung (Strom D) wird nicht zuverlässig als Entdeckungsfrage realisiert, sondern manchmal als Wind-down. **Kein** State-Machine-Fehler, **kein** nicht-terminierender Loop (R1 war 9 Turns non-terminating, R2-K5 6 Turns; jetzt ≤3 und terminiert immer via Readiness). Judge-flagged („leicht redundant in der Verabschiedung"). Der Abschied hängt an der benannten AC „kein Farewell-Loop", tritt in ~40% der buchhalter-Läufe auf, ist aber nicht terminierungs-blockierend → Medium.
+
+**BUG (Low) — Floskel-Slot-Extraktions-Rausch (H-2-Rest).** buchhalter-Smoke t18: eine reine Höflichkeitsantwort („Gern geschehen, es war mir ein Anliegen…") löst 6 `record_slot`-Calls aus. Unter B/C blockiert das **nicht** mehr die Terminierung (das war der H-1-Kern; entkoppelt), verrauscht aber weiterhin die Extraktion. Bewusster ADR-024-Trade-off (Fragmentierung/Rausch bleibt an den Dedup-Schichten, Termination davon entkoppelt) — dokumentiert, kein Blocker.
+
+**Nicht PROJ-46:** Forced-Choice-Anchoring (buchhalter-Smoke t8 „Eher 20 oder eher 100 Mahnschreiben?") = KI-21, out of scope (PROJ-43). Depth/potenzial_coverage-Schwäche = PROJ-40/43-Instrument-/Elicitation-Scope.
+
+### Offen (nicht durch die Eval abgedeckt)
+- **Manueller adversarialer (Tim-artiger) Durchlauf** und **Latenz-Delta-Messung**: nicht durchgeführt. Der Termination-Nachweis liegt jetzt aus 8 Läufen vor (H-1 war der Blocker in R1/R2); der adversariale Durchlauf prüft zusätzlich Rollen-Guard/Gegenfragen (überwiegend PROJ-42-Scope). Empfehlung: vor der gemeinsamen Gate-Entscheidung nachziehen, aber nicht mehr Termination-blockierend.
+
+### Fix-Richtung für BUG-Medium (Entwickler-Entscheidung, nicht QA)
+Der Abschieds-Schwanz ist Talker-seitig: am Closing-Eintritt formuliert der Talker manchmal einen Abschied statt einer Entdeckungsfrage. Kandidaten: (a) Closing-Eintritts-Prompt schärfen (explizit „stelle EINE Entdeckungsfrage, verabschiede dich NICHT"), (b) den explore-seitigen verfrühten Abschied (Talker sagt „fertig" bevor `discovery_exhausted` feuert) unterbinden. Beides Prompt-Ebene, KI-18-dichte-sensitiv → measure-first, klein halten.
+
+### Status & Weg nach vorn (Nutzer-Entscheidung 2026-07-19)
+Bugs-Feld **0:1:1** (Abschieds-Schwanz Medium + Floskel-Rausch Low; H-1b ist PROJ-43-attribuiert, siehe Re-Attribution). PROJ-46s Mechanismus-Ziele sind erfüllt. **Nächster Schritt: PROJ-43 (Elicitation-Reorientierung) bauen** — das ist die Wurzel des flachen Abschlusses (Metrik-Turns → Cards, Treiber/WHY-Fragen füllen O-Felder, Forced-Choice/KI-21 weg). Ein PROJ-46-Completion-Guard-Recheck ist **deferred** auf nach PROJ-43 (measure-first) — jetzt verschärfen würde die Non-Termination wieder einführen. **PROJ-42, PROJ-44, PROJ-46 bleiben gemeinsam In Review** bis nach PROJ-43 die Engine-Tiefe steht; dann gemeinsame Gate-Entscheidung. Offen (nicht Term-blockierend): manueller adversarialer Durchlauf, Latenz-Delta, Medium-Abschieds-Schwanz (Talker-Closing-Prompt).
 
 ## Deployment
 _To be added by /deploy_
