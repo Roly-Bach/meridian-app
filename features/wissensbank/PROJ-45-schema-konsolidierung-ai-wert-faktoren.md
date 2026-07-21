@@ -1,13 +1,13 @@
 # PROJ-45: Schema-Konsolidierung + AI-Wert-Faktoren
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Wissensbank
 **Extends:** PROJ-25
 **Appetite:** XL
 **Bugs:** —
 **Created:** 2026-07-20
-**Last Updated:** 2026-07-20
+**Last Updated:** 2026-07-21
 
 ## Dependencies
 - Requires: PROJ-25 (Prozesswissens-Schema) — PROJ-45 überarbeitet dessen Schema direkt.
@@ -81,7 +81,151 @@ PROJ-43 (Elicitation-Reorientierung) sollte ursprünglich zuerst gebaut werden. 
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+> Ergebnis aus `/architecture` + `/grilling` (2026-07-21). Alle Entscheidungen unten mit dem User durchgegangen (grilling-Runde, je Frage mit Empfehlung, User hat in allen Fällen der Empfehlung zugestimmt). ADR folgt danach (Entscheidung: ja, siehe Handoff).
+
+### A) Betroffene Komponenten (Überblick)
+
+```
+Interview-Engine (Erhebung)
+├── interviewSemantic.ts       — EIN Schritt-Typ ersetzt den StepEntry-Slot-Zoo
+│                                 (SlotValue/TaziteSlot/TaziteSlotArray/GovernanceSlot → SchemaSlot*)
+├── interviewTools.ts          — record_slot (erweitert um reibungspunkte/aufgabentyp/
+│                                 risiko_schwere/ausloeser/teilschritte), record_dependency
+│                                 unverändert. record_governance UND update_walkthrough_data
+│                                 entfallen (Tools-Anzahl 6 → 4 aktive Schreib-Tools + link_bottleneck)
+├── talkerPrompt.ts            — SLOT_PROMPT_HINT: 4 neue Einträge, tazite_cues-Eintrag entfällt
+│                                 (kein target_o_field mehr, bleibt aber schreibbarer Slot)
+└── interviewAnalyst.ts        — Prüfschema-Text-Fix (toter rule_based-Verweis), target_o_field-
+                                  Enum erweitert, Klassifikationslogik für standardisierungsgrad/
+                                  informationsdichte (aus bereits erhobenen Antworten, keine
+                                  eigene Frage)
+
+Persistenz (Übergabe an Wissensbank)
+├── interview_state.step_tracker (JSONB)  — Format unverändert, ist jetzt direkt der Schritt-Typ
+└── process_steps (Postgres-Tabelle)
+    ├── NEU:      schritt_daten (jsonb)  — 1:1 Kopie des Schritt-Objekts aus step_tracker
+    ├── ENTFÄLLT: role, frequency_per_month, duration_minutes, data_sources, rule_based,
+    │             error_rate_percent, media_breaks, friction_points, friction_tools,
+    │             walkthrough_steps  (10 Spalten)
+    └── UNVERÄNDERT: id, interview_id, workspace_id, title, description, source_quote,
+                  step_type, condition_text, substeps, cluster_id, embedding, created_at
+                  (LLM-generierte Anreicherung + Cluster/Embedding — kein O-Feld, nicht betroffen)
+
+Downstream-Konsumenten (lesen künftig aus schritt_daten statt Flach-Spalten; Konsum-Anpassung,
+keine Neugestaltung eigener Logik — wie in der Spec vorgegeben)
+├── useCaseEngine.ts             — ROI-Berechnung: potenzial.*.wert (+ Einheiten-Umrechnung, s.u.)
+├── processStepsAggregation.ts   — Cluster-Aggregation über schritt_daten
+├── processClustering.ts         — Cluster-Bildung, Lese-Pfad ändert sich, Logik nicht
+├── reportGenerator.ts           — PDF-Report-Datengenerierung
+├── ProcessStepsTable.tsx        — Tabellenansicht + Inline-Edit (PATCH-Aufrufer)
+├── UseCaseSheet.tsx             — Detail-Sheet
+├── InterviewReport.tsx          — PDF-Komponente
+├── ClarificationCards.tsx       — Abschlussfragen-UI
+├── interview/[token]/clarification/route.ts — Card-Generierung
+└── process-steps/[id]/route.ts  — PATCH-Endpoint (Ergänzung zum Spec-Scope — nutzt heute
+                                    dieselben 7 wegfallenden Flach-Spalten für manuelle Edits,
+                                    im ursprünglichen Downstream-Dateien-Abschnitt der Spec fehlend)
+```
+
+### B) Datenmodell (Klartext)
+
+**Ein Schritt-Objekt, drei Verwendungsorte (Conversation-State, Persistenz, Export) — dieselbe Form.**
+
+*Stammdaten (unwrapped, kein Slot):* `id` (stabile Form "S001"), `bezeichnung` (Titel), `reihenfolge`.
+Begründung für "kein Slot": beide sind ab `register_step` immer gesetzt und nie im Sinne von
+Konfidenz/Nicht-Befund revidierbar — Slot-Overhead ohne Zustandsvarianz. Konsistent mit der
+Thesis-Schema-Spec selbst, die `reihenfolge` bereits explizit als "immer befüllt, kein Slot" führt.
+
+*Aktiv verfolgte O-Felder (target_o_field-fähig — der Talker fragt gezielt danach, solange offen):*
+
+| Feld | Form | Status |
+|------|------|--------|
+| `entscheidungslogik` | SchemaSlotString | unverändert |
+| `ausnahmen` | SchemaSlotStringArray | unverändert |
+| `inputs` | SchemaSlotStringArray | unverändert |
+| `outputs` | SchemaSlotStringArray | unverändert |
+| `hilfsmittel` | SchemaSlotStringArray | unverändert |
+| `abhaengigkeiten` | strukturierte Kanten (depends_on/influences) | unverändert (PROJ-26) |
+| `reibungspunkte` | SchemaSlotStringArray | NEU aktiv (vorher `friction_points`, Legacy-Nebenkanal) |
+| `aufgabentyp` | Mehrfachauswahl-Enum: Entscheidung / Informationsübertragung / Zusammenfassung / Suche / Klassifikation / Generierung | NEU |
+| `risiko_schwere` | Mehrfachauswahl-Enum: leicht_korrigierbar / teuer / rechtlich_kritisch / kundenkontakt_relevant | NEU |
+| `ausloeser` | SchemaSlotString (Freitext) | NEU |
+
+*Opportunistisch erfasst (schreibbar, aber kein target_o_field — Talker fragt nie gezielt danach):*
+
+| Feld | Form | Status |
+|------|------|--------|
+| `tazite_cues` | SchemaSlotStringArray | bleibt im Schema, fällt aus dem Ziel-Set (Aspekt-i-Zuordnung) |
+| `teilschritte` | string[], additiv | umbenannt von `process_steps` (Namenskollision mit Postgres-Tabelle), jetzt record_slot-Array-Slot statt eigenes Tool |
+| `potenzial` (4 Felder: `haeufigkeit_pro_monat`, `dauer_minuten`, `fehlerquote_prozent`, `medienbrueche`) | SchemaSlotNumber, jetzt mit optionalem `einheit`-Feld | s. Einheiten-Unabhängigkeit unten |
+
+*Klassifikations-Felder (vom Analyst aus bereits erhobenen Antworten abgeleitet — keine eigene Frage, kein SLOT_PROMPT_HINT-Eintrag):*
+
+| Feld | Werte | Abgeleitet aus |
+|------|-------|-----------------|
+| `standardisierungsgrad` | standardisiert / teilweise_standardisiert / stark_variabel | `ausnahmen`-Antwort |
+| `informationsdichte` | strukturiert / gemischt / unstrukturiert | `inputs`/`hilfsmittel`-Antwort |
+
+"Anzahl Systeme"/Kontextwechsel-Signal: reine Ableitung aus `hilfsmittel.wert?.length`, kein eigenes
+Feld, keine Spalte — nur zur Anzeige-/ROI-Zeit berechnet.
+
+*Entfällt vollständig:* `governance` (rolle/organisationseinheit/systeme — ersetzt durch
+`interviews.employee_role`/`department`, einmal pro Interview statt pro Schritt), `friction_tools`,
+`pain_point_primary` (Begründung je Feld: siehe Acceptance Criteria der Spec).
+
+**Einheiten-Unabhängigkeit (Häufigkeit/Dauer):** `SchemaSlotNumber` bekommt ein optionales
+`einheit`-Feld statt eines impliziten Fixwerts — z.B. `potenzial.haeufigkeit_pro_monat` wird zu
+`{wert: 3, einheit: 'pro_woche', konfidenz, nicht_befund_typ}` statt eines auf "pro Monat"
+vorab-normalisierten Werts. Umrechnung auf eine kanonische Einheit passiert deterministisch im
+Code zur Nutzungszeit (ROI-Berechnung, Reports), nie durch das Sprachmodell zum Erhebungszeitpunkt.
+Adressiert KI-18s größte dokumentierte Einzelursache (13 von 39 Grounding-Verletzungen) strukturell,
+nicht nur im Prompt.
+
+### C) Tech-Entscheidungen (Begründung)
+
+1. **JSONB-only Persistenz, keine Flach-Spalten für O-Felder** (grilling-Entscheidung). Ein neues
+   Feld `schritt_daten` auf `process_steps` trägt das komplette Schritt-Objekt 1:1 — dieselbe Form
+   wie in `step_tracker`. Begründung: einzige Quelle der Wahrheit, kein Sync-Risiko zwischen
+   Conversation-State und Persistenz (erfüllt die AC "einzige Repräsentation" wörtlich). Verifiziert:
+   aktuell nutzt keine Downstream-Logik SQL-seitiges Filtern/Sortieren auf den betroffenen Feldern
+   (`processStepsAggregation.ts`/`useCaseEngine.ts` aggregieren in JS nach dem Laden) — kein
+   Funktionsverlust durch den Wegfall der Flach-Spalten. Manuelle Korrektur im UI
+   (`process-steps/[id]/route.ts`) wird Read-Merge-Write auf dem JSONB-Feld statt Spalten-Update —
+   für den Nutzer unsichtbar, nur der Backend-Mechanismus ändert sich. Kein GIN-Index auf
+   `schritt_daten` vorgesehen (keine Query filtert aktuell auf JSONB-Inhalt) — bei Bedarf später
+   nachrüstbar.
+2. **Governance-Streichung, Bezug auf `interviews.employee_role`/`department`** (grilling-Entscheidung:
+   `role`-Spalte auf `process_steps` wird ersatzlos entfernt, nicht nur leergelassen). Empirisch nur
+   4/20 Schritte je gefüllt, strukturell redundant mit der Interview-Verwaltung. Der Edge Case "ein
+   anderer Ausführender pro Schritt als der Interviewte" wird bewusst nicht mehr unterschieden.
+3. **Zwei Coverage-Konzepte bleiben unabhängig — kein Merge.** `COVERAGE_FIELDS` (9-Felder-Metrik,
+   `dedup_slot_coverage`-Eval-Scorer, an das eingefrorene Thesis-Schema gebunden) bleibt
+   **unverändert**, inkl. `tazite_cues`. `O_SLOT_FIELDS` (Interview-Engine-Ziel-Feld-Menge,
+   `target_o_field`-Enum) ändert sich: −`tazite_cues`, +`reibungspunkte`/`aufgabentyp`/
+   `risiko_schwere`/`ausloeser` (7 → 10 Felder). Aktuell ist `O_SLOT_FIELDS` codeseitig ein reiner
+   Filter auf `COVERAGE_FIELDS` — das wird jetzt zu zwei unabhängigen Konstantenlisten, da sich die
+   Mengen nicht mehr decken. Diese Trennung muss im Code explizit werden; ohne sie bricht die
+   Vergleichbarkeit mit der historischen KI-18/KI-27-Eval-Befundlage.
+4. **`update_walkthrough_data` → `record_slot`** (grilling-Entscheidung): `teilschritte` wird ein
+   regulärer additiver Array-Slot, wie `tazite_cues`/`ausnahmen`/`inputs`/`outputs`/`hilfsmittel`
+   bereits additiv sind. Ein Feld allein rechtfertigt keinen eigenen Tool-Adapter mehr.
+5. **Einheiten-Unabhängigkeit für Häufigkeit/Dauer** — s. Datenmodell oben. Struktur-Erweiterung von
+   `SchemaSlotNumber` (optionales `einheit`-Feld), kein neuer Typ.
+
+**Hinweis (informativ, keine Entscheidung nötig):** `toGrenzobjekt()` mappt `StepEntry` aktuell auf
+die im Thesis-Repo (`meridian-ma`) als "eingefroren" (v1.2) geführte `Schritt`-Form. PROJ-45 entfernt
+`governance` und führt 5 neue, dort nicht vorhandene Felder ein (`aufgabentyp`, `risiko_schwere`,
+`ausloeser`, `standardisierungsgrad`, `informationsdichte`) — die App-Implementierung divergiert damit
+bewusst vom akademischen Schema. Konsistent mit der DSR-Rahmung (Code ist zitierter Vorlauf, nicht die
+Thesis-Grundlage selbst) und mit der Spec-eigenen AC, `toGrenzobjekt()` ersatzlos zu streichen. Keine
+Rückwirkung auf `meridian-ma` in dieser Spec.
+
+### D) Dependencies
+
+Keine neuen npm-Pakete — reine Schema-/Code-Konsolidierung. Eine neue Postgres-Migration
+(`process_steps`: 10 Spalten löschen, `schritt_daten jsonb` hinzufügen). Kein Backfill (Edge Case
+bereits in der Spec dokumentiert: Altbestand bleibt wie erfasst, neue Felder gelten ab Deploy).
 
 ## QA Test Results
 _To be added by /qa_
