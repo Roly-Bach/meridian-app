@@ -61,7 +61,7 @@
 | PROJ-42 | Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-42-interview-grenzfall-robustheit.md) | P0 | M | 0:4:1 |
 | PROJ-43 | Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards) | Revision | Interview Engine | PROJ-29 | Roadmap | — | P1 | L | — |
 | PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-44-pipeline-simplifikation.md) | P1 | XL | 1:5:2 |
-| PROJ-45 | Schema-Konsolidierung + AI-Wert-Faktoren | Revision | Wissensbank | PROJ-25 | In Review | [spec](wissensbank/PROJ-45-schema-konsolidierung-ai-wert-faktoren.md) | P1 | XL | 0:1:0 |
+| PROJ-45 | Schema-Konsolidierung + AI-Wert-Faktoren | Revision | Wissensbank | PROJ-25 | Approved | [spec](wissensbank/PROJ-45-schema-konsolidierung-ai-wert-faktoren.md) | P1 | XL | 0:1:0 |
 | PROJ-46 | Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-46-talker-briefing-konsolidierung.md) | P1 | XL | 0:1:1 |
 
 <!-- Add features above this line -->

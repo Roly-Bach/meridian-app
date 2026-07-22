@@ -1,6 +1,6 @@
 # PROJ-45: Schema-Konsolidierung + AI-Wert-Faktoren
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Wissensbank
 **Extends:** PROJ-25
@@ -435,6 +435,8 @@ Zwei Ebenen — die erste ist risikoarm, die zweite eval-pflichtig:
 
 **Stufe 3b (Prompt-Deslop) — auf Nutzer-Wunsch zurückgestellt.** Nutzer entschied sich für „jetzt erst H-1 verifizieren, Stufe 3b danach separat" — kein Umfang-Rewrite in dieser Session, bleibt offener Punkt für eine eigene `/grilling`-Runde.
 
+**Nachtrag `/qa` Runde 2 (2026-07-22, Opus 4.8): Stufe 3b bekommt KEIN eigenes PROJ.** Sie ist eine Teilmenge von **PROJ-46** (Talker-Briefing-Konsolidierung), das laut eigener Spec „überwiegend Löschung und Ent-Dichtung des Talker-Prompts" ist (Z. 39/92) und auch den Analyst-Prompt anfasst. Ein separates Deslop-Feature würde `talkerPrompt.ts`/`interviewAnalyst.ts` ein zweites Mal umschreiben (PROJ-43 und PROJ-46 tun das ohnehin) und Eval-Budget doppelt verbrennen. **Festlegung (Nutzer):** die Prompt-Deslop-Session inklusive `/grilling` muss VOR PROJ-46 Approval erfolgt sein. PROJ-46 trägt dafür jetzt eine explizite Analyst-Deslop-AC (Strom C) und einen Gate-Vermerk (Strom G). Siehe [PROJ-46](../interview-engine/PROJ-46-talker-briefing-konsolidierung.md).
+
 **Verifikation:** `tsc --noEmit` sauber, **66/66 Testdateien, 808/808 Tests grün** (807 + 1 neuer Reject-Test) nach jeder Stufe erneut geprüft.
 
 ## Re-Eval (2026-07-22, `google/gemini-3.1-flash-lite` it-support, Supabase-Store, `--seed` random=27831)
@@ -471,6 +473,56 @@ Artefakt: `docs/evals/interview/2026-07-22/2026-07-22-08-40-14-google-gemini-3-1
 **Bugs: 0 High : 1 Medium : 0 Low** (H-1 behoben, M-1 bleibt offen/dokumentiert wie oben).
 
 **Nicht committet** — Working Tree enthält den vollständigen Stufe-1/2/3a-Diff (65 Dateien) + diese Spec-/INDEX-Updates. Nächster Schritt laut Nutzer-Entscheidung: `/qa PROJ-45` für finales Sign-off (Status-Übergang zu Approved ist QA-Zuständigkeit, nicht Backend), danach optional Stufe 3b in eigener `/grilling`-Runde.
+
+## QA Runde 2 — Approved-Sign-off (`/qa` 2026-07-22, Opus 4.8)
+
+> Finales Sign-off nach der H-1-Remediation. Auftrag: unabhängig verifizieren statt dem Backend-/Re-Eval-Summary zu vertrauen (fix committet als `3595494`).
+
+### Statik + Regression (bestanden)
+
+| Check | Ergebnis |
+|-------|----------|
+| `npx tsc --noEmit` | **exit 0**, sauber (gesamtes Repo, nach 65-Datei-Rename) |
+| `npm test` | **66/66 Testdateien, 808/808 Tests grün, 0 Skip, 0 Failures** |
+| Working Tree | clean, H-1-Fix committet (`3595494`), 1 Commit ahead of origin/main |
+| Rename-Vollständigkeit | `frequency_per_month`/`duration_minutes` in Nicht-Test-`src` nur noch im Back-compat-Read (`RawStepEntry`, `frequency ?? frequency_per_month`) + Kommentaren — kein aktiver Feldname mehr. `max_duration_minutes` (andere Tabelle) unberührt. |
+| `einheit`-Hard-Reject | Code vorhanden ([interviewTools.ts:377-378](../../src/services/interviewTools.ts#L377)) **und** unit-getestet (`rejects frequency/duration value without einheit`, interviewTools.test.ts:165). |
+
+### H-1 unabhängig verifiziert BEHOBEN
+
+Zwei unabhängige Belege, nicht nur die Backend-Summary-Tabelle:
+
+1. **Roh-Slot-Trail** (`…08-35-23-…it-support.slot-trail.jsonl`, tatsächlicher LLM-Output): „75 bis 100 Tickets **pro Woche**" → `value=75/87.5` (NICHT ~325/Monat); „3 bis 5 **pro Woche**" → `value=3-4` (NICHT ~16/Monat); „drei Arbeitstage" → `duration value=3` (NICHT auf Minuten umgerechnet). Keine LLM-Selbstumrechnung.
+2. **Live-DB direkt abgefragt** (`process_steps.schritt_daten->potenzial`, interview_id `e5a704b3-…`): hardware-tausch `value=3, einheit=pro_woche`; it-support `value=75, einheit=pro_woche`; software-installationen `duration value=3, einheit=tage`. `einheit` in der ROH genannten Einheit persistiert, nie vorab-normalisiert. Das historische KI-18-Muster („2-3 Tage"→„1200 Minuten", „15-20/Tag"→„350/Monat") trat NICHT auf.
+
+`blocked_writes: 0` — das Modell lieferte `einheit` von sich aus korrekt, der Hard-Reject musste live nicht greifen (Safety-Net bleibt unit-getestet).
+
+### Eval-Gate (QA §8b — dokumentiert, PROJ-45-Verhalten grün)
+
+Re-Eval 2026-07-22 (`google/gemini-3.1-flash-lite`, it-support, Supabase-Store), Judge-Preflight HTTP 200:
+
+| Metrik | Wert | Gate | |
+|--------|------|------|---|
+| completion_correctness | true | =true | ✓ |
+| dialog_naturalness | 0.67 | ≥0.65 | ✓ (keine KI-18-Prompt-Dichte-Regression durch Stufe 2/3a) |
+| talker_grounding_violations | 0 | 0 | ✓ |
+| hallucination_rate | 0 | <0.01 | ✓ |
+| step_registration_coverage | 1.0 | 1.0 | ✓ |
+| blocked_rate | 0 | <0.10 | ✓ |
+| dedup_slot_coverage | 0.67 | ≥0.75 | ✗ |
+| **status (Runner-Gate)** | **FAIL** | — | ausschließlich wegen dedup_slot_coverage |
+
+Der Runner-FAIL hängt allein an `dedup_slot_coverage` (0.67), einer orthogonalen Tiefe-Metrik mit etablierter Baseline 0.56–0.72 über PROJ-44/PROJ-46 hinweg, explizit PROJ-43-Remit (KI-27), **kein PROJ-45-Regress**. Alle PROJ-45-relevanten Gates grün. Die Eval erfüllt ihren §8b-Zweck (reales Konversationsverhalten geprüft, H-1 aufgedeckt→gefixt→bestätigt) — Approved-tauglich, konsistent mit der Behandlung derselben dedup-FAILs bei PROJ-44/46.
+
+### Security
+
+Keine neue Angriffsfläche. Die Remediation berührte Prompt-Text/Schema/Rename, keine Route-Auth-Logik. Der Object-Ownership-Guard auf `process-steps/[id]` PATCH (Auth + `workspace_members`) wurde in QA-Runde 1 verifiziert und ist unverändert.
+
+### Endurteil
+
+**READY → Approved.** Keine Critical/High-Bugs offen (H-1 unabhängig als behoben verifiziert). **M-1 (Medium) bleibt offen und dokumentiert** — Dauer als SLA-/Monats-Aggregat statt pro Vorgang (ROI-Überzählungsrisiko), Straddle PROJ-43-Elicitation, nicht durch PROJ-45s Schema-Arbeit verursacht, kein Approved-Blocker. E2E nicht anwendbar (Datenschicht-Konsolidierung, keine neuen UI-Flows; Downstream-UI liest nur ein neues Feld).
+
+**Bugs: 0 High : 1 Medium : 0 Low** (M-1 → PROJ-43).
 
 ## Deployment
 _To be added by /deploy_

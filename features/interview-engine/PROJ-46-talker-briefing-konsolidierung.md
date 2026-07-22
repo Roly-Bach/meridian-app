@@ -7,7 +7,7 @@
 **Appetite:** XL
 **Bugs:** 0:1:1
 **Created:** 2026-07-18
-**Last Updated:** 2026-07-19 (QA-Runde 3: B/C Re-Eval — Non-Termination behoben; flacher Abschluss = PROJ-43-Wurzel, nächster Schritt PROJ-43)
+**Last Updated:** 2026-07-19 (QA-Runde 3: B/C Re-Eval — Non-Termination behoben; flacher Abschluss = PROJ-43-Wurzel, nächster Schritt PROJ-43); 2026-07-22 (PROJ-45 Stufe-3b-Deslop hier gebündelt, `/grilling` als Approval-Vorbedingung, siehe Strom C + G)
 **ADR:** [ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md) (Rollen-Vertrag-Amendment), [ADR-024](../../docs/adr/ADR-024-analyst-completion-readiness-geguardetes-boolean.md) (Completion-Readiness-Amendment, Accepted)
 
 ## Context
@@ -90,6 +90,7 @@ Die KI-18-Historie zeigt: dichte Talker-Prompts kosten `dialog_naturalness` beim
   - `coverageCheckSection` ([Z. 316](../../src/services/talkerPrompt.ts#L316)): fehlende Quant-Pflichtslots im Closing sind Card-Territorium (PROJ-43/M-4).
 - [ ] Im statischen Talker-Prompt **erhalten**: Rolle, `<turn_format>`, `<verboten>`, `<no_repeat>` (Grounding gegen Re-Ask gefüllter Slots), `<kein_kommentar>`, Floskel-Verbot, die statische Anti-Zitat-Regel ([Z. 44-45](../../src/services/talkerPrompt.ts#L44), guardet Talker-Eigenberechnung).
 - [ ] Netto-Reduktion im Talker-Prompt ist dokumentiert (Zeilen-/Block-Delta). Der Analyst-Prompt wächst netto nicht (STUFE 4 umgeframt statt additiv).
+- [ ] **Analyst-Prompt-Deslop (aus PROJ-45 Stufe 3b hierher gebündelt):** der Analyst-Systemprompt ([interviewAnalyst.ts](../../src/services/interviewAnalyst.ts)) wird auf Redundanz und Widersprüche durchgesehen und ent-dichtet (nur Nötiges + Eindeutiges), nicht nur der Talker-Prompt. PROJ-45 hat Stufe 3a (Tracking-ID-Strip in beiden Dateien) bereits erledigt; die inhaltliche Deslop-Ebene (Stufe 3b) ist bewusst hierher verlagert, weil PROJ-46 dieselben zwei Dateien ohnehin umbaut (kein zweiter Zugriff, saubere Eval-Attribuierung). Eval-pflichtig über Strom G.
 
 ### Strom D — Terminierungs- und Closing-Vertrag (H-2, BUG-4, M-7)
 
@@ -117,6 +118,7 @@ Die KI-18-Historie zeigt: dichte Talker-Prompts kosten `dialog_naturalness` beim
 - [ ] O-Feld-Tiefe pro Schritt messbar über der Runde-3-Baseline (`dedup_slot_coverage`-Trend nach oben). Das **grüne** Gate (≥0.75) ist **nicht** PROJ-46-eigen: M-4 (Cards, PROJ-43), M-5 (dependency_capture) und der Instrument-Effekt (`dedup_slot_coverage`-Nenner, PROJ-40) sind separat.
 - [ ] **Transkript-Level-Verifikation** (aggregierte Scores verdecken Konversationsfehler): H-2 (kein Farewell-Limbo/Doppel-Abschied), BUG-4 (keine wortgleiche Sonden-Wiederholung), M-6 (kein Ping-Pong, Lock bindend), M-7 (Abschluss würdigt substanziellen Inhalt), L-1 (Übergänge vorhanden) sind an den neuen Transkripten nicht mehr reproduzierbar.
 - [ ] Keine neuen `talker_grounding_violations`. Zusätzlich wird die **Guard-Aktivität** (Regenerations-Zahl) als Leitindikator dokumentiert. Der Guard bleibt; seine Entfernbarkeit ist eine spätere, separate, evidenz-schwere Entscheidung, nicht Teil dieser Spec.
+- [ ] **Prompt-Deslop-Session als Approval-Vorbedingung (Nutzer, 2026-07-22):** die inhaltliche Deslop-Überarbeitung von `talkerPrompt.ts` UND `interviewAnalyst.ts` (PROJ-45 Stufe 3b, hier gebündelt) inklusive der vorgeschalteten `/grilling`-Runde muss vor dem Übergang zu Status=Approved abgeschlossen und Eval-verifiziert sein (Vorher/Nachher-`dialog_naturalness`-Median gegen die Runde-3-Baseline, KI-18-Dichte-Regel). Ohne diese Session kein Approved.
 
 ## Edge Cases
 
