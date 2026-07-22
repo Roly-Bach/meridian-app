@@ -543,7 +543,7 @@ Keine neue Angriffsfläche. Die Remediation berührte Prompt-Text/Schema/Rename,
 
 ## Post-Mortem
 
-> Vorschlag aus der `/deploy`-Session, vom Nutzer zu bestätigen/korrigieren.
+> `/deploy`-Session 2026-07-22, vom Nutzer bestätigt.
 
 | Aspekt | Bewertung |
 |--------|-----------|
