@@ -124,7 +124,7 @@ const ClarificationCardSchema = z.object({
   step_title: z.string(),
   question: z.string().describe('Natural language question for the missing slot'),
   options: z.array(z.string()).min(2).max(4).describe('Answer options for QualitativeCards; last option must be "Weiß ich nicht". SlotCards and OpenItemCards use UI-fixed options.'),
-  slot_key: z.string().describe('Which slot key this fills: frequency_per_month | duration_minutes | entscheidungslogik | error_rate_percent | open_item | qualitative'),
+  slot_key: z.string().describe('Which slot key this fills: frequency | duration | entscheidungslogik | error_rate_percent | open_item | qualitative'),
   answer_type: z.enum(['single', 'multi']).optional().default('single').describe('single for slot/open-item cards, multi for qualitative cards'),
 })
 
@@ -242,7 +242,7 @@ Ein Schritt ist aktiv im Walkthrough UND kein neuer Schritt in Stufe 1?
   → record_slot(slot=teilschritte) für den Ablauf, record_slot(slot=reibungspunkte) für Reibungspunkte,
     record_slot(slot=hilfsmittel) für Systeme.
 
-STUFE 3b — KLASSIFIKATION (PROJ-45, keine eigene Frage, aus bereits erhobenen Antworten ableiten):
+STUFE 3b — KLASSIFIKATION (keine eigene Frage, aus bereits erhobenen Antworten ableiten):
   → Sobald ausnahmen befüllt wurde: record_slot(slot=standardisierungsgrad) setzen
     (standardisiert / teilweise_standardisiert / stark_variabel), abgeleitet aus dem
     ausnahmen-Inhalt (viele/starke Ausnahmen → stark_variabel; keine/kaum → standardisiert).
@@ -265,7 +265,7 @@ STUFE 4 — ZIEL-O-FELD + ADVANCE-SIGNAL (jeden Turn mit aktivem/gesperrtem Schr
     Setze es NICHT nur weil ein Turn vergangen ist — nur wenn der Schritt selbst ausreichend
     abgedeckt wirkt.
 
-STUFE 4b — COMPLETION-READINESS (jeden Turn prüfen, PROJ-46/ADR-024):
+STUFE 4b — COMPLETION-READINESS (jeden Turn prüfen):
   → produce_briefing.discovery_exhausted = true setzen, wenn DU urteilst: die Entdeckung ist
     erschöpft — alle genannten Prozesse sind erfasst UND der Mitarbeiter liefert nichts
     Substanzielles mehr (wiederholt sich, weicht aus, gibt nur noch Höflichkeits-/
@@ -285,7 +285,7 @@ Richtig:  "Rechnungsbearbeitung: Eingang und Prüfung", "Monatsabschluss: Abstim
 Falsch:   "Rechnungsprüfung", "Rechnungsprüfung und Kontierung" (kein Parent-Kontext → Fragmentation)
 
 **record_slot**: VORHER PRÜFEN: Ist der Slot im Step-Tracker bereits gefüllt (Wert ≠ null)? Wenn ja → NICHT aufrufen. Das System erkennt Duplikate und gibt "STOPP" zurück — vermeide redundante Calls.
-Nicht-Befund (PROJ-28/BL-E2.1) — NUR für potenzial-Slots: Wenn der Mitarbeiter in diesem Turn aktiv befragt wurde aber KEINEN belegbaren Wert geliefert hat, setze nicht_befund_typ statt value:
+Nicht-Befund — NUR für potenzial-Slots: Wenn der Mitarbeiter in diesem Turn aktiv befragt wurde aber KEINEN belegbaren Wert geliefert hat, setze nicht_befund_typ statt value:
 - 'unbekannt' → Mitarbeiter weiß es nicht ("Das kann ich nicht schätzen", "Weiß ich leider nicht")
 - 'verweigert' → Mitarbeiter lehnt Auskunft ab ("Das sage ich nicht", "Möchte ich nicht nennen")
 - 'nicht_zutreffend' → Feld explizit nicht anwendbar ("Fehlerquote gibt es bei uns nicht", "Passiert nicht")
@@ -293,8 +293,8 @@ evidence_span PFLICHT auch bei nicht_befund_typ (wörtlicher Ausschnitt der Mita
 NICHT setzen wenn der Slot noch gar nicht adressiert wurde — nur wenn aktiv gefragt und keine Antwort kam.
 Für jeden explizit genannten Wert:
 - Spannen ("80 bis 100", "zwei bis drei Tage") → SOFORT erfassen mit confidence=estimate und qualifier="Spanne: <original>". Mittelwert als value: "80 bis 100" → 90. Zeitspannen in Minuten: "2–3 Tage à 8h" → 1200. NICHT warten bis der Talker nachhakt.
-- frequency_per_month: Häufigkeitsangaben. PROJ-45 Einheiten-Unabhängigkeit: speichere den Wert in der vom Mitarbeiter GENANNTEN Einheit + einheit-Parameter (z.B. "3× pro Woche" → value=3, einheit="pro_woche"). NIEMALS selbst auf Monat umrechnen — das passiert deterministisch im Code. Ohne genannte Einheit: einheit weglassen (Default pro_monat). Spannen sofort als estimate erfassen.
-- duration_minutes: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände). PROJ-45: speichere in der genannten Einheit + einheit-Parameter ("2 Stunden" → value=2, einheit="stunden"). NIEMALS selbst in Minuten umrechnen. Ohne genannte Einheit: einheit weglassen (Default minuten). Spannen sofort als estimate erfassen.
+- frequency: Häufigkeitsangaben. Wert + einheit GENAU wie genannt erfassen (z.B. "3× pro Woche" → value=3, einheit="pro_woche"). NIEMALS selbst umrechnen — das passiert deterministisch im Code. Spannen sofort als estimate erfassen.
+- duration: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände). Wert + einheit GENAU wie genannt erfassen (z.B. "2 Stunden" → value=2, einheit="stunden"). NIEMALS selbst umrechnen. Spannen sofort als estimate erfassen.
 - entscheidungslogik: Aussagen zur Regelbasierung ("immer gleich", "variiert", "nach Schema") als Freitext.
 - hilfsmittel: Genannte Systeme, Tools, Datenbanken — NUR via record_slot setzen.
 - reibungspunkte: Genannte Reibungspunkte/Zeitfresser — via record_slot setzen.
@@ -327,12 +327,12 @@ Dies ist unabhängig davon was im aktuellen Turn besprochen wurde — historisch
 früheren Turns MÜSSEN hier erfasst werden.
 
 Prüfschema pro Schritt:
-- Ist frequency_per_month null? → SlotCard generieren.
-- Ist duration_minutes null? → SlotCard generieren.
+- Ist frequency null? → SlotCard generieren.
+- Ist duration null? → SlotCard generieren.
 - Ist entscheidungslogik null? → SlotCard generieren.
 
 Generiere bis zu 8 ClarificationCards via produce_briefing.clarification_cards, priorisiert nach Use-Case-Relevanz:
-1. **SlotCards** (slot_key=frequency_per_month|duration_minutes|entscheidungslogik|error_rate_percent): Für jeden registrierten Schritt mit leerem Pflicht-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
+1. **SlotCards** (slot_key=frequency|duration|entscheidungslogik|error_rate_percent): Für jeden registrierten Schritt mit leerem Pflicht-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
 2. **OpenItemCards** (slot_key=open_item): Für erwähnte aber nicht registrierte Prozessschritte. options leer lassen — UI verwendet Ja/Nein/Manchmal.
 3. **QualitativeCards** (slot_key=qualitative, answer_type=multi): Für fehlenden Prozesskontext: Beteiligte, Systeme, Blockaden, Abstimmungsbedarf, Automatisierungspotenzial. options=[2-4 spezifische Antwortoptionen], letzter Eintrag="Weiß ich nicht".
 Wenn alle Pflicht-Slots gefüllt sind: leeres Array zurückgeben.

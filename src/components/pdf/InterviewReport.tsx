@@ -13,8 +13,8 @@ export interface ReportProcessStep {
   id: string
   title: string
   description: string | null
-  frequency_per_month: number | null
-  duration_minutes: number | null
+  frequency: number | null
+  duration: number | null
   data_sources: string[]
   rule_based: boolean
 }
@@ -312,8 +312,8 @@ function ProcessStepsSection({ steps }: { steps: ReportProcessStep[] }) {
                 <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9 }}>{step.title}</Text>
                 {step.description && <Text style={{ fontSize: 8, color: TEXT_MUTED, marginTop: 1 }}>{step.description}</Text>}
               </View>
-              <Text style={[styles.tableCell, styles.tableCellNarrow]}>{dash(step.frequency_per_month)}</Text>
-              <Text style={[styles.tableCell, styles.tableCellNarrow]}>{dash(step.duration_minutes)}</Text>
+              <Text style={[styles.tableCell, styles.tableCellNarrow]}>{dash(step.frequency)}</Text>
+              <Text style={[styles.tableCell, styles.tableCellNarrow]}>{dash(step.duration)}</Text>
               <Text style={styles.tableCell}>
                 {step.data_sources.length > 0 ? step.data_sources.join(', ') : '—'}
               </Text>

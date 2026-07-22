@@ -55,13 +55,13 @@ export const itSupport: Persona = {
     {
       process: 'Ticket-Bearbeitung',
       aiCandidate: true, // sehr hohe Frequenz, Wiki-Lookup teils regelbasiert, 3× Tool-Wechsel = Medienbrüche
-      potenzial: { frequency_per_month: 350, media_breaks: 3 }, // 15–20/Tag × ~20 Arbeitstage
+      potenzial: { frequency: 350, media_breaks: 3 }, // 15–20/Tag × ~20 Arbeitstage
       dependsOn: [],
     },
     {
       process: 'Hardware-Tausch',
       aiCandidate: false, // niedrigere Frequenz, physisch
-      potenzial: { frequency_per_month: 16 }, // 3–5/Woche × 4
+      potenzial: { frequency: 16 }, // 3–5/Woche × 4
       dependsOn: [],
     },
   ],

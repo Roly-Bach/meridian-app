@@ -15,8 +15,8 @@ function makeStep(overrides: Partial<ProcessStep> = {}): ProcessStep {
     cluster_id: null,
     title: 'Rechnung prüfen',
     description: null,
-    frequency_per_month: 10,
-    duration_minutes: 15,
+    frequency: 10,
+    duration: 15,
     data_sources: [],
     rule_based: false,
     error_rate_percent: null,
@@ -65,16 +65,16 @@ describe('computeInterviewStepCounts', () => {
 describe('computeClusterAggregates', () => {
   it('averages mixed null and numeric values, ignoring nulls', () => {
     const steps = [
-      makeStep({ frequency_per_month: 10 }),
-      makeStep({ frequency_per_month: null }),
-      makeStep({ frequency_per_month: 20 }),
+      makeStep({ frequency: 10 }),
+      makeStep({ frequency: null }),
+      makeStep({ frequency: 20 }),
     ]
     const result = computeClusterAggregates(steps, {})
     expect(result.mergedFrequency).toBe(15)
   })
 
   it('returns null when all values are null', () => {
-    const steps = [makeStep({ frequency_per_month: null }), makeStep({ frequency_per_month: null })]
+    const steps = [makeStep({ frequency: null }), makeStep({ frequency: null })]
     const result = computeClusterAggregates(steps, {})
     expect(result.mergedFrequency).toBeNull()
   })

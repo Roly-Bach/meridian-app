@@ -112,8 +112,8 @@ function makeStepEntry(title = 'Rechnungsprüfung', status: StepEntry['status'] 
     status,
     abhaengigkeiten: null,
     potenzial: {
-      frequency_per_month: null,
-      duration_minutes: null,
+      frequency: null,
+      duration: null,
       error_rate_percent: null,
       media_breaks: null,
     },

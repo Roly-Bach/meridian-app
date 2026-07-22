@@ -2,8 +2,8 @@
  * L4 — Slot-Write Race Condition (Trail/Tracker Desync)
  *
  * Reproduziert das in 06-07 Eval-Lauf beobachtete Phänomen:
- * Trail emittiert "monatsabschluss.duration_minutes=1200, overwrite=false, sourceTurn=5",
- * finaler Tracker zeigt aber duration_minutes=null.
+ * Trail emittiert "monatsabschluss.duration=1200, overwrite=false, sourceTurn=5",
+ * finaler Tracker zeigt aber duration=null.
  *
  * Ursache: record_slot, quick-extract und backfill teilen sich das Pattern
  * READ tracker → MODIFY in memory → WRITE tracker zurück.
@@ -37,8 +37,8 @@ function makeEmptyStep(title: string): StepEntry {
     abhaengigkeiten: null,
     status: 'exploring',
     potenzial: {
-      frequency_per_month: null,
-      duration_minutes: null,
+      frequency: null,
+      duration: null,
       error_rate_percent: null,
       media_breaks: null,
     },
@@ -92,9 +92,9 @@ describe('L4: concurrent slot-write race condition', () => {
     // Writer B (online extraction) reads — gets t=0 snapshot too (race window)
     const snapshotB = JSON.parse(JSON.stringify(dbState)) as StepEntry[]
 
-    // Writer A modifies + writes duration_minutes
+    // Writer A modifies + writes duration
     const aResult = currentImplWrite(snapshotA, 0, {
-      slot: 'duration_minutes',
+      slot: 'duration',
       value: 1200,
       writeSource: 'analyst',
     })
@@ -108,15 +108,15 @@ describe('L4: concurrent slot-write race condition', () => {
     })
     dbState = bResult
 
-    // Final state: B's write wiped A's write — duration_minutes is null again
+    // Final state: B's write wiped A's write — duration is null again
     expect(dbState[0].potenzial.media_breaks).not.toBeNull()
-    expect(dbState[0].potenzial.duration_minutes).toBeNull() // 👈 LOST UPDATE — A's write gone
+    expect(dbState[0].potenzial.duration).toBeNull() // 👈 LOST UPDATE — A's write gone
   })
 
   it('safe baseline: sequential writes (no race) preserve both slots', () => {
     let dbState: StepEntry[] = [makeEmptyStep('monatsabschluss')]
     dbState = currentImplWrite(dbState, 0, {
-      slot: 'duration_minutes',
+      slot: 'duration',
       value: 1200,
       writeSource: 'analyst',
     })
@@ -126,12 +126,12 @@ describe('L4: concurrent slot-write race condition', () => {
       value: 2,
       writeSource: 'analyst_online',
     })
-    expect(dbState[0].potenzial.duration_minutes).not.toBeNull()
+    expect(dbState[0].potenzial.duration).not.toBeNull()
     expect(dbState[0].potenzial.media_breaks).not.toBeNull()
   })
 
   it('PROOF: jsonb_set path-isolation — writing to one slot leaves sibling intact', () => {
-    // Model: jsonb_set(['potenzial', 'duration_minutes'], v) touches ONLY that leaf.
+    // Model: jsonb_set(['potenzial', 'duration'], v) touches ONLY that leaf.
     // sibling path ['potenzial', 'media_breaks'] is untouched — no matter when B reads.
     function jsonbSetPath(
       obj: Record<string, unknown>,
@@ -143,24 +143,24 @@ describe('L4: concurrent slot-write race condition', () => {
       return { ...obj, [head]: rest.length === 0 ? value : jsonbSetPath(nested, rest, value) }
     }
 
-    const initial = { potenzial: { duration_minutes: null, media_breaks: null } }
+    const initial = { potenzial: { duration: null, media_breaks: null } }
     const aWrite = { value: 1200, writeSource: 'analyst' }
     const bWrite = { value: 2, writeSource: 'analyst_online' }
 
     // Order A→B: both slots filled regardless
     const ab = jsonbSetPath(
-      jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'duration_minutes'], aWrite),
+      jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'duration'], aWrite),
       ['potenzial', 'media_breaks'],
       bWrite,
     )
     // Order B→A: same result
     const ba = jsonbSetPath(
       jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'media_breaks'], bWrite),
-      ['potenzial', 'duration_minutes'],
+      ['potenzial', 'duration'],
       aWrite,
     )
 
-    const expected = { duration_minutes: aWrite, media_breaks: bWrite }
+    const expected = { duration: aWrite, media_breaks: bWrite }
     expect((ab as { potenzial: unknown }).potenzial).toEqual(expected)
     expect((ba as { potenzial: unknown }).potenzial).toEqual(expected)
     // Contrast with REPRO test above — no lost update here
@@ -177,13 +177,13 @@ describe('L4: concurrent slot-write race condition', () => {
       return { ...obj, [head]: rest.length === 0 ? value : jsonbSetPath(nested, rest, value) }
     }
 
-    const initial = { potenzial: { duration_minutes: null } }
-    const afterA = jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'duration_minutes'], { value: 1200 })
-    const afterB = jsonbSetPath(afterA, ['potenzial', 'duration_minutes'], { value: 600 })
+    const initial = { potenzial: { duration: null } }
+    const afterA = jsonbSetPath(initial as Record<string, unknown>, ['potenzial', 'duration'], { value: 1200 })
+    const afterB = jsonbSetPath(afterA, ['potenzial', 'duration'], { value: 600 })
 
     // Last writer (B) wins deterministically — no null, no corruption
-    expect((afterB as { potenzial: { duration_minutes: unknown } }).potenzial.duration_minutes).toEqual({ value: 600 })
-    expect((afterB as { potenzial: { duration_minutes: unknown } }).potenzial.duration_minutes).not.toBeNull()
+    expect((afterB as { potenzial: { duration: unknown } }).potenzial.duration).toEqual({ value: 600 })
+    expect((afterB as { potenzial: { duration: unknown } }).potenzial.duration).not.toBeNull()
   })
 
   it('canOverwrite priority resolver does NOT catch lost update on empty slot', () => {

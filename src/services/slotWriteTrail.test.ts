@@ -6,7 +6,7 @@ const baseEvent: SlotWriteEvent = {
   interviewId: 'test-interview-id',
   source: 'analyst',
   stepTitle: 'Rechnungsprüfung',
-  slot: 'frequency_per_month',
+  slot: 'frequency',
   value: 100,
   overwrite: false,
   sourceTurn: 3,
@@ -18,7 +18,7 @@ describe('SlotWriteEvent shape', () => {
     const e: SlotWriteEvent = { ...baseEvent }
     expect(e.source).toBe('analyst')
     expect(e.overwrite).toBe(false)
-    expect(e.slot).toBe('frequency_per_month')
+    expect(e.slot).toBe('frequency')
   })
 
   it('allows optional fields to be omitted', () => {
@@ -101,7 +101,7 @@ describe('emitSlotWrite', () => {
     const msg = spy.mock.calls[0][0] as string
     expect(msg).toContain('[slot_trail]')
     expect(msg).toContain('analyst')
-    expect(msg).toContain('frequency_per_month')
+    expect(msg).toContain('frequency')
     delete process.env.DEBUG
   })
 

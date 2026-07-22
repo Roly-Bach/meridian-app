@@ -5,7 +5,7 @@
       "reihenfolge": 1,
       "abhaengigkeiten": null,
       "status": "done",
-      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "potenzial": { "frequency": null, "duration": null, "error_rate_percent": null, "media_breaks": null },
       "slots": {
         "entscheidungslogik": { "value": "SAP FI, wenn der Betrag 5.000 EUR übersteigt", "quote": "SAP FI, wenn der Betrag 5.000 EUR übersteigt", "nicht_befund_typ": null },
         "tazite_cues": { "value": ["Vier-Augen-Prinzip bei Beträgen über 5.000 EUR"], "quote": "Vier-Augen-Prinzip bei Beträgen über 5.000 EUR", "nicht_befund_typ": null },
@@ -20,7 +20,7 @@
       "reihenfolge": 2,
       "abhaengigkeiten": null,
       "status": "done",
-      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "potenzial": { "frequency": null, "duration": null, "error_rate_percent": null, "media_breaks": null },
       "slots": {
         "entscheidungslogik": { "value": "Freigabe durch Abteilungsleiter, wenn Betrag über 10.000 EUR", "quote": "Freigabe durch Abteilungsleiter, wenn Betrag über 10.000 EUR", "nicht_befund_typ": null },
         "tazite_cues": { "value": ["Zweite Unterschrift nötig bei Auslandsüberweisungen"], "quote": "Zweite Unterschrift nötig bei Auslandsüberweisungen", "nicht_befund_typ": null },

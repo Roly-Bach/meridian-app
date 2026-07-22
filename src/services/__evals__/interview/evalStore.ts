@@ -88,7 +88,7 @@ const ENTSCHEIDUNGSLOGIK_MAP: Record<string, boolean> = { 'Immer gleich': true, 
 const ERROR_RATE_MAP: Record<string, number> = { 'Selten Fehler': 2, 'Gelegentlich': 10, 'Häufig': 30 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const SLOT_KEYS = ['frequency_per_month', 'duration_minutes', 'entscheidungslogik', 'error_rate_percent']
+const SLOT_KEYS = ['frequency', 'duration', 'entscheidungslogik', 'error_rate_percent']
 
 // ─── Supabase backend (default — verbatim of the pre-PROJ-34 runner) ──────────
 
@@ -233,8 +233,8 @@ async function createSupabaseEvalStore(): Promise<EvalStore> {
       for (const a of answers) {
         if (!SLOT_KEYS.includes(a.slot_key) || typeof a.answer !== 'string' || a.answer === 'Weiß ich nicht') continue
         const patch: ManualCorrectionPatch = {}
-        if (a.slot_key === 'frequency_per_month' && FREQUENCY_MAP[a.answer] !== undefined) patch.frequency_per_month = FREQUENCY_MAP[a.answer]
-        else if (a.slot_key === 'duration_minutes' && DURATION_MAP[a.answer] !== undefined) patch.duration_minutes = DURATION_MAP[a.answer]
+        if (a.slot_key === 'frequency' && FREQUENCY_MAP[a.answer] !== undefined) patch.frequency = FREQUENCY_MAP[a.answer]
+        else if (a.slot_key === 'duration' && DURATION_MAP[a.answer] !== undefined) patch.duration = DURATION_MAP[a.answer]
         else if (a.slot_key === 'entscheidungslogik' && ENTSCHEIDUNGSLOGIK_MAP[a.answer] !== undefined) patch.rule_based = ENTSCHEIDUNGSLOGIK_MAP[a.answer]
         else if (a.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[a.answer] !== undefined) patch.error_rate_percent = ERROR_RATE_MAP[a.answer]
         if (Object.keys(patch).length === 0) continue

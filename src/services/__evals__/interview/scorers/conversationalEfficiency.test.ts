@@ -10,7 +10,7 @@ const makeStep = (potenzial: Partial<StepEntry['potenzial']> = {}, slots: Partia
   title: 'Rechnungsprüfung',
   reihenfolge: 1,
   abhaengigkeiten: null,
-  potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null, ...potenzial },
+  potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null, ...potenzial },
   status: 'done',
   slots: {
     entscheidungslogik: null,
@@ -33,7 +33,7 @@ const turn = (n: number): TurnRecord => ({ turnNumber: n, userInput: 'x', agentT
 
 describe('scoreConversationalEfficiency', () => {
   it('counts filled potenzial + tazite slots and divides by turns', () => {
-    const step = makeStep({ frequency_per_month: sv(90), duration_minutes: sv(15) }, { entscheidungslogik: tazite('regelbasiert') })
+    const step = makeStep({ frequency: sv(90), duration: sv(15) }, { entscheidungslogik: tazite('regelbasiert') })
     const turns = [turn(1), turn(2), turn(3), turn(4)]
     const r = scoreConversationalEfficiency(turns, [step])
     expect(r.turnsToCompletion).toBe(4)
@@ -42,13 +42,13 @@ describe('scoreConversationalEfficiency', () => {
   })
 
   it('zero turns → slotsPerTurn 0 (no division by zero)', () => {
-    const r = scoreConversationalEfficiency([], [makeStep({ frequency_per_month: sv(90) })])
+    const r = scoreConversationalEfficiency([], [makeStep({ frequency: sv(90) })])
     expect(r.turnsToCompletion).toBe(0)
     expect(r.slotsPerTurn).toBe(0)
   })
 
   it('more turns for the same yield → lower efficiency', () => {
-    const step = makeStep({ frequency_per_month: sv(90), duration_minutes: sv(15) })
+    const step = makeStep({ frequency: sv(90), duration: sv(15) })
     const fast = scoreConversationalEfficiency([turn(1), turn(2)], [step])
     const slow = scoreConversationalEfficiency([turn(1), turn(2), turn(3), turn(4)], [step])
     expect(fast.slotsPerTurn).toBeGreaterThan(slow.slotsPerTurn)

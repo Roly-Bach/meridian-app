@@ -34,8 +34,8 @@ import type { AnalystBriefing } from './interviewTypes'
  */
 
 const emptyPotenzial: StepEntry['potenzial'] = {
-  frequency_per_month: null,
-  duration_minutes: null,
+  frequency: null,
+  duration: null,
   error_rate_percent: null,
   media_breaks: null,
 }
@@ -65,7 +65,7 @@ function makeStep(title: string, status: StepEntry['status'], extra: Partial<Ste
 const REAL_FINAL_TRACKER: StepEntry[] = [
   makeStep('Softwareentwicklung', 'walkthrough', {
     id: 'S001',
-    potenzial: { ...emptyPotenzial, frequency_per_month: { value: 20, quote: '1 pro tag', confidence: 'estimate', nicht_befund_typ: null } },
+    potenzial: { ...emptyPotenzial, frequency: { value: 20, quote: '1 pro tag', confidence: 'estimate', nicht_befund_typ: null } },
     slots: {
       ...emptySlots,
       inputs: { value: ['code'], quote: 'ne spaß ist schon der code', nicht_befund_typ: null },
@@ -77,7 +77,7 @@ const REAL_FINAL_TRACKER: StepEntry[] = [
   }),
   makeStep('Meetings', 'walkthrough', {
     id: 'S002',
-    potenzial: { ...emptyPotenzial, frequency_per_month: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed', nicht_befund_typ: null }, duration_minutes: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed', nicht_befund_typ: null } },
+    potenzial: { ...emptyPotenzial, frequency: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed', nicht_befund_typ: null }, duration: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed', nicht_befund_typ: null } },
     slots: {
       ...emptySlots,
       hilfsmittel: { value: ['visual studio code'], quote: '[auto-backfill aus erwähnten Tools/Systemen]', nicht_befund_typ: null },

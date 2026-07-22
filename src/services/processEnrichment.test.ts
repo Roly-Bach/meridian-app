@@ -89,8 +89,8 @@ const MOCK_STEP_WALKTHROUGH = {
   abhaengigkeiten: null,
   status: 'walkthrough' as const,
   potenzial: {
-    frequency_per_month: { value: 50, quote: '50 passt ganz gut', confidence: 'confirmed' as const, nicht_befund_typ: null },
-    duration_minutes: { value: 50, quote: 'so eine Stunde', confidence: 'estimate' as const, nicht_befund_typ: null },
+    frequency: { value: 50, quote: '50 passt ganz gut', confidence: 'confirmed' as const, nicht_befund_typ: null },
+    duration: { value: 50, quote: 'so eine Stunde', confidence: 'estimate' as const, nicht_befund_typ: null },
     error_rate_percent: null,
     media_breaks: null,
   },
@@ -179,9 +179,9 @@ describe('createProcessStepsFromTracker', () => {
     const arg = (insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
 
     // PROJ-45 (ADR-025 D1): schritt_daten carries the tracker entry verbatim — no
-    // flat frequency_per_month/duration_minutes/rule_based/data_sources columns anymore.
-    expect(arg.schritt_daten.potenzial.frequency_per_month.value).toBe(50)
-    expect(arg.schritt_daten.potenzial.duration_minutes.value).toBe(50)
+    // flat frequency/duration/rule_based/data_sources columns anymore.
+    expect(arg.schritt_daten.potenzial.frequency.value).toBe(50)
+    expect(arg.schritt_daten.potenzial.duration.value).toBe(50)
     expect(arg.schritt_daten.slots.entscheidungslogik.value).toBe('feste Vorlage')
     expect(arg.schritt_daten.slots.hilfsmittel.value).toEqual(['Salesforce', 'Excel'])
     expect(arg.schritt_daten.potenzial.error_rate_percent).toBeNull()
@@ -214,7 +214,7 @@ describe('createProcessStepsFromTracker', () => {
     const arg = (insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(arg.description).toBeNull()
     expect(arg.source_quote).toBeNull()
-    expect(arg.schritt_daten.potenzial.frequency_per_month.value).toBe(50)
+    expect(arg.schritt_daten.potenzial.frequency.value).toBe(50)
 
     errorSpy.mockRestore()
   })

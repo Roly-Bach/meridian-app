@@ -104,7 +104,7 @@ describe('GET /api/use-cases/[id]', () => {
   })
 
   it('returns 200 with use_case, process_step, interview for individual UC', async () => {
-    const step = { title: 'Rechnungen prüfen', description: 'desc', source_quote: 'quote', frequency_per_month: 20, duration_minutes: 60, error_rate_percent: 5, rule_based: true, data_sources: [], interview_id: 'iv-1' }
+    const step = { title: 'Rechnungen prüfen', description: 'desc', source_quote: 'quote', frequency: 20, duration: 60, error_rate_percent: 5, rule_based: true, data_sources: [], interview_id: 'iv-1' }
     const iv = { employee_name: 'Max', employee_role: 'Buchhalter', created_at: '2026-01-01' }
 
     mockAdminFrom
@@ -144,8 +144,8 @@ describe('GET /api/use-cases/[id]', () => {
       abhaengigkeiten: null,
       status: 'done',
       potenzial: {
-        frequency_per_month: { value: freq, quote: 'q', nicht_befund_typ: null },
-        duration_minutes: { value: duration, quote: 'q', nicht_befund_typ: null },
+        frequency: { value: freq, quote: 'q', nicht_befund_typ: null },
+        duration: { value: duration, quote: 'q', nicht_befund_typ: null },
         error_rate_percent: errorRate == null ? null : { value: errorRate, quote: 'q', nicht_befund_typ: null },
         media_breaks: null,
       },

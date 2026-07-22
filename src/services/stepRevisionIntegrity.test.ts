@@ -19,8 +19,8 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
     abhaengigkeiten: null,
     status: 'exploring',
     potenzial: {
-      frequency_per_month: null,
-      duration_minutes: null,
+      frequency: null,
+      duration: null,
       error_rate_percent: null,
       media_breaks: null,
     },
@@ -77,7 +77,7 @@ describe('normalizeStepEntry — id preservation', () => {
     const legacy = {
       title: 'Monatsabschluss',
       status: 'exploring' as const,
-      slots: { frequency_per_month: { value: 1, quote: 'q' } },
+      slots: { frequency: { value: 1, quote: 'q' } },
     }
     const normalized = normalizeStepEntry(legacy, 1)
     expect(normalized.id).toBeUndefined()
@@ -99,7 +99,7 @@ describe('normalizeStepEntry — empty TaziteSlotArray normalization (BUG-M1)', 
     title: 'X',
     reihenfolge: 1,
     status: 'exploring' as const,
-    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+    potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
   }
 
   it('hilfsmittel value:[] → null in non-legacy path', () => {
@@ -111,7 +111,7 @@ describe('normalizeStepEntry — empty TaziteSlotArray normalization (BUG-M1)', 
   it('hilfsmittel value:[] → null in legacy fallback (no data_sources)', () => {
     const raw = {
       title: 'X', status: 'exploring' as const,
-      slots: { frequency_per_month: { value: 1, quote: 'q' }, hilfsmittel: { value: [], quote: null, nicht_befund_typ: null } },
+      slots: { frequency: { value: 1, quote: 'q' }, hilfsmittel: { value: [], quote: null, nicht_befund_typ: null } },
     }
     const normalized = normalizeStepEntry(raw, 1)
     expect(normalized.slots.hilfsmittel?.value).toBeNull()
@@ -179,11 +179,11 @@ describe('is_correction: corrected slot value replaces previous', () => {
 
   it('jsonb_set replaces old value — no stale value survives in slot', () => {
     const before: Record<string, unknown> = {
-      potenzial: { duration_minutes: { value: 1200, quote: 'original', writeSource: 'analyst' } },
+      potenzial: { duration: { value: 1200, quote: 'original', writeSource: 'analyst' } },
     }
     const correction = { value: 900, quote: 'corrected', writeSource: 'analyst' }
-    const after = jsonbSetPath(before, ['potenzial', 'duration_minutes'], correction)
-    expect((after as { potenzial: { duration_minutes: unknown } }).potenzial.duration_minutes).toEqual(correction)
+    const after = jsonbSetPath(before, ['potenzial', 'duration'], correction)
+    expect((after as { potenzial: { duration: unknown } }).potenzial.duration).toEqual(correction)
     // Old value gone — not present anywhere in the slot
     expect(JSON.stringify(after)).not.toContain('"value":1200')
   })

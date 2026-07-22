@@ -19,7 +19,7 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
     title: 'Rechnungsprüfung',
     reihenfolge: 1,
     abhaengigkeiten: null,
-    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+    potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
     status: 'exploring',
     slots: {
       entscheidungslogik: null,
@@ -70,7 +70,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
       kind: 'record_slot',
       stepId: 'S001',
       stepTitle: 'Rechnungsprüfung',
-      slot: 'frequency_per_month',
+      slot: 'frequency',
       value: 90,
       isNichtBefundMode: false,
       quote: '80 bis 100',
@@ -85,7 +85,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
     // Read back from the persisted DB (not the in-memory snapshot).
     const persisted = await handle.readStepTracker(IV)
     expect(persisted).toHaveLength(1)
-    const slot = persisted[0].potenzial.frequency_per_month
+    const slot = persisted[0].potenzial.frequency
     // PROJ-38 class: jsonb survives as a structured object, NOT a JSON string.
     expect(slot).toMatchObject({ value: 90, quote: '80 bis 100', confidence: 'estimate', writeSource: 'analyst_online' })
     expect(typeof slot).toBe('object')
@@ -95,7 +95,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
   it('a second session sees the previous session\'s committed writes', async () => {
     const s2 = await handle.store.openTurn(IV, WS)
     const snap = s2.snapshot()
-    expect(snap.stepTracker[0]?.potenzial.frequency_per_month?.value).toBe(90)
+    expect(snap.stepTracker[0]?.potenzial.frequency?.value).toBe(90)
   })
 
   it('priority block leaves the persisted value untouched', async () => {
@@ -105,7 +105,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
       kind: 'record_slot',
       stepId: 'S001',
       stepTitle: 'Rechnungsprüfung',
-      slot: 'frequency_per_month',
+      slot: 'frequency',
       value: 999,
       isNichtBefundMode: false,
       quote: 'x',
@@ -114,7 +114,7 @@ describe('PGliteTurnStore (Stufe 2, hermetic)', () => {
     expect(res.status).toBe('blocked')
     await session.commit()
     const persisted = await handle.readStepTracker(IV)
-    expect(persisted[0].potenzial.frequency_per_month?.value).toBe(90)
+    expect(persisted[0].potenzial.frequency?.value).toBe(90)
   })
 
   it('link_bottleneck inserts a knowledge_object row + appends extractions_log', async () => {

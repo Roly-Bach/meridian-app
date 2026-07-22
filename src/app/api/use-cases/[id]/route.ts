@@ -103,8 +103,8 @@ export async function GET(
           const s = r.step!
           const display = deriveProcessStepDisplayFieldsFromRaw(s.schritt_daten)
           const roiEur =
-            display.frequency_per_month != null && display.duration_minutes != null
-              ? Math.round((display.frequency_per_month * display.duration_minutes / 60) * 12 * reductionRate * hourlyRate * 100) / 100
+            display.frequency != null && display.duration != null
+              ? Math.round((display.frequency * display.duration / 60) * 12 * reductionRate * hourlyRate * 100) / 100
               : null
           return {
             employee_name: r.participant.employee_name,
@@ -112,8 +112,8 @@ export async function GET(
             process_step: {
               title: s.title,
               source_quote: s.source_quote,
-              frequency_per_month: display.frequency_per_month,
-              duration_minutes: display.duration_minutes,
+              frequency: display.frequency,
+              duration: display.duration,
               error_rate_percent: display.error_rate_percent,
             },
             roi_eur: roiEur,

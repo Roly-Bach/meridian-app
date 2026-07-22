@@ -24,8 +24,8 @@ export interface ProcessStep {
   cluster_id: string | null
   title: string
   description: string | null
-  frequency_per_month: number | null
-  duration_minutes: number | null
+  frequency: number | null
+  duration: number | null
   data_sources: string[]
   rule_based: boolean
   error_rate_percent: number | null
@@ -94,8 +94,8 @@ export function computeClusterAggregates(
     groupSteps.map(s => s.interviews?.employee_name).filter((n): n is string => !!n)
   )]
 
-  const mergedFrequency = avg(groupSteps.map(s => s.frequency_per_month))
-  const mergedDuration = avg(groupSteps.map(s => s.duration_minutes))
+  const mergedFrequency = avg(groupSteps.map(s => s.frequency))
+  const mergedDuration = avg(groupSteps.map(s => s.duration))
   const mergedErrorRate = avg(groupSteps.map(s => s.error_rate_percent))
   const mergedMediaBreaks = avg(groupSteps.map(s => s.media_breaks))
   const mergedDataSources = [...new Set(groupSteps.flatMap(s => s.data_sources))]

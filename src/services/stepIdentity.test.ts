@@ -20,8 +20,8 @@ function makeStep(title: string, embedding?: number[]): StepEntry {
     abhaengigkeiten: null,
     status: 'exploring',
     potenzial: {
-      frequency_per_month: null,
-      duration_minutes: null,
+      frequency: null,
+      duration: null,
       error_rate_percent: null,
       media_breaks: null,
     },

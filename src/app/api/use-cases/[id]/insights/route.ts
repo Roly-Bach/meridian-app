@@ -72,8 +72,8 @@ export async function POST(
       const display = deriveProcessStepDisplayFieldsFromRaw(schritt_daten)
       ctx.processStep = {
         ...stepData,
-        frequency_per_month: display.frequency_per_month,
-        duration_minutes: display.duration_minutes,
+        frequency: display.frequency,
+        duration: display.duration,
         error_rate_percent: display.error_rate_percent,
         rule_based: display.rule_based,
       }

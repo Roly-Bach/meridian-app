@@ -34,8 +34,8 @@ export interface EngineProcessStep {
   interview_id: string
   title: string
   description: string | null
-  frequency_per_month: number | null
-  duration_minutes: number | null
+  frequency: number | null
+  duration: number | null
   data_sources: string[]
   rule_based: boolean
   error_rate_percent: number | null
@@ -112,11 +112,11 @@ function r2(n: number): number {
 }
 
 function roi(step: EngineProcessStep, rate: number, hourlyRate: number): number {
-  return r2((step.frequency_per_month! * step.duration_minutes! / 60) * 12 * rate * hourlyRate)
+  return r2((step.frequency! * step.duration! / 60) * 12 * rate * hourlyRate)
 }
 
 function hours(step: EngineProcessStep, rate: number): number {
-  return r2((step.frequency_per_month! * step.duration_minutes! / 60) * 12 * rate)
+  return r2((step.frequency! * step.duration! / 60) * 12 * rate)
 }
 
 // DB column is numeric(12,2) — no cap needed (20260522000000_fix_use_cases_score_precision.sql)
@@ -150,7 +150,7 @@ function hasSearchKeywordsInText(text: string): boolean {
 }
 
 function canCompute(step: EngineProcessStep): boolean {
-  return step.frequency_per_month != null && step.duration_minutes != null
+  return step.frequency != null && step.duration != null
 }
 
 function makeUC(
@@ -177,8 +177,8 @@ function makeUC(
     roi_hours_per_year: hours(step, rate),
     roi_eur_per_year: roiEur,
     roi_breakdown: {
-      freq: step.frequency_per_month!,
-      duration: step.duration_minutes!,
+      freq: step.frequency!,
+      duration: step.duration!,
       hourly_rate: hourlyRate,
       reduction_rate: rate,
       participant_count: 1,
@@ -229,7 +229,7 @@ function sumParticipantRoi(cluster: ClusterContext, rate: number, hourlyRate: nu
   return r2(
     cluster.participants
       .filter(p => canCompute(p.step))
-      .reduce((sum, p) => sum + (p.step.frequency_per_month! * p.step.duration_minutes! / 60) * 12 * rate * hourlyRate, 0)
+      .reduce((sum, p) => sum + (p.step.frequency! * p.step.duration! / 60) * 12 * rate * hourlyRate, 0)
   )
 }
 
@@ -237,7 +237,7 @@ function sumParticipantHours(cluster: ClusterContext, rate: number): number {
   return r2(
     cluster.participants
       .filter(p => canCompute(p.step))
-      .reduce((sum, p) => sum + (p.step.frequency_per_month! * p.step.duration_minutes! / 60) * 12 * rate, 0)
+      .reduce((sum, p) => sum + (p.step.frequency! * p.step.duration! / 60) * 12 * rate, 0)
   )
 }
 
@@ -298,10 +298,10 @@ function runClusterRules(
     if (computeParticipants.length === 0) continue
 
     const avgFreq = r2(
-      computeParticipants.reduce((s, p) => s + p.step.frequency_per_month!, 0) / computeParticipants.length
+      computeParticipants.reduce((s, p) => s + p.step.frequency!, 0) / computeParticipants.length
     )
     const avgDuration = r2(
-      computeParticipants.reduce((s, p) => s + p.step.duration_minutes!, 0) / computeParticipants.length
+      computeParticipants.reduce((s, p) => s + p.step.duration!, 0) / computeParticipants.length
     )
 
     const candidates: GeneratedUseCase[] = []
@@ -472,7 +472,7 @@ export function runHeuristicEngine(
 
     // R1 — Vollautomatisierung
     if (
-      step.frequency_per_month! >= 20 &&
+      step.frequency! >= 20 &&
       step.rule_based &&
       (step.error_rate_percent == null || step.error_rate_percent < 10)
     ) {
@@ -484,7 +484,7 @@ export function runHeuristicEngine(
     }
 
     // R2 — LLM-Extraktion
-    if (hasDocSources(step.data_sources) && step.duration_minutes! >= 15) {
+    if (hasDocSources(step.data_sources) && step.duration! >= 15) {
       add(makeUC(step, 'llm_extraction',
         `${step.title} — Dokumenten-Extraktion`,
         'LLM extrahiert strukturierte Informationen aus E-Mails, PDFs oder Word-Dokumenten.',
@@ -495,7 +495,7 @@ export function runHeuristicEngine(
     // R3 — Entscheidungsunterstützung
     if (
       !step.rule_based &&
-      step.duration_minutes! >= 30 &&
+      step.duration! >= 30 &&
       step.error_rate_percent != null &&
       step.error_rate_percent >= 10
     ) {
@@ -516,7 +516,7 @@ export function runHeuristicEngine(
     }
 
     // R5 — RAG Wissensassistent
-    if (hasSearchKeywords(step) && step.duration_minutes! >= 10) {
+    if (hasSearchKeywords(step) && step.duration! >= 10) {
       add(makeUC(step, 'rag',
         `${step.title} — Wissensassistent`,
         'RAG-System beantwortet Fragen sofort aus der Unternehmenswissensbasis.',
@@ -527,7 +527,7 @@ export function runHeuristicEngine(
     // R6 — Fehlerhafte Regelautomatisierung
     if (
       step.rule_based &&
-      step.frequency_per_month! >= 5 &&
+      step.frequency! >= 5 &&
       step.error_rate_percent != null &&
       step.error_rate_percent >= 10
     ) {
@@ -541,8 +541,8 @@ export function runHeuristicEngine(
     // R7 — KI-unterstützte Routinearbeit
     if (
       !step.rule_based &&
-      step.frequency_per_month! >= 10 &&
-      step.duration_minutes! >= 20 &&
+      step.frequency! >= 10 &&
+      step.duration! >= 20 &&
       (step.error_rate_percent == null || step.error_rate_percent < 10)
     ) {
       add(makeUC(step, 'llm_extraction',
@@ -555,7 +555,7 @@ export function runHeuristicEngine(
     // R8 — Daten-Aggregation für Entscheidungen
     if (
       !step.rule_based &&
-      step.duration_minutes! >= 30 &&
+      step.duration! >= 30 &&
       (step.error_rate_percent == null || step.error_rate_percent < 10) &&
       !hasSearchKeywords(step)
     ) {

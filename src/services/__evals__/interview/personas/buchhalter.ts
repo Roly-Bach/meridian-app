@@ -59,13 +59,13 @@ export const buchhalter: Persona = {
     {
       process: 'Rechnungsprüfung',
       aiCandidate: true, // hohe Frequenz, teils regelbasiert, Medienbrüche über 3 Systeme
-      potenzial: { frequency_per_month: 90, error_rate_percent: 5, media_breaks: 3 },
+      potenzial: { frequency: 90, error_rate_percent: 5, media_breaks: 3 },
       dependsOn: [],
     },
     {
       process: 'Monatsabschluss',
       aiCandidate: false, // monatlich, ermessens-/abstimmungslastig
-      potenzial: { frequency_per_month: 1, duration_minutes: 1200 },
+      potenzial: { frequency: 1, duration: 1200 },
       dependsOn: ['Rechnungsprüfung'],
     },
   ],

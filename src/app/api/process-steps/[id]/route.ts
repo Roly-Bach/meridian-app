@@ -9,8 +9,8 @@ import type { Database, Json } from '@/lib/database.types'
 const PatchSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  frequency_per_month: z.number().int().min(0, 'Muss ≥ 0 sein').nullable().optional(),
-  duration_minutes: z.number().int().min(0, 'Muss ≥ 0 sein').nullable().optional(),
+  frequency: z.number().int().min(0, 'Muss ≥ 0 sein').nullable().optional(),
+  duration: z.number().int().min(0, 'Muss ≥ 0 sein').nullable().optional(),
   data_sources: z.array(z.string()).optional(),
   rule_based: z.boolean().optional(),
   error_rate_percent: z.number().int().min(0).max(100).nullable().optional(),
@@ -18,7 +18,7 @@ const PatchSchema = z.object({
   source_quote: z.string().nullable().optional(),
 }).strict()
 
-// PROJ-45 (ADR-025 D1/Consequences): frequency_per_month/duration_minutes/
+// PROJ-45 (ADR-025 D1/Consequences): frequency/duration/
 // data_sources/rule_based/error_rate_percent/media_breaks no longer have their
 // own columns — they live inside schritt_daten (JSONB). A manual PATCH here is
 // therefore read-merge-write instead of a plain column update; for the user
@@ -73,8 +73,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { title, description, source_quote, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks } = parsed.data
-  const touchesSchrittDaten = [frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks]
+  const { title, description, source_quote, frequency, duration, data_sources, rule_based, error_rate_percent, media_breaks } = parsed.data
+  const touchesSchrittDaten = [frequency, duration, data_sources, rule_based, error_rate_percent, media_breaks]
     .some((v) => v !== undefined)
 
   const updatePayload: Database['public']['Tables']['process_steps']['Update'] = {
@@ -85,7 +85,7 @@ export async function PATCH(
   if (touchesSchrittDaten) {
     const current = parseSchrittDaten(step.schritt_daten)
     updatePayload.schritt_daten = mergeManualCorrection(current, {
-      frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks,
+      frequency, duration, data_sources, rule_based, error_rate_percent, media_breaks,
     }) as unknown as Json
   }
 

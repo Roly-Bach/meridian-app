@@ -1,13 +1,13 @@
 # PROJ-45: Schema-Konsolidierung + AI-Wert-Faktoren
 
-## Status: In Progress
+## Status: In Review
 **Type:** Revision
 **Domain:** Wissensbank
 **Extends:** PROJ-25
 **Appetite:** XL
-**Bugs:** —
+**Bugs:** 0:1:0
 **Created:** 2026-07-20
-**Last Updated:** 2026-07-21
+**Last Updated:** 2026-07-22
 
 ## Dependencies
 - Requires: PROJ-25 (Prozesswissens-Schema) — PROJ-45 überarbeitet dessen Schema direkt.
@@ -418,6 +418,59 @@ Zwei Ebenen — die erste ist risikoarm, die zweite eval-pflichtig:
 - Diese QA-Session zusätzlich: QA-Ergebnisse in diese Spec + INDEX Bugs `1:1:0` (Status In Review); **zwei Cleanups umgesetzt** — `src/lib/supabase-types.ts` gelöscht, substanzloser key-gated Test in [dialogNaturalness.test.ts](../../src/services/__evals__/interview/scorers/dialogNaturalness.test.ts) entfernt (+ tote `hasApiKey`-Konstante). Suite danach 66 Dateien / 807 grün / 0 Skip, `tsc` sauber.
 - Eval-Artefakte in `docs/evals/interview/2026-07-21/` (buchhalter + it-support, je `.md`/`.transcript.json`/`.slot-trail.jsonl`).
 - Nichts committet (kein Auftrag dazu). Vorschlag für die nächste Session: QA + Cleanups als `test(PROJ-45): …` committen, dann Stufe 1-3 als `fix(PROJ-45): einheiten-neutrale Feldnamen + Prompt-Deslop`.
+
+## Remediation umgesetzt (`/backend`, 2026-07-22, Sonnet 5)
+
+> Umsetzung des Remediation-Handoffs oben, in einer frischen Sonnet-Session wie vom Nutzer vorgegeben.
+
+**Stufe 1 — Rename (H-1-Wurzel).** `frequency_per_month`→`frequency`, `duration_minutes`→`duration` mechanisch über 65 Dateien (Code, Tests, JSON-Fixtures) per wortgrenzen-sicherem Rename ersetzt (`\bduration_minutes\b` trifft NICHT auf `max_duration_minutes` — geprüft). Back-compat in `normalizeStepEntry` ([interviewSemantic.ts](../../src/services/interviewSemantic.ts)): `RawStepEntry.potenzial` liest weiterhin die alten Schlüssel `frequency_per_month`/`duration_minutes` als Fallback, falls `frequency`/`duration` fehlen — sichert die 6 realen Alt-Interviews UND die beiden `schritt_daten`-Zeilen aus den QA-Eval-Läufen dieser Spec (`feb6d603…`, `33e94583…`) ohne Migration.
+
+**Stufe 3a — Tracking-ID-Strip (risikoarm, vor Stufe 2 ausgeführt).** In den ans LLM gesendeten Prompt-Strings entfernt: `PROJ-45`/`PROJ-46/ADR-024`/`PROJ-28/BL-E2.1` in [interviewAnalyst.ts](../../src/services/interviewAnalyst.ts), `E3.3, PROJ-46`/`E3.5`/`E3.7` in [talkerPrompt.ts](../../src/services/talkerPrompt.ts). Nur Zeichen entfernt, keine Instruktion verändert. Code-Kommentare (nie ans LLM gesendet) unverändert gelassen.
+
+**Stufe 2 — `einheit` verpflichtend (Nutzer-Freigabe eingeholt vor Umsetzung, siehe unten).** Nutzer bestätigte den vorgeschlagenen Wortlaut mit einem Zusatzhinweis: die „Default pro_monat"/„Default minuten"-Formulierung ist gestrichen — es gibt keinen Default mehr, der Mitarbeiter nennt immer die Einheit. Umgesetzt:
+- `record_slot`-Tool-Schema ([interviewTools.ts](../../src/services/interviewTools.ts)): `einheit`-Feld-`.describe()` von „Nur für frequency/duration: … (Default pro_monat)/(Default minuten)" auf „PFLICHT bei frequency/duration sobald value gesetzt ist: … " geändert, keine Default-Erwähnung mehr.
+- Neue Laufzeit-Validierung in `record_slot.execute()`: `slot ∈ {frequency, duration}` + `value` gesetzt (kein `nicht_befund_typ`) + `einheit` fehlt/leer → harter `success:false`-Reject mit Fehlermeldung, die die erlaubten Einheiten nennt und explizit vor Selbst-Umrechnung warnt.
+- Analyst-Prompt ([interviewAnalyst.ts:296-297](../../src/services/interviewAnalyst.ts#L296-L297)): „Ohne genannte Einheit: einheit weglassen (Default pro_monat/minuten)" ersatzlos gestrichen (widersprach der jetzt harten Pflicht); neuer Wortlaut verlangt Wert + Einheit „GENAU wie genannt" ohne Default-Fallback-Option.
+- Test-Fallout gefixt: `interviewTools.test.ts` — ein Test rief `record_slot(slot=frequency, value=20)` ohne `einheit` auf (fing jetzt korrekt den neuen Hard-Reject ab), auf `einheit: 'pro_monat'` ergänzt; zweiter betroffener Call ebenso ergänzt; neuer Test `rejects frequency/duration value without einheit (H-1 remediation)` deckt den neuen Reject-Pfad explizit ab.
+
+**Stufe 3b (Prompt-Deslop) — auf Nutzer-Wunsch zurückgestellt.** Nutzer entschied sich für „jetzt erst H-1 verifizieren, Stufe 3b danach separat" — kein Umfang-Rewrite in dieser Session, bleibt offener Punkt für eine eigene `/grilling`-Runde.
+
+**Verifikation:** `tsc --noEmit` sauber, **66/66 Testdateien, 808/808 Tests grün** (807 + 1 neuer Reject-Test) nach jeder Stufe erneut geprüft.
+
+## Re-Eval (2026-07-22, `google/gemini-3.1-flash-lite` it-support, Supabase-Store, `--seed` random=27831)
+
+Judge-Preflight (general.md): echter Anthropic-Messages-Call gegen `claude-haiku-4-5` → HTTP 200 (Key valide, Guthaben verbraucht — nicht nur `/v1/models`).
+
+**H-1 verifiziert BEHOBEN** — Live-DB-Check (`process_steps.schritt_daten->potenzial`, interview_id `e5a704b3-c4c3-42cb-819d-36099b45f984`):
+
+| Schritt | Quote | value | einheit |
+|---------|-------|-------|---------|
+| hardware-tausch | „3 bis 5 Hardware-Tausch-Vorgänge pro Woche." | 3 | **pro_woche** |
+| it-support | „Im Schnitt 75 bis 100 Tickets pro Woche." | 75 | **pro_woche** |
+| software-installationen | „Dauert oft bis zu drei Arbeitstage." | 3 | **tage** |
+
+Kein einziger Fall von LLM-Selbstumrechnung (das dokumentierte „15-20/Tag"→„350/Monat"-Muster trat NICHT auf) — beide Häufigkeits-Werte blieben in der roh genannten Einheit `pro_woche`, nicht auf Monat vorab-normalisiert. `blocked_writes: 0` im Trail — der neue Hard-Reject musste in diesem Lauf nie greifen, das Modell lieferte `einheit` von sich aus korrekt.
+
+| Metrik | Wert | Gate |
+|--------|------|------|
+| status (Runner-Gate) | **FAIL** | — |
+| dedup_slot_coverage | 0.67 | ≥0.75 ✗ |
+| completion_correctness | true | =true ✓ |
+| step_registration_coverage | 1.0 | ≥0.8 ✓ |
+| dialog_naturalness | 0.67 | ≥0.65 ✓ (keine Regression durch Stufe 2/3a) |
+| blocked_rate | 0 | <0.1 ✓ |
+| talker_grounding_violations | 0 | — ✓ |
+| hallucination_rate | 0 | — ✓ |
+
+**FAIL weiterhin ausschließlich wegen `dedup_slot_coverage` 0.67 <0.75** — deckungsgleich mit der bereits dokumentierten PROJ-43-Tiefe-Lücke (Baseline 0.56–0.72 über mehrere Features hinweg), kein PROJ-45-Regress, keine neue Ursache. `dialog_naturalness` hielt exakt den Wert des vorigen it-support-Laufs (0.67) — die Stufe-3a-ID-Strips + Stufe-2-Wording-Änderungen (isoliert von der größeren Stufe-3b-Umschreibung) haben keine KI-18-artige Regression ausgelöst.
+
+**M-1 (Dauer als Monats-/SLA-Aggregat)** bleibt offen, unverändert dokumentiert — betrifft `software-installationen`: „bis zu drei Arbeitstage" ist eine Genehmigungs-Wartezeit (SLA), nicht die reine Bearbeitungsdauer; straddle PROJ-43, kein PROJ-45-Blocker.
+
+Artefakt: `docs/evals/interview/2026-07-22/2026-07-22-08-40-14-google-gemini-3-1-flash-lite-it-support.md`
+
+**Bugs: 0 High : 1 Medium : 0 Low** (H-1 behoben, M-1 bleibt offen/dokumentiert wie oben).
+
+**Nicht committet** — Working Tree enthält den vollständigen Stufe-1/2/3a-Diff (65 Dateien) + diese Spec-/INDEX-Updates. Nächster Schritt laut Nutzer-Entscheidung: `/qa PROJ-45` für finales Sign-off (Status-Übergang zu Approved ist QA-Zuständigkeit, nicht Backend), danach optional Stufe 3b in eigener `/grilling`-Runde.
 
 ## Deployment
 _To be added by /deploy_

@@ -32,8 +32,8 @@ const makeStep = (
   reihenfolge: 1,
   abhaengigkeiten: null,
   potenzial: {
-    frequency_per_month: null,
-    duration_minutes: null,
+    frequency: null,
+    duration: null,
     error_rate_percent: null,
     media_breaks: null,
   },
@@ -116,8 +116,8 @@ describe('scoreSlotCoverage', () => {
   it('potenzial fields do NOT count toward O1–O6 coverage', () => {
     const step = makeStep({
       potenzial: {
-        frequency_per_month: { value: 90, quote: '90', confidence: 'confirmed', nicht_befund_typ: null },
-        duration_minutes: { value: 30, quote: '30', confidence: 'confirmed', nicht_befund_typ: null },
+        frequency: { value: 90, quote: '90', confidence: 'confirmed', nicht_befund_typ: null },
+        duration: { value: 30, quote: '30', confidence: 'confirmed', nicht_befund_typ: null },
         error_rate_percent: null,
         media_breaks: null,
       },

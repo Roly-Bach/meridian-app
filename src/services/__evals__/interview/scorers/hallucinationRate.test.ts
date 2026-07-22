@@ -24,8 +24,8 @@ const makeStep = (overrides: Partial<StepEntry> = {}): StepEntry => ({
   abhaengigkeiten: null,
   status: 'done',
   potenzial: {
-    frequency_per_month: null,
-    duration_minutes: null,
+    frequency: null,
+    duration: null,
     error_rate_percent: null,
     media_breaks: null,
   },
@@ -62,8 +62,8 @@ describe('scoreHallucinationRate', () => {
     const tracker = [
       makeStep({
         potenzial: {
-          frequency_per_month: potenzialValue(90, 'Ich bearbeite im Monat 80 bis 100 Rechnungen.'),
-          duration_minutes: null,
+          frequency: potenzialValue(90, 'Ich bearbeite im Monat 80 bis 100 Rechnungen.'),
+          duration: null,
           error_rate_percent: null,
           media_breaks: null,
         },
@@ -80,8 +80,8 @@ describe('scoreHallucinationRate', () => {
     const tracker = [
       makeStep({
         potenzial: {
-          frequency_per_month: potenzialValue(90, '"In diesem Bereich bearbeite ich im Monatsverlauf eine Größenordnung von insgesamt 80 bis 100 eingegangenen Rechnungen."'),
-          duration_minutes: null,
+          frequency: potenzialValue(90, '"In diesem Bereich bearbeite ich im Monatsverlauf eine Größenordnung von insgesamt 80 bis 100 eingegangenen Rechnungen."'),
+          duration: null,
           error_rate_percent: null,
           media_breaks: null,
         },
@@ -95,8 +95,8 @@ describe('scoreHallucinationRate', () => {
     const tracker = [
       makeStep({
         potenzial: {
-          frequency_per_month: null,
-          duration_minutes: potenzialValue(240, '"Das hat ungefähr 240 Minuten gedauert."'),
+          frequency: null,
+          duration: potenzialValue(240, '"Das hat ungefähr 240 Minuten gedauert."'),
           error_rate_percent: null,
           media_breaks: null,
         },
@@ -133,8 +133,8 @@ describe('scoreHallucinationRate', () => {
     const tracker = [
       makeStep({
         potenzial: {
-          frequency_per_month: potenzialValue(5, '"[auto-backfill]"'),
-          duration_minutes: potenzialValue(5, '"5"'),
+          frequency: potenzialValue(5, '"[auto-backfill]"'),
+          duration: potenzialValue(5, '"5"'),
           error_rate_percent: null,
           media_breaks: null,
         },

@@ -117,10 +117,10 @@ export async function POST(
     .eq('id', interviewId)
 
   // Process SlotCards — read-merge-write into schritt_daten (PROJ-45/ADR-025:
-  // frequency_per_month/duration_minutes/entscheidungslogik/error_rate_percent
+  // frequency/duration/entscheidungslogik/error_rate_percent
   // no longer have their own columns).
   const slotAnswers = answers.filter(
-    (a) => ['frequency_per_month', 'duration_minutes', 'entscheidungslogik', 'error_rate_percent'].includes(a.slot_key)
+    (a) => ['frequency', 'duration', 'entscheidungslogik', 'error_rate_percent'].includes(a.slot_key)
       && typeof a.answer === 'string'
       && a.answer !== 'Weiß ich nicht'
   )
@@ -139,10 +139,10 @@ export async function POST(
     const answerStr = sa.answer as string
     const patch: ManualCorrectionPatch = {}
 
-    if (sa.slot_key === 'frequency_per_month' && FREQUENCY_MAP[answerStr] !== undefined) {
-      patch.frequency_per_month = FREQUENCY_MAP[answerStr]
-    } else if (sa.slot_key === 'duration_minutes' && DURATION_MAP[answerStr] !== undefined) {
-      patch.duration_minutes = DURATION_MAP[answerStr]
+    if (sa.slot_key === 'frequency' && FREQUENCY_MAP[answerStr] !== undefined) {
+      patch.frequency = FREQUENCY_MAP[answerStr]
+    } else if (sa.slot_key === 'duration' && DURATION_MAP[answerStr] !== undefined) {
+      patch.duration = DURATION_MAP[answerStr]
     } else if (sa.slot_key === 'entscheidungslogik' && ENTSCHEIDUNGSLOGIK_MAP[answerStr] !== undefined) {
       patch.rule_based = ENTSCHEIDUNGSLOGIK_MAP[answerStr]
     } else if (sa.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[answerStr] !== undefined) {

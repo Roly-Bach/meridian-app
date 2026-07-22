@@ -5,7 +5,7 @@
       "reihenfolge": 1,
       "abhaengigkeiten": null,
       "status": "done",
-      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "potenzial": { "frequency": null, "duration": null, "error_rate_percent": null, "media_breaks": null },
       "slots": {
         "entscheidungslogik": { "value": "SAP FI blockiert automatisch ab 5.000 EUR, weil interne Revisionsrichtlinien Vieraugenprinzip vorschreiben", "quote": "SAP FI blockiert automatisch ab 5.000 EUR, weil interne Revisionsrichtlinien Vieraugenprinzip vorschreiben", "nicht_befund_typ": null },
         "tazite_cues": { "value": ["Ich erkenne fehlerhafte Rechnungen am Schriftbild, weil bestimmte Lieferanten immer denselben Fehler machen – das Wissen kommt aus 8 Jahren Erfahrung, nirgends dokumentiert"], "quote": "Ich erkenne fehlerhafte Rechnungen am Schriftbild", "nicht_befund_typ": null },
@@ -20,7 +20,7 @@
       "reihenfolge": 2,
       "abhaengigkeiten": null,
       "status": "done",
-      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "potenzial": { "frequency": null, "duration": null, "error_rate_percent": null, "media_breaks": null },
       "slots": {
         "entscheidungslogik": { "value": "Der Abteilungsleiter unterschreibt oft blind, weil er mir vertraut – das echte Gate ist meine eigene Prüfung, nicht seine Unterschrift", "quote": "Der Abteilungsleiter unterschreibt oft blind, weil er mir vertraut", "nicht_befund_typ": null },
         "tazite_cues": { "value": ["Ich prüfe zuerst immer Kontonummer und Bankleitzahl, weil wir einmal eine Zahlung an ein falsches Konto hatten – seitdem ist das mein erster Schritt"], "quote": "Ich prüfe zuerst immer Kontonummer und Bankleitzahl", "nicht_befund_typ": null },

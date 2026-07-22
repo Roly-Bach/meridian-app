@@ -25,8 +25,8 @@ export interface InsightsContext {
     title: string
     description: string | null
     source_quote: string | null
-    frequency_per_month: number | null
-    duration_minutes: number | null
+    frequency: number | null
+    duration: number | null
     error_rate_percent: number | null
     rule_based: boolean | null
   } | null
@@ -65,8 +65,8 @@ export async function generateUseCaseInsights(ctx: InsightsContext): Promise<Llm
     lines.push(`Titel: ${ctx.processStep.title}`)
     if (ctx.processStep.description) lines.push(`Beschreibung: ${ctx.processStep.description}`)
     if (ctx.processStep.source_quote) lines.push(`Originalzitat: "${ctx.processStep.source_quote}"`)
-    if (ctx.processStep.frequency_per_month != null) lines.push(`Häufigkeit: ${ctx.processStep.frequency_per_month}×/Monat`)
-    if (ctx.processStep.duration_minutes != null) lines.push(`Dauer: ${ctx.processStep.duration_minutes} Min`)
+    if (ctx.processStep.frequency != null) lines.push(`Häufigkeit: ${ctx.processStep.frequency}×/Monat`)
+    if (ctx.processStep.duration != null) lines.push(`Dauer: ${ctx.processStep.duration} Min`)
     if (ctx.processStep.error_rate_percent != null) lines.push(`Fehlerrate: ${ctx.processStep.error_rate_percent}%`)
   }
 

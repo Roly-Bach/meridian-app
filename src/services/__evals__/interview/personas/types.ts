@@ -54,8 +54,8 @@ export interface ProcessGroundTruth {
   aiCandidate: boolean
   /** Kanonische Soll-Werte (Punkt statt Range), nur befüllt wo aus der Narration ableitbar. */
   potenzial: {
-    frequency_per_month?: number
-    duration_minutes?: number
+    frequency?: number
+    duration?: number
     error_rate_percent?: number
     media_breaks?: number
   }

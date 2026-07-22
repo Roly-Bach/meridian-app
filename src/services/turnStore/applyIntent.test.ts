@@ -33,7 +33,7 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
     title: 'Rechnungsprüfung',
     reihenfolge: 1,
     abhaengigkeiten: null,
-    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+    potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
     status: 'exploring',
     slots: {
       entscheidungslogik: null,
@@ -58,8 +58,8 @@ function makeFullStep(holes: string[] = [], overrides: Partial<StepEntry> = {}):
   const step = makeStep({
     status: 'walkthrough',
     potenzial: {
-      frequency_per_month: pslot(90, 'analyst_online'),
-      duration_minutes: pslot(15, 'analyst_online'),
+      frequency: pslot(90, 'analyst_online'),
+      duration: pslot(15, 'analyst_online'),
       error_rate_percent: pslot(2, 'analyst_online'),
       media_breaks: pslot(1, 'analyst_online'),
     },
@@ -124,21 +124,21 @@ describe('step lookup', () => {
 describe('record_slot — accept + status transition', () => {
   it('fills an empty potenzial slot, moves exploring → walkthrough, emits trail', () => {
     const snap = makeSnapshot([makeStep({ status: 'exploring' })])
-    const out = applyIntent(snap, recordSlot({ slot: 'frequency_per_month', value: 90 }), CTX)
+    const out = applyIntent(snap, recordSlot({ slot: 'frequency', value: 90 }), CTX)
 
     expect(out.result.status).toBe('accepted')
     // snapshot mutated immutably
-    expect(snap.stepTracker[0].potenzial.frequency_per_month).toBeNull()
-    expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month).toMatchObject({ value: 90, writeSource: 'analyst_online' })
+    expect(snap.stepTracker[0].potenzial.frequency).toBeNull()
+    expect(out.snapshot.stepTracker[0].potenzial.frequency).toMatchObject({ value: 90, writeSource: 'analyst_online' })
     expect(out.snapshot.stepTracker[0].status).toBe('walkthrough')
     // patches: slot field + status transition (verbatim with today's two rpc calls)
     expect(out.patches).toEqual([
-      { kind: 'step_field', stepIndex: 0, subPath: ['potenzial', 'frequency_per_month'], value: expect.objectContaining({ value: 90 }) },
+      { kind: 'step_field', stepIndex: 0, subPath: ['potenzial', 'frequency'], value: expect.objectContaining({ value: 90 }) },
       { kind: 'step_field', stepIndex: 0, subPath: ['status'], value: 'walkthrough' },
     ])
     // trail
     expect(out.trail).toHaveLength(1)
-    expect(out.trail[0]).toMatchObject({ source: 'analyst_online', slot: 'frequency_per_month', value: 90, overwrite: false })
+    expect(out.trail[0]).toMatchObject({ source: 'analyst_online', slot: 'frequency', value: 90, overwrite: false })
     expect(out.trail[0].blocked).toBeUndefined()
   })
 
@@ -173,8 +173,8 @@ describe('record_slot — accept + status transition', () => {
 
 describe('record_slot — idempotency', () => {
   it('skips identical scalar value without correction', () => {
-    const snap = makeSnapshot([makeStep({ status: 'walkthrough', potenzial: { ...makeStep().potenzial, frequency_per_month: pslot(90, 'analyst_online') } })])
-    const out = applyIntent(snap, recordSlot({ slot: 'frequency_per_month', value: 90 }), CTX)
+    const snap = makeSnapshot([makeStep({ status: 'walkthrough', potenzial: { ...makeStep().potenzial, frequency: pslot(90, 'analyst_online') } })])
+    const out = applyIntent(snap, recordSlot({ slot: 'frequency', value: 90 }), CTX)
     expect(out.result.status).toBe('skipped')
     expect(out.result.reason).toBe('idempotent')
     expect(out.patches).toHaveLength(0)
@@ -190,8 +190,8 @@ describe('record_slot — idempotency', () => {
 
   it('does NOT skip when is_correction=true (even if same value)', () => {
     const step = makeStep({ status: 'walkthrough' })
-    step.potenzial.frequency_per_month = pslot(90, 'analyst_online')
-    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 90, isCorrection: true }), CTX)
+    step.potenzial.frequency = pslot(90, 'analyst_online')
+    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency', value: 90, isCorrection: true }), CTX)
     expect(out.result.status).toBe('accepted')
   })
 })
@@ -201,23 +201,23 @@ describe('record_slot — idempotency', () => {
 describe('record_slot — priority conflict', () => {
   it('blocks lower-priority overwrite of a higher-priority slot, emits blocked trail', () => {
     const step = makeStep({ status: 'walkthrough' })
-    step.potenzial.frequency_per_month = pslot(90, 'analyst_catchup') // priority 4
-    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'backfill' }), CTX) // priority 1
+    step.potenzial.frequency = pslot(90, 'analyst_catchup') // priority 4
+    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency', value: 120, writeSource: 'backfill' }), CTX) // priority 1
     expect(out.result.status).toBe('blocked')
     expect(out.result.reason).toBe('priority')
     expect(out.patches).toHaveLength(0)
     expect(out.trail).toHaveLength(1)
     expect(out.trail[0]).toMatchObject({ blocked: true, overwrite: true, source: 'backfill', value: 120 })
     // snapshot unchanged
-    expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(90)
+    expect(out.snapshot.stepTracker[0].potenzial.frequency!.value).toBe(90)
   })
 
   it('allows equal-or-higher priority overwrite', () => {
     const step = makeStep({ status: 'walkthrough' })
-    step.potenzial.frequency_per_month = pslot(90, 'backfill')
-    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'analyst_online' }), CTX)
+    step.potenzial.frequency = pslot(90, 'backfill')
+    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency', value: 120, writeSource: 'analyst_online' }), CTX)
     expect(out.result.status).toBe('accepted')
-    expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(120)
+    expect(out.snapshot.stepTracker[0].potenzial.frequency!.value).toBe(120)
   })
 
   // PROJ-44/ADR-021 D3: a historical interview whose slot trail still carries
@@ -226,10 +226,10 @@ describe('record_slot — priority conflict', () => {
   // as priority 0, so the current Analyst (priority 3) may overwrite it.
   it('degrades a historical "quick" writeSource to priority 0 — analyst_online may overwrite it', () => {
     const step = makeStep({ status: 'walkthrough' })
-    step.potenzial.frequency_per_month = { value: 90, quote: 'q', nicht_befund_typ: null, writeSource: 'quick' as SchemaSlotNumber['writeSource'] }
-    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'analyst_online' }), CTX)
+    step.potenzial.frequency = { value: 90, quote: 'q', nicht_befund_typ: null, writeSource: 'quick' as SchemaSlotNumber['writeSource'] }
+    const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency', value: 120, writeSource: 'analyst_online' }), CTX)
     expect(out.result.status).toBe('accepted')
-    expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(120)
+    expect(out.snapshot.stepTracker[0].potenzial.frequency!.value).toBe(120)
   })
 
   it('does NOT apply priority gate to tazite slots (no writeSource competition)', () => {
@@ -244,14 +244,14 @@ describe('record_slot — priority conflict', () => {
 
 describe('record_slot — step not found', () => {
   it('blocks with step_not_found + available list', () => {
-    const out = applyIntent(makeSnapshot([makeStep({ title: 'Monatsabschluss', id: 'S001' })]), recordSlot({ stepTitle: 'Völlig anderer Prozess', slot: 'frequency_per_month', value: 1 }), CTX)
+    const out = applyIntent(makeSnapshot([makeStep({ title: 'Monatsabschluss', id: 'S001' })]), recordSlot({ stepTitle: 'Völlig anderer Prozess', slot: 'frequency', value: 1 }), CTX)
     expect(out.result.status).toBe('blocked')
     expect(out.result.reason).toBe('step_not_found')
     expect(out.result.detail).toMatchObject({ requested: 'Völlig anderer Prozess', available: [{ title: 'Monatsabschluss', id: 'S001' }] })
   })
 
   it('falls back from missing step_id to fuzzy title', () => {
-    const out = applyIntent(makeSnapshot([makeStep({ id: 'S001', title: 'Rechnungsprüfung' })]), recordSlot({ stepId: 'S999', stepTitle: 'Rechnungsprüfung', slot: 'duration_minutes', value: 10 }), CTX)
+    const out = applyIntent(makeSnapshot([makeStep({ id: 'S001', title: 'Rechnungsprüfung' })]), recordSlot({ stepId: 'S999', stepTitle: 'Rechnungsprüfung', slot: 'duration', value: 10 }), CTX)
     expect(out.result.status).toBe('accepted')
   })
 })
@@ -292,9 +292,9 @@ describe('intra-pass read-after-write (ADR-018 Edge Case)', () => {
     expect(reg.result.status).toBe('accepted')
     snap = reg.snapshot // session threads the evolved snapshot forward
 
-    const rec = applyIntent(snap, recordSlot({ stepId: 'S001', slot: 'frequency_per_month', value: 90 }), CTX)
+    const rec = applyIntent(snap, recordSlot({ stepId: 'S001', slot: 'frequency', value: 90 }), CTX)
     expect(rec.result.status).toBe('accepted')
-    expect(rec.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(90)
+    expect(rec.snapshot.stepTracker[0].potenzial.frequency!.value).toBe(90)
   })
 })
 

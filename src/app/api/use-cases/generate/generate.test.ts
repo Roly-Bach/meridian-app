@@ -161,7 +161,7 @@ describe('POST /api/use-cases/generate', () => {
       .mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({
-          data: [{ id: 'step-1', workspace_id: 'ws-1', interview_id: 'iv-1', title: 'Test', description: null, frequency_per_month: 22, duration_minutes: 60, data_sources: [], rule_based: true, error_rate_percent: 5, media_breaks: 0 }],
+          data: [{ id: 'step-1', workspace_id: 'ws-1', interview_id: 'iv-1', title: 'Test', description: null, frequency: 22, duration: 60, data_sources: [], rule_based: true, error_rate_percent: 5, media_breaks: 0 }],
           error: null,
         }),
       })

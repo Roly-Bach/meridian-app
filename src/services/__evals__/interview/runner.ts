@@ -183,8 +183,8 @@ function parseArgs(): RunArgs {
 // Deterministic synthetic answers for each card type
 function buildSyntheticClarificationAnswers(cards: ClarificationCard[]): ClarificationAnswer[] {
   const SLOT_DEFAULTS: Record<string, string> = {
-    frequency_per_month: 'Wöchentlich',
-    duration_minutes: '15–30 Min',
+    frequency: 'Wöchentlich',
+    duration: '15–30 Min',
     rule_based: 'Meistens gleich',
     error_rate_percent: 'Gelegentlich',
     open_item: 'Ja',
@@ -576,7 +576,7 @@ function buildSlotTable(stepTracker: StepEntry[]): string {
       s ? `${String(s.value).slice(0, 20)} ✓` : 'null'
     const ft = (s: import('@/services/interviewSemantic').SchemaSlotString | import('@/services/interviewSemantic').SchemaSlotStringArray | null) =>
       s?.value != null ? `${String(s.value).slice(0, 20)} ✓` : s?.nicht_befund_typ ? `[${s.nicht_befund_typ}]` : 'null'
-    return `| ${step.title} | ${step.status} | ${fp(step.potenzial.frequency_per_month)} | ${fp(step.potenzial.duration_minutes)} | ${ft(step.slots.entscheidungslogik)} | ${ft(step.slots.hilfsmittel)} | ${fp(step.potenzial.error_rate_percent)} | ${fp(step.potenzial.media_breaks)} |`
+    return `| ${step.title} | ${step.status} | ${fp(step.potenzial.frequency)} | ${fp(step.potenzial.duration)} | ${ft(step.slots.entscheidungslogik)} | ${ft(step.slots.hilfsmittel)} | ${fp(step.potenzial.error_rate_percent)} | ${fp(step.potenzial.media_breaks)} |`
   })
 
   return [...header, ...rows, ''].join('\n')

@@ -5,7 +5,7 @@
       "reihenfolge": 1,
       "abhaengigkeiten": null,
       "status": "done",
-      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "potenzial": { "frequency": null, "duration": null, "error_rate_percent": null, "media_breaks": null },
       "slots": {
         "entscheidungslogik": { "value": "SAP FI", "quote": "SAP FI", "nicht_befund_typ": null },
         "tazite_cues": { "value": ["Vier-Augen-Prinzip"], "quote": "Vier-Augen-Prinzip", "nicht_befund_typ": null },
@@ -20,7 +20,7 @@
       "reihenfolge": 2,
       "abhaengigkeiten": null,
       "status": "done",
-      "potenzial": { "frequency_per_month": null, "duration_minutes": null, "error_rate_percent": null, "media_breaks": null },
+      "potenzial": { "frequency": null, "duration": null, "error_rate_percent": null, "media_breaks": null },
       "slots": {
         "entscheidungslogik": { "value": "Freigabe", "quote": "Freigabe", "nicht_befund_typ": null },
         "tazite_cues": { "value": ["Unterschrift"], "quote": "Unterschrift", "nicht_befund_typ": null },

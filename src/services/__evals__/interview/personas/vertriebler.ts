@@ -54,13 +54,13 @@ export const vertriebler: Persona = {
     {
       process: 'Angebotserstellung',
       aiCandidate: true, // mittlere Frequenz, Template-Anpassung teils regelbasiert
-      potenzial: { frequency_per_month: 50 }, // 5–20/Woche, saisonal → Mittel ~12.5/Woche × 4
+      potenzial: { frequency: 50 }, // 5–20/Woche, saisonal → Mittel ~12.5/Woche × 4
       dependsOn: [],
     },
     {
       process: 'Reisekostenabrechnung',
       aiCandidate: false, // vollmanuell/Papier (automatisierbar), aber sehr niedrige Frequenz → schwacher ROI
-      potenzial: { frequency_per_month: 2 },
+      potenzial: { frequency: 2 },
       dependsOn: [],
     },
   ],

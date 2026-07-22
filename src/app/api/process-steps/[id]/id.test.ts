@@ -44,12 +44,12 @@ describe('PATCH /api/process-steps/:id', () => {
       from: vi.fn(),
     } as never)
 
-    const res = await PATCH(makeRequest(STEP_ID, { frequency_per_month: 4 }), makeParams(STEP_ID))
+    const res = await PATCH(makeRequest(STEP_ID, { frequency: 4 }), makeParams(STEP_ID))
     expect(res.status).toBe(401)
   })
 
-  it('returns 400 for negative frequency_per_month', async () => {
-    const res = await PATCH(makeRequest(STEP_ID, { frequency_per_month: -1 }), makeParams(STEP_ID))
+  it('returns 400 for negative frequency', async () => {
+    const res = await PATCH(makeRequest(STEP_ID, { frequency: -1 }), makeParams(STEP_ID))
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(JSON.stringify(json.error)).toContain('≥ 0')
@@ -72,7 +72,7 @@ describe('PATCH /api/process-steps/:id', () => {
       single: vi.fn().mockResolvedValue({ data: null, error: new Error('Not found') }),
     })
 
-    const res = await PATCH(makeRequest(STEP_ID, { frequency_per_month: 4 }), makeParams(STEP_ID))
+    const res = await PATCH(makeRequest(STEP_ID, { frequency: 4 }), makeParams(STEP_ID))
     expect(res.status).toBe(404)
   })
 
@@ -80,7 +80,7 @@ describe('PATCH /api/process-steps/:id', () => {
     const updatedStep = {
       id: STEP_ID,
       title: 'Rechnungen prüfen',
-      frequency_per_month: 22,
+      frequency: 22,
       workspace_id: WORKSPACE_ID,
     }
 
@@ -103,12 +103,12 @@ describe('PATCH /api/process-steps/:id', () => {
       })
 
     const res = await PATCH(
-      makeRequest(STEP_ID, { frequency_per_month: 22 }),
+      makeRequest(STEP_ID, { frequency: 22 }),
       makeParams(STEP_ID)
     )
     expect(res.status).toBe(200)
     const json = await res.json()
-    expect(json.process_step.frequency_per_month).toBe(22)
+    expect(json.process_step.frequency).toBe(22)
   })
 
   it('returns 403 when step belongs to different workspace', async () => {
@@ -131,7 +131,7 @@ describe('PATCH /api/process-steps/:id', () => {
       }),
     } as never)
 
-    const res = await PATCH(makeRequest(STEP_ID, { frequency_per_month: 4 }), makeParams(STEP_ID))
+    const res = await PATCH(makeRequest(STEP_ID, { frequency: 4 }), makeParams(STEP_ID))
     expect(res.status).toBe(403)
   })
 })

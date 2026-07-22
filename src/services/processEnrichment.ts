@@ -165,7 +165,7 @@ export async function createProcessStepsFromTracker({
     // PROJ-45 (ADR-025 D1): schritt_daten carries the full step_tracker entry
     // verbatim — same object shape as interview_state.step_tracker, no
     // translation/coercion layer. The 10 legacy flat columns (role,
-    // frequency_per_month, duration_minutes, data_sources, rule_based,
+    // frequency, duration, data_sources, rule_based,
     // error_rate_percent, media_breaks, friction_points, friction_tools,
     // walkthrough_steps) no longer exist on process_steps.
     const { error } = await supabase.from('process_steps').insert({

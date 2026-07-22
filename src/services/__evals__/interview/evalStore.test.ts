@@ -19,7 +19,7 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
     title: 'Rechnungsprüfung',
     reihenfolge: 1,
     abhaengigkeiten: null,
-    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+    potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
     status: 'exploring',
     slots: {
       entscheidungslogik: null,
@@ -107,7 +107,7 @@ describe('PGlite EvalStore adapter (Stufe 2, hermetic)', () => {
 
   it('executeClarificationCompletion completes the interview (DB-free, no pipeline)', async () => {
     await evalStore.executeClarificationCompletion(interviewId, workspaceId, [
-      { process_step_id: 'Rechnungsprüfung', slot_key: 'frequency_per_month', answer: 'Wöchentlich' },
+      { process_step_id: 'Rechnungsprüfung', slot_key: 'frequency', answer: 'Wöchentlich' },
       { process_step_id: 'Rechnungsprüfung', slot_key: 'open_item', answer: 'Ja' },
     ])
     expect(await evalStore.loadStatus(interviewId)).toBe('completed')

@@ -96,8 +96,8 @@ async function synthesizeCluster(clusterId: string): Promise<void> {
       const display = deriveProcessStepDisplayFieldsFromRaw(s.schritt_daten)
       const parts = [`**${name} (${role})**`]
       if (s.description) parts.push(`Beschreibung: ${s.description}`)
-      if (display.duration_minutes) parts.push(`Dauer: ${display.duration_minutes} Minuten`)
-      if (display.frequency_per_month) parts.push(`Häufigkeit: ${display.frequency_per_month}× pro Monat`)
+      if (display.duration) parts.push(`Dauer: ${display.duration} Minuten`)
+      if (display.frequency) parts.push(`Häufigkeit: ${display.frequency}× pro Monat`)
       if (display.data_sources.length) parts.push(`Tools/Systeme: ${display.data_sources.join(', ')}`)
       if (s.source_quote) parts.push(`Originalzitat: "${s.source_quote}"`)
       return parts.join('\n')

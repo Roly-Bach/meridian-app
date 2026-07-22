@@ -130,7 +130,7 @@ describe('scoreSlotDepth — Edge Cases', () => {
       reihenfolge: 1,
       abhaengigkeiten: null,
       status: 'exploring',
-      potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+      potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
       slots: {
         entscheidungslogik: null,
         tazite_cues: null,
@@ -217,7 +217,7 @@ describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
       reihenfolge: 1,
       abhaengigkeiten: null,
       status: 'done',
-      potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+      potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
       slots: {
         entscheidungslogik: { value: 'Freigabe ab 5000 EUR', quote: 'Freigabe ab 5000 EUR', confidence: 'confirmed', nicht_befund_typ: null },
         tazite_cues: null,
@@ -283,7 +283,7 @@ describe('scoreSlotDepth — Prompt-Inhalt: getStepTurns-Grenzen', () => {
       reihenfolge: 1,
       abhaengigkeiten: null,
       status: 'done',
-      potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+      potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
       slots: {
         entscheidungslogik: { value: 'Freigabe ab 5000 EUR', quote: 'Freigabe ab 5000 EUR', confidence: 'confirmed', nicht_befund_typ: null },
         tazite_cues: null,

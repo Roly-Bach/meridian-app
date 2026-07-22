@@ -4,8 +4,8 @@ interface SubUseCase {
   process_step: {
     title: string
     source_quote: string | null
-    frequency_per_month: number | null
-    duration_minutes: number | null
+    frequency: number | null
+    duration: number | null
     error_rate_percent: number | null
   }
   roi_eur: number | null
@@ -42,11 +42,11 @@ export function ParticipantList({ subUseCases, participantCount }: Props) {
             </div>
             <p className="text-[12px] text-[#6B7280] mb-1.5">{sub.process_step.title}</p>
             <div className="flex gap-3 text-[11px] text-[#9C27B0]">
-              {sub.process_step.frequency_per_month != null && (
-                <span>{sub.process_step.frequency_per_month}×/Mon</span>
+              {sub.process_step.frequency != null && (
+                <span>{sub.process_step.frequency}×/Mon</span>
               )}
-              {sub.process_step.duration_minutes != null && (
-                <span>{sub.process_step.duration_minutes} Min</span>
+              {sub.process_step.duration != null && (
+                <span>{sub.process_step.duration} Min</span>
               )}
               {sub.process_step.error_rate_percent != null && (
                 <span>{sub.process_step.error_rate_percent}% Fehler</span>

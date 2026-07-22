@@ -124,8 +124,8 @@ export interface StepEntry {
   abhaengigkeiten: Abhaengigkeiten | null
   /** Quantitative KI-Potenzial fields */
   potenzial: {
-    frequency_per_month: SchemaSlotNumber | null
-    duration_minutes: SchemaSlotNumber | null
+    frequency: SchemaSlotNumber | null
+    duration: SchemaSlotNumber | null
     error_rate_percent: SchemaSlotNumber | null
     media_breaks: SchemaSlotNumber | null
   }
@@ -164,14 +164,21 @@ export interface StepEntry {
 /**
  * Backward-compat read shape: raw JSONB step_tracker entries written before
  * PROJ-45 may still carry these now-removed fields (governance, friction_tools,
- * pain_point_primary, process_steps, top-level friction_points). Only used by
- * normalizeStepEntry to safely ignore them — never written again.
+ * pain_point_primary, process_steps, top-level friction_points) or the pre-rename
+ * potenzial key names (frequency_per_month/duration_minutes, renamed to
+ * frequency/duration as part of the H-1 remediation — see interviewAnalyst.ts
+ * remediation handoff). Only used by normalizeStepEntry to safely read/ignore
+ * them — never written again.
  */
-interface RawStepEntry extends Omit<StepEntry, 'slots' | 'teilschritte'> {
+interface RawStepEntry extends Omit<StepEntry, 'slots' | 'teilschritte' | 'potenzial'> {
   slots?: Partial<StepEntry['slots']>
   process_steps?: string[]
   teilschritte?: string[]
   friction_points?: string[]
+  potenzial?: Partial<StepEntry['potenzial']> & {
+    frequency_per_month?: SchemaSlotNumber | null
+    duration_minutes?: SchemaSlotNumber | null
+  }
 }
 
 /**
@@ -209,8 +216,12 @@ export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): S
   const r = raw as RawStepEntry
 
   const potenzial: StepEntry['potenzial'] = {
-    frequency_per_month: parseJsonIfString(r.potenzial?.frequency_per_month),
-    duration_minutes: parseJsonIfString(r.potenzial?.duration_minutes),
+    // PROJ-45 H-1 remediation: frequency_per_month/duration_minutes renamed to
+    // frequency/duration. Fall back to the pre-rename keys so pre-existing
+    // step_tracker/schritt_daten JSONB (real interviews + the two eval sessions
+    // from the /qa run) remains readable without a data migration.
+    frequency: parseJsonIfString(r.potenzial?.frequency ?? r.potenzial?.frequency_per_month),
+    duration: parseJsonIfString(r.potenzial?.duration ?? r.potenzial?.duration_minutes),
     error_rate_percent: parseJsonIfString(r.potenzial?.error_rate_percent),
     media_breaks: parseJsonIfString(r.potenzial?.media_breaks),
   }
@@ -268,8 +279,8 @@ export function parseSchrittDaten(raw: unknown): StepEntry | null {
 
 /** Writable quantitative slot keys passed to record_slot */
 export const POTENZIAL_SLOT_NAMES = [
-  'frequency_per_month',
-  'duration_minutes',
+  'frequency',
+  'duration',
   'error_rate_percent',
   'media_breaks',
 ] as const
@@ -449,12 +460,12 @@ function resolveWithFactorTable(slot: SchemaSlotNumber | null | undefined, table
   return Math.round(slot.value * factor * 100) / 100
 }
 
-/** Resolves a haeufigkeit (frequency_per_month) slot to its canonical "pro Monat" value. */
+/** Resolves a haeufigkeit (frequency) slot to its canonical "pro Monat" value. */
 export function resolveHaeufigkeitProMonat(slot: SchemaSlotNumber | null | undefined): number | null {
   return resolveWithFactorTable(slot, HAEUFIGKEIT_TO_MONATLICH)
 }
 
-/** Resolves a dauer (duration_minutes) slot to its canonical "Minuten" value. */
+/** Resolves a dauer (duration) slot to its canonical "Minuten" value. */
 export function resolveDauerMinuten(slot: SchemaSlotNumber | null | undefined): number | null {
   return resolveWithFactorTable(slot, DAUER_TO_MINUTEN)
 }

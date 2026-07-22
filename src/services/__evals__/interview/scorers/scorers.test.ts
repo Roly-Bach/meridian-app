@@ -29,8 +29,8 @@ const makeStep = (slotOverrides: Partial<StepEntry['slots']> = {}, stepOverrides
   reihenfolge: 1,
   abhaengigkeiten: null,
   potenzial: {
-    frequency_per_month: null,
-    duration_minutes: null,
+    frequency: null,
+    duration: null,
     error_rate_percent: null,
     media_breaks: null,
   },
@@ -279,7 +279,7 @@ describe('scoreToolCallPlausibility', () => {
             toolName: 'record_slot',
             args: {
               step_title: 'Rechnungsprüfung',
-              slot: 'frequency_per_month',
+              slot: 'frequency',
               value: 90,
               evidence_quote: '80 bis 100 Rechnungen pro Monat',
               source_turn: 1,
@@ -300,7 +300,7 @@ describe('scoreToolCallPlausibility', () => {
             toolName: 'record_slot',
             args: {
               step_title: 'Rechnungsprüfung',
-              slot: 'frequency_per_month',
+              slot: 'frequency',
               value: 90,
               evidence_quote: '80 bis 100 Rechnungen pro Monat',
             },
@@ -320,7 +320,7 @@ describe('scoreToolCallPlausibility', () => {
             toolName: 'record_slot',
             args: {
               step_title: 'Rechnungsprüfung',
-              slot: 'frequency_per_month',
+              slot: 'frequency',
               value: 90,
               evidence_quote: '100 Rechnungen Monat',
               source_turn: 1,
@@ -343,7 +343,7 @@ describe('scoreToolCallPlausibility', () => {
             toolName: 'record_slot',
             args: {
               step_title: 'Rechnungsprüfung',
-              slot: 'frequency_per_month',
+              slot: 'frequency',
               value: 90,
               evidence_quote: '90 Rechnungen pro Monat',
             },

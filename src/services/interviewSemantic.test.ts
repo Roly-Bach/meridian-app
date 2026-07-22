@@ -5,8 +5,8 @@ import { hasNewOField, type StepEntry } from './interviewSemantic'
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const emptyPotenzial: StepEntry['potenzial'] = {
-  frequency_per_month: null,
-  duration_minutes: null,
+  frequency: null,
+  duration: null,
   error_rate_percent: null,
   media_breaks: null,
 }
@@ -63,7 +63,7 @@ describe('hasNewOField (PROJ-46 QA H-1 Fix D)', () => {
   it('is false when only a potenzial slot (frequency/duration/error_rate/media_breaks) was filled', () => {
     const before = [makeStep('S001')]
     const after = [makeStep('S001', emptySlots, {
-      potenzial: { ...emptyPotenzial, frequency_per_month: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate', nicht_befund_typ: null } },
+      potenzial: { ...emptyPotenzial, frequency: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate', nicht_befund_typ: null } },
     })]
     expect(hasNewOField(before, after)).toBe(false)
   })

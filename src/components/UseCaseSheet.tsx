@@ -41,8 +41,8 @@ interface ProcessStep {
   title: string
   description: string | null
   source_quote: string | null
-  frequency_per_month: number | null
-  duration_minutes: number | null
+  frequency: number | null
+  duration: number | null
   error_rate_percent: number | null
   rule_based: boolean | null
   data_sources: string[]
@@ -60,8 +60,8 @@ interface SubUseCase {
   process_step: {
     title: string
     source_quote: string | null
-    frequency_per_month: number | null
-    duration_minutes: number | null
+    frequency: number | null
+    duration: number | null
     error_rate_percent: number | null
   }
   roi_eur: number | null
@@ -309,13 +309,13 @@ export function UseCaseSheet({ useCase, onClose }: Props) {
               {(() => {
                 const step = detail?.process_step
                 if (!step) return null
-                if (step.frequency_per_month == null && step.duration_minutes == null && step.error_rate_percent == null) return null
+                if (step.frequency == null && step.duration == null && step.error_rate_percent == null) return null
                 return (
                   <>
                     <SectionLabel>Metriken</SectionLabel>
                     <MetricsGrid
-                      frequencyPerMonth={step.frequency_per_month}
-                      durationMinutes={step.duration_minutes}
+                      frequencyPerMonth={step.frequency}
+                      durationMinutes={step.duration}
                       errorRatePercent={step.error_rate_percent}
                     />
                     <Divider />

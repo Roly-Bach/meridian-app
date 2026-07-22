@@ -36,8 +36,8 @@ function step(overrides: Record<string, unknown> = {}) {
     status: 'walkthrough',
     reihenfolge: 1,
     potenzial: {
-      frequency_per_month: null,
-      duration_minutes: null,
+      frequency: null,
+      duration: null,
       error_rate_percent: null,
       media_breaks: null,
     },

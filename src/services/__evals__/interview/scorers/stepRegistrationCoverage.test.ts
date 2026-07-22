@@ -30,7 +30,7 @@ function makeStep(title: string): StepEntry {
     title,
     reihenfolge: 1,
     abhaengigkeiten: null,
-    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+    potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
     status: 'done',
     slots: emptySlots,
   }

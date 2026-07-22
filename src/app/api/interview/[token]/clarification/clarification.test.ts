@@ -117,7 +117,7 @@ describe('POST /api/interview/[token]/clarification', () => {
     mockAdminFrom.mockReturnValue(chain)
 
     const res = await POST(
-      makeRequest({ answers: [{ process_step_id: 's1', slot_key: 'frequency_per_month', answer: 'Täglich' }] }),
+      makeRequest({ answers: [{ process_step_id: 's1', slot_key: 'frequency', answer: 'Täglich' }] }),
       makeParams()
     )
     expect(res.status).toBe(404)
@@ -137,7 +137,7 @@ describe('POST /api/interview/[token]/clarification', () => {
     mockAdminFrom.mockReturnValue(chain)
 
     const res = await POST(
-      makeRequest({ answers: [{ process_step_id: 's1', slot_key: 'frequency_per_month', answer: 'Täglich' }] }),
+      makeRequest({ answers: [{ process_step_id: 's1', slot_key: 'frequency', answer: 'Täglich' }] }),
       makeParams()
     )
     expect(res.status).toBe(410)
@@ -157,7 +157,7 @@ describe('POST /api/interview/[token]/clarification', () => {
     mockAdminFrom.mockReturnValue(chain)
 
     const res = await POST(
-      makeRequest({ answers: [{ process_step_id: 's1', slot_key: 'frequency_per_month', answer: 'Täglich' }] }),
+      makeRequest({ answers: [{ process_step_id: 's1', slot_key: 'frequency', answer: 'Täglich' }] }),
       makeParams()
     )
     expect(res.status).toBe(409)
@@ -222,8 +222,8 @@ describe('POST /api/interview/[token]/clarification', () => {
     const res = await POST(
       makeRequest({
         answers: [
-          { process_step_id: STEP_UUID, slot_key: 'frequency_per_month', answer: 'Täglich' },
-          { process_step_id: STEP_UUID, slot_key: 'duration_minutes', answer: '5–15 Min' },
+          { process_step_id: STEP_UUID, slot_key: 'frequency', answer: 'Täglich' },
+          { process_step_id: STEP_UUID, slot_key: 'duration', answer: '5–15 Min' },
         ],
       }),
       makeParams()
@@ -270,7 +270,7 @@ describe('POST /api/interview/[token]/clarification', () => {
 
     await POST(
       makeRequest({
-        answers: [{ process_step_id: 'Step A', slot_key: 'frequency_per_month', answer: 'Weiß ich nicht' }],
+        answers: [{ process_step_id: 'Step A', slot_key: 'frequency', answer: 'Weiß ich nicht' }],
       }),
       makeParams()
     )

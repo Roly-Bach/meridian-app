@@ -14,8 +14,8 @@ import type { ODroughtState } from './interviewTypes'
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const emptyPotenzial: StepEntry['potenzial'] = {
-  frequency_per_month: null,
-  duration_minutes: null,
+  frequency: null,
+  duration: null,
   error_rate_percent: null,
   media_breaks: null,
 }
@@ -36,8 +36,8 @@ const emptySlots: StepEntry['slots'] = {
 }
 
 const fullPotenzial: StepEntry['potenzial'] = {
-  frequency_per_month: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate' as const, nicht_befund_typ: null },
-  duration_minutes: { value: 30, quote: '30 Minuten', confidence: 'confirmed' as const, nicht_befund_typ: null },
+  frequency: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate' as const, nicht_befund_typ: null },
+  duration: { value: 30, quote: '30 Minuten', confidence: 'confirmed' as const, nicht_befund_typ: null },
   error_rate_percent: { value: 0, quote: 'keine Fehler', confidence: 'confirmed' as const, nicht_befund_typ: null },
   media_breaks: { value: 0, quote: 'keine Brüche', confidence: 'confirmed' as const, nicht_befund_typ: null },
 }

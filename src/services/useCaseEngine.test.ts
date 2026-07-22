@@ -16,8 +16,8 @@ const BASE_STEP: EngineProcessStep = {
   interview_id: 'interview-1',
   title: 'Rechnungen prüfen',
   description: 'Prüft eingehende Rechnungen',
-  frequency_per_month: null,
-  duration_minutes: null,
+  frequency: null,
+  duration: null,
   data_sources: [],
   rule_based: false,
   error_rate_percent: null,
@@ -53,13 +53,13 @@ describe('runHeuristicEngine', () => {
     expect(runHeuristicEngine([], HOURLY_RATE)).toEqual([])
   })
 
-  it('skips steps without frequency_per_month', () => {
-    const step = { ...BASE_STEP, duration_minutes: 60, rule_based: true }
+  it('skips steps without frequency', () => {
+    const step = { ...BASE_STEP, duration: 60, rule_based: true }
     expect(runHeuristicEngine([step], HOURLY_RATE)).toEqual([])
   })
 
-  it('skips steps without duration_minutes', () => {
-    const step = { ...BASE_STEP, frequency_per_month: 22, rule_based: true }
+  it('skips steps without duration', () => {
+    const step = { ...BASE_STEP, frequency: 22, rule_based: true }
     expect(runHeuristicEngine([step], HOURLY_RATE)).toEqual([])
   })
 
@@ -67,8 +67,8 @@ describe('runHeuristicEngine', () => {
   it('R1: generates automation use case for high-freq rule-based step', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
       error_rate_percent: 5,
     }
@@ -85,8 +85,8 @@ describe('runHeuristicEngine', () => {
   it('R1: does NOT fire when error_rate >= 10', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
       error_rate_percent: 15,
     }
@@ -100,8 +100,8 @@ describe('runHeuristicEngine', () => {
   it('R2: generates llm_extraction for email data source', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 10,
-      duration_minutes: 30,
+      frequency: 10,
+      duration: 30,
       data_sources: ['E-Mail', 'PDF'],
     }
     const result = runHeuristicEngine([step], HOURLY_RATE)
@@ -113,8 +113,8 @@ describe('runHeuristicEngine', () => {
   it('R2: does NOT fire when duration < 15', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 10,
-      duration_minutes: 10,
+      frequency: 10,
+      duration: 10,
       data_sources: ['PDF'],
     }
     const result = runHeuristicEngine([step], HOURLY_RATE)
@@ -125,8 +125,8 @@ describe('runHeuristicEngine', () => {
   it('R3: generates decision_support for error-prone judgment process', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 8,
-      duration_minutes: 45,
+      frequency: 8,
+      duration: 45,
       rule_based: false,
       error_rate_percent: 20,
     }
@@ -140,8 +140,8 @@ describe('runHeuristicEngine', () => {
   it('R4: generates automation for high media_breaks', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 5,
-      duration_minutes: 30,
+      frequency: 5,
+      duration: 30,
       media_breaks: 4,
     }
     const result = runHeuristicEngine([step], HOURLY_RATE)
@@ -153,8 +153,8 @@ describe('runHeuristicEngine', () => {
   it('R1 vs R4 conflict: keeps highest ROI automation (R1 wins)', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
       error_rate_percent: 5,
       media_breaks: 4,
@@ -170,8 +170,8 @@ describe('runHeuristicEngine', () => {
   it('R5: generates rag for search process', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 10,
-      duration_minutes: 20,
+      frequency: 10,
+      duration: 20,
       title: 'Informationen nachschlagen',
     }
     const result = runHeuristicEngine([step], HOURLY_RATE)
@@ -182,8 +182,8 @@ describe('runHeuristicEngine', () => {
   it('R6: generates automation for rule-based process with high errors', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 10,
-      duration_minutes: 30,
+      frequency: 10,
+      duration: 30,
       rule_based: true,
       error_rate_percent: 25,
     }
@@ -197,8 +197,8 @@ describe('runHeuristicEngine', () => {
   it('R7: generates llm_extraction for recurring non-rule-based task', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 15,
-      duration_minutes: 25,
+      frequency: 15,
+      duration: 25,
       rule_based: false,
       error_rate_percent: 3,
     }
@@ -210,8 +210,8 @@ describe('runHeuristicEngine', () => {
   it('R8: generates rag for long decision process without errors', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 8,
-      duration_minutes: 60,
+      frequency: 8,
+      duration: 60,
       rule_based: false,
       error_rate_percent: null,
       title: 'Quartalsplanung erstellen',
@@ -223,8 +223,8 @@ describe('runHeuristicEngine', () => {
   it('R8: does NOT fire when step has search keywords (R5 handles it)', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 8,
-      duration_minutes: 60,
+      frequency: 8,
+      duration: 60,
       rule_based: false,
       title: 'Informationen suchen und prüfen',
     }
@@ -236,8 +236,8 @@ describe('runHeuristicEngine', () => {
 
   it('sorts by score descending', () => {
     const steps: EngineProcessStep[] = [
-      { ...BASE_STEP, id: 'a', frequency_per_month: 5, duration_minutes: 20, data_sources: ['PDF'] },
-      { ...BASE_STEP, id: 'b', frequency_per_month: 22, duration_minutes: 60, rule_based: true, error_rate_percent: 5 },
+      { ...BASE_STEP, id: 'a', frequency: 5, duration: 20, data_sources: ['PDF'] },
+      { ...BASE_STEP, id: 'b', frequency: 22, duration: 60, rule_based: true, error_rate_percent: 5 },
     ]
     const result = runHeuristicEngine(steps, HOURLY_RATE)
     for (let i = 1; i < result.length; i++) {
@@ -249,8 +249,8 @@ describe('runHeuristicEngine', () => {
     // Score > 5000 → high
     const highStep: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
       error_rate_percent: 5,
     }
@@ -262,8 +262,8 @@ describe('runHeuristicEngine', () => {
     // Low score → low priority
     const lowStep: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 1,
-      duration_minutes: 15,
+      frequency: 1,
+      duration: 15,
       data_sources: ['PDF'],
     }
     const low = runHeuristicEngine([lowStep], HOURLY_RATE).find((u) => u.type === 'llm_extraction')
@@ -275,8 +275,8 @@ describe('runHeuristicEngine', () => {
   it('uses hourly_rate from workspace', () => {
     const step: EngineProcessStep = {
       ...BASE_STEP,
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
       error_rate_percent: 5,
     }
@@ -292,8 +292,8 @@ const QUAL_STEP: EngineProcessStep = {
   ...BASE_STEP,
   id: 'qual-step-1',
   interview_id: 'interview-qual',
-  frequency_per_month: null,
-  duration_minutes: null,
+  frequency: null,
+  duration: null,
 }
 
 describe('runHeuristicEngine — qualitative rules (P1-P3)', () => {
@@ -382,8 +382,8 @@ const CLUSTER_STEP_A: EngineProcessStep = {
   interview_id: 'iv-1',
   title: 'Rechnungen prüfen',
   description: null,
-  frequency_per_month: 10,
-  duration_minutes: 45,
+  frequency: 10,
+  duration: 45,
   data_sources: [],
   rule_based: true,
   error_rate_percent: 5,
@@ -394,7 +394,7 @@ const CLUSTER_STEP_B: EngineProcessStep = {
   ...CLUSTER_STEP_A,
   id: 'cs-b',
   interview_id: 'iv-2',
-  frequency_per_month: 8,
+  frequency: 8,
   error_rate_percent: 5,
 }
 
@@ -427,8 +427,8 @@ describe('runHeuristicEngine — cluster rules (C1–C3)', () => {
   })
 
   it('C1: does NOT fire when avg_frequency < 5', () => {
-    const lowFreqA = { ...CLUSTER_STEP_A, frequency_per_month: 3 }
-    const lowFreqB = { ...CLUSTER_STEP_B, frequency_per_month: 2 }
+    const lowFreqA = { ...CLUSTER_STEP_A, frequency: 3 }
+    const lowFreqB = { ...CLUSTER_STEP_B, frequency: 2 }
     const cluster = makeCluster({
       participants: [
         { interview_id: 'iv-1', employee_name: 'Max', employee_role: null, process_step_id: 'cs-a', step: lowFreqA },
@@ -440,8 +440,8 @@ describe('runHeuristicEngine — cluster rules (C1–C3)', () => {
   })
 
   it('C2: generates process_standardization when avg_error_rate ≥ 10%', () => {
-    const errA = { ...CLUSTER_STEP_A, frequency_per_month: 3, error_rate_percent: 15 }
-    const errB = { ...CLUSTER_STEP_B, frequency_per_month: 3, error_rate_percent: 12 }
+    const errA = { ...CLUSTER_STEP_A, frequency: 3, error_rate_percent: 15 }
+    const errB = { ...CLUSTER_STEP_B, frequency: 3, error_rate_percent: 12 }
     const cluster = makeCluster({
       participants: [
         { interview_id: 'iv-1', employee_name: 'Max', employee_role: null, process_step_id: 'cs-a', step: errA },
@@ -459,13 +459,13 @@ describe('runHeuristicEngine — cluster rules (C1–C3)', () => {
   })
 
   it('C3: generates knowledge_rag_at_scale when participant_count ≥ 3 and canonical_description has search keywords', () => {
-    const stepC: EngineProcessStep = { ...CLUSTER_STEP_A, id: 'cs-c', interview_id: 'iv-3', frequency_per_month: 3 }
+    const stepC: EngineProcessStep = { ...CLUSTER_STEP_A, id: 'cs-c', interview_id: 'iv-3', frequency: 3 }
     const cluster = makeCluster({
       participant_count: 3,
       canonical_description: 'Mitarbeiter müssen Informationen suchen und nachschlagen.',
       participants: [
-        { interview_id: 'iv-1', employee_name: 'Max', employee_role: null, process_step_id: 'cs-a', step: { ...CLUSTER_STEP_A, frequency_per_month: 3 } },
-        { interview_id: 'iv-2', employee_name: 'Anna', employee_role: null, process_step_id: 'cs-b', step: { ...CLUSTER_STEP_B, frequency_per_month: 3 } },
+        { interview_id: 'iv-1', employee_name: 'Max', employee_role: null, process_step_id: 'cs-a', step: { ...CLUSTER_STEP_A, frequency: 3 } },
+        { interview_id: 'iv-2', employee_name: 'Anna', employee_role: null, process_step_id: 'cs-b', step: { ...CLUSTER_STEP_B, frequency: 3 } },
         { interview_id: 'iv-3', employee_name: 'Tom', employee_role: null, process_step_id: 'cs-c', step: stepC },
       ],
     })
@@ -522,8 +522,8 @@ describe('runHeuristicEngine — suppression logic', () => {
     const step: EngineProcessStep = {
       ...CLUSTER_STEP_A,
       id: 'cs-a',
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
     }
     const cluster = makeCluster({
@@ -544,8 +544,8 @@ describe('runHeuristicEngine — suppression logic', () => {
     const uncoveredStep: EngineProcessStep = {
       ...BASE_STEP,
       id: 'uncovered',
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
       error_rate_percent: 5,
     }
@@ -556,13 +556,13 @@ describe('runHeuristicEngine — suppression logic', () => {
 
   it('R-rules run normally when cluster has no C-rule (no qualifying condition)', () => {
     // Low frequency cluster — no C-rule fires → no suppression
-    const lowA = { ...CLUSTER_STEP_A, frequency_per_month: 2, error_rate_percent: 2 }
-    const lowB = { ...CLUSTER_STEP_B, frequency_per_month: 2, error_rate_percent: 2 }
+    const lowA = { ...CLUSTER_STEP_A, frequency: 2, error_rate_percent: 2 }
+    const lowB = { ...CLUSTER_STEP_B, frequency: 2, error_rate_percent: 2 }
     const clusterStep: EngineProcessStep = {
       ...BASE_STEP,
       id: 'cs-a',
-      frequency_per_month: 22,
-      duration_minutes: 60,
+      frequency: 22,
+      duration: 60,
       rule_based: true,
       error_rate_percent: 2,
     }

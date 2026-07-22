@@ -3,7 +3,7 @@ import type { StepEntry, PotenzialSlotName } from '@/services/interviewSemantic'
 
 /**
  * PROJ-40 (Refokus KI-Potenzial): Coverage der quantitativen Potenzial-Facetten
- * (frequency_per_month, duration_minutes, error_rate_percent, media_breaks) — die
+ * (frequency, duration, error_rate_percent, media_breaks) — die
  * eigentlichen ROI-/Automatisierbarkeits-Eingänge. slotCoverage zählt diese bewusst NICHT
  * (nur die taziten/strukturellen O1–O6-Felder), weshalb das alte Gate das KI-Potenzial-Signal
  * nicht maß. Diese Metrik schließt die Lücke.

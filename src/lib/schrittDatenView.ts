@@ -18,8 +18,8 @@ import {
 } from '@/services/interviewSemantic'
 
 export interface ProcessStepDisplayFields {
-  frequency_per_month: number | null
-  duration_minutes: number | null
+  frequency: number | null
+  duration: number | null
   data_sources: string[]
   rule_based: boolean
   error_rate_percent: number | null
@@ -41,8 +41,8 @@ export function deriveProcessStepDisplayFields(step: StepEntry | null): ProcessS
   const hilfsmittelValue = step?.slots.hilfsmittel?.value
   const dataSources = Array.isArray(hilfsmittelValue) ? hilfsmittelValue : []
   return {
-    frequency_per_month: resolveHaeufigkeitProMonat(step?.potenzial.frequency_per_month),
-    duration_minutes: resolveDauerMinuten(step?.potenzial.duration_minutes),
+    frequency: resolveHaeufigkeitProMonat(step?.potenzial.frequency),
+    duration: resolveDauerMinuten(step?.potenzial.duration),
     data_sources: dataSources,
     rule_based: deriveRuleBased(step?.slots.entscheidungslogik?.value),
     error_rate_percent: step?.potenzial.error_rate_percent?.value ?? null,
@@ -60,7 +60,7 @@ const EMPTY_STEP_ENTRY: StepEntry = {
   reihenfolge: 1,
   status: 'done',
   abhaengigkeiten: null,
-  potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+  potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
   slots: {
     entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null,
     hilfsmittel: null, reibungspunkte: null, ausloeser: null, aufgabentyp: null, risiko_schwere: null,
@@ -69,8 +69,8 @@ const EMPTY_STEP_ENTRY: StepEntry = {
 }
 
 export interface ManualCorrectionPatch {
-  frequency_per_month?: number | null
-  duration_minutes?: number | null
+  frequency?: number | null
+  duration?: number | null
   data_sources?: string[]
   rule_based?: boolean
   error_rate_percent?: number | null
@@ -88,7 +88,7 @@ export interface ManualCorrectionPatch {
 export function mergeManualCorrection(current: StepEntry | null, patch: ManualCorrectionPatch): StepEntry {
   const base = current ?? EMPTY_STEP_ENTRY
 
-  const numberSlot = (value: number, existing: StepEntry['potenzial']['frequency_per_month']) => ({
+  const numberSlot = (value: number, existing: StepEntry['potenzial']['frequency']) => ({
     value,
     quote: existing?.quote ?? '[manuelle Korrektur]',
     confidence: 'confirmed' as const,
@@ -99,12 +99,12 @@ export function mergeManualCorrection(current: StepEntry | null, patch: ManualCo
   return {
     ...base,
     potenzial: {
-      frequency_per_month: patch.frequency_per_month !== undefined
-        ? (patch.frequency_per_month == null ? null : numberSlot(patch.frequency_per_month, base.potenzial.frequency_per_month))
-        : base.potenzial.frequency_per_month,
-      duration_minutes: patch.duration_minutes !== undefined
-        ? (patch.duration_minutes == null ? null : numberSlot(patch.duration_minutes, base.potenzial.duration_minutes))
-        : base.potenzial.duration_minutes,
+      frequency: patch.frequency !== undefined
+        ? (patch.frequency == null ? null : numberSlot(patch.frequency, base.potenzial.frequency))
+        : base.potenzial.frequency,
+      duration: patch.duration !== undefined
+        ? (patch.duration == null ? null : numberSlot(patch.duration, base.potenzial.duration))
+        : base.potenzial.duration,
       error_rate_percent: patch.error_rate_percent !== undefined
         ? (patch.error_rate_percent == null ? null : numberSlot(patch.error_rate_percent, base.potenzial.error_rate_percent))
         : base.potenzial.error_rate_percent,

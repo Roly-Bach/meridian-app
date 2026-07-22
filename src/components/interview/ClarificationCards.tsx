@@ -7,8 +7,8 @@ import type { ClarificationCard } from '@/services/interviewTypes'
 // ─── Fixed options per slot type ─────────────────────────────────────────────
 
 const SLOT_OPTIONS: Record<string, string[]> = {
-  frequency_per_month: ['Täglich', 'Wöchentlich', 'Mehrfach/Monat', 'Monatlich', 'Weiß ich nicht'],
-  duration_minutes: ['< 5 Min', '5–15 Min', '15–30 Min', '> 30 Min', 'Weiß ich nicht'],
+  frequency: ['Täglich', 'Wöchentlich', 'Mehrfach/Monat', 'Monatlich', 'Weiß ich nicht'],
+  duration: ['< 5 Min', '5–15 Min', '15–30 Min', '> 30 Min', 'Weiß ich nicht'],
   entscheidungslogik: ['Immer gleich', 'Meistens gleich', 'Variiert stark', 'Weiß ich nicht'],
   error_rate_percent: ['Selten Fehler', 'Gelegentlich', 'Häufig', 'Weiß ich nicht'],
 }

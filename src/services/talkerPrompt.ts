@@ -86,8 +86,8 @@ Keine Ankündigung von Phasenwechseln: "Damit haben wir X sehr detailliert erfas
 // mehr, bleibt aber schreibbarer Slot). 4 neue Einträge für die AI-Wert-Faktoren.
 const SLOT_PROMPT_HINT: Record<OSlotField | PotenzialSlotName, string> = {
   // Potenzial (quantitativ, opportunistisch — kein Talker-Ziel)
-  frequency_per_month: 'wie oft pro Monat / Woche dieser Schritt vorkommt',
-  duration_minutes: 'wie lange eine einzelne Durchführung dieses Schritts dauert',
+  frequency: 'wie oft pro Monat / Woche dieser Schritt vorkommt',
+  duration: 'wie lange eine einzelne Durchführung dieses Schritts dauert',
   error_rate_percent: 'wie häufig Fehler oder Korrekturen auftreten',
   media_breaks: 'ob es Medienbrüche zwischen Systemen gibt',
   // O2–O6 (qualitativ — Ziel-O-Feld-Menge, PROJ-46/45)
@@ -144,8 +144,8 @@ function formatStepTracker(steps: StepEntry[]): string {
     }
 
     const potenzialLines = [
-      fmtPotenzial(step.potenzial.frequency_per_month, 'frequency_per_month'),
-      fmtPotenzial(step.potenzial.duration_minutes,    'duration_minutes   '),
+      fmtPotenzial(step.potenzial.frequency, 'frequency'),
+      fmtPotenzial(step.potenzial.duration,    'duration   '),
       fmtPotenzial(step.potenzial.error_rate_percent,  'error_rate_percent '),
       fmtPotenzial(step.potenzial.media_breaks,        'media_breaks       '),
     ]
@@ -203,9 +203,9 @@ Entdeckung: Gibt es einen weiteren wiederkehrenden Vorgang, der noch nicht regis
 Vertiefung (aktiver Schritt, Status exploring/walkthrough): Ablauf und Reibungspunkte erfassen — eine Frage pro Turn. Signalwörter ("zuerst", "dann", "danach", "als nächstes") → sofort record_slot mit teilschritte. Spontan genannte Werte (Häufigkeit, Dauer, Systeme, Reibungspunkte) → record_slot, keine direkten Slot-Fragen. Verbleibende Pflichtslots natürlich nachfragen — max. 2–3 pro Turn, kein Listenformat, keine Ankündigung. Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → kurze Bestätigung (max. 1–2 Versuche), dann weiter. confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen. abhaengigkeiten: record_dependency wenn ein Schritt einen anderen voraussetzt oder beeinflusst. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — nicht slot-relevant.
 Kontextregel: Beschreibt die Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt — andere Prozesse per register_step registrieren, Erkundung im nächsten Turn.
 
-Anker-Option (E3.3, PROJ-46): Wenn es gesprächslogisch passt, darf die Nachfrage ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns aufgreifen — ist aber nicht verpflichtet. Erfinde NIEMALS einen Anker, den es nicht gab. Verneinungen ("nutzen wir kein X", "passiert nie") sind kein Anker.
-Maieutik (E3.5): Keine inhaltlichen Vorschläge ("Was wäre, wenn du Tool X hättest?"), keine Leading-Questions ("Wäre das wie X?"). Frage offen.
-Ist-Fokus (E3.7): Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen. Bei spontaner To-be-Nennung: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?").`
+Anker-Option: Wenn es gesprächslogisch passt, darf die Nachfrage ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns aufgreifen — ist aber nicht verpflichtet. Erfinde NIEMALS einen Anker, den es nicht gab. Verneinungen ("nutzen wir kein X", "passiert nie") sind kein Anker.
+Maieutik: Keine inhaltlichen Vorschläge ("Was wäre, wenn du Tool X hättest?"), keine Leading-Questions ("Wäre das wie X?"). Frage offen.
+Ist-Fokus: Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen. Bei spontaner To-be-Nennung: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?").`
   }
 
   if (phase === 'clarification') {
@@ -252,7 +252,7 @@ Wiederholung einer früheren Frage.
 Neuer Prozess genannt → register_step aufrufen, explorieren.
 Keine neuen Inhalte über mehrere Turns → das System schließt automatisch ab, sobald genug Turns
 ohne neue Information vergangen sind — du musst das nicht ankündigen oder herbeiführen.
-Ist-Fokus (E3.7): Ziel sind noch nicht genannte Ist-Prozesse. Keine Verbesserungsideen oder
+Ist-Fokus: Ziel sind noch nicht genannte Ist-Prozesse. Keine Verbesserungsideen oder
 Zukunftswünsche anfragen. Bei spontaner To-be-Nennung: Ist-Problem dahinter erfassen.`
 }
 

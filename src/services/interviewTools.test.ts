@@ -21,8 +21,8 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
     abhaengigkeiten: null,
     status: 'exploring',
     potenzial: {
-      frequency_per_month: null,
-      duration_minutes: null,
+      frequency: null,
+      duration: null,
       error_rate_percent: null,
       media_breaks: null,
     },
@@ -68,7 +68,7 @@ describe('Tool Handlers', () => {
       expect(result.step_tracker).toHaveLength(1)
       expect(result.step_tracker[0].title).toBe('Rechnungseingang')
       expect(result.step_tracker[0].status).toBe('exploring')
-      expect(result.step_tracker[0].potenzial.frequency_per_month).toBeNull()
+      expect(result.step_tracker[0].potenzial.frequency).toBeNull()
       // staged into the live snapshot
       expect(session.snapshot().stepTracker).toHaveLength(1)
     })
@@ -148,17 +148,32 @@ describe('Tool Handlers', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'frequency_per_month',
+        slot: 'frequency',
         value: 20,
+        einheit: 'pro_monat',
         evidence_quote: 'etwa 20 mal im Monat',
       })
 
       expect(result.success).toBe(true)
-      expect(result.slot).toBe('frequency_per_month')
+      expect(result.slot).toBe('frequency')
       expect(result.value).toBe(20)
       // PROJ-38: stored as a slot OBJECT (value lives at .value), not a stringified blob
-      const slot = session.snapshot().stepTracker[0].potenzial.frequency_per_month
+      const slot = session.snapshot().stepTracker[0].potenzial.frequency
       expect(slot).toMatchObject({ value: 20 })
+    })
+
+    it('rejects frequency/duration value without einheit (H-1 remediation)', async () => {
+      const { tools } = await setup([makeStep({ title: 'Rechnungseingang' })])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (tools.record_slot as any).execute({
+        step_title: 'Rechnungseingang',
+        slot: 'frequency',
+        value: 20,
+        evidence_quote: 'etwa 20 mal im Monat',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('einheit')
     })
 
     it('rejects short evidence_quote (Grounding Guard)', async () => {
@@ -166,7 +181,7 @@ describe('Tool Handlers', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'frequency_per_month',
+        slot: 'frequency',
         value: 20,
         evidence_quote: 'ab',
       })
@@ -180,8 +195,8 @@ describe('Tool Handlers', () => {
         makeStep({
           title: 'Rechnungseingang',
           potenzial: {
-            frequency_per_month: { value: 20, quote: 'etwa 20 mal', nicht_befund_typ: null },
-            duration_minutes: { value: 15, quote: '15 Minuten', nicht_befund_typ: null },
+            frequency: { value: 20, quote: 'etwa 20 mal', nicht_befund_typ: null },
+            duration: { value: 15, quote: '15 Minuten', nicht_befund_typ: null },
             error_rate_percent: { value: 5, quote: 'ca. 5%', nicht_befund_typ: null },
             media_breaks: { value: 2, quote: '2 Brüche', nicht_befund_typ: null },
           },
@@ -218,8 +233,9 @@ describe('Tool Handlers', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'frequency_per_month',
+        slot: 'frequency',
         value: 20,
+        einheit: 'pro_monat',
         evidence_quote: 'etwa 20 mal im Monat',
       })
 
@@ -252,12 +268,12 @@ describe('Tool Handlers', () => {
       expect(result.error).toContain('ganze Zahl')
     })
 
-    it('rejects string value for frequency_per_month (must be number)', async () => {
+    it('rejects string value for frequency (must be number)', async () => {
       const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.record_slot as any).execute({
         step_title: 'Rechnungseingang',
-        slot: 'frequency_per_month',
+        slot: 'frequency',
         value: 'monatlich',
         evidence_quote: 'das mache ich monatlich',
       })

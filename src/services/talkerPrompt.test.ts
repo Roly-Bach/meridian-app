@@ -96,8 +96,8 @@ describe('talkerPrompt — WP1 farewell dynamic-block short-circuit', () => {
             status: 'done',
             reihenfolge: 1,
             potenzial: {
-              frequency_per_month: { value: 100, confidence: 'confirmed', qualifier: null, source_turn: 1 },
-              duration_minutes: { value: 5, confidence: 'confirmed', qualifier: null, source_turn: 1 },
+              frequency: { value: 100, confidence: 'confirmed', qualifier: null, source_turn: 1 },
+              duration: { value: 5, confidence: 'confirmed', qualifier: null, source_turn: 1 },
               error_rate_percent: null,
               media_breaks: null,
             },
@@ -163,8 +163,8 @@ describe('talkerPrompt — WP2 duplicate "Bereits erfasste Werte" removed', () =
             status: 'walkthrough',
             reihenfolge: 1,
             potenzial: {
-              frequency_per_month: { value: 100, confidence: 'confirmed', qualifier: null, source_turn: 1 },
-              duration_minutes: null,
+              frequency: { value: 100, confidence: 'confirmed', qualifier: null, source_turn: 1 },
+              duration: null,
               error_rate_percent: null,
               media_breaks: null,
             },
@@ -189,7 +189,7 @@ describe('talkerPrompt — WP2 duplicate "Bereits erfasste Werte" removed', () =
     )
     expect(ctx).not.toMatch(/Bereits erfasste Werte/)
     // ✓ mark for the filled slot still comes through via the step tracker itself.
-    expect(ctx).toMatch(/frequency_per_month.*✓ erfasst/)
+    expect(ctx).toMatch(/frequency.*✓ erfasst/)
   })
 
   it('STATIC_PROMPT no_repeat rule no longer references "Bereits erfasst" as a separate source', () => {
@@ -216,8 +216,8 @@ function doneStep(overrides: Record<string, unknown> = {}) {
     status: 'done',
     reihenfolge: 1,
     potenzial: {
-      frequency_per_month: { value: 100, confidence: 'confirmed', qualifier: null, source_turn: 1 },
-      duration_minutes: { value: 5, confidence: 'confirmed', qualifier: null, source_turn: 1 },
+      frequency: { value: 100, confidence: 'confirmed', qualifier: null, source_turn: 1 },
+      duration: { value: 5, confidence: 'confirmed', qualifier: null, source_turn: 1 },
       error_rate_percent: { value: 2, confidence: 'confirmed', qualifier: null, source_turn: 1 },
       media_breaks: { value: 1, confidence: 'confirmed', qualifier: null, source_turn: 1 },
     },
@@ -248,7 +248,7 @@ describe('talkerPrompt — WP3 done-step compact rendering', () => {
       }),
     )
     expect(ctx).toMatch(/\[done\] S001 "Rechnungsprüfung" \(Schritt 1\) — alle Pflichtslots erfasst/)
-    expect(ctx).not.toMatch(/frequency_per_month\s*: ✓ erfasst/)
+    expect(ctx).not.toMatch(/frequency\s*: ✓ erfasst/)
     // tazite_cues/ausnahmen aren't mentioned by any phase methodology text, so their
     // absence here unambiguously confirms the per-slot checklist was dropped.
     expect(ctx).not.toMatch(/tazite_cues/)
@@ -267,7 +267,7 @@ describe('talkerPrompt — WP3 done-step compact rendering', () => {
         stepTracker: [doneStep({ status: 'walkthrough' })] as any,
       }),
     )
-    expect(ctx).toMatch(/frequency_per_month: ✓ erfasst/)
+    expect(ctx).toMatch(/frequency: ✓ erfasst/)
     // governance no longer exists (PROJ-45) — entscheidungslogik is still part of
     // the full checklist for a non-done step, confirming the checklist wasn't
     // over-truncated.
@@ -319,7 +319,7 @@ function trackerStep(overrides: Record<string, unknown> = {}) {
     title: 'Rechnungsprüfung',
     status: 'walkthrough',
     reihenfolge: 1,
-    potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
+    potenzial: { frequency: null, duration: null, error_rate_percent: null, media_breaks: null },
     slots: { entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null },
     governance: null,
     abhaengigkeiten: null,

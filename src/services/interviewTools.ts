@@ -238,8 +238,8 @@ export function buildTools(
             reihenfolge: stepNum,
             abhaengigkeiten: null,
             potenzial: {
-              frequency_per_month: null,
-              duration_minutes: null,
+              frequency: null,
+              duration: null,
               error_rate_percent: null,
               media_breaks: null,
             },
@@ -279,13 +279,13 @@ export function buildTools(
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency_per_month, duration_minutes, error_rate_percent, media_breaks), qualitative O-Felder (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, reibungspunkte, ausloeser, aufgabentyp, risiko_schwere) und die Analyst-Klassifikationsfelder (standardisierungsgrad, informationsdichte — aus bereits erhobenen Antworten abgeleitet, keine eigene Frage) sowie teilschritte (additive Ablauf-Liste). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert. Nicht-Befund (PROJ-28): Für potenzial-Slots kann statt value ein nicht_befund_typ gesetzt werden wenn der Mitarbeiter keine Angabe machen konnte.',
+      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency, duration, error_rate_percent, media_breaks), qualitative O-Felder (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, reibungspunkte, ausloeser, aufgabentyp, risiko_schwere) und die Analyst-Klassifikationsfelder (standardisierungsgrad, informationsdichte — aus bereits erhobenen Antworten abgeleitet, keine eigene Frage) sowie teilschritte (additive Ablauf-Liste). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert. Nicht-Befund (PROJ-28): Für potenzial-Slots kann statt value ein nicht_befund_typ gesetzt werden wenn der Mitarbeiter keine Angabe machen konnte.',
       inputSchema: z.object({
         step_id: z.string().regex(/^S[0-9]{3}$/).optional().describe('Stabiler Schritt-ID (z.B. S001). Bevorzugt gegenüber step_title. Aus register_step-Antwort.'),
         step_title: z.string().min(1),
         slot: z.enum([
           // Potenzial (quantitativ)
-          'frequency_per_month', 'duration_minutes', 'error_rate_percent', 'media_breaks',
+          'frequency', 'duration', 'error_rate_percent', 'media_breaks',
           // Qualitative O-Felder (Freitext, einzeln)
           'entscheidungslogik', 'ausloeser',
           // Qualitative O-Felder (Freitext, Mehrwert)
@@ -299,7 +299,7 @@ export function buildTools(
         ]),
         value: z.union([z.string(), z.number(), z.array(z.string())]).optional().describe('String für Einzel-Slots (entscheidungslogik, ausloeser, standardisierungsgrad, informationsdichte), String-Array für Mehrwert-/Enum-/Ablauf-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel/reibungspunkte/aufgabentyp/risiko_schwere/teilschritte), Zahl für potenzial-Slots. Optional wenn nicht_befund_typ gesetzt.'),
         nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Nur für potenzial-Slots: Setze wenn Mitarbeiter keine belegbare Angabe machen konnte. unbekannt=weiß nicht, verweigert=Auskunft abgelehnt, nicht_zutreffend=nicht anwendbar. Nicht setzen wenn value vorhanden.'),
-        einheit: z.string().optional().describe('Nur für frequency_per_month/duration_minutes: die vom Mitarbeiter genannte Einheit — z.B. "pro_tag"/"pro_woche"/"pro_quartal"/"pro_jahr" (Häufigkeit, Default pro_monat) oder "stunden"/"tage" (Dauer, Default minuten). Speichere den Wert in der genannten Einheit — rechne NIEMALS selbst um, die Umrechnung passiert deterministisch im Code.'),
+        einheit: z.string().optional().describe('PFLICHT bei frequency/duration sobald value gesetzt ist: die vom Mitarbeiter genannte Einheit — z.B. "pro_tag"/"pro_woche"/"pro_monat"/"pro_quartal"/"pro_jahr" (Häufigkeit) oder "minuten"/"stunden"/"tage" (Dauer). Speichere den Wert in der genannten Einheit — rechne NIEMALS selbst um, die Umrechnung passiert deterministisch im Code.'),
         evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus dem aktuellen Mitarbeiter-Turn. System extrahiert den umgebenden Satz als Beleg.'),
         evidence_quote: z.string().min(3).optional().describe('Fallback wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up). Pflicht: source_turn setzen.'),
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
@@ -359,7 +359,7 @@ export function buildTools(
         const isNichtBefundMode = resolvedNichtBefundTyp !== undefined && resolvedValue === undefined
         if (isNichtBefundMode) {
           if (!isPotenzial) {
-            return { success: false, error: `nicht_befund_typ ist nur für potenzial-Slots gültig (frequency_per_month, duration_minutes, error_rate_percent, media_breaks). Für alle anderen Slots: Slot leer lassen.` }
+            return { success: false, error: `nicht_befund_typ ist nur für potenzial-Slots gültig (frequency, duration, error_rate_percent, media_breaks). Für alle anderen Slots: Slot leer lassen.` }
           }
           // Falls through to step lookup + write below with isNichtBefundMode=true
         } else {
@@ -371,8 +371,11 @@ export function buildTools(
             if (slot === 'media_breaks' && typeof value !== 'number') {
               return { success: false, error: `media_breaks erwartet eine ganze Zahl (Anzahl Medienbrüche pro Durchlauf, z.B. 0, 1, 2), nicht "${value}".` }
             }
-            if ((slot === 'frequency_per_month' || slot === 'duration_minutes' || slot === 'error_rate_percent') && typeof value !== 'number') {
+            if ((slot === 'frequency' || slot === 'duration' || slot === 'error_rate_percent') && typeof value !== 'number') {
               return { success: false, error: `${slot} erwartet eine Zahl, nicht "${value}". Extrahiere den numerischen Mittelwert.` }
+            }
+            if ((slot === 'frequency' || slot === 'duration') && (!einheit || !einheit.trim())) {
+              return { success: false, error: `${slot} erfordert immer eine explizite einheit (z.B. "pro_tag"/"pro_woche"/"pro_monat" bei frequency; "minuten"/"stunden"/"tage" bei duration) — gib die vom Mitarbeiter genannte Einheit an, rechne nicht selbst um.` }
             }
           } else if (isTeilschritte) {
             if (!Array.isArray(value) || (value as string[]).length === 0) {

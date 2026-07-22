@@ -142,12 +142,12 @@
       "governance": null,
       "abhaengigkeiten": null,
       "potenzial": {
-        "frequency_per_month": {
+        "frequency": {
           "value": 1,
           "quote": "zwölf Durchgänge im Kalenderjahr",
           "confidence": "confirmed"
         },
-        "duration_minutes": {
+        "duration": {
           "value": 1440,
           "quote": "24 Arbeitsstunden für einen Abschluss",
           "confidence": "confirmed"
@@ -187,12 +187,12 @@
       "governance": null,
       "abhaengigkeiten": null,
       "potenzial": {
-        "frequency_per_month": {
+        "frequency": {
           "value": 100,
           "quote": "100 Rechnungen pro Monat",
           "confidence": "confirmed"
         },
-        "duration_minutes": {
+        "duration": {
           "value": 5,
           "quote": "innerhalb von etwa fünf Minuten vollständig erfassen und archivieren",
           "confidence": "confirmed"

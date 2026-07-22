@@ -414,8 +414,8 @@ function ClusterDetailSheet({ groupSteps }: ClusterDetailSheetProps) {
 
 function MetrikenSection({ step }: { step: ProcessStep }) {
   const metrics = [
-    step.frequency_per_month != null && { label: '📅 Häufigkeit', value: `${step.frequency_per_month}×/Mo` },
-    step.duration_minutes != null && { label: '⏱ Dauer', value: `${step.duration_minutes} Min` },
+    step.frequency != null && { label: '📅 Häufigkeit', value: `${step.frequency}×/Mo` },
+    step.duration != null && { label: '⏱ Dauer', value: `${step.duration} Min` },
     step.error_rate_percent != null && { label: '⚠ Fehlerrate', value: `${step.error_rate_percent}%` },
     step.media_breaks != null && step.media_breaks > 0 && { label: '🔗 Medienbrüche', value: `${step.media_breaks}` },
   ].filter(Boolean) as { label: string; value: string }[]
@@ -523,11 +523,11 @@ function MitarbeiterCard({ step }: { step: ProcessStep }) {
       )}
 
       <div className="flex items-center gap-3 flex-wrap">
-        {step.duration_minutes != null && (
-          <span className="text-[11px] text-[#6B7280]">⏱ {step.duration_minutes} Min</span>
+        {step.duration != null && (
+          <span className="text-[11px] text-[#6B7280]">⏱ {step.duration} Min</span>
         )}
-        {step.frequency_per_month != null && (
-          <span className="text-[11px] text-[#6B7280]">📅 {step.frequency_per_month}×/Mo</span>
+        {step.frequency != null && (
+          <span className="text-[11px] text-[#6B7280]">📅 {step.frequency}×/Mo</span>
         )}
         {step.data_sources.length > 0 && (
           <div className="flex gap-1 flex-wrap">
@@ -539,7 +539,7 @@ function MitarbeiterCard({ step }: { step: ProcessStep }) {
       </div>
 
       {displayQuote && (
-        <div className={`border-t border-[#E5E5E5] pt-2 ${step.duration_minutes != null || step.frequency_per_month != null || step.data_sources.length > 0 ? 'mt-2' : ''}`}>
+        <div className={`border-t border-[#E5E5E5] pt-2 ${step.duration != null || step.frequency != null || step.data_sources.length > 0 ? 'mt-2' : ''}`}>
           <p className="text-[11px] text-[#6B7280] italic leading-relaxed">&ldquo;{displayQuote}&rdquo;</p>
           {isLong && (
             <button
