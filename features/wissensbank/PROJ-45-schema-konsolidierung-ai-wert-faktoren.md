@@ -1,6 +1,6 @@
 # PROJ-45: Schema-Konsolidierung + AI-Wert-Faktoren
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Wissensbank
 **Extends:** PROJ-25
@@ -525,16 +525,31 @@ Keine neue Angriffsfläche. Die Remediation berührte Prompt-Text/Schema/Rename,
 **Bugs: 0 High : 1 Medium : 0 Low** (M-1 → PROJ-43).
 
 ## Deployment
-_To be added by /deploy_
+
+> `/deploy` 2026-07-22 (Opus 4.8). Deploy via GitHub-Auto-Deploy (Push `main` → Vercel Prod).
+
+**Deployed:** 2026-07-22 · **Production URL:** https://meridian-app-tau.vercel.app · **Commit:** `46d5471` (enthält H-1-Fix `3595494` + PROJ-45-Backend `fc63fd7`) · **Vercel Deployment:** `dpl_9cYYpdMzbbuKLPurHcz8pt2nFHar` (state READY, target production)
+
+| Gate | Ergebnis |
+|------|----------|
+| G1 Static | **pass** — `npm run build` grün, `tsc --noEmit` exit 0, Security-Header vorhanden (X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, HSTS; CSP via proxy.ts/PROJ-15) |
+| G2 Tests | **pass** (in-scope) — 808/808 Unit/Integration; 16/16 Chromium-E2E (PROJ-11 PDF + PROJ-6 Use-Case-Board = die `schritt_daten`-Lesepfade). Mobile-Safari-E2E nicht ausgeführt (fehlendes WebKit-Binary; Mobile ist PRD-Non-Goal, kein PROJ-45-Regress) |
+| G3 Sandbox | **n/a** — Vercel CLI nicht installiert; Deploy via GitHub-Auto-Deploy. Kompensiert durch lokalen Prod-Build (G1). Post-Deploy-Smoke gegen Prod: `/login` 200, `/dashboard` 307-Redirect (unauth), `/api/process-steps` 401 (Auth-Guard) |
+| G4 Permissions | **pass** — `process_steps` RLS aktiv (1 Policy), Migration RLS-erhaltend, Ownership-Guard auf `process-steps/[id]` PATCH verifiziert (QA), keine neue Route/Tabelle/LLM-Endpoint. 1 vorbestehender Auth-WARN (leaked-password-protection), PROJ-45-unabhängig, optionale Härtung |
+
+**Migrations-/Deploy-Reihenfolge:** die DB-Migration (`schritt_daten jsonb`, 10 Flach-Spalten gelöscht) war bereits vor diesem Deploy auf der Prod-Supabase aktiv (angewendet beim `/backend`). Dieser Deploy bringt den Prod-Code mit der DB in Deckung und behebt die zwischenzeitliche Code/DB-Inkonsistenz.
+
+**Git-Tag:** `v1.45.0-PROJ-45`.
 
 ## Post-Mortem
-_To be added by /deploy_
+
+> Vorschlag aus der `/deploy`-Session, vom Nutzer zu bestätigen/korrigieren.
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: XL / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | High — Umsetzung folgte ADR-025 D1–D7; die einzige bewusste Abweichung (ein generischer `SchemaSlotBase<T>` statt zusätzlichem Deutsch-Rename) ist dokumentiert und AC-erfüllend |
+| Appetite vs. tatsächlich | geschätzt: XL / tatsächlich: XL (Backend + 2 QA-Runden + H-1-Remediation + Deploy) |
+| Größte Überraschung | H-1: der Feldname `frequency_per_month` trieb die LLM-Selbstumrechnung selbst. Fix war Umbenennen (`frequency`/`duration`) + Pflicht-`einheit` mit Hard-Reject, nicht ein weiteres Prompt-Verbot gegen den eigenen Feldnamen |
+| Vorgeschlagene Regeländerung | Bei AC, die ein LLM-Verhalten verbieten („niemals X"): prüfen, ob eine strukturelle Erzwingung (Schema/Feldname/Hard-Reject) statt eines reinen Prompt-Verbots möglich ist. Prompt-Verbote gegen den eigenen Feldnamen scheitern (H-1). → Kandidat für `/retro` |
+| Build-Loop-Iterationen | — (kein `/build`-Loop; manuelles `/backend` + zwei `/qa`-Runden) |
+| Häufigste Fehlerkategorie im Loop | Spec-Lücke — die Headline-AC „Umrechnung nie durch das LLM" hatte keine strukturelle Erzwingung, erst in QA (H-1) gefangen und in der Remediation strukturell geschlossen |
