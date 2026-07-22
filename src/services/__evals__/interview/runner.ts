@@ -472,7 +472,6 @@ function buildReport(opts: {
     `  dialog_naturalness: ${scores.dialogNaturalness}`,
     `  completion_correctness: ${scores.completionCorrectness}`,
     `  step_registration_coverage: ${scores.stepRegistrationCoverage}`,
-    `  schema_conformance_rate: ${scores.schemaConformanceRate}`,
     `  hallucination_rate: ${scores.hallucinationRate}`,
     `  confidence_trigger_rate: ${scores.confidenceTriggerRate ?? 'n/a (keine unknown-Slots)'}`,
     `  talker_grounding_violations: ${scores.talkerGroundingViolations}`,
@@ -514,7 +513,6 @@ function buildReport(opts: {
     `| dialog_naturalness | ${scores.dialogNaturalness} | maximize |`,
     `| completion_correctness | ${scores.completionCorrectness} | true |`,
     `| step_registration_coverage | ${scores.stepRegistrationCoverage} | 1.0 |`,
-    `| schema_conformance_rate | ${scores.schemaConformanceRate} | 1.0 |`,
     `| hallucination_rate | ${scores.hallucinationRate} | < 0.01 |`,
     `| confidence_trigger_rate | ${scores.confidenceTriggerRate ?? 'n/a (keine unknown-Slots)'} | > 0.80 |`,
     `| talker_grounding_violations | ${scores.talkerGroundingViolations} | 0 |`,
@@ -574,9 +572,9 @@ function buildSlotTable(stepTracker: StepEntry[]): string {
   ]
 
   const rows = stepTracker.map(step => {
-    const fp = (s: import('@/services/interviewSemantic').SlotValue | null) =>
+    const fp = (s: import('@/services/interviewSemantic').SchemaSlotNumber | null) =>
       s ? `${String(s.value).slice(0, 20)} ✓` : 'null'
-    const ft = (s: import('@/services/interviewSemantic').TaziteSlot | import('@/services/interviewSemantic').TaziteSlotArray | null) =>
+    const ft = (s: import('@/services/interviewSemantic').SchemaSlotString | import('@/services/interviewSemantic').SchemaSlotStringArray | null) =>
       s?.value != null ? `${String(s.value).slice(0, 20)} ✓` : s?.nicht_befund_typ ? `[${s.nicht_befund_typ}]` : 'null'
     return `| ${step.title} | ${step.status} | ${fp(step.potenzial.frequency_per_month)} | ${fp(step.potenzial.duration_minutes)} | ${ft(step.slots.entscheidungslogik)} | ${ft(step.slots.hilfsmittel)} | ${fp(step.potenzial.error_rate_percent)} | ${fp(step.potenzial.media_breaks)} |`
   })
@@ -685,7 +683,6 @@ async function writeLangfuseScores(
     { name: 'dialog_naturalness', value: scores.dialogNaturalness, dataType: 'NUMERIC' },
     { name: 'completion_correctness', value: scores.completionCorrectness ? 1 : 0, dataType: 'BOOLEAN' },
     { name: 'step_registration_coverage', value: scores.stepRegistrationCoverage, dataType: 'NUMERIC' },
-    { name: 'schema_conformance_rate', value: scores.schemaConformanceRate, dataType: 'NUMERIC' },
     { name: 'hallucination_rate', value: scores.hallucinationRate, dataType: 'NUMERIC' },
     { name: 'talker_grounding_violations', value: scores.talkerGroundingViolations, dataType: 'NUMERIC' },
   ]
@@ -1038,7 +1035,7 @@ function writeAggregateReport(opts: {
     'slotsPerTurn', 'turnsToCompletion',
     'phaseAdherence', 'phaseProgression', 'anchoringViolations', 'anchoringViolationRate',
     'toolCallPlausibility', 'dialogNaturalness', 'stepRegistrationCoverage',
-    'schemaConformanceRate', 'hallucinationRate',
+    'hallucinationRate',
     'talkerGroundingViolations',
   ]
 

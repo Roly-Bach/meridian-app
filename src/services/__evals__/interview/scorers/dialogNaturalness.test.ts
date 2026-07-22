@@ -10,8 +10,6 @@ import { generateObject } from 'ai'
 import { parseJudgeResponse, scoreDialogNaturalness } from './dialogNaturalness'
 import type { TurnRecord } from './types'
 
-const hasApiKey = !!(process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.ANTHROPIC_API_KEY)
-
 // generateObject-Mock-Helfer: Hauptpfad (isolatedCriteria=false) nutzt structured output (PROJ-40 D).
 const asDialogObj = (stufe: number, begruendung = 'ok') =>
   ({ object: { stufe, begruendung }, usage: { inputTokens: 0, outputTokens: 0 } } as unknown as Awaited<ReturnType<typeof generateObject>>)
@@ -152,45 +150,6 @@ describe('parseJudgeResponse — Positions-Swap-Invarianz', () => {
     // Verify that both transcripts are genuinely different
     expect(transcript1[0]).not.toBe(transcript2[0])
   })
-})
-
-// ─── Positions-Swap Integration-Test (key-gated, EVAL-J-02) ──────────────────
-//
-// Testet echte Judge-Swap-Invarianz (BL-E5.2): Bei umgekehrter Turn-Reihenfolge
-// darf der gemappte Score-Delta nicht > 0.34 betragen (= Stufen-Differenz ≤ 1).
-// ≥ 80 % der Test-Cases müssen die Schwelle einhalten.
-//
-// Dieser Test läuft nur wenn GOOGLE_GENERATIVE_AI_API_KEY oder ANTHROPIC_API_KEY
-// gesetzt ist. Im regulären CI-Lauf (kein API-Key) wird er übersprungen.
-// Für echte Judge-Invarianz ohne vi.mock: direkt per tsx ausführen.
-
-describe('scoreDialogNaturalness — Positions-Swap Integration (key-gated)', () => {
-  it.skipIf(!hasApiKey)(
-    'Positions-Swap: gemappter Score-Delta ≤ 0.34 (Stufen-Differenz ≤ 1, EVAL-J-02)',
-    async () => {
-      const mockGenerateObject = vi.mocked(generateObject)
-
-      const sampleTurns: TurnRecord[] = [
-        { turnNumber: 1, userInput: 'Ich bearbeite täglich Eingangsrechnungen.', agentText: 'Hallo Andreas. Schön, dass wir sprechen.', phase: 'intro', toolCalls: [] },
-        { turnNumber: 2, userInput: 'Etwa 100 Rechnungen pro Monat, ca. 5 Minuten pro Standardfall.', agentText: 'Wie viele Rechnungen bearbeitest du pro Monat?', phase: 'intro', toolCalls: [] },
-        { turnNumber: 3, userInput: 'Der Monatsabschluss dauert drei Tage.', agentText: 'Danke, das ist präzise.', phase: 'intro', toolCalls: [] },
-      ]
-      const reversedTurns: TurnRecord[] = [...sampleTurns]
-        .reverse()
-        .map((t, i) => ({ ...t, turnNumber: i + 1 }))
-
-      // Simulate judge returning Stufe 2 for both orderings (invariant case)
-      mockGenerateObject
-        .mockResolvedValueOnce(asDialogObj(2, 'Überwiegend natürliche Sprache, vereinzelte Mängel.'))
-        .mockResolvedValueOnce(asDialogObj(2, 'Angemessene Sprachqualität, konsistente Du-Form.'))
-
-      const result1 = await scoreDialogNaturalness(sampleTurns, 'google/gemini-3.1-flash-lite', false)
-      const result2 = await scoreDialogNaturalness(reversedTurns, 'google/gemini-3.1-flash-lite', false)
-
-      // EVAL-J-02: Positions-Swap-Invarianz — mapped delta ≤ 0.34 (Stufen-Differenz ≤ 1)
-      expect(Math.abs(result1.score - result2.score)).toBeLessThanOrEqual(0.34)
-    },
-  )
 })
 
 // ─── Prompt-Content-Tests: Sample-Auswahl (2026-06-24 audit) ────────────────────

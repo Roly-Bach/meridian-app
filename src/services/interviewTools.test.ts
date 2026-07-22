@@ -18,7 +18,6 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
   return {
     title: 'Rechnungseingang buchen',
     reihenfolge: 1,
-    governance: null,
     abhaengigkeiten: null,
     status: 'exploring',
     potenzial: {
@@ -34,11 +33,14 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
       inputs: null,
       outputs: null,
       hilfsmittel: null,
+      reibungspunkte: null,
+      ausloeser: null,
+      aufgabentyp: null,
+      risiko_schwere: null,
+      standardisierungsgrad: null,
+      informationsdichte: null,
     },
-    process_steps: [],
-    friction_points: [],
-    friction_tools: [],
-    pain_point_primary: null,
+    teilschritte: [],
     ...overrides,
   }
 }
@@ -71,16 +73,17 @@ describe('Tool Handlers', () => {
       expect(session.snapshot().stepTracker).toHaveLength(1)
     })
 
-    it('initializes walkthrough fields as empty arrays and null', async () => {
+    it('initializes teilschritte as an empty array', async () => {
+      // PROJ-45: friction_points/friction_tools/pain_point_primary/process_steps were
+      // removed from StepEntry entirely (governance object + legacy walkthrough
+      // side-channels) — process_steps was renamed to teilschritte, the only one of
+      // these still initialized by register_step.
       const { tools } = await setup([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (tools.register_step as any).execute({ title: 'Rechnungseingang' })
 
       expect(result.success).toBe(true)
-      expect(result.step_tracker[0].process_steps).toEqual([])
-      expect(result.step_tracker[0].friction_points).toEqual([])
-      expect(result.step_tracker[0].friction_tools).toEqual([])
-      expect(result.step_tracker[0].pain_point_primary).toBeNull()
+      expect(result.step_tracker[0].teilschritte).toEqual([])
     })
 
     it('deduplicates case-insensitively and returns deduplicated flag', async () => {
@@ -172,15 +175,15 @@ describe('Tool Handlers', () => {
       expect(result.error).toContain('evidence_quote')
     })
 
-    it('auto-sets status to done when all 10 mandatory slots are filled', async () => {
+    it('auto-sets status to done when all mandatory potenzial + O-slots are filled (PROJ-45: TAZITE_SLOT_NAMES grew 6→12)', async () => {
       const tracker = [
         makeStep({
           title: 'Rechnungseingang',
           potenzial: {
-            frequency_per_month: { value: 20, quote: 'etwa 20 mal' },
-            duration_minutes: { value: 15, quote: '15 Minuten' },
-            error_rate_percent: { value: 5, quote: 'ca. 5%' },
-            media_breaks: { value: 2, quote: '2 Brüche' },
+            frequency_per_month: { value: 20, quote: 'etwa 20 mal', nicht_befund_typ: null },
+            duration_minutes: { value: 15, quote: '15 Minuten', nicht_befund_typ: null },
+            error_rate_percent: { value: 5, quote: 'ca. 5%', nicht_befund_typ: null },
+            media_breaks: { value: 2, quote: '2 Brüche', nicht_befund_typ: null },
           },
           slots: {
             entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
@@ -189,6 +192,12 @@ describe('Tool Handlers', () => {
             inputs: { value: ['Rechnung'], quote: 'Rechnung', nicht_befund_typ: null },
             outputs: { value: ['Buchung'], quote: 'Buchung', nicht_befund_typ: null },
             hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
+            reibungspunkte: { value: ['Doppelerfassung'], quote: 'Doppelerfassung', nicht_befund_typ: null },
+            ausloeser: { value: 'Rechnungseingang per E-Mail', quote: 'kommt per E-Mail', nicht_befund_typ: null },
+            aufgabentyp: { value: ['entscheidung'], quote: 'ich entscheide', nicht_befund_typ: null },
+            risiko_schwere: { value: ['leicht_korrigierbar'], quote: 'leicht korrigierbar', nicht_befund_typ: null },
+            standardisierungsgrad: { value: 'standardisiert', quote: 'immer gleich', nicht_befund_typ: null },
+            informationsdichte: { value: 'strukturiert', quote: 'strukturiert', nicht_befund_typ: null },
           },
         }),
       ]
@@ -270,46 +279,10 @@ describe('Tool Handlers', () => {
     })
   })
 
-  // ── update_walkthrough_data ─────────────────────────────────────────────────
-
-  describe('update_walkthrough_data', () => {
-    it('replaces process_steps on a second call (no additive duplication)', async () => {
-      const tracker = [
-        makeStep({ title: 'Rechnungseingang', process_steps: ['Rechnung öffnen', 'Datum prüfen'] }),
-      ]
-      const { tools, session } = await setup(tracker)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.update_walkthrough_data as any).execute({
-        step_title: 'Rechnungseingang',
-        process_steps: ['Betrag kontrollieren'],
-      })
-
-      expect(result.success).toBe(true)
-      expect(session.snapshot().stepTracker[0].process_steps).toEqual(['Betrag kontrollieren'])
-    })
-
-    it('returns success false when step is not found', async () => {
-      const { tools } = await setup([])
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (tools.update_walkthrough_data as any).execute({
-        step_title: 'Nicht vorhanden',
-        process_steps: ['Irgendwas'],
-      })
-
-      expect(result.success).toBe(false)
-    })
-
-    it("transitions status from 'exploring' to 'walkthrough' on first call", async () => {
-      const { tools, session } = await setup([makeStep({ title: 'Rechnungseingang', status: 'exploring' })])
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (tools.update_walkthrough_data as any).execute({
-        step_title: 'Rechnungseingang',
-        friction_points: ['Langer Genehmigungsprozess'],
-      })
-
-      expect(session.snapshot().stepTracker[0].status).toBe('walkthrough')
-    })
-  })
+  // update_walkthrough_data was removed by PROJ-45 — its functionality (teilschritte,
+  // formerly process_steps) was absorbed into record_slot as just another slot name,
+  // written the same way as any other array slot. See record_slot's 'teilschritte'
+  // tests above/elsewhere for the replacement coverage.
 
   // ── link_bottleneck ─────────────────────────────────────────────────────────
 

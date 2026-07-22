@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { generateUseCaseInsights, type InsightsContext } from '@/services/useCaseInsights'
 import { checkUserLimitInsights } from '@/lib/ratelimit'
+import { deriveProcessStepDisplayFieldsFromRaw } from '@/lib/schrittDatenView'
 
 // POST /api/use-cases/[id]/insights
 // Cache-first: returns cached llm_insights if already set; otherwise generates + caches.
@@ -62,13 +63,20 @@ export async function POST(
   if (useCase.process_step_id) {
     const { data: step } = await admin
       .from('process_steps')
-      .select('title, description, source_quote, frequency_per_month, duration_minutes, error_rate_percent, rule_based, interview_id')
+      .select('title, description, source_quote, schritt_daten, interview_id')
       .eq('id', useCase.process_step_id)
       .single()
 
     if (step) {
-      const { interview_id, ...stepData } = step
-      ctx.processStep = stepData
+      const { interview_id, schritt_daten, ...stepData } = step
+      const display = deriveProcessStepDisplayFieldsFromRaw(schritt_daten)
+      ctx.processStep = {
+        ...stepData,
+        frequency_per_month: display.frequency_per_month,
+        duration_minutes: display.duration_minutes,
+        error_rate_percent: display.error_rate_percent,
+        rule_based: display.rule_based,
+      }
 
       if (interview_id) {
         const { data: iv } = await admin

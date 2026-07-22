@@ -1,4 +1,4 @@
-import { type Phase, type StepEntry, type OSlotField, countFilledOFields, O_SLOT_FIELDS, isCoverageFieldFilled } from './interviewSemantic'
+import { type Phase, type StepEntry, type OSlotField, countFilledOFields, O_SLOT_FIELDS, isOFieldFilled } from './interviewSemantic'
 import type { AnalystBriefing, ODroughtState, TransitionReason } from './interviewTypes'
 
 export type { TransitionReason }
@@ -141,14 +141,14 @@ export function computeFocusLock(stepTracker: StepEntry[], previous: ODroughtSta
 /**
  * PROJ-46 (ADR-023 D1): deterministic fallback for the Analyst's
  * target_o_field when the LLM omits it — the first still-open O2–O6 field of
- * the locked step, in COVERAGE_FIELDS order. Pure, injected into
+ * the locked step, in O_SLOT_FIELDS order. Pure, injected into
  * interviewAnalyst.ts's runAnalyst (ballast-avoidance, same pattern as
  * updateODrought). Returns null when there is no locked step or it's already
  * fully covered (D3 would have already advanced the lock past it).
  */
 export function computeTargetOFieldFallback(step: StepEntry | undefined): OSlotField | null {
   if (!step) return null
-  return O_SLOT_FIELDS.find((f) => !isCoverageFieldFilled(step, f)) ?? null
+  return O_SLOT_FIELDS.find((f) => !isOFieldFilled(step, f)) ?? null
 }
 
 /**

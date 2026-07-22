@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { parseSchrittDaten } from '@/services/interviewSemantic'
+import { mergeManualCorrection } from '@/lib/schrittDatenView'
+import type { Database, Json } from '@/lib/database.types'
 
 const PatchSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  role: z.string().nullable().optional(),
   frequency_per_month: z.number().int().min(0, 'Muss ≥ 0 sein').nullable().optional(),
   duration_minutes: z.number().int().min(0, 'Muss ≥ 0 sein').nullable().optional(),
   data_sources: z.array(z.string()).optional(),
@@ -15,6 +17,12 @@ const PatchSchema = z.object({
   media_breaks: z.number().int().min(0, 'Muss ≥ 0 sein').optional(),
   source_quote: z.string().nullable().optional(),
 }).strict()
+
+// PROJ-45 (ADR-025 D1/Consequences): frequency_per_month/duration_minutes/
+// data_sources/rule_based/error_rate_percent/media_breaks no longer have their
+// own columns — they live inside schritt_daten (JSONB). A manual PATCH here is
+// therefore read-merge-write instead of a plain column update; for the user
+// this is invisible, only the backend mechanism changes.
 
 // PATCH /api/process-steps/:id
 // Updates individual attributes of a process step.
@@ -46,7 +54,7 @@ export async function PATCH(
   // Verify process step exists and belongs to caller's workspace
   const { data: step } = await admin
     .from('process_steps')
-    .select('id, workspace_id')
+    .select('id, workspace_id, schritt_daten')
     .eq('id', id)
     .single()
 
@@ -65,9 +73,25 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const { title, description, source_quote, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks } = parsed.data
+  const touchesSchrittDaten = [frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks]
+    .some((v) => v !== undefined)
+
+  const updatePayload: Database['public']['Tables']['process_steps']['Update'] = {
+    ...(title !== undefined ? { title } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(source_quote !== undefined ? { source_quote } : {}),
+  }
+  if (touchesSchrittDaten) {
+    const current = parseSchrittDaten(step.schritt_daten)
+    updatePayload.schritt_daten = mergeManualCorrection(current, {
+      frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks,
+    }) as unknown as Json
+  }
+
   const { data: updated, error } = await admin
     .from('process_steps')
-    .update(parsed.data)
+    .update(updatePayload)
     .eq('id', id)
     .select('*')
     .single()

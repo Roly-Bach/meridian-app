@@ -10,20 +10,20 @@ import { applyIntent, findStepFuzzy, findStepById } from './applyIntent'
 import type { ApplyContext, TurnSnapshot, RecordSlotIntent } from './intents'
 import type {
   StepEntry,
-  SlotValue,
-  TaziteSlot,
-  TaziteSlotArray,
+  SchemaSlotNumber,
+  SchemaSlotString,
+  SchemaSlotStringArray,
 } from '@/services/interviewSemantic'
 
 const CTX: ApplyContext = { interviewId: 'iv-1', now: '2026-06-22T00:00:00.000Z', workspaceId: 'ws-1' }
 
-function pslot(value: number, writeSource?: SlotValue['writeSource']): SlotValue {
-  return { value, quote: 'q', ...(writeSource ? { writeSource } : {}) }
+function pslot(value: number, writeSource?: SchemaSlotNumber['writeSource']): SchemaSlotNumber {
+  return { value, quote: 'q', nicht_befund_typ: null, ...(writeSource ? { writeSource } : {}) }
 }
-function tslot(value: string): TaziteSlot {
+function tslot(value: string): SchemaSlotString {
   return { value, quote: 'q', nicht_befund_typ: null }
 }
-function taslot(value: string[]): TaziteSlotArray {
+function taslot(value: string[]): SchemaSlotStringArray {
   return { value, quote: 'q', nicht_befund_typ: null }
 }
 
@@ -32,15 +32,23 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
     id: 'S001',
     title: 'Rechnungsprüfung',
     reihenfolge: 1,
-    governance: null,
     abhaengigkeiten: null,
     potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
     status: 'exploring',
-    slots: { entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null },
-    process_steps: [],
-    friction_points: [],
-    friction_tools: [],
-    pain_point_primary: null,
+    slots: {
+      entscheidungslogik: null,
+      tazite_cues: null,
+      ausnahmen: null,
+      inputs: null,
+      outputs: null,
+      hilfsmittel: null,
+      reibungspunkte: null,
+      ausloeser: null,
+      aufgabentyp: null,
+      risiko_schwere: null,
+      standardisierungsgrad: null,
+      informationsdichte: null,
+    },
     ...overrides,
   }
 }
@@ -62,6 +70,15 @@ function makeFullStep(holes: string[] = [], overrides: Partial<StepEntry> = {}):
       inputs: taslot(['Rechnung']),
       outputs: taslot(['Buchung']),
       hilfsmittel: taslot(['SAP']),
+      // PROJ-45: TAZITE_SLOT_NAMES grew 6→12 — the done-transition check in
+      // applyIntent.ts requires all of them filled, so "every coverage slot
+      // filled except `holes`" now needs these 6 pre-filled too.
+      reibungspunkte: taslot(['Doppelerfassung']),
+      ausloeser: tslot('Rechnungseingang per E-Mail'),
+      aufgabentyp: { value: ['entscheidung'], quote: 'q', nicht_befund_typ: null },
+      risiko_schwere: { value: ['leicht_korrigierbar'], quote: 'q', nicht_befund_typ: null },
+      standardisierungsgrad: { value: 'standardisiert', quote: 'q', nicht_befund_typ: null },
+      informationsdichte: { value: 'strukturiert', quote: 'q', nicht_befund_typ: null },
     },
     ...overrides,
   })
@@ -209,7 +226,7 @@ describe('record_slot — priority conflict', () => {
   // as priority 0, so the current Analyst (priority 3) may overwrite it.
   it('degrades a historical "quick" writeSource to priority 0 — analyst_online may overwrite it', () => {
     const step = makeStep({ status: 'walkthrough' })
-    step.potenzial.frequency_per_month = { value: 90, quote: 'q', writeSource: 'quick' as SlotValue['writeSource'] }
+    step.potenzial.frequency_per_month = { value: 90, quote: 'q', nicht_befund_typ: null, writeSource: 'quick' as SchemaSlotNumber['writeSource'] }
     const out = applyIntent(makeSnapshot([step]), recordSlot({ slot: 'frequency_per_month', value: 120, writeSource: 'analyst_online' }), CTX)
     expect(out.result.status).toBe('accepted')
     expect(out.snapshot.stepTracker[0].potenzial.frequency_per_month!.value).toBe(120)
@@ -281,22 +298,9 @@ describe('intra-pass read-after-write (ADR-018 Edge Case)', () => {
   })
 })
 
-// ─── record_governance ───────────────────────────────────────────────────────
-
-describe('record_governance', () => {
-  it('partial merge keeps existing fields', () => {
-    const step = makeStep({ governance: { rolle: 'Buchhalter', organisationseinheit: 'FI', systeme: null, nicht_befund_typ: null } })
-    const out = applyIntent(makeSnapshot([step]), { kind: 'record_governance', stepTitle: 'Rechnungsprüfung', systeme: ['SAP'], quote: 'q' }, CTX)
-    expect(out.result.status).toBe('accepted')
-    expect(out.snapshot.stepTracker[0].governance).toEqual({ rolle: 'Buchhalter', organisationseinheit: 'FI', systeme: ['SAP'], nicht_befund_typ: null })
-    expect(out.patches).toEqual([{ kind: 'step_field', stepIndex: 0, subPath: ['governance'], value: expect.objectContaining({ systeme: ['SAP'] }) }])
-  })
-  it('blocks when step not found', () => {
-    const out = applyIntent(makeSnapshot([makeStep({ title: 'X' })]), { kind: 'record_governance', stepTitle: 'Nichtexistent', rolle: 'r', quote: null }, CTX)
-    expect(out.result.status).toBe('blocked')
-    expect(out.result.reason).toBe('step_not_found')
-  })
-})
+// record_governance was removed by PROJ-45 (ADR-025: governance field deleted from
+// StepEntry entirely, no replacement) — the WriteIntent kind no longer exists,
+// this describe block tested it and was deleted along with it.
 
 // ─── record_dependency ───────────────────────────────────────────────────────
 
@@ -326,17 +330,9 @@ describe('record_dependency', () => {
   })
 })
 
-// ─── update_walkthrough_data ─────────────────────────────────────────────────
-
-describe('update_walkthrough_data', () => {
-  it('additive merge + full-array patch + exploring→walkthrough', () => {
-    const out = applyIntent(makeSnapshot([makeStep({ status: 'exploring' })]), { kind: 'update_walkthrough_data', stepTitle: 'Rechnungsprüfung', friction_tools: ['Excel'] }, CTX)
-    expect(out.result.status).toBe('accepted')
-    expect(out.snapshot.stepTracker[0].friction_tools).toEqual(['Excel'])
-    expect(out.snapshot.stepTracker[0].status).toBe('walkthrough')
-    expect(out.patches).toEqual([{ kind: 'step_tracker', value: out.snapshot.stepTracker }])
-  })
-})
+// update_walkthrough_data was removed by PROJ-45 — its functionality (teilschritte)
+// was absorbed into record_slot as just another slot name; the WriteIntent kind no
+// longer exists, this describe block tested it and was deleted along with it.
 
 // ─── link_bottleneck (two targets) ───────────────────────────────────────────
 

@@ -46,10 +46,16 @@ const emptySlots: StepEntry['slots'] = {
   inputs: null,
   outputs: null,
   hilfsmittel: null,
+  reibungspunkte: null,
+  ausloeser: null,
+  aufgabentyp: null,
+  risiko_schwere: null,
+  standardisierungsgrad: null,
+  informationsdichte: null,
 }
 
 function makeStep(title: string, status: StepEntry['status'], extra: Partial<StepEntry> = {}): StepEntry {
-  return { title, reihenfolge: 1, governance: null, abhaengigkeiten: null, status, potenzial: emptyPotenzial, slots: emptySlots, process_steps: [], friction_points: [], friction_tools: [], pain_point_primary: null, ...extra }
+  return { title, reihenfolge: 1, abhaengigkeiten: null, status, potenzial: emptyPotenzial, slots: emptySlots, ...extra }
 }
 
 // Real final tracker shape (Supabase, abbreviated — embeddings/exact quotes omitted,
@@ -59,7 +65,7 @@ function makeStep(title: string, status: StepEntry['status'], extra: Partial<Ste
 const REAL_FINAL_TRACKER: StepEntry[] = [
   makeStep('Softwareentwicklung', 'walkthrough', {
     id: 'S001',
-    potenzial: { ...emptyPotenzial, frequency_per_month: { value: 20, quote: '1 pro tag', confidence: 'estimate' } },
+    potenzial: { ...emptyPotenzial, frequency_per_month: { value: 20, quote: '1 pro tag', confidence: 'estimate', nicht_befund_typ: null } },
     slots: {
       ...emptySlots,
       inputs: { value: ['code'], quote: 'ne spaß ist schon der code', nicht_befund_typ: null },
@@ -71,7 +77,7 @@ const REAL_FINAL_TRACKER: StepEntry[] = [
   }),
   makeStep('Meetings', 'walkthrough', {
     id: 'S002',
-    potenzial: { ...emptyPotenzial, frequency_per_month: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed' }, duration_minutes: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed' } },
+    potenzial: { ...emptyPotenzial, frequency_per_month: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed', nicht_befund_typ: null }, duration_minutes: { value: 20, quote: '1 pro tag 20 min', confidence: 'confirmed', nicht_befund_typ: null } },
     slots: {
       ...emptySlots,
       hilfsmittel: { value: ['visual studio code'], quote: '[auto-backfill aus erwähnten Tools/Systemen]', nicht_befund_typ: null },

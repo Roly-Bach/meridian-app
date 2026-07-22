@@ -1,24 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { scoreSlotCoverage, scoreDedupCoverage, scoreGovernanceCoverage } from './slotCoverage'
-import type { StepEntry, TaziteSlot, TaziteSlotArray, GovernanceSlot, AbhaengigkeitsKante, EinflussKante, Abhaengigkeiten } from '@/services/interviewSemantic'
+import { scoreSlotCoverage, scoreDedupCoverage } from './slotCoverage'
+import type { StepEntry, SchemaSlotString, SchemaSlotStringArray, AbhaengigkeitsKante, EinflussKante, Abhaengigkeiten } from '@/services/interviewSemantic'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const tazite = (value: string): TaziteSlot => ({
+const tazite = (value: string): SchemaSlotString => ({
   value,
   quote: value,
   confidence: 'confirmed',
   nicht_befund_typ: null,
 })
 
-const taziteArray = (values: string[]): TaziteSlotArray => ({
+const taziteArray = (values: string[]): SchemaSlotStringArray => ({
   value: values,
   quote: values[0] ?? null,
   confidence: 'confirmed',
   nicht_befund_typ: null,
 })
 
-const taziteNichtZutreffend = (): TaziteSlot => ({
+const taziteNichtZutreffend = (): SchemaSlotString => ({
   value: null,
   quote: null,
   nicht_befund_typ: 'nicht_zutreffend',
@@ -30,7 +30,6 @@ const makeStep = (
 ): StepEntry => ({
   title: 'Rechnungsprüfung',
   reihenfolge: 1,
-  governance: null,
   abhaengigkeiten: null,
   potenzial: {
     frequency_per_month: null,
@@ -46,6 +45,12 @@ const makeStep = (
     inputs: null,
     outputs: null,
     hilfsmittel: null,
+    reibungspunkte: null,
+    ausloeser: null,
+    aufgabentyp: null,
+    risiko_schwere: null,
+    standardisierungsgrad: null,
+    informationsdichte: null,
     ...slotOverrides,
   },
   ...overrides,
@@ -111,8 +116,8 @@ describe('scoreSlotCoverage', () => {
   it('potenzial fields do NOT count toward O1–O6 coverage', () => {
     const step = makeStep({
       potenzial: {
-        frequency_per_month: { value: 90, quote: '90', confidence: 'confirmed' },
-        duration_minutes: { value: 30, quote: '30', confidence: 'confirmed' },
+        frequency_per_month: { value: 90, quote: '90', confidence: 'confirmed', nicht_befund_typ: null },
+        duration_minutes: { value: 30, quote: '30', confidence: 'confirmed', nicht_befund_typ: null },
         error_rate_percent: null,
         media_breaks: null,
       },
@@ -187,47 +192,6 @@ describe('scoreDedupCoverage', () => {
   })
 })
 
-// ─── scoreGovernanceCoverage ──────────────────────────────────────────────────
-
-describe('scoreGovernanceCoverage', () => {
-  it('returns 0 for empty tracker', () => {
-    expect(scoreGovernanceCoverage([])).toBe(0)
-  })
-
-  it('returns 0 when all governance null', () => {
-    expect(scoreGovernanceCoverage([makeStep(), makeStep({ title: 'Freigabe', reihenfolge: 2 })])).toBe(0)
-  })
-
-  it('returns 1.0 when all steps have governance role', () => {
-    const gov: GovernanceSlot = { rolle: 'Buchhalter', organisationseinheit: null, systeme: null, nicht_befund_typ: null }
-    const steps = [
-      makeStep({ governance: gov, reihenfolge: 1 }),
-      makeStep({ governance: gov, title: 'Freigabe', reihenfolge: 2 }),
-    ]
-    expect(scoreGovernanceCoverage(steps)).toBe(1.0)
-  })
-
-  it('counts nicht_befund_typ as filled', () => {
-    const gov: GovernanceSlot = { rolle: null, organisationseinheit: null, systeme: null, nicht_befund_typ: 'unbekannt' }
-    expect(scoreGovernanceCoverage([makeStep({ governance: gov })])).toBe(1.0)
-  })
-
-  it('partial fill: 1 of 2 steps has governance', () => {
-    const gov: GovernanceSlot = { rolle: 'Controller', organisationseinheit: 'Finance', systeme: null, nicht_befund_typ: null }
-    const steps = [
-      makeStep({ governance: gov, reihenfolge: 1 }),
-      makeStep({ reihenfolge: 2, title: 'Monatsabschluss' }),
-    ]
-    expect(scoreGovernanceCoverage(steps)).toBe(0.5)
-  })
-
-  it('systeme array filled = counts as filled', () => {
-    const gov: GovernanceSlot = { rolle: null, organisationseinheit: null, systeme: ['SAP'], nicht_befund_typ: null }
-    expect(scoreGovernanceCoverage([makeStep({ governance: gov })])).toBe(1.0)
-  })
-
-  it('empty systeme array alone does NOT count as filled', () => {
-    const gov: GovernanceSlot = { rolle: null, organisationseinheit: null, systeme: [], nicht_befund_typ: null }
-    expect(scoreGovernanceCoverage([makeStep({ governance: gov })])).toBe(0)
-  })
-})
+// scoreGovernanceCoverage was removed by PROJ-45 (ADR-025: governance field deleted
+// from StepEntry entirely, no replacement) — this describe block tested it and was
+// deleted along with it.

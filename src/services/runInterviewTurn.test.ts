@@ -110,7 +110,6 @@ function makeStepEntry(title = 'Rechnungsprüfung', status: StepEntry['status'] 
     title,
     reihenfolge: 1,
     status,
-    governance: null,
     abhaengigkeiten: null,
     potenzial: {
       frequency_per_month: null,
@@ -125,11 +124,14 @@ function makeStepEntry(title = 'Rechnungsprüfung', status: StepEntry['status'] 
       inputs: null,
       outputs: null,
       hilfsmittel: null,
+      reibungspunkte: null,
+      ausloeser: null,
+      aufgabentyp: null,
+      risiko_schwere: null,
+      standardisierungsgrad: null,
+      informationsdichte: null,
     },
-    process_steps: [],
-    friction_points: [],
-    friction_tools: [],
-    pain_point_primary: null,
+    teilschritte: [],
   }
 }
 

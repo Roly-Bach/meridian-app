@@ -1,17 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { scoreHallucinationRate } from './hallucinationRate'
-import type { StepEntry, SlotValue, TaziteSlotArray } from '@/services/interviewSemantic'
+import type { StepEntry, SchemaSlotNumber, SchemaSlotStringArray } from '@/services/interviewSemantic'
 import type { TurnRecord } from './types'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const potenzialValue = (value: number, quote: string): SlotValue => ({
+const potenzialValue = (value: number, quote: string): SchemaSlotNumber => ({
   value,
   quote,
   confidence: 'confirmed',
+  nicht_befund_typ: null,
 })
 
-const taziteValue = (value: string[], quote: string): TaziteSlotArray => ({
+const taziteValue = (value: string[], quote: string): SchemaSlotStringArray => ({
   value,
   quote,
   nicht_befund_typ: null,
@@ -20,7 +21,6 @@ const taziteValue = (value: string[], quote: string): TaziteSlotArray => ({
 const makeStep = (overrides: Partial<StepEntry> = {}): StepEntry => ({
   title: 'Rechnungsprüfung',
   reihenfolge: 1,
-  governance: null,
   abhaengigkeiten: null,
   status: 'done',
   potenzial: {
@@ -36,6 +36,12 @@ const makeStep = (overrides: Partial<StepEntry> = {}): StepEntry => ({
     inputs: null,
     outputs: null,
     hilfsmittel: null,
+    reibungspunkte: null,
+    ausloeser: null,
+    aufgabentyp: null,
+    risiko_schwere: null,
+    standardisierungsgrad: null,
+    informationsdichte: null,
   },
   ...overrides,
 })
@@ -110,6 +116,12 @@ describe('scoreHallucinationRate', () => {
           inputs: taziteValue(['E-Mail-Programm', 'SAP FI'], '"wechsle manuell zwischen E-Mail, SAP FI und DocuWare"'),
           outputs: null,
           hilfsmittel: null,
+          reibungspunkte: null,
+          ausloeser: null,
+          aufgabentyp: null,
+          risiko_schwere: null,
+          standardisierungsgrad: null,
+          informationsdichte: null,
         },
       }),
     ]

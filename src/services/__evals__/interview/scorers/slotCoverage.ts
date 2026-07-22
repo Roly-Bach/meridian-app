@@ -43,28 +43,3 @@ export function scoreDedupCoverage(stepTracker: StepEntry[]): number {
   const total = groups.length * COVERAGE_FIELDS.length
   return total === 0 ? 0 : filled / total
 }
-
-/**
- * Governance coverage: fraction of governance sub-fields filled across all steps.
- * Reported separately — does NOT count toward O1–O6 coverage denominator.
- * A step's governance is filled if rolle/organisationseinheit/systeme is set OR nicht_befund_typ != null.
- */
-export function scoreGovernanceCoverage(stepTracker: StepEntry[]): number {
-  if (stepTracker.length === 0) return 0
-
-  let filled = 0
-  for (const step of stepTracker) {
-    const g = step.governance
-    if (g == null) continue
-    if (
-      g.rolle != null ||
-      g.organisationseinheit != null ||
-      (Array.isArray(g.systeme) && g.systeme.length > 0) ||
-      g.nicht_befund_typ != null
-    ) {
-      filled++
-    }
-  }
-
-  return filled / stepTracker.length
-}

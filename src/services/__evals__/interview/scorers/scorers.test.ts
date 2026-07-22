@@ -17,7 +17,7 @@ import type { StepEntry } from '@/services/interviewSemantic'
 
 const slotFilled = (value: string) => ({ value, quote: value, confidence: 'confirmed' as const })
 
-const taziteFilled = (value: string): import('@/services/interviewSemantic').TaziteSlot => ({
+const taziteFilled = (value: string): import('@/services/interviewSemantic').SchemaSlotString => ({
   value,
   quote: value,
   confidence: 'confirmed',
@@ -27,7 +27,6 @@ const taziteFilled = (value: string): import('@/services/interviewSemantic').Taz
 const makeStep = (slotOverrides: Partial<StepEntry['slots']> = {}, stepOverrides: Partial<Omit<StepEntry, 'slots'>> = {}): StepEntry => ({
   title: 'Rechnungsprüfung',
   reihenfolge: 1,
-  governance: null,
   abhaengigkeiten: null,
   potenzial: {
     frequency_per_month: null,
@@ -43,6 +42,12 @@ const makeStep = (slotOverrides: Partial<StepEntry['slots']> = {}, stepOverrides
     inputs: null,
     outputs: null,
     hilfsmittel: null,
+    reibungspunkte: null,
+    ausloeser: null,
+    aufgabentyp: null,
+    risiko_schwere: null,
+    standardisierungsgrad: null,
+    informationsdichte: null,
     ...slotOverrides,
   },
   ...stepOverrides,

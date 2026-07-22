@@ -24,7 +24,6 @@ export interface ProcessStep {
   cluster_id: string | null
   title: string
   description: string | null
-  role: string | null
   frequency_per_month: number | null
   duration_minutes: number | null
   data_sources: string[]

@@ -7,9 +7,9 @@ import { clusterProcessSteps, resynthesizeClusters } from '@/services/processClu
 import { deduplicateKnowledgeObjects } from '@/services/extraction'
 import { generateEmbedding } from '@/services/embeddings'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
-import type { Database } from '@/lib/database.types'
-
-type ProcessStepUpdate = Database['public']['Tables']['process_steps']['Update']
+import { parseSchrittDaten } from '@/services/interviewSemantic'
+import { mergeManualCorrection, type ManualCorrectionPatch } from '@/lib/schrittDatenView'
+import type { Json } from '@/lib/database.types'
 
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -23,7 +23,7 @@ const ClarificationInputSchema = z.object({
   answers: z.array(AnswerSchema).min(1),
 })
 
-// ─── Slot answer → typed DB value ────────────────────────────────────────────
+// ─── Slot answer → typed schritt_daten patch ─────────────────────────────────
 
 const FREQUENCY_MAP: Record<string, number> = {
   'Täglich': 22,
@@ -39,7 +39,9 @@ const DURATION_MAP: Record<string, number> = {
   '> 30 Min': 45,
 }
 
-const RULE_BASED_MAP: Record<string, boolean> = {
+// PROJ-45: rule_based (boolean column) is gone — entscheidungslogik is free text
+// since PROJ-25. The closed-choice SlotCard answer is stored verbatim.
+const ENTSCHEIDUNGSLOGIK_MAP: Record<string, boolean> = {
   'Immer gleich': true,
   'Meistens gleich': true,
   'Variiert stark': false,
@@ -114,45 +116,53 @@ export async function POST(
     .update({ clarification_answers: clarificationAnswers as unknown as import('@/lib/database.types').Json })
     .eq('id', interviewId)
 
-  // Process SlotCards — update process_steps
+  // Process SlotCards — read-merge-write into schritt_daten (PROJ-45/ADR-025:
+  // frequency_per_month/duration_minutes/entscheidungslogik/error_rate_percent
+  // no longer have their own columns).
   const slotAnswers = answers.filter(
-    (a) => ['frequency_per_month', 'duration_minutes', 'rule_based', 'error_rate_percent'].includes(a.slot_key)
+    (a) => ['frequency_per_month', 'duration_minutes', 'entscheidungslogik', 'error_rate_percent'].includes(a.slot_key)
       && typeof a.answer === 'string'
       && a.answer !== 'Weiß ich nicht'
   )
 
   const updatedStepIds = new Set<string>()
 
+  async function applyPatchToStep(stepId: string, patch: ManualCorrectionPatch) {
+    const { data: row } = await supabase.from('process_steps').select('schritt_daten').eq('id', stepId).single()
+    if (!row) return
+    const merged = mergeManualCorrection(parseSchrittDaten(row.schritt_daten), patch)
+    await supabase.from('process_steps').update({ schritt_daten: merged as unknown as Json }).eq('id', stepId)
+    updatedStepIds.add(stepId)
+  }
+
   for (const sa of slotAnswers) {
     const answerStr = sa.answer as string
-    const update: ProcessStepUpdate = {}
+    const patch: ManualCorrectionPatch = {}
 
     if (sa.slot_key === 'frequency_per_month' && FREQUENCY_MAP[answerStr] !== undefined) {
-      update.frequency_per_month = FREQUENCY_MAP[answerStr]
+      patch.frequency_per_month = FREQUENCY_MAP[answerStr]
     } else if (sa.slot_key === 'duration_minutes' && DURATION_MAP[answerStr] !== undefined) {
-      update.duration_minutes = DURATION_MAP[answerStr]
-    } else if (sa.slot_key === 'rule_based' && RULE_BASED_MAP[answerStr] !== undefined) {
-      update.rule_based = RULE_BASED_MAP[answerStr]
+      patch.duration_minutes = DURATION_MAP[answerStr]
+    } else if (sa.slot_key === 'entscheidungslogik' && ENTSCHEIDUNGSLOGIK_MAP[answerStr] !== undefined) {
+      patch.rule_based = ENTSCHEIDUNGSLOGIK_MAP[answerStr]
     } else if (sa.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[answerStr] !== undefined) {
-      update.error_rate_percent = ERROR_RATE_MAP[answerStr]
+      patch.error_rate_percent = ERROR_RATE_MAP[answerStr]
     }
 
-    if (Object.keys(update).length === 0) continue
+    if (Object.keys(patch).length === 0) continue
 
     // Try to match by UUID first, fall back to title match
     const isUuid = TOKEN_UUID_RE.test(sa.process_step_id)
     if (isUuid) {
-      await supabase.from('process_steps').update(update).eq('id', sa.process_step_id).eq('interview_id', interviewId)
-      updatedStepIds.add(sa.process_step_id)
+      await applyPatchToStep(sa.process_step_id, patch)
     } else {
       const { data: matchedSteps } = await supabase
         .from('process_steps')
         .select('id')
         .eq('title', sa.process_step_id)
         .eq('interview_id', interviewId)
-      if (matchedSteps) {
-        await supabase.from('process_steps').update(update).eq('title', sa.process_step_id).eq('interview_id', interviewId)
-        for (const s of matchedSteps) updatedStepIds.add(s.id)
+      for (const s of matchedSteps ?? []) {
+        await applyPatchToStep(s.id, patch)
       }
     }
   }
@@ -210,17 +220,12 @@ export async function POST(
       workspace_id: workspaceId,
       title,
       description: null,
-      role: null,
       source_quote: null,
       step_type: 'action',
       condition_text: null,
       embedding: embedding as number[],
-      frequency_per_month: null,
-      duration_minutes: null,
-      rule_based: false,
-      data_sources: [],
-      error_rate_percent: null,
-      media_breaks: 0,
+      // No slots — step was only confirmed, not walked through.
+      schritt_daten: null,
     })
 
     if (stepError) {

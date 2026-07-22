@@ -60,16 +60,16 @@ function getFilledSlots(step: StepEntry): FilledSlot[] {
   // Potenzial slots (schemaagnostisch — evaluate if quote is substantive)
   const { frequency_per_month, duration_minutes, error_rate_percent, media_breaks } = step.potenzial
   if (frequency_per_month?.value != null && (frequency_per_month.quote?.trim().length ?? 0) > 5) {
-    result.push({ name: 'frequency_per_month', value: String(frequency_per_month.value), quote: frequency_per_month.quote })
+    result.push({ name: 'frequency_per_month', value: String(frequency_per_month.value), quote: frequency_per_month.quote ?? '' })
   }
   if (duration_minutes?.value != null && (duration_minutes.quote?.trim().length ?? 0) > 5) {
-    result.push({ name: 'duration_minutes', value: String(duration_minutes.value), quote: duration_minutes.quote })
+    result.push({ name: 'duration_minutes', value: String(duration_minutes.value), quote: duration_minutes.quote ?? '' })
   }
   if (error_rate_percent?.value != null && (error_rate_percent.quote?.trim().length ?? 0) > 5) {
-    result.push({ name: 'error_rate_percent', value: String(error_rate_percent.value), quote: error_rate_percent.quote })
+    result.push({ name: 'error_rate_percent', value: String(error_rate_percent.value), quote: error_rate_percent.quote ?? '' })
   }
   if (media_breaks?.value != null && (media_breaks.quote?.trim().length ?? 0) > 5) {
-    result.push({ name: 'media_breaks', value: String(media_breaks.value), quote: media_breaks.quote })
+    result.push({ name: 'media_breaks', value: String(media_breaks.value), quote: media_breaks.quote ?? '' })
   }
 
   return result

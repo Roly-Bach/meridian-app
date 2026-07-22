@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { deriveProcessStepDisplayFieldsFromRaw } from '@/lib/schrittDatenView'
 
 // GET /api/use-cases/[id]
 // Returns enriched use case detail: use_case + process_step + interview + cluster sub-use-cases.
@@ -44,13 +45,13 @@ export async function GET(
   if (useCase.process_step_id) {
     const { data: step } = await admin
       .from('process_steps')
-      .select('title, description, source_quote, frequency_per_month, duration_minutes, error_rate_percent, rule_based, data_sources, interview_id')
+      .select('title, description, source_quote, schritt_daten, interview_id')
       .eq('id', useCase.process_step_id)
       .single()
 
     if (step) {
-      const { interview_id, ...stepData } = step
-      processStep = stepData
+      const { interview_id, schritt_daten, ...stepData } = step
+      processStep = { ...stepData, ...deriveProcessStepDisplayFieldsFromRaw(schritt_daten) }
 
       if (interview_id) {
         const { data: iv } = await admin
@@ -86,7 +87,7 @@ export async function GET(
           .map(p =>
             admin
               .from('process_steps')
-              .select('id, title, source_quote, frequency_per_month, duration_minutes, error_rate_percent')
+              .select('id, title, source_quote, schritt_daten')
               .eq('id', p.process_step_id)
               .single()
               .then(({ data }) => ({ participant: p, step: data }))
@@ -100,9 +101,10 @@ export async function GET(
         .filter(r => r.step != null)
         .map(r => {
           const s = r.step!
+          const display = deriveProcessStepDisplayFieldsFromRaw(s.schritt_daten)
           const roiEur =
-            s.frequency_per_month != null && s.duration_minutes != null
-              ? Math.round((s.frequency_per_month * s.duration_minutes / 60) * 12 * reductionRate * hourlyRate * 100) / 100
+            display.frequency_per_month != null && display.duration_minutes != null
+              ? Math.round((display.frequency_per_month * display.duration_minutes / 60) * 12 * reductionRate * hourlyRate * 100) / 100
               : null
           return {
             employee_name: r.participant.employee_name,
@@ -110,9 +112,9 @@ export async function GET(
             process_step: {
               title: s.title,
               source_quote: s.source_quote,
-              frequency_per_month: s.frequency_per_month,
-              duration_minutes: s.duration_minutes,
-              error_rate_percent: s.error_rate_percent,
+              frequency_per_month: display.frequency_per_month,
+              duration_minutes: display.duration_minutes,
+              error_rate_percent: display.error_rate_percent,
             },
             roi_eur: roiEur,
           }

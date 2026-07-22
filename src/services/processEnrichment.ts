@@ -3,43 +3,9 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
 import { generateEmbedding } from './embeddings'
-import { normalizeStepEntry, type StepEntry } from './interviewSemantic'
+import { normalizeStepEntry } from './interviewSemantic'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
-
-// ── Slot coercions (safety net for legacy tracker data or LLM type errors) ──────
-
-const FALSY_STRINGS = new Set(['false', 'nein', 'no', 'none', 'keine', 'niemals', '0', ''])
-
-function coerceRuleBased(v: unknown): boolean {
-  if (typeof v === 'boolean') return v
-  if (typeof v === 'number') return v !== 0
-  if (typeof v === 'string') return !FALSY_STRINGS.has(v.toLowerCase().trim())
-  return Boolean(v)
-}
-
-const MEDIA_BREAKS_TEXT_MAP: [RegExp, number][] = [
-  [/nie|niemals|keine|nein|no\b|0/i, 0],
-  [/sehr selten|kaum|fast nie|rarely/i, 0],
-  [/selten|manchmal|occasionally/i, 1],
-  [/gelegentlich|ab und zu|sometimes/i, 2],
-  [/häufig|often|regelmäßig/i, 4],
-  [/sehr häufig|always|immer/i, 6],
-]
-
-function coerceMediaBreaks(v: unknown): number {
-  if (typeof v === 'number') return Math.round(v)
-  if (typeof v === 'boolean') return v ? 1 : 0
-  if (typeof v === 'string') {
-    const parsed = parseFloat(v)
-    if (!isNaN(parsed)) return Math.round(parsed)
-    for (const [pattern, count] of MEDIA_BREAKS_TEXT_MAP) {
-      if (pattern.test(v)) return count
-    }
-    console.warn(`[coerceMediaBreaks] Unrecognized text value: "${v}", defaulting to 0`)
-    return 0
-  }
-  return 0
-}
+import type { Json } from '@/lib/database.types'
 
 interface EnrichedAttribute<T> {
   value: T | null
@@ -134,9 +100,7 @@ export async function createProcessStepsFromTracker({
   const stepsInput = JSON.stringify(
     steps.map((s) => ({
       step_title: s.title,
-      role: s.governance?.rolle ?? null,
-      friction_points: s.friction_points ?? [],
-      pain_point_primary: s.pain_point_primary ?? null,
+      reibungspunkte: s.slots.reibungspunkte?.value ?? [],
     }))
   )
 
@@ -198,28 +162,22 @@ export async function createProcessStepsFromTracker({
       .filter(Boolean).join(' ').trim()
     const embedding = await generateEmbedding(embeddingInput, traceCtx)
 
-    // rule_based: read from entscheidungslogik.value (string "rule_based: true/false" format) or coerce
-    const entscheidungslogikVal = step.slots.entscheidungslogik?.value ?? null
-
+    // PROJ-45 (ADR-025 D1): schritt_daten carries the full step_tracker entry
+    // verbatim — same object shape as interview_state.step_tracker, no
+    // translation/coercion layer. The 10 legacy flat columns (role,
+    // frequency_per_month, duration_minutes, data_sources, rule_based,
+    // error_rate_percent, media_breaks, friction_points, friction_tools,
+    // walkthrough_steps) no longer exist on process_steps.
     const { error } = await supabase.from('process_steps').insert({
       interview_id: interviewId,
       workspace_id: workspaceId,
       title,
       description,
-      role: step.governance?.rolle ?? null,
       source_quote: desc?.source_quote ?? null,
       step_type: desc?.step_type === 'decision' ? 'decision' : 'action',
       condition_text: desc?.step_type === 'decision' ? (desc.condition_text ?? null) : null,
       embedding: embedding as number[],
-      frequency_per_month: step.potenzial.frequency_per_month?.value != null ? Math.round(step.potenzial.frequency_per_month.value as number) : null,
-      duration_minutes: step.potenzial.duration_minutes?.value != null ? Math.round(step.potenzial.duration_minutes.value as number) : null,
-      rule_based: coerceRuleBased(entscheidungslogikVal),
-      data_sources: dataSources,
-      error_rate_percent: step.potenzial.error_rate_percent?.value != null ? Math.round(step.potenzial.error_rate_percent.value as number) : null,
-      media_breaks: coerceMediaBreaks(step.potenzial.media_breaks?.value),
-      friction_points: step.friction_points ?? [],
-      friction_tools: step.friction_tools ?? [],
-      walkthrough_steps: step.process_steps ?? [],
+      schritt_daten: step as unknown as Json,
     })
 
     if (error) {

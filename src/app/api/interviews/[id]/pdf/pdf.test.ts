@@ -78,7 +78,7 @@ function mockFullReportData() {
       created_at: new Date().toISOString(),
     },
     executiveSummary: 'Test summary.',
-    processSteps: [{ id: 'ps-1', title: 'Angebot prüfen', description: null, role: null, frequency_per_month: 10, duration_minutes: 30, data_sources: [], rule_based: false }],
+    processSteps: [{ id: 'ps-1', title: 'Angebot prüfen', description: null, frequency_per_month: 10, duration_minutes: 30, data_sources: [], rule_based: false }],
     painPoints: [],
     tools: [],
     useCases: [],

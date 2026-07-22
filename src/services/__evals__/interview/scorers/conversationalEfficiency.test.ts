@@ -1,19 +1,32 @@
 import { describe, it, expect } from 'vitest'
 import { scoreConversationalEfficiency } from './conversationalEfficiency'
-import type { StepEntry, SlotValue, TaziteSlot } from '@/services/interviewSemantic'
+import type { StepEntry, SchemaSlotNumber, SchemaSlotString } from '@/services/interviewSemantic'
 import type { TurnRecord } from './types'
 
-const sv = (value: string | number): SlotValue => ({ value, quote: String(value), confidence: 'confirmed' })
-const tazite = (value: string): TaziteSlot => ({ value, quote: value, confidence: 'confirmed', nicht_befund_typ: null })
+const sv = (value: string | number): SchemaSlotNumber => ({ value: value as number, quote: String(value), confidence: 'confirmed', nicht_befund_typ: null })
+const tazite = (value: string): SchemaSlotString => ({ value, quote: value, confidence: 'confirmed', nicht_befund_typ: null })
 
 const makeStep = (potenzial: Partial<StepEntry['potenzial']> = {}, slots: Partial<StepEntry['slots']> = {}): StepEntry => ({
   title: 'Rechnungsprüfung',
   reihenfolge: 1,
-  governance: null,
   abhaengigkeiten: null,
   potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null, ...potenzial },
   status: 'done',
-  slots: { entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null, ...slots },
+  slots: {
+    entscheidungslogik: null,
+    tazite_cues: null,
+    ausnahmen: null,
+    inputs: null,
+    outputs: null,
+    hilfsmittel: null,
+    reibungspunkte: null,
+    ausloeser: null,
+    aufgabentyp: null,
+    risiko_schwere: null,
+    standardisierungsgrad: null,
+    informationsdichte: null,
+    ...slots,
+  },
 })
 
 const turn = (n: number): TurnRecord => ({ turnNumber: n, userInput: 'x', agentText: 'y', phase: 'explore', toolCalls: [] })

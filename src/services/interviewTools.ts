@@ -6,10 +6,30 @@ import { generateEmbedding } from './embeddings'
 import { classifyStepSimilarity, generateMissingEmbeddings, HARD_THRESHOLD } from './stepIdentity'
 import {
   POTENZIAL_SLOT_NAMES,
+  TAZITE_STRING_SLOT_NAMES,
+  TAZITE_ARRAY_SLOT_NAMES,
+  TAZITE_ENUM_ARRAY_SLOT_NAMES,
+  TAZITE_ENUM_SINGLE_SLOT_NAMES,
+  AUFGABENTYP_VALUES,
+  RISIKO_SCHWERE_VALUES,
+  STANDARDISIERUNGSGRAD_VALUES,
+  INFORMATIONSDICHTE_VALUES,
   colonParent,
   tokenJaccardNorm,
   type StepEntry,
 } from './interviewSemantic'
+
+// PROJ-45: enum value sets for record_slot's tazite-enum slots (aufgabentyp/
+// risiko_schwere are multi-select; standardisierungsgrad/informationsdichte are
+// single-select, Analyst-classified — see interviewAnalyst.ts's system prompt).
+const ENUM_ARRAY_VALUES: Record<string, readonly string[]> = {
+  aufgabentyp: AUFGABENTYP_VALUES,
+  risiko_schwere: RISIKO_SCHWERE_VALUES,
+}
+const ENUM_SINGLE_VALUES: Record<string, readonly string[]> = {
+  standardisierungsgrad: STANDARDISIERUNGSGRAD_VALUES,
+  informationsdichte: INFORMATIONSDICHTE_VALUES,
+}
 
 // PROJ-44: moved out of interviewAgent.ts (deleted — legacy createInterviewStream/
 // buildStaticPrompt path). buildTools is now a Deep-Module-internal detail of the
@@ -216,7 +236,6 @@ export function buildTools(
             id: candidateId,
             title: title.trim(),
             reihenfolge: stepNum,
-            governance: null,
             abhaengigkeiten: null,
             potenzial: {
               frequency_per_month: null,
@@ -232,11 +251,14 @@ export function buildTools(
               inputs: null,
               outputs: null,
               hilfsmittel: null,
+              reibungspunkte: null,
+              ausloeser: null,
+              aufgabentyp: null,
+              risiko_schwere: null,
+              standardisierungsgrad: null,
+              informationsdichte: null,
             },
-            process_steps: [],
-            friction_points: [],
-            friction_tools: [],
-            pain_point_primary: null,
+            teilschritte: [],
             ...(titleEmbedding ? { embedding: titleEmbedding } : {}),
           }
 
@@ -257,18 +279,27 @@ export function buildTools(
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency_per_month, duration_minutes, error_rate_percent, media_breaks) und tazite O2–O5 (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert. Nicht-Befund (PROJ-28): Für potenzial-Slots kann statt value ein nicht_befund_typ gesetzt werden wenn der Mitarbeiter keine Angabe machen konnte.',
+      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency_per_month, duration_minutes, error_rate_percent, media_breaks), qualitative O-Felder (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, reibungspunkte, ausloeser, aufgabentyp, risiko_schwere) und die Analyst-Klassifikationsfelder (standardisierungsgrad, informationsdichte — aus bereits erhobenen Antworten abgeleitet, keine eigene Frage) sowie teilschritte (additive Ablauf-Liste). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert. Nicht-Befund (PROJ-28): Für potenzial-Slots kann statt value ein nicht_befund_typ gesetzt werden wenn der Mitarbeiter keine Angabe machen konnte.',
       inputSchema: z.object({
         step_id: z.string().regex(/^S[0-9]{3}$/).optional().describe('Stabiler Schritt-ID (z.B. S001). Bevorzugt gegenüber step_title. Aus register_step-Antwort.'),
         step_title: z.string().min(1),
         slot: z.enum([
           // Potenzial (quantitativ)
           'frequency_per_month', 'duration_minutes', 'error_rate_percent', 'media_breaks',
-          // Tazite O2–O5 (qualitativ)
-          'entscheidungslogik', 'tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel',
+          // Qualitative O-Felder (Freitext, einzeln)
+          'entscheidungslogik', 'ausloeser',
+          // Qualitative O-Felder (Freitext, Mehrwert)
+          'tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel', 'reibungspunkte',
+          // PROJ-45 AI-Wert-Faktoren (Enum, Mehrfachauswahl)
+          'aufgabentyp', 'risiko_schwere',
+          // PROJ-45 Klassifikation (Enum, Einzelauswahl — Analyst-derived, keine eigene Frage)
+          'standardisierungsgrad', 'informationsdichte',
+          // Additive Ablauf-Liste (PROJ-45/ADR-025 D4: absorbiert von update_walkthrough_data)
+          'teilschritte',
         ]),
-        value: z.union([z.string(), z.number(), z.array(z.string())]).optional().describe('String für tazite Einzel-Slots (entscheidungslogik), String-Array für Mehrwert-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel), Zahl für potenzial-Slots. Optional wenn nicht_befund_typ gesetzt.'),
+        value: z.union([z.string(), z.number(), z.array(z.string())]).optional().describe('String für Einzel-Slots (entscheidungslogik, ausloeser, standardisierungsgrad, informationsdichte), String-Array für Mehrwert-/Enum-/Ablauf-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel/reibungspunkte/aufgabentyp/risiko_schwere/teilschritte), Zahl für potenzial-Slots. Optional wenn nicht_befund_typ gesetzt.'),
         nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Nur für potenzial-Slots: Setze wenn Mitarbeiter keine belegbare Angabe machen konnte. unbekannt=weiß nicht, verweigert=Auskunft abgelehnt, nicht_zutreffend=nicht anwendbar. Nicht setzen wenn value vorhanden.'),
+        einheit: z.string().optional().describe('Nur für frequency_per_month/duration_minutes: die vom Mitarbeiter genannte Einheit — z.B. "pro_tag"/"pro_woche"/"pro_quartal"/"pro_jahr" (Häufigkeit, Default pro_monat) oder "stunden"/"tage" (Dauer, Default minuten). Speichere den Wert in der genannten Einheit — rechne NIEMALS selbst um, die Umrechnung passiert deterministisch im Code.'),
         evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus dem aktuellen Mitarbeiter-Turn. System extrahiert den umgebenden Satz als Beleg.'),
         evidence_quote: z.string().min(3).optional().describe('Fallback wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up). Pflicht: source_turn setzen.'),
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
@@ -276,7 +307,7 @@ export function buildTools(
         source_turn: z.number().int().positive().optional(),
         is_correction: z.boolean().optional().describe('Setze auf true wenn der Mitarbeiter einen früher genannten Wert explizit widerspricht oder korrigiert. Hebt Prioritäts-Konflikt-Sperre auf.'),
       }),
-      execute: async ({ step_id, step_title, slot, value, nicht_befund_typ, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
+      execute: async ({ step_id, step_title, slot, value, nicht_befund_typ, einheit, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
         // Fix 3 (ADR-015): prefer deterministic span-based extraction.
         const userInputText = currentUserInput?.trim() ?? ''
         let resolvedQuote: string | null = null
@@ -305,7 +336,11 @@ export function buildTools(
 
         // Per-slot type guards
         const isPotenzial = (POTENZIAL_SLOT_NAMES as readonly string[]).includes(slot)
-        const isTaziteArray = ((['tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel'] as const) as readonly string[]).includes(slot)
+        const isTeilschritte = slot === 'teilschritte'
+        const isTaziteArray = (TAZITE_ARRAY_SLOT_NAMES as readonly string[]).includes(slot)
+        const isEnumArray = (TAZITE_ENUM_ARRAY_SLOT_NAMES as readonly string[]).includes(slot)
+        const isTaziteString = (TAZITE_STRING_SLOT_NAMES as readonly string[]).includes(slot)
+        const isEnumSingle = (TAZITE_ENUM_SINGLE_SLOT_NAMES as readonly string[]).includes(slot)
 
         // F2: Parse NICHT-BEFUND string that quick-extract LLM may pass as raw value
         // e.g. value="NICHT-BEFUND:unbekannt" with no nicht_befund_typ set → convert to structured mode
@@ -324,7 +359,7 @@ export function buildTools(
         const isNichtBefundMode = resolvedNichtBefundTyp !== undefined && resolvedValue === undefined
         if (isNichtBefundMode) {
           if (!isPotenzial) {
-            return { success: false, error: `nicht_befund_typ ist nur für potenzial-Slots gültig (frequency_per_month, duration_minutes, error_rate_percent, media_breaks). Für tazite-Slots: Slot leer lassen.` }
+            return { success: false, error: `nicht_befund_typ ist nur für potenzial-Slots gültig (frequency_per_month, duration_minutes, error_rate_percent, media_breaks). Für alle anderen Slots: Slot leer lassen.` }
           }
           // Falls through to step lookup + write below with isNichtBefundMode=true
         } else {
@@ -339,16 +374,32 @@ export function buildTools(
             if ((slot === 'frequency_per_month' || slot === 'duration_minutes' || slot === 'error_rate_percent') && typeof value !== 'number') {
               return { success: false, error: `${slot} erwartet eine Zahl, nicht "${value}". Extrahiere den numerischen Mittelwert.` }
             }
+          } else if (isTeilschritte) {
+            if (!Array.isArray(value) || (value as string[]).length === 0) {
+              return { success: false, error: `teilschritte erwartet ein nicht-leeres String-Array (die VOLLSTÄNDIGE bisherige Ablauf-Liste inkl. neuem Schritt), z.B. ["Rechnung prüfen", "Kontieren", "Freigeben"].` }
+            }
+          } else if (isEnumArray) {
+            if (!Array.isArray(value) || (value as string[]).length === 0) {
+              return { success: false, error: `${slot} erwartet ein nicht-leeres Array aus: ${ENUM_ARRAY_VALUES[slot].join(', ')}.` }
+            }
+            const invalid = (value as string[]).filter((v) => !ENUM_ARRAY_VALUES[slot].includes(v))
+            if (invalid.length > 0) {
+              return { success: false, error: `${slot}: ungültige Werte ${JSON.stringify(invalid)}. Erlaubt: ${ENUM_ARRAY_VALUES[slot].join(', ')}.` }
+            }
           } else if (isTaziteArray) {
             if (!Array.isArray(value)) {
               return { success: false, error: `${slot} erwartet ein String-Array, z.B. ["SAP FI", "Excel"]. Nicht: "${value}".` }
             }
             // Reject empty arrays — spec requires value: null + nicht_befund_typ instead
             if ((value as string[]).length === 0) {
-              return { success: false, error: `Leeres Array für "${slot}" ist ungültig. Wenn nichts bekannt: lass den Slot leer und setze nicht_befund_typ via record_governance, oder frag nochmals nach.` }
+              return { success: false, error: `Leeres Array für "${slot}" ist ungültig. Wenn nichts bekannt: lass den Slot leer, oder frag nochmals nach.` }
             }
-          } else if (slot === 'entscheidungslogik' && typeof value !== 'string') {
-            return { success: false, error: `entscheidungslogik erwartet einen String (Beschreibung der Entscheidungslogik), nicht "${value}".` }
+          } else if (isEnumSingle) {
+            if (typeof value !== 'string' || !ENUM_SINGLE_VALUES[slot].includes(value)) {
+              return { success: false, error: `${slot} erwartet genau einen Wert aus: ${ENUM_SINGLE_VALUES[slot].join(', ')}. Nicht: "${value}".` }
+            }
+          } else if (isTaziteString && typeof value !== 'string') {
+            return { success: false, error: `${slot} erwartet einen String, nicht "${value}".` }
           }
         }
 
@@ -369,6 +420,7 @@ export function buildTools(
           quote: verbatimQuote,
           ...(confidence !== undefined ? { confidence } : {}),
           ...(qualifier !== undefined ? { qualifier } : {}),
+          ...(einheit !== undefined ? { einheit } : {}),
           sourceTurn: source_turn ?? null,
           isCorrection: is_correction,
           writeSource,
@@ -392,53 +444,6 @@ export function buildTools(
         }
         // accepted — detail carries step_id, step_title, slot, value|nicht_befund_typ, source_turn
         return { success: true, ...result.detail }
-      },
-    }),
-
-    record_governance: tool({
-      description: 'Erfasst Governance-Information zu einem Prozessschritt (wer führt aus, welche OE, welche Systeme). Partial-Write: nur übergebene Felder werden gesetzt, bestehende bleiben unverändert. Separat von record_slot — GovernanceSlot hat anderes Format. Rufe auf sobald eine Governance-Information im Turn vorkommt.',
-      inputSchema: z.object({
-        step_title: z.string().min(1),
-        rolle: z.string().optional().describe('Person oder Rolle, die den Schritt ausführt'),
-        organisationseinheit: z.string().optional().describe('Organisationseinheit / Abteilung'),
-        systeme: z.array(z.string()).optional().describe('Systeme oder Plattformen, die für diesen Schritt zuständig sind (nicht: Tools die benutzt werden — das ist hilfsmittel)'),
-        nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Setze wenn Governance explizit nicht klärbar ist'),
-        evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus aktuellem Turn als Beleg'),
-        evidence_quote: z.string().min(3).optional(),
-        source_turn: z.number().int().positive().optional(),
-      }),
-      execute: async ({ step_title, rolle, organisationseinheit, systeme, nicht_befund_typ, evidence_span, evidence_quote, source_turn }) => {
-        // Evidence validation (same pattern as record_slot)
-        const userInputText = currentUserInput?.trim() ?? ''
-        let resolvedQuote: string | null = null
-
-        if (evidence_span && evidence_span.trim().length >= 2) {
-          const span = evidence_span.trim()
-          if (userInputText.length > 0 && userInputText.includes(span)) {
-            resolvedQuote = extractSentenceAroundSpan(userInputText, span)
-          } else {
-            return { success: false, error: `evidence_span "${span}" nicht im aktuellen Turn gefunden.` }
-          }
-        }
-        if (resolvedQuote === null && evidence_quote && evidence_quote.trim().length >= 3) {
-          resolvedQuote = evidence_quote.trim()
-        }
-
-        const result = session.stage({
-          kind: 'record_governance',
-          stepTitle: step_title,
-          ...(rolle !== undefined ? { rolle } : {}),
-          ...(organisationseinheit !== undefined ? { organisationseinheit } : {}),
-          ...(systeme !== undefined ? { systeme } : {}),
-          ...(nicht_befund_typ !== undefined ? { nichtBefundTyp: nicht_befund_typ } : {}),
-          quote: resolvedQuote,
-          sourceTurn: source_turn ?? null,
-        })
-        if (result.status === 'blocked' && result.reason === 'step_not_found') {
-          const avail = (result.detail?.available as Array<{ title: string }> | undefined ?? []).map((s) => `"${s.title}"`).join(', ')
-          return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbar: ${avail || '(keine)'}.` }
-        }
-        return { success: true, step_title, governance: result.detail?.governance, quote: resolvedQuote, source_turn: source_turn ?? null }
       },
     }),
 
@@ -517,31 +522,6 @@ export function buildTools(
       },
     }),
 
-    update_walkthrough_data: tool({
-      description: 'Aktualisiert die Ablauf- und Reibungsdaten eines Prozessschritts. SOFORT aufrufen wenn der Mitarbeiter Prozessschritte beschreibt — erkennbar an Signalwörtern wie "zuerst", "dann", "danach", "als nächstes", "am Ende". Felder sind additiv — bestehende Einträge werden nicht gelöscht.',
-      inputSchema: z.object({
-        step_title: z.string().min(1),
-        process_steps: z.array(z.string()).optional(),
-        friction_points: z.array(z.string()).optional(),
-        friction_tools: z.array(z.string()).optional(),
-        pain_point_primary: z.string().nullable().optional(),
-      }),
-      execute: async ({ step_title, process_steps, friction_points, friction_tools, pain_point_primary }) => {
-        const result = session.stage({
-          kind: 'update_walkthrough_data',
-          stepTitle: step_title,
-          ...(process_steps !== undefined ? { process_steps } : {}),
-          ...(friction_points !== undefined ? { friction_points } : {}),
-          ...(friction_tools !== undefined ? { friction_tools } : {}),
-          ...(pain_point_primary !== undefined ? { pain_point_primary } : {}),
-        })
-        if (result.status === 'blocked' && result.reason === 'step_not_found') {
-          const avail = (result.detail?.available as Array<{ title: string }> | undefined ?? []).map((s) => `"${s.title}"`).join(', ')
-          return { success: false, error: `Schritt "${step_title}" nicht gefunden. Verfügbare Schritte: ${avail || '(keine)'}. Nutze einen dieser Titel exakt.` }
-        }
-        return { success: true, step_title }
-      },
-    }),
   }
 
   // When allowedTools is specified, filter the returned tool map to only the requested tools.

@@ -9,6 +9,8 @@
  * that touch Supabase, the AI SDK, or Next.js server modules.
  */
 
+import type { WriteSource } from './slotConflictResolver'
+
 /**
  * PROJ-42: collapsed from six phases (intro/process_loop/walkthrough_step/
  * slot_completion/coverage_check/wrap_up/clarification) to three plus the
@@ -22,41 +24,42 @@ export type Phase =
   | 'closing'
   | 'clarification'
 
-export interface SlotValue {
-  value: string | number | boolean | string[] | null
-  quote: string
-  confidence?: 'confirmed' | 'estimate' | 'unknown'
-  qualifier?: string | null
-  /** Which write path last successfully wrote this slot — used for conflict resolution */
-  writeSource?: 'analyst_catchup' | 'analyst_online' | 'backfill' | 'analyst'
-  /** Explicit non-finding marker — deckungsgleich mit TaziteSlot/Schema NichtBefundTyp (PROJ-28/BL-E2.1) */
-  nicht_befund_typ?: NichtBefundTyp
-}
-
 export type NichtBefundTyp = 'nicht_zutreffend' | 'unbekannt' | 'verweigert' | null
 
-/** Taziter Einzel-Slot: wörtlicher Beleg + nicht_befund_typ für Coverage-Bewertung */
-export interface TaziteSlot {
-  value: string | null
+/**
+ * PROJ-45 (ADR-025): single unified slot shape for every scalar/array O-field —
+ * replaces the four previously-distinct StepEntry slot types (SlotValue for
+ * potenzial, TaziteSlot for single-string O-fields, TaziteSlotArray for
+ * multi-value O-fields, GovernanceSlot for the now-removed governance object).
+ * `qualifier`/`writeSource`/`einheit` only carry meaning on potenzial fields
+ * (SchemaSlotNumber) — kept optional here so the qualitative O-fields don't
+ * need to shed them.
+ */
+export interface SchemaSlotBase<T> {
+  value: T | null
+  /** Verbatim evidence quote grounding this value — required for KI-18 grounding checks and eval scorers (hallucinationRate, slotDepth). */
   quote: string | null
   confidence?: 'confirmed' | 'estimate' | 'unknown'
+  /** Explicit non-finding marker (PROJ-28/BL-E2.1) */
   nicht_befund_typ: NichtBefundTyp
 }
 
-/** Taziter Mehrwert-Slot (leeres Array [] ist ungültig → value: null + nicht_befund_typ setzen) */
-export interface TaziteSlotArray {
-  value: string[] | null
-  quote: string | null
-  confidence?: 'confirmed' | 'estimate' | 'unknown'
-  nicht_befund_typ: NichtBefundTyp
-}
+export type SchemaSlotString = SchemaSlotBase<string>
+export type SchemaSlotStringArray = SchemaSlotBase<string[]>
 
-/** Governance-Objekt: organisationale Einbettung eines Prozessschritts */
-export interface GovernanceSlot {
-  rolle: string | null
-  organisationseinheit: string | null
-  systeme: string[] | null
-  nicht_befund_typ: NichtBefundTyp
+export interface SchemaSlotNumber extends SchemaSlotBase<number> {
+  qualifier?: string | null
+  /** Which write path last successfully wrote this slot — used for conflict resolution (potenzial only) */
+  writeSource?: WriteSource
+  /**
+   * PROJ-45 (ADR-025 D5): unit as stated by the employee — e.g. 'pro_woche' for
+   * haeufigkeit, 'stunden' for dauer. Absent = the field's implicit canonical
+   * unit (pro Monat / Minuten — matches how the 6 pre-PROJ-45 interviews were
+   * recorded). Conversion to the canonical unit happens deterministically in
+   * code at use-time (resolveHaeufigkeitProMonat/resolveDauerMinuten below),
+   * never by the LLM at elicitation time (KI-18's largest documented cause).
+   */
+  einheit?: string | null
 }
 
 /** Getypte Abhängigkeitskante (depends_on-Array) — PROJ-26/BL-E1.2 */
@@ -80,81 +83,95 @@ export interface Abhaengigkeiten {
   nicht_befund_typ: NichtBefundTyp
 }
 
+// ─── PROJ-45: AI-Wert-Faktoren enums ──────────────────────────────────────────
+
+export const AUFGABENTYP_VALUES = [
+  'entscheidung',
+  'informationsuebertragung',
+  'zusammenfassung',
+  'suche',
+  'klassifikation',
+  'generierung',
+] as const
+export type Aufgabentyp = (typeof AUFGABENTYP_VALUES)[number]
+
+export const RISIKO_SCHWERE_VALUES = [
+  'leicht_korrigierbar',
+  'teuer',
+  'rechtlich_kritisch',
+  'kundenkontakt_relevant',
+] as const
+export type RisikoSchwere = (typeof RISIKO_SCHWERE_VALUES)[number]
+
+export const STANDARDISIERUNGSGRAD_VALUES = [
+  'standardisiert',
+  'teilweise_standardisiert',
+  'stark_variabel',
+] as const
+export type Standardisierungsgrad = (typeof STANDARDISIERUNGSGRAD_VALUES)[number]
+
+export const INFORMATIONSDICHTE_VALUES = ['strukturiert', 'gemischt', 'unstrukturiert'] as const
+export type Informationsdichte = (typeof INFORMATIONSDICHTE_VALUES)[number]
+
 export interface StepEntry {
   /** Stable identifier assigned by register_step: S001, S002, … (PROJ-27/BL-E1.4) */
   id?: string
   title: string
   /** 1-based position in step_tracker array (O1) — set by register_step */
   reihenfolge: number
-  /** Replaces free-text role field */
-  governance: GovernanceSlot | null
+  status: 'exploring' | 'walkthrough' | 'done'
   /** O6 typed dependency edges — PROJ-26 */
   abhaengigkeiten: Abhaengigkeiten | null
-  /** Quantitative KI-Potenzial fields (moved from slots) */
+  /** Quantitative KI-Potenzial fields */
   potenzial: {
-    frequency_per_month: SlotValue | null
-    duration_minutes: SlotValue | null
-    error_rate_percent: SlotValue | null
-    media_breaks: SlotValue | null
+    frequency_per_month: SchemaSlotNumber | null
+    duration_minutes: SchemaSlotNumber | null
+    error_rate_percent: SchemaSlotNumber | null
+    media_breaks: SchemaSlotNumber | null
   }
-  status: 'exploring' | 'walkthrough' | 'done'
   slots: {
-    /** O2 Entscheidungslogik (was: rule_based boolean) */
-    entscheidungslogik: TaziteSlot | null
-    /** O2 Tazite Cues / implizites Erfahrungswissen */
-    tazite_cues: TaziteSlotArray | null
-    /** O3 Ausnahmen und Sonderfälle */
-    ausnahmen: TaziteSlotArray | null
-    /** O4 Inputs */
-    inputs: TaziteSlotArray | null
-    /** O4 Outputs */
-    outputs: TaziteSlotArray | null
-    /** O5 Hilfsmittel / Systeme (was: data_sources) */
-    hilfsmittel: TaziteSlotArray | null
+    /** O2 Entscheidungslogik (reguläre, wiederkehrende Verzweigungsregel) */
+    entscheidungslogik: SchemaSlotString | null
+    /** O2 Tazite Cues / implizites Erfahrungswissen — Aspekt (i), opportunistisch (kein target_o_field) */
+    tazite_cues: SchemaSlotStringArray | null
+    /** O3 Ausnahmen und Sonderfälle (seltene Abweichungen vom Normalablauf) */
+    ausnahmen: SchemaSlotStringArray | null
+    /** O4 Inputs — Dateninhalt, keine Systemnamen (die gehören in hilfsmittel) */
+    inputs: SchemaSlotStringArray | null
+    /** O4 Outputs — Dateninhalt, keine Systemnamen */
+    outputs: SchemaSlotStringArray | null
+    /** O5 Hilfsmittel / Systeme */
+    hilfsmittel: SchemaSlotStringArray | null
+    /** PROJ-45: befördert von friction_points (Legacy-Nebenkanal) zu vollwertigem O-Feld */
+    reibungspunkte: SchemaSlotStringArray | null
+    /** PROJ-45 (neu): externer Auslöser einer Tätigkeit — Freitext. Ein Trigger, der ein anderer registrierter Schritt ist, gehört in abhaengigkeiten (Kantentyp ausloeser), nicht hierher. */
+    ausloeser: SchemaSlotString | null
+    /** PROJ-45 (neu): Mehrfachauswahl, koexistiert mit entscheidungslogik (bleibt Freitext-Beschreibung der Regel) */
+    aufgabentyp: SchemaSlotBase<Aufgabentyp[]> | null
+    /** PROJ-45 (neu): Mehrfachauswahl, Konsequenzen nicht gegenseitig exklusiv */
+    risiko_schwere: SchemaSlotBase<RisikoSchwere[]> | null
+    /** PROJ-45 (neu): Klassifikation aus bereits erhobenem ausnahmen-Inhalt — kein eigenes target_o_field, keine eigene Frage */
+    standardisierungsgrad: SchemaSlotBase<Standardisierungsgrad> | null
+    /** PROJ-45 (neu): Klassifikation aus bereits erhobenem inputs-/hilfsmittel-Inhalt — kein eigenes target_o_field, keine eigene Frage */
+    informationsdichte: SchemaSlotBase<Informationsdichte> | null
   }
-  process_steps?: string[]
-  friction_points?: string[]
-  friction_tools?: string[]
-  pain_point_primary?: string | null
+  /** Ordered walkthrough sub-steps — additive, unwrapped (no confidence/nicht_befund semantics). Renamed from process_steps (PROJ-45: collided with the process_steps table name). */
+  teilschritte?: string[]
   /** Cached Jina v3 embedding of the step title — populated on register_step, used for semantic dedup */
   embedding?: number[]
 }
 
-/** Legacy JSONB shape (pre-PROJ-25) — used by normalizeStepEntry for backward compat */
-interface LegacyStepEntry {
-  id?: string
-  title: string
-  role?: string | null
-  status: 'exploring' | 'walkthrough' | 'done'
-  slots: {
-    frequency_per_month?: SlotValue | null
-    duration_minutes?: SlotValue | null
-    rule_based?: SlotValue | null
-    data_sources?: SlotValue | null
-    error_rate_percent?: SlotValue | null
-    media_breaks?: SlotValue | null
-    // new tazite fields may already be present in partially-migrated entries
-    entscheidungslogik?: TaziteSlot | null
-    tazite_cues?: TaziteSlotArray | null
-    ausnahmen?: TaziteSlotArray | null
-    inputs?: TaziteSlotArray | null
-    outputs?: TaziteSlotArray | null
-    hilfsmittel?: TaziteSlotArray | null
-  }
-  potenzial?: {
-    frequency_per_month?: SlotValue | null
-    duration_minutes?: SlotValue | null
-    error_rate_percent?: SlotValue | null
-    media_breaks?: SlotValue | null
-  } | null
-  reihenfolge?: number
-  governance?: GovernanceSlot | null
-  abhaengigkeiten?: Abhaengigkeiten | null
+/**
+ * Backward-compat read shape: raw JSONB step_tracker entries written before
+ * PROJ-45 may still carry these now-removed fields (governance, friction_tools,
+ * pain_point_primary, process_steps, top-level friction_points). Only used by
+ * normalizeStepEntry to safely ignore them — never written again.
+ */
+interface RawStepEntry extends Omit<StepEntry, 'slots' | 'teilschritte'> {
+  slots?: Partial<StepEntry['slots']>
   process_steps?: string[]
+  teilschritte?: string[]
   friction_points?: string[]
-  friction_tools?: string[]
-  pain_point_primary?: string | null
-  embedding?: number[]
 }
 
 /**
@@ -171,98 +188,37 @@ function parseJsonIfString<T>(v: unknown): T | null {
   }
 }
 
-/** Normalizes a TaziteSlotArray: empty value:[] → value:null (spec: [] is invalid). */
-function normalizeArraySlot(raw: TaziteSlotArray | null | undefined): TaziteSlotArray | null {
+/** Normalizes a SchemaSlotStringArray: empty value:[] → value:null (spec: [] is invalid). */
+function normalizeArraySlot<T>(raw: SchemaSlotBase<T[]> | null | undefined): SchemaSlotBase<T[]> | null {
   if (raw == null) return null
-  const slot = parseJsonIfString<TaziteSlotArray>(raw) ?? raw
+  const slot = parseJsonIfString<SchemaSlotBase<T[]>>(raw) ?? raw
   if (Array.isArray(slot.value) && slot.value.length === 0) return { ...slot, value: null }
   return slot
 }
 
 /**
  * Normalizes a raw JSONB step entry into the current StepEntry shape.
- * Handles both pre-PROJ-25 (flat slots) and post-PROJ-25 (potenzial + tazite slots).
- * Call at all JSONB read points so old sessions remain readable without a code-side migration.
+ * Call at all JSONB read points so old sessions remain readable without a
+ * code-side migration. PROJ-45: the pre-PROJ-25 flat-slot legacy branch was
+ * removed (verified: 0 real records in that format across all 6 real
+ * interviews) — this now only handles the post-PROJ-25/pre-PROJ-45 shape,
+ * silently dropping fields removed by PROJ-45 (governance, friction_tools,
+ * pain_point_primary) if present in older step_tracker JSONB.
  */
 export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): StepEntry {
-  const r = raw as LegacyStepEntry
+  const r = raw as RawStepEntry
 
-  // Determine if this is a legacy entry (quantitative fields still in slots)
-  const isLegacy =
-    r.potenzial == null &&
-    (r.slots?.frequency_per_month !== undefined ||
-      r.slots?.duration_minutes !== undefined ||
-      r.slots?.rule_based !== undefined ||
-      r.slots?.data_sources !== undefined ||
-      r.slots?.error_rate_percent !== undefined ||
-      r.slots?.media_breaks !== undefined)
-
-  let potenzial: StepEntry['potenzial']
-  let entscheidungslogik: TaziteSlot | null
-  let hilfsmittel: TaziteSlotArray | null
-
-  if (isLegacy) {
-    // Move quantitative fields from slots to potenzial
-    potenzial = {
-      frequency_per_month: r.slots?.frequency_per_month ?? null,
-      duration_minutes: r.slots?.duration_minutes ?? null,
-      error_rate_percent: r.slots?.error_rate_percent ?? null,
-      media_breaks: r.slots?.media_breaks ?? null,
-    }
-
-    // rule_based (boolean SlotValue) → entscheidungslogik (TaziteSlot)
-    const ruleBasedSlot = r.slots?.rule_based
-    if (ruleBasedSlot != null) {
-      entscheidungslogik = {
-        value: `rule_based: ${String(ruleBasedSlot.value)}`,
-        quote: ruleBasedSlot.quote,
-        confidence: ruleBasedSlot.confidence,
-        nicht_befund_typ: null,
-      }
-    } else {
-      entscheidungslogik = r.slots?.entscheidungslogik ?? null
-    }
-
-    // data_sources (string[] SlotValue) → hilfsmittel (TaziteSlotArray)
-    const dataSourcesSlot = r.slots?.data_sources
-    if (dataSourcesSlot != null) {
-      const val = dataSourcesSlot.value
-      hilfsmittel = {
-        value: Array.isArray(val) && val.length > 0 ? val : val != null && !Array.isArray(val) ? [String(val)] : null,
-        quote: dataSourcesSlot.quote,
-        confidence: dataSourcesSlot.confidence,
-        nicht_befund_typ: null,
-      }
-    } else {
-      hilfsmittel = r.slots?.hilfsmittel ?? null
-    }
-  } else {
-    potenzial = {
-      frequency_per_month: parseJsonIfString(r.potenzial?.frequency_per_month),
-      duration_minutes: parseJsonIfString(r.potenzial?.duration_minutes),
-      error_rate_percent: parseJsonIfString(r.potenzial?.error_rate_percent),
-      media_breaks: parseJsonIfString(r.potenzial?.media_breaks),
-    }
-    entscheidungslogik = parseJsonIfString<TaziteSlot>(r.slots?.entscheidungslogik) ?? null
-    hilfsmittel = parseJsonIfString<TaziteSlotArray>(r.slots?.hilfsmittel) ?? null
-  }
-
-  // Governance: migrate free-text role if governance not yet set
-  let governance: GovernanceSlot | null = parseJsonIfString<GovernanceSlot>(r.governance) ?? null
-  if (governance == null && r.role != null) {
-    governance = {
-      rolle: r.role,
-      organisationseinheit: null,
-      systeme: null,
-      nicht_befund_typ: null,
-    }
+  const potenzial: StepEntry['potenzial'] = {
+    frequency_per_month: parseJsonIfString(r.potenzial?.frequency_per_month),
+    duration_minutes: parseJsonIfString(r.potenzial?.duration_minutes),
+    error_rate_percent: parseJsonIfString(r.potenzial?.error_rate_percent),
+    media_breaks: parseJsonIfString(r.potenzial?.media_breaks),
   }
 
   return {
     ...(r.id !== undefined ? { id: r.id } : {}),
     title: r.title,
     reihenfolge: r.reihenfolge ?? fallbackReihenfolge,
-    governance,
     abhaengigkeiten: (() => {
       // KI-1 read-compat (decode legacy string) + PROJ-26 typed-edge normalization
       const a = parseJsonIfString<Abhaengigkeiten>(r.abhaengigkeiten)
@@ -277,49 +233,38 @@ export function normalizeStepEntry(raw: unknown, fallbackReihenfolge: number): S
     potenzial,
     status: parseJsonIfString<string>(r.status) as StepEntry['status'],
     slots: {
-      entscheidungslogik,
+      entscheidungslogik: parseJsonIfString<SchemaSlotString>(r.slots?.entscheidungslogik) ?? null,
       tazite_cues: normalizeArraySlot(r.slots?.tazite_cues),
       ausnahmen: normalizeArraySlot(r.slots?.ausnahmen),
       inputs: normalizeArraySlot(r.slots?.inputs),
       outputs: normalizeArraySlot(r.slots?.outputs),
-      hilfsmittel: normalizeArraySlot(hilfsmittel),
+      hilfsmittel: normalizeArraySlot(r.slots?.hilfsmittel),
+      reibungspunkte: normalizeArraySlot(r.slots?.reibungspunkte),
+      ausloeser: parseJsonIfString<SchemaSlotString>(r.slots?.ausloeser) ?? null,
+      aufgabentyp: normalizeArraySlot(r.slots?.aufgabentyp),
+      risiko_schwere: normalizeArraySlot(r.slots?.risiko_schwere),
+      standardisierungsgrad: parseJsonIfString(r.slots?.standardisierungsgrad) ?? null,
+      informationsdichte: parseJsonIfString(r.slots?.informationsdichte) ?? null,
     },
-    process_steps: r.process_steps,
-    friction_points: r.friction_points,
-    friction_tools: r.friction_tools,
-    pain_point_primary: r.pain_point_primary ?? null,
+    teilschritte: r.teilschritte ?? r.process_steps,
     embedding: r.embedding,
   }
+}
+
+/**
+ * Parses the process_steps.schritt_daten JSONB column (PROJ-45/ADR-025 D1) —
+ * a single StepEntry-shaped object (not an array), written verbatim from the
+ * step_tracker entry at createProcessStepsFromTracker time. Returns null for
+ * pre-PROJ-45 rows that predate this column (no backfill — spec edge case).
+ */
+export function parseSchrittDaten(raw: unknown): StepEntry | null {
+  if (raw == null) return null
+  return normalizeStepEntry(raw, 1)
 }
 
 // ---------------------------------------------------------------------------
 // Slot name constants
 // ---------------------------------------------------------------------------
-
-/** Legacy quantitative slots — kept for backward compat with existing callers */
-export const MANDATORY_SLOTS = [
-  'frequency_per_month',
-  'duration_minutes',
-  'rule_based',
-  'data_sources',
-] as const
-
-export const OPTIONAL_SLOTS = ['error_rate_percent', 'media_breaks'] as const
-
-/** @deprecated Use TAZITE_SLOT_NAMES + POTENZIAL_SLOT_NAMES instead */
-export type SlotName = (typeof MANDATORY_SLOTS)[number] | (typeof OPTIONAL_SLOTS)[number]
-
-/** Writable tazite slot keys (O2–O5) passed to record_slot */
-export const TAZITE_SLOT_NAMES = [
-  'entscheidungslogik',
-  'tazite_cues',
-  'ausnahmen',
-  'inputs',
-  'outputs',
-  'hilfsmittel',
-] as const
-
-export type TaziteSlotName = (typeof TAZITE_SLOT_NAMES)[number]
 
 /** Writable quantitative slot keys passed to record_slot */
 export const POTENZIAL_SLOT_NAMES = [
@@ -331,9 +276,43 @@ export const POTENZIAL_SLOT_NAMES = [
 
 export type PotenzialSlotName = (typeof POTENZIAL_SLOT_NAMES)[number]
 
+/** Single free-text string slots (SchemaSlotString) writable via record_slot. */
+export const TAZITE_STRING_SLOT_NAMES = ['entscheidungslogik', 'ausloeser'] as const
+
+/** Free-text array slots (SchemaSlotStringArray) writable via record_slot. */
+export const TAZITE_ARRAY_SLOT_NAMES = [
+  'tazite_cues',
+  'ausnahmen',
+  'inputs',
+  'outputs',
+  'hilfsmittel',
+  'reibungspunkte',
+] as const
+
+/** Enum-constrained multi-select slots (PROJ-45 AI-Wert-Faktoren) writable via record_slot. */
+export const TAZITE_ENUM_ARRAY_SLOT_NAMES = ['aufgabentyp', 'risiko_schwere'] as const
+
+/** Enum-constrained single-value classification slots — Analyst-derived, no target_o_field, no SLOT_PROMPT_HINT. */
+export const TAZITE_ENUM_SINGLE_SLOT_NAMES = ['standardisierungsgrad', 'informationsdichte'] as const
+
+/** All slot-object keys (excludes teilschritte, which is a bare unwrapped array). */
+export const TAZITE_SLOT_NAMES = [
+  ...TAZITE_STRING_SLOT_NAMES,
+  ...TAZITE_ARRAY_SLOT_NAMES,
+  ...TAZITE_ENUM_ARRAY_SLOT_NAMES,
+  ...TAZITE_ENUM_SINGLE_SLOT_NAMES,
+] as const
+
+export type TaziteSlotName = (typeof TAZITE_SLOT_NAMES)[number]
+
 /**
- * O1–O6 coverage fields (9 total). Scored by slotCoverage.ts.
- * NOTE: potenzial-fields and governance are NOT in this list.
+ * O1–O6 coverage fields (9 total). Scored by slotCoverage.ts's dedup_slot_coverage
+ * eval metric — bound to the frozen (meridian-ma v1.2) thesis schema.
+ * PROJ-45 (ADR-025 D3): stays UNCHANGED, including tazite_cues, even though the
+ * Interview-Engine's own target_o_field set (O_SLOT_FIELDS below) has diverged
+ * from it — kept as two independent lists so historical KI-18/KI-27 eval
+ * comparability isn't broken by the AI-Wert-Faktoren additions.
+ * NOTE: potenzial-fields are NOT in this list.
  */
 export const COVERAGE_FIELDS = [
   'bezeichnung',       // O1 — maps to StepEntry.title
@@ -350,12 +329,30 @@ export const COVERAGE_FIELDS = [
 export type CoverageField = (typeof COVERAGE_FIELDS)[number]
 
 /**
- * True iff an O1–O6 coverage field is "filled" for a step (non-null value OR an
- * explicit nicht_befund_typ). Shared by the dedup_slot_coverage eval scorer
- * (slotCoverage.ts) and the O-Drought primitive (interviewOrchestrator.ts,
- * PROJ-44 Remediation) so both stay behaviorally identical.
+ * PROJ-46 (ADR-023 D1) target_o_field set — the Interview-Engine's OWN active
+ * elicitation target, independent from COVERAGE_FIELDS (ADR-025 D3). PROJ-45:
+ * −tazite_cues (Aspekt-i, opportunistic only), +reibungspunkte/aufgabentyp/
+ * risiko_schwere/ausloeser (7 → 10 fields). standardisierungsgrad/
+ * informationsdichte are intentionally excluded — Analyst-classified, never a
+ * Talker target.
  */
-export function isCoverageFieldFilled(step: StepEntry, field: CoverageField): boolean {
+export const O_SLOT_FIELDS = [
+  'entscheidungslogik',
+  'ausnahmen',
+  'inputs',
+  'outputs',
+  'hilfsmittel',
+  'abhaengigkeiten',
+  'reibungspunkte',
+  'aufgabentyp',
+  'risiko_schwere',
+  'ausloeser',
+] as const
+
+/** The 10 O2–O6 field names as a type (PROJ-46: Analyst's target_o_field enum). */
+export type OSlotField = (typeof O_SLOT_FIELDS)[number]
+
+function isFieldFilled(step: StepEntry, field: CoverageField | OSlotField): boolean {
   switch (field) {
     case 'bezeichnung':
       // O1 — title always present (non-empty string = filled)
@@ -373,7 +370,6 @@ export function isCoverageFieldFilled(step: StepEntry, field: CoverageField): bo
       )
     }
     default: {
-      // O2–O5 tazite slots — field name matches slots key directly
       const slot = step.slots[field as keyof typeof step.slots]
       if (slot == null) return false
       return slot.value != null || slot.nicht_befund_typ != null
@@ -382,28 +378,33 @@ export function isCoverageFieldFilled(step: StepEntry, field: CoverageField): bo
 }
 
 /**
- * O2–O6 fields only — excludes the auto-filled O1 (bezeichnung/reihenfolge).
- * The "substantial" coverage fields the O-Drought primitive tracks (PROJ-44
- * Remediation): a step whose O1 alone is set (just registered) has made no
- * qualitative progress yet.
+ * True iff an O1–O6 coverage field is "filled" for a step (non-null value OR an
+ * explicit nicht_befund_typ). Used by the dedup_slot_coverage eval scorer
+ * (slotCoverage.ts) — bound to COVERAGE_FIELDS (frozen thesis schema).
  */
-export const O_SLOT_FIELDS = COVERAGE_FIELDS.filter(
-  (f): f is Exclude<CoverageField, 'bezeichnung' | 'reihenfolge'> => f !== 'bezeichnung' && f !== 'reihenfolge',
-)
-
-/** The 7 O2–O6 field names as a type (PROJ-46: Analyst's target_o_field enum). */
-export type OSlotField = (typeof O_SLOT_FIELDS)[number]
-
-/** Count of filled O2–O6 fields for a step — the "depth" signal the O-Drought streak tracks. */
-export function countFilledOFields(step: StepEntry): number {
-  return O_SLOT_FIELDS.filter((f) => isCoverageFieldFilled(step, f)).length
+export function isCoverageFieldFilled(step: StepEntry, field: CoverageField): boolean {
+  return isFieldFilled(step, field)
 }
 
 /**
- * PROJ-46 QA H-1 Fix D: true iff the total count of filled O2–O6 fields across
- * the WHOLE tracker increased between before/after — "real new process depth",
- * as opposed to "any applied knowledge-tool write" (interviewAnalyst.ts's former
- * hasAppliedExtraction), which also fired on re-records, potenzial-only writes
+ * True iff an Interview-Engine target_o_field is "filled" for a step. Used by
+ * the O-Drought primitive (interviewOrchestrator.ts) — bound to O_SLOT_FIELDS
+ * (PROJ-45/46, diverges from COVERAGE_FIELDS per ADR-025 D3).
+ */
+export function isOFieldFilled(step: StepEntry, field: OSlotField): boolean {
+  return isFieldFilled(step, field)
+}
+
+/** Count of filled target_o_field fields for a step — the "depth" signal the O-Drought streak tracks. */
+export function countFilledOFields(step: StepEntry): number {
+  return O_SLOT_FIELDS.filter((f) => isOFieldFilled(step, f)).length
+}
+
+/**
+ * PROJ-46 QA H-1 Fix D: true iff the total count of filled target_o_field
+ * fields across the WHOLE tracker increased between before/after — "real new
+ * process depth", as opposed to "any applied knowledge-tool write" (interviewAnalyst.ts's
+ * former hasAppliedExtraction), which also fired on re-records, potenzial-only writes
  * (frequency/duration/error_rate/media_breaks) and floskel-triggered slots (run1
  * t34: 16 record_slot calls on a goodbye courtesy phrase). That over-broad signal
  * powered both the No-New-Extraction streak (interviewAnalyst.ts's
@@ -417,6 +418,45 @@ export function countFilledOFields(step: StepEntry): number {
 export function hasNewOField(beforeTracker: StepEntry[], afterTracker: StepEntry[]): boolean {
   const sumFilled = (tracker: StepEntry[]) => tracker.reduce((sum, s) => sum + countFilledOFields(s), 0)
   return sumFilled(afterTracker) > sumFilled(beforeTracker)
+}
+
+// ---------------------------------------------------------------------------
+// Einheiten-Unabhängigkeit (PROJ-45/ADR-025 D5) — deterministic unit conversion
+// ---------------------------------------------------------------------------
+// Converts a potenzial SchemaSlotNumber to its canonical unit (Monat für
+// Häufigkeit, Minuten für Dauer) at USE time (ROI-Berechnung, Reports, Use-Case
+// Engine) — never by the LLM at elicitation time. Absent/unrecognized `einheit`
+// defaults to the canonical unit (matches how the 6 pre-PROJ-45 interviews were
+// recorded — spec edge case: "als implizite Einheit Monat/Minuten interpretieren").
+
+const HAEUFIGKEIT_TO_MONATLICH: Record<string, number> = {
+  pro_tag: 30,
+  pro_woche: 30 / 7,
+  pro_monat: 1,
+  pro_quartal: 1 / 3,
+  pro_jahr: 1 / 12,
+}
+
+const DAUER_TO_MINUTEN: Record<string, number> = {
+  minuten: 1,
+  stunden: 60,
+  tage: 480, // 1 Arbeitstag = 8h
+}
+
+function resolveWithFactorTable(slot: SchemaSlotNumber | null | undefined, table: Record<string, number>): number | null {
+  if (slot?.value == null) return null
+  const factor = slot.einheit != null ? (table[slot.einheit] ?? 1) : 1
+  return Math.round(slot.value * factor * 100) / 100
+}
+
+/** Resolves a haeufigkeit (frequency_per_month) slot to its canonical "pro Monat" value. */
+export function resolveHaeufigkeitProMonat(slot: SchemaSlotNumber | null | undefined): number | null {
+  return resolveWithFactorTable(slot, HAEUFIGKEIT_TO_MONATLICH)
+}
+
+/** Resolves a dauer (duration_minutes) slot to its canonical "Minuten" value. */
+export function resolveDauerMinuten(slot: SchemaSlotNumber | null | undefined): number | null {
+  return resolveWithFactorTable(slot, DAUER_TO_MINUTEN)
 }
 
 const STEP_STOPWORDS = new Set(['und', 'oder', 'per', 'bei', 'im', 'von', 'mit', 'der', 'die', 'das'])
@@ -467,134 +507,6 @@ export function tokenJaccardNorm(a: string, b: string): number {
   let intersection = 0
   for (const t of ta) if (tb.has(t)) intersection++
   return intersection / (ta.size + tb.size - intersection)
-}
-
-// ---------------------------------------------------------------------------
-// Schema-conformant types (PROJ-25/27) — mirrors prozessschritt-schema.json
-// ---------------------------------------------------------------------------
-
-export type Konfidenz = 0.9 | 0.6 | 0.3 | null
-
-export interface SchemaSlotString {
-  wert: string | null
-  konfidenz: Konfidenz
-  nicht_befund_typ: NichtBefundTyp
-}
-
-export interface SchemaSlotStringArray {
-  wert: string[] | null
-  konfidenz: Konfidenz
-  nicht_befund_typ: NichtBefundTyp
-}
-
-export interface SchemaSlotNumber {
-  wert: number | null
-  konfidenz: Konfidenz
-  nicht_befund_typ: NichtBefundTyp
-}
-
-export interface SchemaPotenzial {
-  haeufigkeit_pro_monat: SchemaSlotNumber
-  dauer_minuten: SchemaSlotNumber
-  fehlerquote_prozent: SchemaSlotNumber
-  medienbrueche: SchemaSlotNumber
-}
-
-export interface SchemaGovernance {
-  rolle: string | null
-  organisationseinheit: string | null
-  systeme: string[] | null
-  nicht_befund_typ: NichtBefundTyp
-}
-
-export interface SchemaAbhaengigkeiten {
-  depends_on: AbhaengigkeitsKante[]
-  influences: EinflussKante[]
-  nicht_befund_typ: NichtBefundTyp
-}
-
-/** Schema-conformant Prozessschritt object (validated against prozessschritt-schema.json#/definitions/Schritt) */
-export interface Schritt {
-  id: string
-  bezeichnung: SchemaSlotString
-  reihenfolge: number
-  entscheidungslogik: SchemaSlotString
-  tazite_cues: SchemaSlotStringArray
-  ausnahmen: SchemaSlotStringArray
-  inputs: SchemaSlotStringArray
-  outputs: SchemaSlotStringArray
-  hilfsmittel: SchemaSlotStringArray
-  abhaengigkeiten: SchemaAbhaengigkeiten
-  potenzial?: SchemaPotenzial
-  governance?: SchemaGovernance
-}
-
-/**
- * Maps a StepEntry to the schema-conformant Schritt form.
- * Used by schemaConformanceRate scorer and future PROJ-26 edge extraction.
- */
-export function toGrenzobjekt(step: StepEntry, fallbackIndex: number): Schritt {
-  const id = step.id ?? `S${String(fallbackIndex).padStart(3, '0')}`
-
-  function conf(c: 'confirmed' | 'estimate' | 'unknown' | undefined, hasValue: boolean): Konfidenz {
-    if (c === 'confirmed') return 0.9
-    if (c === 'estimate') return 0.6
-    if (c === 'unknown') return 0.3
-    return hasValue ? 0.9 : null
-  }
-
-  function mapTaziteSlot(ts: TaziteSlot | null): SchemaSlotString {
-    if (ts == null) return { wert: null, konfidenz: null, nicht_befund_typ: null }
-    return { wert: ts.value, konfidenz: conf(ts.confidence, ts.value != null), nicht_befund_typ: ts.nicht_befund_typ ?? null }
-  }
-
-  function mapTaziteSlotArray(tsa: TaziteSlotArray | null): SchemaSlotStringArray {
-    if (tsa == null) return { wert: null, konfidenz: null, nicht_befund_typ: null }
-    return { wert: tsa.value, konfidenz: conf(tsa.confidence, tsa.value != null), nicht_befund_typ: tsa.nicht_befund_typ ?? null }
-  }
-
-  function mapPotenzialSlot(sv: SlotValue | null): SchemaSlotNumber {
-    if (sv == null) return { wert: null, konfidenz: null, nicht_befund_typ: null }
-    return {
-      wert: typeof sv.value === 'number' ? sv.value : null,
-      konfidenz: conf(sv.confidence, sv.value != null),
-      nicht_befund_typ: sv.nicht_befund_typ ?? null,
-    }
-  }
-
-  const schritt: Schritt = {
-    id,
-    bezeichnung: { wert: step.title, konfidenz: 0.9, nicht_befund_typ: null },
-    reihenfolge: step.reihenfolge,
-    entscheidungslogik: mapTaziteSlot(step.slots.entscheidungslogik),
-    tazite_cues: mapTaziteSlotArray(step.slots.tazite_cues),
-    ausnahmen: mapTaziteSlotArray(step.slots.ausnahmen),
-    inputs: mapTaziteSlotArray(step.slots.inputs),
-    outputs: mapTaziteSlotArray(step.slots.outputs),
-    hilfsmittel: mapTaziteSlotArray(step.slots.hilfsmittel),
-    abhaengigkeiten: step.abhaengigkeiten ?? { depends_on: [], influences: [], nicht_befund_typ: null },
-  }
-
-  const p = step.potenzial
-  if (p.frequency_per_month != null || p.duration_minutes != null || p.error_rate_percent != null || p.media_breaks != null) {
-    schritt.potenzial = {
-      haeufigkeit_pro_monat: mapPotenzialSlot(p.frequency_per_month),
-      dauer_minuten: mapPotenzialSlot(p.duration_minutes),
-      fehlerquote_prozent: mapPotenzialSlot(p.error_rate_percent),
-      medienbrueche: mapPotenzialSlot(p.media_breaks),
-    }
-  }
-
-  if (step.governance != null) {
-    schritt.governance = {
-      rolle: step.governance.rolle,
-      organisationseinheit: step.governance.organisationseinheit,
-      systeme: step.governance.systeme,
-      nicht_befund_typ: step.governance.nicht_befund_typ,
-    }
-  }
-
-  return schritt
 }
 
 /**

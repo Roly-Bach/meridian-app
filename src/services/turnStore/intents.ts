@@ -15,7 +15,6 @@
 import type { Json } from '@/lib/database.types'
 import type {
   StepEntry,
-  GovernanceSlot,
   NichtBefundTyp,
   PotenzialSlotName,
   TaziteSlotName,
@@ -115,7 +114,7 @@ export interface RecordSlotIntent {
   kind: 'record_slot'
   stepId?: string
   stepTitle: string
-  slot: PotenzialSlotName | TaziteSlotName
+  slot: PotenzialSlotName | TaziteSlotName | 'teilschritte'
   /** Resolved value (post NICHT-BEFUND parse). Undefined in NICHT-BEFUND mode. */
   value?: string | number | string[]
   nichtBefundTyp?: Exclude<NichtBefundTyp, null>
@@ -124,21 +123,11 @@ export interface RecordSlotIntent {
   quote: string
   confidence?: 'confirmed' | 'estimate' | 'unknown'
   qualifier?: string | null
+  /** PROJ-45 (ADR-025 D5): unit as stated by the employee — potenzial slots only. */
+  einheit?: string | null
   sourceTurn?: number | null
   isCorrection?: boolean
   writeSource: WriteSource
-}
-
-/** record_governance — partial merge of the GovernanceSlot. */
-export interface RecordGovernanceIntent {
-  kind: 'record_governance'
-  stepTitle: string
-  rolle?: string
-  organisationseinheit?: string
-  systeme?: string[]
-  nichtBefundTyp?: Exclude<NichtBefundTyp, null>
-  quote: string | null
-  sourceTurn?: number | null
 }
 
 /** record_dependency — typed edge add or nicht-befund marker on the source step. */
@@ -159,16 +148,6 @@ export interface LinkBottleneckIntent {
   stepTitle: string
   description: string
   severity: 'high' | 'medium' | 'low'
-}
-
-/** update_walkthrough_data — additive merge of walkthrough/friction fields. */
-export interface UpdateWalkthroughDataIntent {
-  kind: 'update_walkthrough_data'
-  stepTitle: string
-  process_steps?: string[]
-  friction_points?: string[]
-  friction_tools?: string[]
-  pain_point_primary?: string | null
 }
 
 /** produce_briefing — interviews.next_briefing + analyst_status='done'. */
@@ -192,10 +171,8 @@ export interface BackfillDataSourcesIntent {
 export type WriteIntent =
   | RegisterStepIntent
   | RecordSlotIntent
-  | RecordGovernanceIntent
   | RecordDependencyIntent
   | LinkBottleneckIntent
-  | UpdateWalkthroughDataIntent
   | ProduceBriefingIntent
   | BackfillDataSourcesIntent
 

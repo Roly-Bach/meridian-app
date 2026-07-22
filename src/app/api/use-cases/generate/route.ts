@@ -4,6 +4,32 @@ import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { runHeuristicEngine, type ClusterContext, type ClusterParticipant, type EngineProcessStep } from '@/services/useCaseEngine'
 import { checkUserLimitUseCases } from '@/lib/ratelimit'
+import { deriveProcessStepDisplayFieldsFromRaw } from '@/lib/schrittDatenView'
+
+// PROJ-45 (ADR-025 D1): process_steps no longer carries the flat potenzial/
+// rule_based/data_sources columns — schritt_daten (JSONB) replaces them.
+// Maps a raw process_steps row (+ schritt_daten) into the EngineProcessStep
+// shape useCaseEngine.ts's own R1–R8/C1–C3 heuristics expect (unchanged logic).
+function toEngineProcessStep(row: {
+  id: string
+  workspace_id: string
+  interview_id: string
+  title: string
+  description: string | null
+  schritt_daten: unknown
+  embedding?: number[] | null
+}): EngineProcessStep {
+  const display = deriveProcessStepDisplayFieldsFromRaw(row.schritt_daten)
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    interview_id: row.interview_id,
+    title: row.title,
+    description: row.description,
+    embedding: row.embedding,
+    ...display,
+  }
+}
 
 const GenerateSchema = z.object({
   workspace_id: z.string().uuid('workspace_id must be a valid UUID'),
@@ -52,10 +78,10 @@ export async function POST(req: Request) {
   const hourlyRate = workspace?.hourly_rate ?? 45
 
   // Fetch process_steps, knowledge_objects, clusters, and interview clarification_answers in parallel
-  const [{ data: steps }, { data: knowledgeObjects }, { data: clustersRaw }, { data: interviews }] = await Promise.all([
+  const [{ data: stepsRaw }, { data: knowledgeObjects }, { data: clustersRaw }, { data: interviews }] = await Promise.all([
     admin
       .from('process_steps')
-      .select('id, workspace_id, title, description, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks, interview_id, embedding')
+      .select('id, workspace_id, title, description, schritt_daten, interview_id, embedding')
       .eq('workspace_id', workspace_id),
     admin
       .from('knowledge_objects')
@@ -66,7 +92,7 @@ export async function POST(req: Request) {
       .from('process_clusters')
       .select(`
         id, workspace_id, canonical_title, canonical_description, participant_count, participants,
-        process_steps(id, workspace_id, interview_id, title, description, frequency_per_month, duration_minutes, error_rate_percent, rule_based, data_sources, media_breaks)
+        process_steps(id, workspace_id, interview_id, title, description, schritt_daten)
       `)
       .eq('workspace_id', workspace_id)
       .gte('participant_count', 2),
@@ -77,14 +103,16 @@ export async function POST(req: Request) {
       .not('clarification_answers', 'is', null),
   ])
 
-  if (!steps || steps.length === 0) {
+  if (!stepsRaw || stepsRaw.length === 0) {
     return NextResponse.json({ use_cases: [], total_roi_eur: 0 })
   }
+
+  const steps: EngineProcessStep[] = stepsRaw.map(toEngineProcessStep)
 
   // Build a step lookup map for cluster participant resolution
   const stepMap = new Map<string, EngineProcessStep>()
   for (const s of steps) {
-    stepMap.set(s.id, s as EngineProcessStep)
+    stepMap.set(s.id, s)
   }
 
   // Build ClusterContext[] from raw cluster data.
@@ -94,7 +122,7 @@ export async function POST(req: Request) {
   for (const raw of clustersRaw ?? []) {
     const participants: ClusterParticipant[] = []
 
-    for (const ps of (raw.process_steps as Array<{ id: string; workspace_id: string; interview_id: string; title: string; description: string | null; frequency_per_month: number | null; duration_minutes: number | null; error_rate_percent: number | null; rule_based: boolean; data_sources: string[]; media_breaks: number | null }> ?? [])) {
+    for (const ps of (raw.process_steps as Array<{ id: string; interview_id: string }> ?? [])) {
       const step = stepMap.get(ps.id)
       if (!step) continue
       // Employee metadata from participants JSON (best-effort, not required for engine logic)
@@ -137,7 +165,7 @@ export async function POST(req: Request) {
 
   // Run heuristic engine: R1–R8 + P1–P4 + C1–C3
   const generated = runHeuristicEngine(
-    steps as EngineProcessStep[],
+    steps,
     hourlyRate,
     (knowledgeObjects ?? []) as import('@/services/useCaseEngine').KnowledgeObjectContext[],
     clusterContexts,

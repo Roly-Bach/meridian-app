@@ -138,8 +138,25 @@ describe('GET /api/use-cases/[id]', () => {
         { interview_id: 'iv-2', employee_name: 'Anna', employee_role: 'Assistenz', process_step_id: 'step-b' },
       ],
     }
-    const stepA = { id: 'step-a', title: 'Step A', source_quote: 'q', frequency_per_month: 20, duration_minutes: 60, error_rate_percent: 5 }
-    const stepB = { id: 'step-b', title: 'Step B', source_quote: null, frequency_per_month: 10, duration_minutes: 30, error_rate_percent: null }
+    const makeSchrittDaten = (freq: number, duration: number, errorRate: number | null) => ({
+      title: 'Step',
+      reihenfolge: 1,
+      abhaengigkeiten: null,
+      status: 'done',
+      potenzial: {
+        frequency_per_month: { value: freq, quote: 'q', nicht_befund_typ: null },
+        duration_minutes: { value: duration, quote: 'q', nicht_befund_typ: null },
+        error_rate_percent: errorRate == null ? null : { value: errorRate, quote: 'q', nicht_befund_typ: null },
+        media_breaks: null,
+      },
+      slots: {
+        entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null,
+        hilfsmittel: null, reibungspunkte: null, ausloeser: null, aufgabentyp: null, risiko_schwere: null,
+        standardisierungsgrad: null, informationsdichte: null,
+      },
+    })
+    const stepA = { id: 'step-a', title: 'Step A', source_quote: 'q', schritt_daten: makeSchrittDaten(20, 60, 5) }
+    const stepB = { id: 'step-b', title: 'Step B', source_quote: null, schritt_daten: makeSchrittDaten(10, 30, null) }
 
     mockAdminFrom
       .mockReturnValueOnce(makeUCFetch(clusterUC))

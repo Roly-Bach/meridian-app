@@ -15,7 +15,6 @@ function makeStep(overrides: Partial<ProcessStep> = {}): ProcessStep {
     cluster_id: null,
     title: 'Rechnung prüfen',
     description: null,
-    role: null,
     frequency_per_month: 10,
     duration_minutes: 15,
     data_sources: [],

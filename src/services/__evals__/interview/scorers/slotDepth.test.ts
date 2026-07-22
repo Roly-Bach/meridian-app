@@ -128,11 +128,23 @@ describe('scoreSlotDepth — Edge Cases', () => {
     const emptySteps: StepEntry[] = [{
       title: 'Leerer Schritt',
       reihenfolge: 1,
-      governance: null,
       abhaengigkeiten: null,
       status: 'exploring',
       potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
-      slots: { entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null },
+      slots: {
+        entscheidungslogik: null,
+        tazite_cues: null,
+        ausnahmen: null,
+        inputs: null,
+        outputs: null,
+        hilfsmittel: null,
+        reibungspunkte: null,
+        ausloeser: null,
+        aufgabentyp: null,
+        risiko_schwere: null,
+        standardisierungsgrad: null,
+        informationsdichte: null,
+      },
     }]
     const result = await scoreSlotDepth(emptySteps, [], EVAL_MODEL)
     expect(result.depth_score).toBeNull()
@@ -203,7 +215,6 @@ describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
     const baseStep: StepEntry = {
       title: 'Rechnungsprüfung',
       reihenfolge: 1,
-      governance: null,
       abhaengigkeiten: null,
       status: 'done',
       potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
@@ -214,6 +225,12 @@ describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
         inputs: { value: ['Eingangsrechnung'], quote: 'Eingangsrechnung', nicht_befund_typ: null },
         outputs: null,
         hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
+        reibungspunkte: null,
+        ausloeser: null,
+        aufgabentyp: null,
+        risiko_schwere: null,
+        standardisierungsgrad: null,
+        informationsdichte: null,
       },
     }
 
@@ -227,6 +244,12 @@ describe('scoreSlotDepth — Order-Swap-Invarianz (BL-E5.2)', () => {
         hilfsmittel: { value: ['SAP FI'], quote: 'SAP FI', nicht_befund_typ: null },
         entscheidungslogik: { value: 'Freigabe ab 5000 EUR', quote: 'Freigabe ab 5000 EUR', confidence: 'confirmed', nicht_befund_typ: null },
         ausnahmen: null,
+        reibungspunkte: null,
+        ausloeser: null,
+        aufgabentyp: null,
+        risiko_schwere: null,
+        standardisierungsgrad: null,
+        informationsdichte: null,
       },
     }
 
@@ -258,7 +281,6 @@ describe('scoreSlotDepth — Prompt-Inhalt: getStepTurns-Grenzen', () => {
     const stepA: StepEntry = {
       title: 'Rechnungsprüfung',
       reihenfolge: 1,
-      governance: null,
       abhaengigkeiten: null,
       status: 'done',
       potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
@@ -269,6 +291,12 @@ describe('scoreSlotDepth — Prompt-Inhalt: getStepTurns-Grenzen', () => {
         inputs: null,
         outputs: null,
         hilfsmittel: null,
+        reibungspunkte: null,
+        ausloeser: null,
+        aufgabentyp: null,
+        risiko_schwere: null,
+        standardisierungsgrad: null,
+        informationsdichte: null,
       },
     }
     const stepB: StepEntry = {

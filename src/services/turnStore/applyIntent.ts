@@ -14,13 +14,15 @@
 
 import {
   POTENZIAL_SLOT_NAMES,
+  TAZITE_ARRAY_SLOT_NAMES,
+  TAZITE_ENUM_ARRAY_SLOT_NAMES,
   TAZITE_SLOT_NAMES,
   tokenJaccardNorm,
   type StepEntry,
-  type SlotValue,
-  type TaziteSlot,
-  type TaziteSlotArray,
-  type GovernanceSlot,
+  type SchemaSlotNumber,
+  type SchemaSlotString,
+  type SchemaSlotStringArray,
+  type SchemaSlotBase,
   type Abhaengigkeiten,
   type AbhaengigkeitsKante,
   type EinflussKante,
@@ -36,10 +38,8 @@ import type {
   ApplyOutcome,
   FieldPatch,
   RecordSlotIntent,
-  RecordGovernanceIntent,
   RecordDependencyIntent,
   LinkBottleneckIntent,
-  UpdateWalkthroughDataIntent,
   RegisterStepIntent,
   ProduceBriefingIntent,
   BackfillDataSourcesIntent,
@@ -47,7 +47,7 @@ import type {
   WriteIntent,
 } from './intents'
 
-const TAZITE_ARRAY_SLOTS: readonly string[] = ['tazite_cues', 'ausnahmen', 'inputs', 'outputs', 'hilfsmittel']
+const TAZITE_ARRAY_SLOTS: readonly string[] = [...TAZITE_ARRAY_SLOT_NAMES, ...TAZITE_ENUM_ARRAY_SLOT_NAMES]
 
 // ─── Step lookup (pure — mirrors interviewAgent.ts) ───────────────────────────
 
@@ -93,11 +93,8 @@ function noWrite(snapshot: TurnSnapshot, status: 'skipped' | 'blocked', reason: 
 // ─── record_slot — the conflict core (verbatim) ──────────────────────────────
 
 function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: ApplyContext): ApplyOutcome {
-  const { stepId, stepTitle, slot, value, nichtBefundTyp, isNichtBefundMode, quote, confidence, qualifier, sourceTurn, isCorrection, writeSource } = intent
+  const { stepId, stepTitle, slot, value, nichtBefundTyp, isNichtBefundMode, quote, confidence, qualifier, einheit, sourceTurn, isCorrection, writeSource } = intent
   const tracker = snapshot.stepTracker
-
-  const isPotenzial = (POTENZIAL_SLOT_NAMES as readonly string[]).includes(slot)
-  const isTaziteArray = TAZITE_ARRAY_SLOTS.includes(slot)
 
   // ID-first lookup (PROJ-27/BL-E1.4): stable reference, falls back to fuzzy title.
   const stepIndex = stepId !== undefined
@@ -115,7 +112,47 @@ function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: 
   }
 
   const step = tracker[stepIndex]
-  const prevSlotValue: SlotValue | TaziteSlot | TaziteSlotArray | null = isPotenzial
+
+  // teilschritte — bare additive array, no SchemaSlot wrapper (PROJ-45/ADR-025 D4:
+  // absorbed from the retired update_walkthrough_data tool into record_slot; the
+  // LLM passes the full cumulative array each call, same additive contract as before).
+  if (slot === 'teilschritte') {
+    const newArray = value as string[]
+    const prevArray = step.teilschritte ?? []
+    const same = newArray.length === prevArray.length && newArray.every((v, i) => v === prevArray[i])
+    if (same) {
+      return noWrite(snapshot, 'skipped', 'idempotent', { slot, stepTitle: step.title })
+    }
+    const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
+    const newStep: StepEntry = { ...step, teilschritte: newArray, status: newStatus }
+    const patches: FieldPatch[] = [{ kind: 'step_field', stepIndex, subPath: ['teilschritte'], value: newArray as unknown as Json }]
+    if (newStatus !== step.status) {
+      patches.push({ kind: 'step_field', stepIndex, subPath: ['status'], value: newStatus })
+    }
+    const acceptedEvent: SlotWriteEvent = {
+      ts: ctx.now,
+      interviewId: ctx.interviewId,
+      source: writeSource,
+      stepTitle: step.title,
+      slot,
+      value: newArray,
+      prevValue: prevArray,
+      overwrite: prevArray.length > 0,
+      sourceTurn: sourceTurn ?? null,
+      evidence: quote,
+    }
+    return {
+      snapshot: withStep(snapshot, stepIndex, newStep),
+      patches,
+      trail: [acceptedEvent],
+      result: { status: 'accepted', detail: { step_id: step.id, step_title: step.title, slot, value: newArray, source_turn: sourceTurn ?? null } },
+    }
+  }
+
+  const isPotenzial = (POTENZIAL_SLOT_NAMES as readonly string[]).includes(slot)
+  const isTaziteArray = TAZITE_ARRAY_SLOTS.includes(slot)
+
+  const prevSlotValue: SchemaSlotNumber | SchemaSlotString | SchemaSlotStringArray | SchemaSlotBase<unknown> | null = isPotenzial
     ? step.potenzial[slot as PotenzialSlotName]
     : step.slots[slot as TaziteSlotName]
   const isOverwrite = prevSlotValue !== null && prevSlotValue !== undefined
@@ -133,7 +170,7 @@ function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: 
 
   // Priority conflict (ADR-016): potenzial slots only.
   if (isPotenzial) {
-    const prevAsSlotValue = prevSlotValue as SlotValue | null
+    const prevAsSlotValue = prevSlotValue as SchemaSlotNumber | null
     const priorityBlocked = isOverwrite && !isCorrection && !canOverwrite(prevAsSlotValue?.writeSource, writeSource as WriteSource)
     if (priorityBlocked) {
       const blockedEvent: SlotWriteEvent = {
@@ -159,20 +196,22 @@ function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: 
 
   // Build the new slot value + patches + status transition.
   const patches: FieldPatch[] = []
-  let newSlotValue: SlotValue | TaziteSlot | TaziteSlotArray
+  let newSlotValue: SchemaSlotNumber | SchemaSlotString | SchemaSlotStringArray | SchemaSlotBase<unknown>
   let newStep: StepEntry
 
   if (isPotenzial) {
     const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
     newSlotValue = isNichtBefundMode
-      ? ({ value: null, quote, writeSource: writeSource as WriteSource, nicht_befund_typ: nichtBefundTyp! } as SlotValue)
+      ? ({ value: null, quote, writeSource: writeSource as WriteSource, nicht_befund_typ: nichtBefundTyp!, ...(einheit !== undefined ? { einheit } : {}) } as SchemaSlotNumber)
       : ({
           value: value!,
           quote,
           writeSource: writeSource as WriteSource,
+          nicht_befund_typ: null,
           ...(confidence !== undefined ? { confidence } : {}),
           ...(qualifier !== undefined ? { qualifier } : {}),
-        } as SlotValue)
+          ...(einheit !== undefined ? { einheit } : {}),
+        } as SchemaSlotNumber)
     patches.push({ kind: 'step_field', stepIndex, subPath: ['potenzial', slot], value: newSlotValue as unknown as Json })
     if (newStatus !== step.status) {
       patches.push({ kind: 'step_field', stepIndex, subPath: ['status'], value: newStatus })
@@ -188,7 +227,7 @@ function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: 
       quote,
       nicht_befund_typ: null,
       ...(confidence !== undefined ? { confidence } : {}),
-    } as TaziteSlotArray
+    } as SchemaSlotStringArray
     patches.push({ kind: 'step_field', stepIndex, subPath: ['slots', slot], value: newSlotValue as unknown as Json })
     const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
     if (step.status === 'exploring') {
@@ -196,13 +235,15 @@ function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: 
     }
     newStep = { ...step, slots: { ...step.slots, [slot]: newSlotValue }, status: newStatus }
   } else {
-    // entscheidungslogik (TaziteSlot)
+    // Single-value slots: entscheidungslogik/ausloeser (SchemaSlotString) or the
+    // Analyst-classified standardisierungsgrad/informationsdichte (enum single) —
+    // identical mechanics, only the value's literal-union type differs.
     newSlotValue = {
       value: value as string,
       quote,
       nicht_befund_typ: null,
       ...(confidence !== undefined ? { confidence } : {}),
-    } as TaziteSlot
+    } as SchemaSlotString
     patches.push({ kind: 'step_field', stepIndex, subPath: ['slots', slot], value: newSlotValue as unknown as Json })
     const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
     if (step.status === 'exploring') {
@@ -252,33 +293,6 @@ function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: 
         source_turn: sourceTurn ?? null,
       },
     },
-  }
-}
-
-// ─── record_governance (partial merge, jsonb_set) ─────────────────────────────
-
-function applyRecordGovernance(snapshot: TurnSnapshot, intent: RecordGovernanceIntent): ApplyOutcome {
-  const { stepTitle, rolle, organisationseinheit, systeme, nichtBefundTyp, quote, sourceTurn } = intent
-  const tracker = snapshot.stepTracker
-  const stepIndex = findStepFuzzy(tracker, stepTitle)
-  if (stepIndex === -1) {
-    return noWrite(snapshot, 'blocked', 'step_not_found', {
-      requested: stepTitle,
-      available: tracker.map((s) => ({ title: s.title, id: s.id ?? null })),
-    })
-  }
-  const existing = tracker[stepIndex].governance
-  const merged: GovernanceSlot = {
-    rolle: rolle !== undefined ? rolle : (existing?.rolle ?? null),
-    organisationseinheit: organisationseinheit !== undefined ? organisationseinheit : (existing?.organisationseinheit ?? null),
-    systeme: systeme !== undefined ? systeme : (existing?.systeme ?? null),
-    nicht_befund_typ: nichtBefundTyp !== undefined ? nichtBefundTyp : (existing?.nicht_befund_typ ?? null),
-  }
-  return {
-    snapshot: withStep(snapshot, stepIndex, { ...tracker[stepIndex], governance: merged }),
-    patches: [{ kind: 'step_field', stepIndex, subPath: ['governance'], value: merged as unknown as Json }],
-    trail: [],
-    result: { status: 'accepted', detail: { step_title: stepTitle, governance: merged, quote, source_turn: sourceTurn ?? null } },
   }
 }
 
@@ -358,36 +372,6 @@ function applyLinkBottleneck(snapshot: TurnSnapshot, intent: LinkBottleneckInten
   }
 }
 
-// ─── update_walkthrough_data (additive merge, full-array) ─────────────────────
-
-function applyUpdateWalkthrough(snapshot: TurnSnapshot, intent: UpdateWalkthroughDataIntent): ApplyOutcome {
-  const { stepTitle, process_steps, friction_points, friction_tools, pain_point_primary } = intent
-  const tracker = snapshot.stepTracker
-  const stepIndex = findStepFuzzy(tracker, stepTitle)
-  if (stepIndex === -1) {
-    return noWrite(snapshot, 'blocked', 'step_not_found', {
-      requested: stepTitle,
-      available: tracker.map((s) => ({ title: s.title, id: s.id ?? null })),
-    })
-  }
-  const existing = tracker[stepIndex]
-  const updatedStep: StepEntry = {
-    ...existing,
-    status: existing.status === 'exploring' ? 'walkthrough' : existing.status,
-    process_steps: process_steps !== undefined ? process_steps : (existing.process_steps ?? []),
-    friction_points: friction_points !== undefined ? friction_points : (existing.friction_points ?? []),
-    friction_tools: friction_tools !== undefined ? friction_tools : (existing.friction_tools ?? []),
-    pain_point_primary: pain_point_primary !== undefined ? pain_point_primary : existing.pain_point_primary,
-  }
-  const newSnapshot = withStep(snapshot, stepIndex, updatedStep)
-  return {
-    snapshot: newSnapshot,
-    patches: [{ kind: 'step_tracker', value: newSnapshot.stepTracker }],
-    trail: [],
-    result: { status: 'accepted', detail: { step_title: stepTitle } },
-  }
-}
-
 // ─── register_step (full-array set; tool owns dedup/embedding decisions) ──────
 
 function applyRegisterStep(snapshot: TurnSnapshot, intent: RegisterStepIntent): ApplyOutcome {
@@ -452,14 +436,10 @@ export function applyIntent(snapshot: TurnSnapshot, intent: WriteIntent, ctx: Ap
   switch (intent.kind) {
     case 'record_slot':
       return applyRecordSlot(snapshot, intent, ctx)
-    case 'record_governance':
-      return applyRecordGovernance(snapshot, intent)
     case 'record_dependency':
       return applyRecordDependency(snapshot, intent)
     case 'link_bottleneck':
       return applyLinkBottleneck(snapshot, intent, ctx)
-    case 'update_walkthrough_data':
-      return applyUpdateWalkthrough(snapshot, intent)
     case 'register_step':
       return applyRegisterStep(snapshot, intent)
     case 'produce_briefing':

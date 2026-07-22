@@ -18,6 +18,12 @@ const emptySlots: StepEntry['slots'] = {
   inputs: null,
   outputs: null,
   hilfsmittel: null,
+  reibungspunkte: null,
+  ausloeser: null,
+  aufgabentyp: null,
+  risiko_schwere: null,
+  standardisierungsgrad: null,
+  informationsdichte: null,
 }
 
 function makeStep(id: string, slots: StepEntry['slots'] = emptySlots, extra: Partial<StepEntry> = {}): StepEntry {
@@ -25,15 +31,10 @@ function makeStep(id: string, slots: StepEntry['slots'] = emptySlots, extra: Par
     id,
     title: 'Rechnungsprüfung',
     reihenfolge: 1,
-    governance: null,
     abhaengigkeiten: null,
     status: 'walkthrough',
     potenzial: emptyPotenzial,
     slots,
-    process_steps: [],
-    friction_points: [],
-    friction_tools: [],
-    pain_point_primary: null,
     ...extra,
   }
 }
@@ -62,7 +63,7 @@ describe('hasNewOField (PROJ-46 QA H-1 Fix D)', () => {
   it('is false when only a potenzial slot (frequency/duration/error_rate/media_breaks) was filled', () => {
     const before = [makeStep('S001')]
     const after = [makeStep('S001', emptySlots, {
-      potenzial: { ...emptyPotenzial, frequency_per_month: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate' } },
+      potenzial: { ...emptyPotenzial, frequency_per_month: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate', nicht_befund_typ: null } },
     })]
     expect(hasNewOField(before, after)).toBe(false)
   })

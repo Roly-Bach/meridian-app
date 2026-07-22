@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { scorePotenzialCoverage, scoreDedupPotenzialCoverage } from './potenzialCoverage'
-import type { StepEntry, SlotValue } from '@/services/interviewSemantic'
+import type { StepEntry, SchemaSlotNumber } from '@/services/interviewSemantic'
 
-const sv = (value: string | number): SlotValue => ({ value, quote: String(value), confidence: 'confirmed' })
-const svNichtBefund = (): SlotValue => ({ value: null, quote: '', nicht_befund_typ: 'nicht_zutreffend' })
+const sv = (value: string | number): SchemaSlotNumber => ({ value: value as number, quote: String(value), confidence: 'confirmed', nicht_befund_typ: null })
+const svNichtBefund = (): SchemaSlotNumber => ({ value: null, quote: '', nicht_befund_typ: 'nicht_zutreffend' })
 
 const makeStep = (
   potenzial: Partial<StepEntry['potenzial']> = {},
@@ -11,11 +11,23 @@ const makeStep = (
 ): StepEntry => ({
   title: 'Rechnungsprüfung',
   reihenfolge: 1,
-  governance: null,
   abhaengigkeiten: null,
   potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null, ...potenzial },
   status: 'done',
-  slots: { entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null },
+  slots: {
+    entscheidungslogik: null,
+    tazite_cues: null,
+    ausnahmen: null,
+    inputs: null,
+    outputs: null,
+    hilfsmittel: null,
+    reibungspunkte: null,
+    ausloeser: null,
+    aufgabentyp: null,
+    risiko_schwere: null,
+    standardisierungsgrad: null,
+    informationsdichte: null,
+  },
   ...overrides,
 })
 

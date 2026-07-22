@@ -9,7 +9,7 @@ import type { ClarificationCard } from '@/services/interviewTypes'
 const SLOT_OPTIONS: Record<string, string[]> = {
   frequency_per_month: ['Täglich', 'Wöchentlich', 'Mehrfach/Monat', 'Monatlich', 'Weiß ich nicht'],
   duration_minutes: ['< 5 Min', '5–15 Min', '15–30 Min', '> 30 Min', 'Weiß ich nicht'],
-  rule_based: ['Immer gleich', 'Meistens gleich', 'Variiert stark', 'Weiß ich nicht'],
+  entscheidungslogik: ['Immer gleich', 'Meistens gleich', 'Variiert stark', 'Weiß ich nicht'],
   error_rate_percent: ['Selten Fehler', 'Gelegentlich', 'Häufig', 'Weiß ich nicht'],
 }
 

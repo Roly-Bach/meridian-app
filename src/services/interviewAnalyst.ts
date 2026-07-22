@@ -4,14 +4,12 @@ import { z } from 'zod'
 import { buildTraceMetadata, type TraceCtx, type OnTokenUsage } from './_telemetry'
 import { buildTools } from './interviewTools'
 import {
-  MANDATORY_SLOTS,
-  OPTIONAL_SLOTS,
   TAZITE_SLOT_NAMES,
+  TAZITE_ENUM_SINGLE_SLOT_NAMES,
   POTENZIAL_SLOT_NAMES,
   O_SLOT_FIELDS,
   groupSemanticSteps,
   type StepEntry,
-  type SlotName,
   type OSlotField,
 } from './interviewSemantic'
 import type {
@@ -126,7 +124,7 @@ const ClarificationCardSchema = z.object({
   step_title: z.string(),
   question: z.string().describe('Natural language question for the missing slot'),
   options: z.array(z.string()).min(2).max(4).describe('Answer options for QualitativeCards; last option must be "Weiß ich nicht". SlotCards and OpenItemCards use UI-fixed options.'),
-  slot_key: z.string().describe('Which slot key this fills: frequency_per_month | duration_minutes | rule_based | error_rate_percent | open_item | qualitative'),
+  slot_key: z.string().describe('Which slot key this fills: frequency_per_month | duration_minutes | entscheidungslogik | error_rate_percent | open_item | qualitative'),
   answer_type: z.enum(['single', 'multi']).optional().default('single').describe('single for slot/open-item cards, multi for qualitative cards'),
 })
 
@@ -241,7 +239,18 @@ Hat der Mitarbeiter in diesem Turn einen Slot-Wert EXPLIZIT genannt (Zahl, Syste
 
 STUFE 3 — WALKTHROUGH-DATEN (ergänzend zu Stufe 2):
 Ein Schritt ist aktiv im Walkthrough UND kein neuer Schritt in Stufe 1?
-  → update_walkthrough_data für Prozessschritte, Reibungspunkte, Systeme.
+  → record_slot(slot=teilschritte) für den Ablauf, record_slot(slot=reibungspunkte) für Reibungspunkte,
+    record_slot(slot=hilfsmittel) für Systeme.
+
+STUFE 3b — KLASSIFIKATION (PROJ-45, keine eigene Frage, aus bereits erhobenen Antworten ableiten):
+  → Sobald ausnahmen befüllt wurde: record_slot(slot=standardisierungsgrad) setzen
+    (standardisiert / teilweise_standardisiert / stark_variabel), abgeleitet aus dem
+    ausnahmen-Inhalt (viele/starke Ausnahmen → stark_variabel; keine/kaum → standardisiert).
+  → Sobald inputs oder hilfsmittel befüllt wurde: record_slot(slot=informationsdichte) setzen
+    (strukturiert / gemischt / unstrukturiert), abgeleitet daraus ob die genannten Dokumente/
+    Daten einheitlich strukturiert sind (z.B. Formulare, feste Felder) oder frei (E-Mails, Notizen).
+  → Beide NUR einmal pro Schritt setzen (record_slot erkennt Duplikate). Keine zusätzliche Frage
+    an den Mitarbeiter stellen — reine Klassifikation des bereits Gesagten.
 
 STUFE 4 — ZIEL-O-FELD + ADVANCE-SIGNAL (jeden Turn mit aktivem/gesperrtem Schritt prüfen):
   → produce_briefing.target_o_field = das gesprächslogisch salienteste noch offene O2–O6-Feld
@@ -284,10 +293,14 @@ evidence_span PFLICHT auch bei nicht_befund_typ (wörtlicher Ausschnitt der Mita
 NICHT setzen wenn der Slot noch gar nicht adressiert wurde — nur wenn aktiv gefragt und keine Antwort kam.
 Für jeden explizit genannten Wert:
 - Spannen ("80 bis 100", "zwei bis drei Tage") → SOFORT erfassen mit confidence=estimate und qualifier="Spanne: <original>". Mittelwert als value: "80 bis 100" → 90. Zeitspannen in Minuten: "2–3 Tage à 8h" → 1200. NICHT warten bis der Talker nachhakt.
-- frequency_per_month: Häufigkeitsangaben (umrechnen auf Monat); Spannen sofort als estimate erfassen.
-- duration_minutes: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände); Spannen sofort als estimate erfassen.
-- rule_based: Aussagen zur Regelbasierung ("immer gleich", "variiert", "nach Schema")
-- data_sources: Genannte Systeme, Tools, Datenbanken — NUR via record_slot setzen. NIEMALS via update_walkthrough_data. friction_tools ist ein separates Feld und befüllt data_sources NICHT.
+- frequency_per_month: Häufigkeitsangaben. PROJ-45 Einheiten-Unabhängigkeit: speichere den Wert in der vom Mitarbeiter GENANNTEN Einheit + einheit-Parameter (z.B. "3× pro Woche" → value=3, einheit="pro_woche"). NIEMALS selbst auf Monat umrechnen — das passiert deterministisch im Code. Ohne genannte Einheit: einheit weglassen (Default pro_monat). Spannen sofort als estimate erfassen.
+- duration_minutes: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände). PROJ-45: speichere in der genannten Einheit + einheit-Parameter ("2 Stunden" → value=2, einheit="stunden"). NIEMALS selbst in Minuten umrechnen. Ohne genannte Einheit: einheit weglassen (Default minuten). Spannen sofort als estimate erfassen.
+- entscheidungslogik: Aussagen zur Regelbasierung ("immer gleich", "variiert", "nach Schema") als Freitext.
+- hilfsmittel: Genannte Systeme, Tools, Datenbanken — NUR via record_slot setzen.
+- reibungspunkte: Genannte Reibungspunkte/Zeitfresser — via record_slot setzen.
+- aufgabentyp: Welcher Aufgabentyp dominiert (Entscheidung/Informationsübertragung/Zusammenfassung/Suche/Klassifikation/Generierung) — Mehrfachauswahl möglich.
+- risiko_schwere: Konsequenz eines Fehlers (leicht_korrigierbar/teuer/rechtlich_kritisch/kundenkontakt_relevant) — Mehrfachauswahl möglich, nicht exklusiv.
+- ausloeser: Externer Auslöser der Tätigkeit als Freitext (z.B. "E-Mail-Eingang", "Monatsende"). Ist der Auslöser ein anderer registrierter Schritt → record_dependency (Kantentyp ausloeser) statt ausloeser-Freitext.
 - evidence_span (PFLICHT bei Online-Extraction aus aktuellem Turn): kurzer WÖRTLICHER Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Statement, z.B. 100 · 5 Minuten · SAP FI. KEIN Paraphrasieren — exakter Substring, OHNE umschließende Anführungszeichen. Das System verifiziert die wörtliche Übereinstimmung und erweitert zum vollständigen Satz.
 - evidence_quote (NUR Fallback bei Catch-up aus historischem Turn): vollständiges Zitat + source_turn PFLICHT.
 - source_turn PFLICHT: Bei jedem record_slot-Call IMMER source_turn setzen (1-indexed Turn-Nummer).
@@ -297,7 +310,7 @@ Für jeden explizit genannten Wert:
 Nach register_step mit deduplicated=true: ALLE nachfolgenden record_slot-Calls MÜSSEN
 den zurückgegebenen matched_title als step_title verwenden.
 
-**update_walkthrough_data**: Wenn Mitarbeiter Prozessschritte (Signalwörter: "zuerst", "dann", "danach"), Reibungspunkte oder Systeme beschreibt.
+**record_slot(slot=teilschritte)**: Wenn Mitarbeiter Prozessschritte beschreibt (Signalwörter: "zuerst", "dann", "danach") — übergib die VOLLSTÄNDIGE bisherige Ablauf-Liste inkl. neuem Schritt.
 
 **link_bottleneck**: Wenn Pain Point klar an einem registrierten Schritt verortet werden kann.
 
@@ -316,10 +329,10 @@ früheren Turns MÜSSEN hier erfasst werden.
 Prüfschema pro Schritt:
 - Ist frequency_per_month null? → SlotCard generieren.
 - Ist duration_minutes null? → SlotCard generieren.
-- Ist rule_based null? → SlotCard generieren.
+- Ist entscheidungslogik null? → SlotCard generieren.
 
 Generiere bis zu 8 ClarificationCards via produce_briefing.clarification_cards, priorisiert nach Use-Case-Relevanz:
-1. **SlotCards** (slot_key=frequency_per_month|duration_minutes|rule_based|error_rate_percent): Für jeden registrierten Schritt mit leerem Pflicht-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
+1. **SlotCards** (slot_key=frequency_per_month|duration_minutes|entscheidungslogik|error_rate_percent): Für jeden registrierten Schritt mit leerem Pflicht-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
 2. **OpenItemCards** (slot_key=open_item): Für erwähnte aber nicht registrierte Prozessschritte. options leer lassen — UI verwendet Ja/Nein/Manchmal.
 3. **QualitativeCards** (slot_key=qualitative, answer_type=multi): Für fehlenden Prozesskontext: Beteiligte, Systeme, Blockaden, Abstimmungsbedarf, Automatisierungspotenzial. options=[2-4 spezifische Antwortoptionen], letzter Eintrag="Weiß ich nicht".
 Wenn alle Pflicht-Slots gefüllt sind: leeres Array zurückgeben.
@@ -349,6 +362,10 @@ function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
   return computeEmptyMandatorySlots(ctx.stepTracker).length > 0
 }
 
+// PROJ-45: classification-only slots (standardisierungsgrad/informationsdichte) are
+// Analyst-derived, never asked via a clarification card — excluded from this gap scan.
+const CLASSIFICATION_ONLY_SLOTS: readonly string[] = TAZITE_ENUM_SINGLE_SLOT_NAMES
+
 function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; slot: string }[] {
   const empty: { step: StepEntry; slot: string }[] = []
   for (const step of tracker) {
@@ -361,6 +378,7 @@ function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; sl
       }
     }
     for (const slot of TAZITE_SLOT_NAMES) {
+      if (CLASSIFICATION_ONLY_SLOTS.includes(slot)) continue
       const sv = step.slots[slot]
       const filled = sv != null && (sv.value != null || sv.nicht_befund_typ != null)
       if (!filled) empty.push({ step, slot })
@@ -379,8 +397,8 @@ export interface AnalystToolCallRecord {
    * returned `success:true` — read straight off the AI SDK's per-step
    * `toolResults[].output`, matched by toolCallId. Every knowledge tool in
    * interviewTools.ts follows the same `{success:boolean, ...}` shape, so this
-   * is a uniform signal across register_step/record_slot/record_governance/
-   * record_dependency/update_walkthrough_data/link_bottleneck — a rejected
+   * is a uniform signal across register_step/record_slot/record_dependency/
+   * link_bottleneck — a rejected
    * evidence_span, a step-not-found lookup, or a blocked priority conflict all
    * surface as `success:false` and therefore `applied:false` here.
    */
@@ -411,7 +429,7 @@ const STATUS_RANK: Record<StepEntry['status'], number> = { done: 2, walkthrough:
  * - Canonical step = member with most filled mandatory slots (tie: first in group)
  * - Slots: canonical wins, falls back to any non-null value in group
  * - status: highest in group (done > walkthrough > exploring)
- * - process_steps / friction_points / friction_tools: union, deduplicated
+ * - teilschritte: union, deduplicated (reibungspunkte lives in slots{} — merged generically above)
  *
  * Idempotent: running twice produces the same result.
  * Pure (PROJ-34): the caller stages the result through the session; this no
@@ -457,18 +475,14 @@ function computeMergedSteps(
       'exploring' as StepEntry['status'],
     )
 
-    const allProcessSteps = [...new Set(group.flatMap(s => s.process_steps ?? []))]
-    const allFrictionPoints = [...new Set(group.flatMap(s => s.friction_points ?? []))]
-    const allFrictionTools = [...new Set(group.flatMap(s => s.friction_tools ?? []))]
+    const allTeilschritte = [...new Set(group.flatMap(s => s.teilschritte ?? []))]
 
     return {
       ...canonical,
       potenzial,
       slots,
       status: bestStatus,
-      process_steps: allProcessSteps.length > 0 ? allProcessSteps : canonical.process_steps,
-      friction_points: allFrictionPoints.length > 0 ? allFrictionPoints : canonical.friction_points,
-      friction_tools: allFrictionTools.length > 0 ? allFrictionTools : canonical.friction_tools,
+      teilschritte: allTeilschritte.length > 0 ? allTeilschritte : canonical.teilschritte,
     }
   })
 
@@ -499,7 +513,7 @@ CATCHUP-MODUS — strikte Regeln:
 - Jeder record_slot-Call MUSS evidence_quote UND source_turn enthalten.
 - source_turn = exakte 1-indexed Nummer des User-Turns (aus dem Turn-Index unten — NICHT schätzen).
 - evidence_span ist NICHT gültig im Catchup — nutze stets evidence_quote + source_turn.
-- NUR record_slot ist verfügbar. Kein register_step, kein produce_briefing, kein update_walkthrough_data.
+- NUR record_slot ist verfügbar. Kein register_step, kein produce_briefing.
 - Extrahiere nur explizit genannte Werte, keine Inferenzen.
 - Wenn keine verpassten Slots gefunden: sofort stoppen (keine Dummy-Calls nötig).
 
@@ -878,9 +892,9 @@ export async function runAnalyst(opts: AnalystRunOptions): Promise<AnalystRunRes
 
 /**
  * Backfill data_sources for steps where it's null but tool/system mentions exist.
- * Sources (in priority order):
- *   1. step.friction_tools (most specific)
- *   2. extractions_log entries of type=tool (less precise — global, not step-scoped)
+ * Source: extractions_log entries of type=tool (global, not step-scoped — PROJ-45:
+ * friction_tools, the former more-specific per-step source, was removed as a
+ * dead/duplicate field, empirically a subset of hilfsmittel).
  *
  * Only fills steps where data_sources is null. Existing values are never overwritten.
  * Sets confidence=unknown so downstream consumers can distinguish from
@@ -914,9 +928,7 @@ function computeDataSourcesBackfill(
     const hilfsmittelFilled = step.slots.hilfsmittel?.value != null || step.slots.hilfsmittel?.nicht_befund_typ != null
     if (hilfsmittelFilled) return step
 
-    const fromFriction = Array.isArray(step.friction_tools) ? step.friction_tools : []
-    const candidates = fromFriction.length > 0 ? fromFriction : globalToolMentions
-    const deduped = Array.from(new Set(candidates.map((s) => s.trim()).filter(Boolean)))
+    const deduped = Array.from(new Set(globalToolMentions.map((s) => s.trim()).filter(Boolean)))
     if (deduped.length === 0) return step
 
     mutated = true

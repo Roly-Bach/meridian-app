@@ -211,21 +211,13 @@ export interface Database {
           cluster_id: string | null
           title: string
           description: string | null
-          role: string | null
-          frequency_per_month: number | null
-          duration_minutes: number | null
-          data_sources: string[]
-          rule_based: boolean
-          error_rate_percent: number | null
-          media_breaks: number
           source_quote: string | null
           step_type: 'action' | 'decision'
           condition_text: string | null
           substeps: Json | null
           embedding: number[] | null
-          friction_points: string[]
-          friction_tools: string[]
-          walkthrough_steps: string[]
+          /** PROJ-45 (ADR-025 D1): full StepEntry object verbatim — same shape as interview_state.step_tracker entries. Replaces the 10 dropped legacy flat columns. */
+          schritt_daten: Json | null
           created_at: string
         }
         Insert: {
@@ -235,42 +227,24 @@ export interface Database {
           cluster_id?: string | null
           title: string
           description?: string | null
-          role?: string | null
-          frequency_per_month?: number | null
-          duration_minutes?: number | null
-          data_sources?: string[]
-          rule_based?: boolean
-          error_rate_percent?: number | null
-          media_breaks?: number
           source_quote?: string | null
           step_type?: 'action' | 'decision'
           condition_text?: string | null
           substeps?: Json | null
           embedding?: number[] | null
-          friction_points?: string[]
-          friction_tools?: string[]
-          walkthrough_steps?: string[]
+          schritt_daten?: Json | null
           created_at?: string
         }
         Update: {
           title?: string
           description?: string | null
-          role?: string | null
-          frequency_per_month?: number | null
-          duration_minutes?: number | null
-          data_sources?: string[]
-          rule_based?: boolean
-          error_rate_percent?: number | null
-          media_breaks?: number
           source_quote?: string | null
           step_type?: 'action' | 'decision'
           condition_text?: string | null
           substeps?: Json | null
           embedding?: number[] | null
           cluster_id?: string | null
-          friction_points?: string[]
-          friction_tools?: string[]
-          walkthrough_steps?: string[]
+          schritt_daten?: Json | null
         }
         Relationships: [
           { foreignKeyName: 'process_steps_interview_id_fkey'; columns: ['interview_id']; referencedRelation: 'interviews'; referencedColumns: ['id'] },

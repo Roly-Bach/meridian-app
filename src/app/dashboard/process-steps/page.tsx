@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { ProcessStepsTable } from '@/components/ProcessStepsTable'
+import { deriveProcessStepDisplayFieldsFromRaw } from '@/lib/schrittDatenView'
+import type { ProcessStep } from '@/lib/processStepsAggregation'
 
 export default async function ProcessStepsPage() {
   const supabase = await createClient()
@@ -21,7 +23,7 @@ export default async function ProcessStepsPage() {
     workspaceId = member?.workspace_id
   }
 
-  const steps = workspaceId
+  const steps: ProcessStep[] = workspaceId
     ? await (async () => {
         const admin = getSupabaseAdmin()
         const { data } = await admin
@@ -30,7 +32,12 @@ export default async function ProcessStepsPage() {
           .eq('workspace_id', workspaceId)
           .order('created_at', { ascending: false })
           .limit(200)
-        return data ?? []
+        // PROJ-45 (ADR-025 D1): schritt_daten replaces the flat potenzial/rule_based/
+        // data_sources columns — derive them for ProcessStepsTable's existing shape.
+        return (data ?? []).map((row) => {
+          const { schritt_daten, ...rest } = row
+          return { ...rest, ...deriveProcessStepDisplayFieldsFromRaw(schritt_daten) } as ProcessStep
+        })
       })()
     : []
 

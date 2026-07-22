@@ -72,7 +72,6 @@ function computeOfflineBaseline(fixture: TranscriptFixture): BaselineFile['score
     dialogNaturalness: 0, // live LLM required — set to 0 in replay baselines
     completionCorrectness,
     stepRegistrationCoverage: round2(scoreStepRegistrationCoverage(fixture.finalStepTracker, fixture.expectedProcessCount)),
-    schemaConformanceRate: 0, // live LLM required — set to 0 in offline baselines
     hallucinationRate: 0,
     confidenceTriggerRate: 1,
     depth_score: null,

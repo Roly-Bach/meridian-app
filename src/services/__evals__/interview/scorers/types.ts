@@ -58,8 +58,6 @@ export interface ScoreSet {
   dialogNaturalness: number
   completionCorrectness: boolean
   stepRegistrationCoverage: number
-  /** PROJ-27/BL-E1.3: fraction of steps passing prozessschritt-schema validation (0–1) */
-  schemaConformanceRate: number
   /** PROJ-28/BL-E2.1: fraction of filled slots whose evidence quote cannot be found in transcript. Target < 0.01 */
   hallucinationRate: number
   /** PROJ-28/BL-E2.2: fraction of estimate/unknown slots that received a follow-up re-ask within 3 turns.

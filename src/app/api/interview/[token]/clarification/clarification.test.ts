@@ -198,17 +198,22 @@ describe('POST /api/interview/[token]/clarification', () => {
         }
       }
       if (table === 'process_steps') {
+        // PROJ-45: SlotCard answers are now read-merge-write on schritt_daten —
+        // select('schritt_daten').eq('id', ...).single() then update({schritt_daten}).eq('id', ...).
+        // Chainable mock supports both that shape and the pre-existing
+        // select().in().not() (affectedClusterIds lookup).
+        const chainable = (): Record<string, unknown> => {
+          const obj: Record<string, unknown> = {}
+          obj.eq = vi.fn().mockReturnValue(obj)
+          obj.in = vi.fn().mockReturnValue(obj)
+          obj.not = vi.fn().mockResolvedValue({ data: [], error: null })
+          obj.single = vi.fn().mockResolvedValue({ data: { schritt_daten: null }, error: null })
+          obj.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(resolve)
+          return obj
+        }
         return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          }),
-          select: vi.fn().mockReturnValue({
-            in: vi.fn().mockReturnValue({
-              not: vi.fn().mockResolvedValue({ data: [], error: null }),
-            }),
-          }),
+          update: vi.fn().mockReturnValue(chainable()),
+          select: vi.fn().mockReturnValue(chainable()),
         }
       }
       return buildChain()
@@ -370,8 +375,7 @@ describe('POST /api/interview/[token]/clarification', () => {
         interview_id: INTERVIEW_ID,
         workspace_id: WORKSPACE_ID,
         title: 'Mahnwesen',
-        frequency_per_month: null,
-        duration_minutes: null,
+        schritt_daten: null,
         step_type: 'action',
       })
     )

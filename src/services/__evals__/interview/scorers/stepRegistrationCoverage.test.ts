@@ -17,21 +17,22 @@ const emptySlots: StepEntry['slots'] = {
   inputs: null,
   outputs: null,
   hilfsmittel: null,
+  reibungspunkte: null,
+  ausloeser: null,
+  aufgabentyp: null,
+  risiko_schwere: null,
+  standardisierungsgrad: null,
+  informationsdichte: null,
 }
 
 function makeStep(title: string): StepEntry {
   return {
     title,
     reihenfolge: 1,
-    governance: null,
     abhaengigkeiten: null,
     potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
     status: 'done',
     slots: emptySlots,
-    process_steps: [],
-    friction_points: [],
-    friction_tools: [],
-    pain_point_primary: null,
   }
 }
 

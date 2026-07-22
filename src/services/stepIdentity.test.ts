@@ -17,7 +17,6 @@ function makeStep(title: string, embedding?: number[]): StepEntry {
   return {
     title,
     reihenfolge: 1,
-    governance: null,
     abhaengigkeiten: null,
     status: 'exploring',
     potenzial: {
@@ -33,6 +32,12 @@ function makeStep(title: string, embedding?: number[]): StepEntry {
       inputs: null,
       outputs: null,
       hilfsmittel: null,
+      reibungspunkte: null,
+      ausloeser: null,
+      aufgabentyp: null,
+      risiko_schwere: null,
+      standardisierungsgrad: null,
+      informationsdichte: null,
     },
     ...(embedding ? { embedding } : {}),
   }

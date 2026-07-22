@@ -1,12 +1,12 @@
 /**
  * PROJ-27 / BL-E1.4: Stable step IDs — revision integrity tests.
- * Verifies that normalizeStepEntry preserves id, toGrenzobjekt assigns correct IDs,
- * and the S001-format regex matches expected patterns.
+ * Verifies that normalizeStepEntry preserves id, and the S001-format regex
+ * matches expected patterns. (toGrenzobjekt coverage removed by PROJ-45 — see
+ * below, the function itself was deleted with no replacement per ADR-025 D7.)
  */
 import { describe, it, expect } from 'vitest'
 import {
   normalizeStepEntry,
-  toGrenzobjekt,
   type StepEntry,
 } from './interviewSemantic'
 import { canOverwrite } from './slotConflictResolver'
@@ -16,7 +16,6 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
     id: 'S001',
     title: 'Rechnungsprüfung',
     reihenfolge: 1,
-    governance: null,
     abhaengigkeiten: null,
     status: 'exploring',
     potenzial: {
@@ -32,6 +31,12 @@ function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
       inputs: null,
       outputs: null,
       hilfsmittel: null,
+      reibungspunkte: null,
+      ausloeser: null,
+      aufgabentyp: null,
+      risiko_schwere: null,
+      standardisierungsgrad: null,
+      informationsdichte: null,
     },
     ...overrides,
   }
@@ -119,137 +124,10 @@ describe('normalizeStepEntry — empty TaziteSlotArray normalization (BUG-M1)', 
   })
 })
 
-// ---------------------------------------------------------------------------
-// toGrenzobjekt — ID assignment
-// ---------------------------------------------------------------------------
-
-describe('toGrenzobjekt — ID assignment', () => {
-  it('uses step.id when present', () => {
-    const step = makeStep({ id: 'S005' })
-    const schritt = toGrenzobjekt(step, 1)
-    expect(schritt.id).toBe('S005')
-  })
-
-  it('falls back to S-padded fallbackIndex when id missing', () => {
-    const step = makeStep({ id: undefined })
-    expect(toGrenzobjekt(step, 1).id).toBe('S001')
-    expect(toGrenzobjekt(step, 12).id).toBe('S012')
-    expect(toGrenzobjekt(step, 100).id).toBe('S100')
-  })
-
-  it('fallback ID passes regex', () => {
-    const step = makeStep({ id: undefined })
-    for (let i = 1; i <= 20; i++) {
-      expect(toGrenzobjekt(step, i).id).toMatch(/^S[0-9]{3}$/)
-    }
-  })
-
-  it('bezeichnung.wert equals step.title', () => {
-    const step = makeStep({ title: 'Eingangsrechnungsprüfung' })
-    expect(toGrenzobjekt(step, 1).bezeichnung.wert).toBe('Eingangsrechnungsprüfung')
-  })
-
-  it('bezeichnung.konfidenz is 0.9 (always high for confirmed step title)', () => {
-    expect(toGrenzobjekt(makeStep(), 1).bezeichnung.konfidenz).toBe(0.9)
-  })
-
-  it('null tazite slot maps to {wert:null,konfidenz:null,nicht_befund_typ:null}', () => {
-    const schritt = toGrenzobjekt(makeStep(), 1)
-    expect(schritt.entscheidungslogik).toEqual({ wert: null, konfidenz: null, nicht_befund_typ: null })
-    expect(schritt.tazite_cues).toEqual({ wert: null, konfidenz: null, nicht_befund_typ: null })
-    expect(schritt.hilfsmittel).toEqual({ wert: null, konfidenz: null, nicht_befund_typ: null })
-  })
-
-  it('TaziteSlot with confirmed confidence maps to konfidenz 0.9', () => {
-    const step = makeStep({
-      slots: {
-        entscheidungslogik: { value: 'regel-basiert', quote: 'q', confidence: 'confirmed', nicht_befund_typ: null },
-        tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null,
-      },
-    })
-    const schritt = toGrenzobjekt(step, 1)
-    expect(schritt.entscheidungslogik.wert).toBe('regel-basiert')
-    expect(schritt.entscheidungslogik.konfidenz).toBe(0.9)
-  })
-
-  it('TaziteSlot with estimate confidence maps to konfidenz 0.6', () => {
-    const step = makeStep({
-      slots: {
-        entscheidungslogik: { value: 'vermutlich', quote: 'q', confidence: 'estimate', nicht_befund_typ: null },
-        tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null,
-      },
-    })
-    expect(toGrenzobjekt(step, 1).entscheidungslogik.konfidenz).toBe(0.6)
-  })
-
-  it('TaziteSlot with unknown confidence maps to konfidenz 0.3', () => {
-    const step = makeStep({
-      slots: {
-        entscheidungslogik: { value: 'unklar', quote: 'q', confidence: 'unknown', nicht_befund_typ: null },
-        tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null,
-      },
-    })
-    expect(toGrenzobjekt(step, 1).entscheidungslogik.konfidenz).toBe(0.3)
-  })
-
-  it('potenzial omitted when all potenzial slots null', () => {
-    const step = makeStep()
-    expect(toGrenzobjekt(step, 1).potenzial).toBeUndefined()
-  })
-
-  it('potenzial included when at least one slot filled', () => {
-    const step = makeStep({
-      potenzial: {
-        frequency_per_month: { value: 20, quote: 'q', confidence: 'confirmed' },
-        duration_minutes: null,
-        error_rate_percent: null,
-        media_breaks: null,
-      },
-    })
-    const schritt = toGrenzobjekt(step, 1)
-    expect(schritt.potenzial).toBeDefined()
-    expect(schritt.potenzial?.haeufigkeit_pro_monat.wert).toBe(20)
-    expect(schritt.potenzial?.haeufigkeit_pro_monat.konfidenz).toBe(0.9)
-    expect(schritt.potenzial?.dauer_minuten.wert).toBeNull()
-  })
-
-  it('governance omitted when null', () => {
-    expect(toGrenzobjekt(makeStep({ governance: null }), 1).governance).toBeUndefined()
-  })
-
-  it('governance mapped when present', () => {
-    const step = makeStep({
-      governance: { rolle: 'Buchhalter', organisationseinheit: 'Finanzen', systeme: ['SAP'], nicht_befund_typ: null },
-    })
-    const schritt = toGrenzobjekt(step, 1)
-    expect(schritt.governance?.rolle).toBe('Buchhalter')
-    expect(schritt.governance?.systeme).toEqual(['SAP'])
-  })
-
-  it('abhaengigkeiten defaults to empty arrays when null', () => {
-    const schritt = toGrenzobjekt(makeStep({ abhaengigkeiten: null }), 1)
-    expect(schritt.abhaengigkeiten.depends_on).toEqual([])
-    expect(schritt.abhaengigkeiten.influences).toEqual([])
-    expect(schritt.abhaengigkeiten.nicht_befund_typ).toBeNull()
-  })
-
-  it('abhaengigkeiten preserved when set', () => {
-    const step = makeStep({
-      abhaengigkeiten: {
-        depends_on: [{ schritt_id: 'S002', typ: 'voraussetzung' as const, beschreibung: null }],
-        influences: [{ schritt_id: 'S003', typ: 'beeinflusst' as const, beschreibung: null }],
-        nicht_befund_typ: null,
-      },
-    })
-    const schritt = toGrenzobjekt(step, 1)
-    expect(schritt.abhaengigkeiten.depends_on[0].schritt_id).toBe('S002')
-  })
-
-  it('reihenfolge matches step.reihenfolge', () => {
-    const step = makeStep({ reihenfolge: 5 })
-    expect(toGrenzobjekt(step, 1).reihenfolge).toBe(5)
-  })
-})
+// toGrenzobjekt (and its ID assignment / confidence-mapping / governance-mapping
+// coverage) was removed by PROJ-45 (ADR-025 D7: the app schema now deliberately
+// diverges from the academic/thesis JSON schema it used to validate against) —
+// the function was deleted entirely, no replacement.
 
 // ---------------------------------------------------------------------------
 // B4: Conditional UPDATE guard — .neq('analyst_status', 'done') semantics
@@ -322,28 +200,5 @@ describe('is_correction: corrected slot value replaces previous', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// nicht_befund_typ mapping
-// ---------------------------------------------------------------------------
-
-describe('toGrenzobjekt — nicht_befund_typ preservation', () => {
-  it('nicht_zutreffend flows through', () => {
-    const step = makeStep({
-      slots: {
-        entscheidungslogik: { value: null, quote: null, nicht_befund_typ: 'nicht_zutreffend' },
-        tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null,
-      },
-    })
-    expect(toGrenzobjekt(step, 1).entscheidungslogik.nicht_befund_typ).toBe('nicht_zutreffend')
-  })
-
-  it('unbekannt flows through', () => {
-    const step = makeStep({
-      slots: {
-        entscheidungslogik: { value: null, quote: null, nicht_befund_typ: 'unbekannt' },
-        tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null,
-      },
-    })
-    expect(toGrenzobjekt(step, 1).entscheidungslogik.nicht_befund_typ).toBe('unbekannt')
-  })
-})
+// toGrenzobjekt's nicht_befund_typ-mapping coverage removed along with the
+// function itself (PROJ-45/ADR-025 D7 — see note above).

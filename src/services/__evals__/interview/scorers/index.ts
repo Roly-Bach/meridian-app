@@ -8,7 +8,6 @@ import { scoreToolCallPlausibility } from './toolCallPlausibility'
 import { scoreDialogNaturalness } from './dialogNaturalness'
 import { scoreCompletionCorrectness } from './completionCorrectness'
 import { scoreStepRegistrationCoverage } from './stepRegistrationCoverage'
-import { scoreSchemaConformanceRate } from './schemaConformanceRate'
 import { scoreHallucinationRate } from './hallucinationRate'
 import { scoreConfidenceTrigger } from './confidenceTrigger'
 import { scoreSlotDepth } from './slotDepth'
@@ -30,7 +29,6 @@ export {
   scoreDialogNaturalness,
   scoreCompletionCorrectness,
   scoreStepRegistrationCoverage,
-  scoreSchemaConformanceRate,
   scoreHallucinationRate,
   scoreConfidenceTrigger,
   scoreSlotDepth,
@@ -81,7 +79,6 @@ export async function runAllScorers(input: ScorerInput, isolatedCriteria = false
     dialogNaturalnessRationale: dialogNaturalnessResult.rationale || undefined,
     completionCorrectness,
     stepRegistrationCoverage: round2(scoreStepRegistrationCoverage(input.finalStepTracker, input.expectedProcessCount)),
-    schemaConformanceRate: round2(scoreSchemaConformanceRate(input.finalStepTracker)),
     hallucinationRate: round2(scoreHallucinationRate(input.turns, input.finalStepTracker)),
     confidenceTriggerRate: round2OrNull(scoreConfidenceTrigger(input.turns)),
     depth_score: slotDepthResult.depth_score,

@@ -182,7 +182,6 @@ async function main() {
           dialogNaturalness: 0, // not computed in replay
           completionCorrectness: scores.completionCorrectness ?? false,
           stepRegistrationCoverage: scores.stepRegistrationCoverage ?? 0,
-          schemaConformanceRate: scores.schemaConformanceRate ?? 0,
           hallucinationRate: scores.hallucinationRate ?? 0,
           confidenceTriggerRate: scores.confidenceTriggerRate ?? 1,
           depth_score: null,

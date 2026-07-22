@@ -16,13 +16,13 @@
  */
 
 import { randomUUID } from 'crypto'
+import { parseSchrittDaten } from '@/services/interviewSemantic'
 import type { Phase, StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
 import type { InterviewStore } from '@/services/turnStore/port'
 import type { RunTurnPorts } from '@/services/runInterviewTurn'
-import type { Database, Json } from '@/lib/database.types'
-
-type ProcessStepUpdate = Database['public']['Tables']['process_steps']['Update']
+import { mergeManualCorrection, type ManualCorrectionPatch } from '@/lib/schrittDatenView'
+import type { Json } from '@/lib/database.types'
 
 // ─── Public shapes ──────────────────────────────────────────────────────────
 
@@ -83,11 +83,12 @@ export interface EvalStore {
 
 const FREQUENCY_MAP: Record<string, number> = { 'Täglich': 22, 'Wöchentlich': 4, 'Mehrfach/Monat': 8, 'Monatlich': 1 }
 const DURATION_MAP: Record<string, number> = { '< 5 Min': 3, '5–15 Min': 10, '15–30 Min': 22, '> 30 Min': 45 }
-const RULE_BASED_MAP: Record<string, boolean> = { 'Immer gleich': true, 'Meistens gleich': true, 'Variiert stark': false }
+// PROJ-45: rule_based (boolean column) is gone — entscheidungslogik is free text since PROJ-25.
+const ENTSCHEIDUNGSLOGIK_MAP: Record<string, boolean> = { 'Immer gleich': true, 'Meistens gleich': true, 'Variiert stark': false }
 const ERROR_RATE_MAP: Record<string, number> = { 'Selten Fehler': 2, 'Gelegentlich': 10, 'Häufig': 30 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const SLOT_KEYS = ['frequency_per_month', 'duration_minutes', 'rule_based', 'error_rate_percent']
+const SLOT_KEYS = ['frequency_per_month', 'duration_minutes', 'entscheidungslogik', 'error_rate_percent']
 
 // ─── Supabase backend (default — verbatim of the pre-PROJ-34 runner) ──────────
 
@@ -228,20 +229,29 @@ async function createSupabaseEvalStore(): Promise<EvalStore> {
         .update({ clarification_answers: clarificationRecord as unknown as Json })
         .eq('id', interviewId)
 
-      // Process SlotCards → update process_steps
+      // Process SlotCards — read-merge-write into schritt_daten (PROJ-45/ADR-025).
       for (const a of answers) {
         if (!SLOT_KEYS.includes(a.slot_key) || typeof a.answer !== 'string' || a.answer === 'Weiß ich nicht') continue
-        const update: ProcessStepUpdate = {}
-        if (a.slot_key === 'frequency_per_month' && FREQUENCY_MAP[a.answer] !== undefined) update.frequency_per_month = FREQUENCY_MAP[a.answer]
-        else if (a.slot_key === 'duration_minutes' && DURATION_MAP[a.answer] !== undefined) update.duration_minutes = DURATION_MAP[a.answer]
-        else if (a.slot_key === 'rule_based' && RULE_BASED_MAP[a.answer] !== undefined) update.rule_based = RULE_BASED_MAP[a.answer]
-        else if (a.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[a.answer] !== undefined) update.error_rate_percent = ERROR_RATE_MAP[a.answer]
-        if (Object.keys(update).length === 0) continue
+        const patch: ManualCorrectionPatch = {}
+        if (a.slot_key === 'frequency_per_month' && FREQUENCY_MAP[a.answer] !== undefined) patch.frequency_per_month = FREQUENCY_MAP[a.answer]
+        else if (a.slot_key === 'duration_minutes' && DURATION_MAP[a.answer] !== undefined) patch.duration_minutes = DURATION_MAP[a.answer]
+        else if (a.slot_key === 'entscheidungslogik' && ENTSCHEIDUNGSLOGIK_MAP[a.answer] !== undefined) patch.rule_based = ENTSCHEIDUNGSLOGIK_MAP[a.answer]
+        else if (a.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[a.answer] !== undefined) patch.error_rate_percent = ERROR_RATE_MAP[a.answer]
+        if (Object.keys(patch).length === 0) continue
+
         const isUuid = UUID_RE.test(a.process_step_id)
+        const stepIds: string[] = []
         if (isUuid) {
-          await supabase.from('process_steps').update(update).eq('id', a.process_step_id).eq('interview_id', interviewId)
+          stepIds.push(a.process_step_id)
         } else {
-          await supabase.from('process_steps').update(update).eq('title', a.process_step_id).eq('interview_id', interviewId)
+          const { data: matched } = await supabase.from('process_steps').select('id').eq('title', a.process_step_id).eq('interview_id', interviewId)
+          for (const s of matched ?? []) stepIds.push(s.id)
+        }
+        for (const stepId of stepIds) {
+          const { data: row } = await supabase.from('process_steps').select('schritt_daten').eq('id', stepId).single()
+          if (!row) continue
+          const merged = mergeManualCorrection(parseSchrittDaten(row.schritt_daten), patch)
+          await supabase.from('process_steps').update({ schritt_daten: merged as unknown as Json }).eq('id', stepId)
         }
       }
 

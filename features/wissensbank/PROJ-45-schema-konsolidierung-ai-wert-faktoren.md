@@ -1,6 +1,6 @@
 # PROJ-45: Schema-Konsolidierung + AI-Wert-Faktoren
 
-## Status: Architected
+## Status: In Progress
 **Type:** Revision
 **Domain:** Wissensbank
 **Extends:** PROJ-25
@@ -227,8 +227,197 @@ Keine neuen npm-Pakete — reine Schema-/Code-Konsolidierung. Eine neue Postgres
 (`process_steps`: 10 Spalten löschen, `schritt_daten jsonb` hinzufügen). Kein Backfill (Edge Case
 bereits in der Spec dokumentiert: Altbestand bleibt wie erfasst, neue Felder gelten ab Deploy).
 
+## Backend Implementation Notes (`/backend`, 2026-07-21, Sonnet 5)
+
+**Migration angewendet** (Supabase MCP, `proj45_schritt_daten_jsonb`): `process_steps.schritt_daten jsonb` hinzugefügt,
+10 Legacy-Spalten (`role, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent,
+media_breaks, friction_points, friction_tools, walkthrough_steps`) gelöscht. Kein Backfill (17 Altzeilen verlieren
+diese Werte — wie in der Spec/ADR akzeptiert). `database.types.ts` manuell nachgeführt (Projekt nutzt Interface-Format,
+kein `supabase gen types`-Rohdump).
+
+**Bewusste Abweichung vom Tech-Design-Wortlaut (dokumentiert, nicht stillschweigend):** Tech Design Abschnitt B)
+skizziert `bezeichnung`/`konfidenz`/`wert` als Feldnamen (in Anlehnung an das vorbestehende `Schritt`/`SchemaPotenzial`,
+das nur für `toGrenzobjekt()` existierte). Umgesetzt wurde stattdessen: **ein** generischer `SchemaSlotBase<T>`-Typ
+ersetzt die vier alten Slot-Typen (`SlotValue`/`TaziteSlot`/`TaziteSlotArray`/`GovernanceSlot` entfallen), aber mit
+den BESTEHENDEN Feldnamen (`value`, `quote`, `confidence`, `nicht_befund_typ`) statt der deutschen Variante, und
+`StepEntry.title`/`potenzial.frequency_per_month` etc. bleiben unrenamed. Begründung: die Kernanforderung der AC
+("StepEntry's vier verschiedene Slot-Typen entfallen zugunsten einer einheitlichen Form") ist damit vollständig
+erfüllt — vier Typen wurden zu einem generischen Typ — ohne einen zusätzlichen, rein kosmetischen Rename mit
+großer Blast-Radius (91 `.title`-Vorkommen, alle Eval-Scorer/Personas, alle Tool-Schemas) einzugehen, der keinen
+weiteren funktionalen Nutzen gehabt hätte. `toGrenzobjekt()`/`Schritt`/`SchemaGovernance`/altes `SchemaPotenzial`
+wurden trotzdem vollständig entfernt (AC-Vorgabe), inkl. des darauf aufbauenden `schemaValidator.ts` +
+`schemaConformanceRate`-Eval-Scorers (beide gelöscht — messen Konformität zu einem Schema, von dem sich die App
+laut ADR-025 D7 bewusst entfernt; ein Scorer der garantiert bei 0 landet ist kein sinnvolles Signal mehr).
+
+**Umgesetzt (entspricht AC/ADR-025 wörtlich):**
+- `process_steps` → `teilschritte` (Namenskollision mit der Postgres-Tabelle behoben)
+- `friction_points` → `reibungspunkte`, vollwertiges `SchemaSlotStringArray`-O-Feld, jetzt in `target_o_field`
+- `governance`, `friction_tools`, `pain_point_primary` ersatzlos entfernt (inkl. `record_governance`-Tool)
+- `update_walkthrough_data`-Tool entfernt, `teilschritte` ist jetzt ein regulärer `record_slot`-Array-Slot
+- Neue Felder: `aufgabentyp`, `risiko_schwere` (aktiv erfragt, Enum-Mehrfachauswahl), `ausloeser` (Freitext, aktiv),
+  `standardisierungsgrad`, `informationsdichte` (Analyst-Klassifikation aus `ausnahmen`/`inputs`/`hilfsmittel`,
+  keine eigene Frage, kein `SLOT_PROMPT_HINT`-Eintrag)
+- `COVERAGE_FIELDS` (9 Felder, `dedup_slot_coverage`-Eval-Metrik) unverändert; `O_SLOT_FIELDS` jetzt unabhängige
+  Konstante (10 Felder: −`tazite_cues`, +`reibungspunkte`/`aufgabentyp`/`risiko_schwere`/`ausloeser`) —
+  `isCoverageFieldFilled`/`isOFieldFilled` als zwei dünne Wrapper um denselben internen Check
+- Einheiten-Unabhängigkeit: `SchemaSlotNumber.einheit?` (z.B. `pro_woche`, `stunden`), deterministische Umrechnung
+  über `resolveHaeufigkeitProMonat`/`resolveDauerMinuten` (interviewSemantic.ts) — nie durch das Sprachmodell
+- `coerceRuleBased`/`coerceMediaBreaks`/`MEDIA_BREAKS_TEXT_MAP`/`MANDATORY_SLOTS`/`OPTIONAL_SLOTS`/`SlotName`/
+  `LegacyStepEntry`-Zweig in `normalizeStepEntry` entfernt
+- `rule_based`-Prompt-Drift in `interviewAnalyst.ts` korrigiert (Prüfschema + `ClarificationCardSchema.slot_key`
+  referenzieren jetzt `entscheidungslogik`)
+- JSONB-only-Persistenz: `processEnrichment.ts` schreibt `schritt_daten` 1:1 aus dem `StepEntry`, keine
+  Übersetzungsschicht mehr
+- Neuer `src/lib/schrittDatenView.ts`: `deriveProcessStepDisplayFieldsFromRaw` (Read-Adapter für
+  `useCaseEngine.ts`/`processStepsAggregation.ts`/`ProcessStepsTable.tsx`/`UseCaseSheet.tsx`/`InterviewReport.tsx` —
+  deren EIGENE Logik unverändert bleibt, nur der Lesepfad von `schritt_daten` aus) + `mergeManualCorrection`
+  (Read-Merge-Write-Helper für die beiden Nicht-LLM-Schreibpfade: `process-steps/[id]/route.ts` PATCH und die
+  SlotCard-Antworten in `interview/[token]/clarification/route.ts` + `evalStore.ts`)
+- Alle Downstream-Dateien aus der Spec-Liste angepasst (Konsum, keine Logik-Neugestaltung), plus die beim
+  Grilling nachgetragene `process-steps/[id]/route.ts` und die dort zusätzlich gefundene
+  `process-steps/[id]/substeps/route.ts`
+
+**Zwei echte Bugs beim Umbau gefunden und mitgefixt** (nicht Teil der Spec, aber durch die Typ-Vereinheitlichung
+aufgedeckt): `interviewOrchestrator.ts::computeTargetOFieldFallback` rief `isCoverageFieldFilled` mit einem
+`OSlotField`-Wert auf (falsche Funktion für die falsche Feld-Menge, seit der D3-Trennung ein Typfehler) — jetzt
+`isOFieldFilled`. `slotDepth.ts`s `FilledSlot.quote` war `string` (non-null) getypt, obwohl `quote` im Slot-Typ
+schon vorher `string | null` war — jetzt korrekt mit `?? ''` abgefangen.
+
+**Test-Fixture-Reparatur abgeschlossen und verifiziert** (2026-07-21): ~19 `*.test.ts`-Dateien (Subagent-Batch:
+`slots`-Objektliterale um die 6 neuen Keys ergänzt, `governance`-Properties entfernt, Typ-Import-Renames
+`SlotValue`/`TaziteSlot`/`TaziteSlotArray`→`SchemaSlotNumber`/`SchemaSlotString`/`SchemaSlotStringArray`,
+`toGrenzobjekt`/`record_governance`/`update_walkthrough_data`/`scoreGovernanceCoverage`-Testblöcke gelöscht) plus
+3 Testdateien, die eigene `schritt_daten`-Umstellungen dieser Session betrafen und deshalb selbst gefixt wurden
+(nicht mechanisch, sondern echte Assertion-Anpassungen auf die neue JSONB-Form): `processEnrichment.test.ts`
+(Assertions von Flach-Spalten auf `arg.schritt_daten.potenzial.*`/`slots.*` umgestellt), `clarification.test.ts`
+(Mock-Query-Kette für das neue Read-Merge-Write erweitert, OpenItem-Insert-Assertion auf `schritt_daten: null`),
+`use-cases/[id]/id.test.ts` (Cluster-Sub-Use-Case-Fixtures tragen jetzt `schritt_daten` statt Flach-Felder).
+
+**Endstand (verifiziert 2026-07-21):** `npx tsc --noEmit` sauber (exit 0, gesamtes Repo). `npm test`: **66/66
+Testdateien, 807 Tests grün, 1 Skip (vorbestehend)** — 0 Failures.
+
+**Ausstehend / nächste Schritte:**
+- **Pflicht-Gate laut general.md**: mindestens ein `eval:interview`-Lauf vor `Approved` (Interview-Engine-Domain-Regel)
+  — hier zusätzlich relevant, da die Talker-/Analyst-Prompt-Texte für die neuen Felder erstmals live verifiziert
+  werden müssen (Prompt-Text ist geschrieben, aber nicht live getestet).
+- Manuelle Verifikation der neuen `record_slot`-Slots (`reibungspunkte`/`aufgabentyp`/`risiko_schwere`/`ausloeser`/
+  `teilschritte`/`standardisierungsgrad`/`informationsdichte`) im realen Interview-Turn — Unit-Tests decken die
+  Typ-Korrektheit ab, nicht das tatsächliche LLM-Verhalten.
+- `docs/architecture/`-Diagramme (falls vorhanden) referenzieren evtl. noch die alten `process_steps`-Flach-Spalten.
+- `src/lib/supabase-types.ts` (unbenutzte Alt-Datei, kein Importer gefunden) enthält noch das alte Schema — nicht
+  angefasst, da tot; ggf. Kandidat für `/cleanup`.
+- Nächster Schritt: `/qa PROJ-45`.
+
 ## QA Test Results
-_To be added by /qa_
+
+> `/qa` 2026-07-21 (Opus 4.8). Fokus laut Auftrag: kritische Prüfung, ob Tests wirklich grün sind und ob der Cleanup vollständig ausgeführt wurde (Backend-Summary in Zweifel gezogen).
+
+### Statische Verifikation (bestanden)
+
+| Check | Ergebnis |
+|-------|----------|
+| `npx tsc --noEmit` | **exit 0**, sauber (gesamtes Repo) |
+| `npm test` (vitest) | **66/66 Testdateien, 807 Tests grün, 1 Skip (vorbestehend), 0 Failures** — Backend-Behauptung bestätigt, entgegen der Auftrags-Vermutung „manche Tests nicht bestanden". Auf dem aktuellen Working Tree gibt es keinen fehlschlagenden Test. |
+| Code-Cleanup entfernter Symbole | `record_governance`/`scoreGovernanceCoverage`/`schemaConformanceRate`/`toGrenzobjekt`/`SchemaGovernance`/`coerceMediaBreaks`/`MANDATORY_SLOTS`/`OPTIONAL_SLOTS`/`SlotName`/`LegacyStepEntry`: **0 echte Code-Referenzen** in `src/`. Verbliebene Treffer für `update_walkthrough_data`/`friction_tools`/`pain_point_primary`/`coerceRuleBased` sind ausschließlich erklärende Kommentare (dokumentieren das Entfernte). |
+| Gelöschte Dateien | `schemaValidator.ts`, `schemaConformanceRate.ts` + `.test.ts` real via git gelöscht (D-Status). |
+| `LegacyStepEntry`-Legacy-Zweig | entfernt. `RawStepEntry` ist ein neuer, davon verschiedener Backward-Compat-Read-Shape für post-PROJ-25/pre-PROJ-45-JSONB (nötig für die 6 realen Alt-Interviews, Spec-Edge-Case) — AC-konform. |
+| Live-DB-Migration (`proj45_schritt_daten_jsonb`, `20260721113650`) | **angewendet.** `process_steps` trägt `schritt_daten jsonb`, alle 10 Legacy-Flach-Spalten entfernt, RLS aktiv. Persistenz-AC erfüllt. |
+| NULL-`schritt_daten` bei 17 Altzeilen (kein Backfill) | `deriveProcessStepDisplayFields`/`parseSchrittDaten`/`mergeManualCorrection` behandeln `null` sauber (Optional-Chaining + `EMPTY_STEP_ENTRY`-Fallback) — kein Crash, Altzeilen rendern leer. Dokumentierte No-Backfill-Entscheidung, kein Bug. |
+| `database.types.ts` | 10 Flach-Spalten von `process_steps` entfernt, `schritt_daten` ergänzt (3 `duration_minutes`-Treffer = `max_duration_minutes` einer anderen Tabelle). |
+| Prompt-Vollständigkeit | `SLOT_PROMPT_HINT` hat die 4 neuen aktiven Felder (`reibungspunkte`/`aufgabentyp`/`risiko_schwere`/`ausloeser`); Analyst-Prompt beschreibt alle neuen Felder inkl. Klassifikations-Slots + `ausloeser`→`record_dependency`-Abgrenzung. |
+| `O_SLOT_FIELDS` (10) vs. `COVERAGE_FIELDS` (9) | als zwei unabhängige Konstanten getrennt (ADR-025 D3), `isCoverageFieldFilled`/`isOFieldFilled` als getrennte Wrapper. |
+| Security: Object-Ownership `process-steps/[id]` PATCH | Auth + `workspace_members`-Ownership-Guard (Z. 65-74) vorhanden; Read-Merge-Write korrekt. Ownership-Logik unverändert ggü. Pre-PROJ-45, keine neue Angriffsfläche. |
+
+### Befunde
+
+- **L-1 (Low):** `src/lib/supabase-types.ts` (18 KB) enthält noch das alte Schema, 0 Importer. Vorbestehende tote Datei, nicht von PROJ-45 eingeführt, vom Backend als `/cleanup`-Kandidat markiert. Kein Funktionsrisiko, aber stale.
+
+### Blockierendes Gate (nicht erfüllt)
+
+- **Eval-Gate offen (general.md + QA §8b):** PROJ-45 verändert Interview-Conversation-Logic (neue `record_slot`-Slots, `SLOT_PROMPT_HINT`, `target_o_field`-Enum, Analyst-Klassifikation). 807 grüne Unit-Tests prüfen Typ-/Pfad-Korrektheit, NICHT das reale LLM-Verhalten der neuen Felder. Kein `eval:interview`-Lauf vorhanden (neuestes Artefakt 2026-07-19). **Ohne mindestens einen erfolgreichen Eval-Lauf kein `Approved`.**
+
+### Eval-Gate (2026-07-21, `google/gemini-3.1-flash-lite`, Supabase-Store)
+
+Judge-Preflight (general.md): echter Anthropic-Messages-Call gegen `claude-haiku-4-5` → HTTP 200 (Key valide + Guthaben). Zwei Läufe je 1×.
+
+| Metrik | buchhalter (`feb6d603`) | it-support (`33e94583`) | Gate |
+|--------|-------------------------|-------------------------|------|
+| status (Runner-Gate) | **FAIL** | **FAIL** | — |
+| dedup_slot_coverage | 0.56 | 0.72 | ≥0.75 ✗ (beide) |
+| completion_correctness | true | true | =true ✓ |
+| step_registration_coverage | 1.0 | 1.0 | ≥0.8 ✓ |
+| dialog_naturalness | **1.0** | 0.67 | ≥0.65 ✓ |
+| blocked_rate | 0.05 | — | <0.1 ✓ |
+| talker_grounding_violations | **0** | **0** | — ✓ |
+| hallucination_rate | 0 | 0 | — ✓ |
+
+**Beide FAIL nur wegen `dedup_slot_coverage` <0.75 — kein PROJ-45-Regress.** Der Scorer hängt an den unveränderten 9 `COVERAGE_FIELDS` (nicht an den neuen Feldern); 0.56/0.72 decken sich mit der etablierten Baseline (PROJ-44 R3 / PROJ-46 = 0.56 buchhalter). Es ist die bekannte Tiefe-Lücke → PROJ-43-Remit, nicht durch PROJ-45 verursacht.
+
+**PROJ-45-eigene Ziele — erreicht:**
+- Alle 6 neuen Felder werden live gefüllt UND verlustfrei nach `process_steps.schritt_daten` persistiert (Live-DB verifiziert, alle 6 Schritte `has_schritt_daten=true`): `aufgabentyp` `["entscheidung","klassifikation"]`, `risiko_schwere` `["teuer","rechtlich_kritisch"]`, `reibungspunkte` `["E-Mails und Anrufe unterbrechen…"]`, `ausloeser` `"Ablauf der monatlichen Zahlungsfristen"`, `informationsdichte` `"gemischt"/"unstrukturiert"`, `standardisierungsgrad` `"stark_variabel"` (Analyst-Klassifikation funktioniert). Enum-Normalisierung korrekt.
+- `dialog_naturalness` gehalten/verbessert (1.0 buchhalter, 0.67 it-support) — keine KI-18-Prompt-Dichte-Regression trotz erweiterter Prompts.
+- `talker_grounding_violations = 0` in beiden Läufen.
+- Extraktion end-to-end: 20 + 26 knowledge_objects, Interviews `completed`.
+
+### Befunde (Eval)
+
+- **H-1 (High) — Einheiten-Unabhängigkeit wird vom LLM umgangen (Headline-AC verletzt).** Die AC „Umrechnung … erfolgt ausschließlich deterministisch im Code … niemals durch das Sprachmodell" wird in 3 von 4 nicht-kanonischen Häufigkeits-/Dauer-Fällen NICHT eingehalten. Quote-belegt aus der Live-DB: Persona „15 bis 20 Tickets **pro Tag**" → gespeichert `frequency_per_month.value=400, einheit MISSING`; „3 bis 5 **pro Woche**" → `value=16, einheit MISSING`. Das LLM rechnet selbst Tag/Woche→Monat um (genau KI-18s dokumentiertes „15-20/Tag"→„350/Monat"-Muster) und lässt `einheit` weg. Der Mechanismus funktioniert, WENN das LLM ihn nutzt (`1 [monatlich]`, `2 [tage]` korrekt), aber der Prompt erzwingt die Nutzung nicht. Der Rohwert bleibt im `quote` erhalten (Mitigation), aber `value` ist LLM-umgerechnet → der deterministische Converter ist ein No-op und vertraut der LLM-Zahl. `talker_grounding_violations=0`, weil die Umrechnung im stillen `record_slot`-Write des Analyst passiert, nicht in einer Talker-Rückfrage — der Guard sieht sie nicht. **Fix-Richtung (an `/backend`):** `einheit` im `record_slot`-Schema für Potenzial-Slots verpflichtend machen + Analyst-Prompt „nenne Zahl UND Einheit exakt wie gesagt, rechne nie selbst um". Blockiert Approved.
+- **M-1 (Medium) — Dauer als Monats-Aggregat statt pro Vorgang (ROI-Überzählung).** Rechnungsprüfung: `duration_minutes.value=900` aus quote „15 **Stunden pro Monat** für die Prüfung dieser 80-100 Rechnungen". 900 min ist der Monatsgesamtwert, nicht die Dauer pro Rechnung. ROI = `frequency × duration` würde massiv überzählen (80 × 900). Straddle PROJ-43 (Elicitation fragt nicht sauber „pro Vorgang") / PROJ-45 (Einheiten-Semantik). Betrifft ROI-Korrektheit.
+- **Nicht auto-getestet:** Use-Case-Generierung (`use_cases=0`, separater Trigger) — der ROI-Read-Adapter (`deriveProcessStepDisplayFieldsFromRaw`) ist unit-getestet + JSONB-Form live wohlgeformt, aber der Live-ROI-Pfad wurde nicht end-to-end ausgeführt.
+
+Artefakte: `docs/evals/interview/2026-07-21/2026-07-21-15-48-52-*-buchhalter.{md,transcript.json}`, `…-15-54-22-*-it-support.md`.
+
+### Cleanup-Nachtrag (nach Nutzer-Freigabe umgesetzt)
+
+- `src/lib/supabase-types.ts` gelöscht (0 Repo-Referenzen, veralteter Duplikat-`Database`-Typ). tsc grün nach Löschung.
+- Substanzloser key-gated Test (`dialogNaturalness.test.ts` „Positions-Swap Integration") entfernt: `generateObject` top-level gemockt → die „Invarianz"-Assertion war trivial wahr, `it.skipIf(!hasApiKey)` sorgte für Dauerskip in jedem CI-Lauf. Zugehörige tote `hasApiKey`-Konstante mit entfernt. Skip-Count jetzt 0 (vorher 1). 807→ Tests weiterhin grün (Skip weg).
+
+### Cleanup-Umfang (quantifiziert)
+
+3 Dateien gelöscht (`schemaValidator.ts`, `schemaConformanceRate.ts`+`.test.ts`) + 1 neue (`schrittDatenView.ts`, 125 Z.). Entfernte Konzepte: 4 Slot-Typen → 1 generischer `SchemaSlotBase<T>`, 2 Tools (`record_governance`, `update_walkthrough_data`), Governance-Objekt. Netto Production-Code **−191 Z.** (brutto ~316 Z. Alt-Logik raus, 125 Adapter zurück), Test-Code **−139 Z.**, Gesamt-Diff netto **−190 Z.** bei mehr Funktionalität.
+
+### Endurteil
+
+**NOT READY (In Review).** Statik + Persistenz + Schema-Konsolidierung solide, alle neuen Felder live gefüllt und persistiert, keine KI-18-Prompt-Regression. **Blocker: H-1** — die Einheiten-Unabhängigkeit (eine Headline-AC + der beworbene strukturelle KI-18-Fix) wird vom LLM umgangen; braucht einen Prompt/Schema-Fix in `/backend`, danach Re-Eval. Die `dedup_slot_coverage`-FAILs sind kein PROJ-45-Regress (PROJ-43-Tiefe-Lücke).
+
+**Bugs: 1 High : 1 Medium : 0 Low**
+
+## Remediation-Handoff (`/backend PROJ-45`, nächste Sonnet-Session)
+
+> Erstellt am Ende der `/qa`-Session 2026-07-21 (Opus 4.8). Nutzer-Entscheidung: H-1-Fix + Prompt-Deslop in einer **frischen Sonnet-Session** ausführen. Diese Session hat NICHTS davon umgesetzt — nur QA + zwei Cleanups (s.o.). Naming-Entscheidung (Nutzer): **`frequency` / `duration`**.
+
+### Auftrag: drei Stufen, in einem `/backend`-Durchlauf, danach Re-Eval
+
+**Stufe 1 — Rename (H-1-Wurzel: der Feldname erzeugt den Umrechnungs-Widerspruch)**
+- `frequency_per_month` → `frequency`, `duration_minutes` → `duration`. **Nur diese zwei.** `error_rate_percent` (% = natürliche Einheit) und `media_breaks` (Zählwert) bleiben unverändert.
+- Blast-Radius: `frequency_per_month` 237 Treffer / 58 Dateien, `duration_minutes` 205 / 67. **Fast alles Code + Tests + Fixtures, nicht Prompt.** Kein DDL (alles im `schritt_daten`-JSONB).
+- Ausgangspunkt: `POTENZIAL_SLOT_NAMES` + `SchemaSlotNumber`-Typ + `resolveHaeufigkeitProMonat`/`resolveDauerMinuten` in [interviewSemantic.ts](../../src/services/interviewSemantic.ts). Von dort dem Compiler folgen (`tsc --noEmit` treibt die ~440 Stellen auf).
+- **Back-compat PFLICHT** in `normalizeStepEntry` ([interviewSemantic.ts](../../src/services/interviewSemantic.ts)): alte JSONB-Keys `potenzial.frequency_per_month`/`duration_minutes` weiterlesen (analog zum bestehenden `teilschritte ?? process_steps`-Fallback). Betrifft die 6 realen Alt-Interviews UND die 6 process_steps-Zeilen, die die Eval-Läufe dieser Session gerade in Supabase geschrieben haben (Interviews `feb6d603…`, `33e94583…`).
+
+**Stufe 2 — `einheit` verpflichtend machen (schließt die Lücke strukturell)**
+- Im `record_slot`-Tool-Schema ([interviewTools.ts](../../src/services/interviewTools.ts)) für `frequency`/`duration`: `einheit` bei gesetztem `value` erzwingen (Tool-`.describe()`: „bei Häufigkeit/Dauer immer Wert UND genannte Einheit").
+- Die drei `NIEMALS selbst umrechnen`/`Default pro_monat|minuten`-Sätze im Analyst-Prompt ([interviewAnalyst.ts:296-297](../../src/services/interviewAnalyst.ts#L296-L297)) **ersatzlos löschen** — sie sind das Pflaster, das mit dem neutralen Namen + Pflicht-`einheit` überflüssig wird. Neu z.B.: `- frequency: Wert + einheit genau wie genannt (z.B. "3× pro Woche" → value=3, einheit="pro_woche").`
+
+**Stufe 3 — Prompt-Deslop BEIDER Dateien (Nutzer-Auftrag ausdrücklich: nicht nur Talker!)**
+Zwei Ebenen — die erste ist risikoarm, die zweite eval-pflichtig:
+- *(a) Tracking-IDs aus den gesendeten Prompt-Strings entfernen (risikoarm, nur Zeichen, keine Instruktion):*
+  - [interviewAnalyst.ts](../../src/services/interviewAnalyst.ts): `PROJ-45` (Z. 245, 296, 297), `PROJ-46/ADR-024` (Z. 268), `PROJ-28/BL-E2.1` (Z. 288) — alle im Template-Literal, gehen ans LLM.
+  - [talkerPrompt.ts](../../src/services/talkerPrompt.ts): `E3.3, PROJ-46` (Z. 206), `E3.5` (Z. 207), `E3.7` (Z. 208, 255) — in den `buildPhaseMethodology`-Rückgabe-Strings. `STATIC_PROMPT` (Z. 29-82) ist bereits sauber. Die `// PROJ-xx`-**Codekommentare** bleiben (nie ans LLM gesendet).
+- *(b) Umfassende inhaltliche Überarbeitung (der eigentliche „Deslop" den der Nutzer will):* Redundanz kürzen, Widersprüche auflösen, nur Nötiges + Eindeutiges. **Eval-pflichtig** — die KI-18-Historie zeigt wiederholt `dialog_naturalness`-Regressionen auf flash-lite durch genau solche Prompt-Dichte-Änderungen. Vorher/Nachher-`dialog_naturalness`-Median vergleichen, nicht blind umschreiben.
+
+> **⛔ HARTE REGEL für die `/backend`-Session (Nutzer, 2026-07-21): Prompt-Wording NICHT eigenmächtig ändern.** Jede inhaltliche Änderung am Prompt-Text (Stufe 3b, und darüber hinaus JEDE Umformulierung, die über den mechanischen Rename + reines ID-Strippen hinausgeht) wird VORHER mit dem Nutzer durchgesprochen — z.B. in einem eigenen `/grilling`. Sonnet schlägt die konkreten Prompt-Änderungen vor und wartet auf Freigabe; es entscheidet die Formulierung NICHT selbst. Nur unbedenklich ohne Rücksprache: der Feld-Rename dort wo `frequency_per_month`/`duration_minutes` wörtlich im Prompt vorkommt, das Löschen der dadurch gegenstandslosen `NIEMALS umrechnen`-Sätze, und das reine Entfernen der Tracking-IDs (Stufe 3a). Alles andere: erst besprechen, dann editieren.
+
+### Verifikation (Pflicht vor Approved)
+- `eval:interview it-support` (die Persona mit Nicht-Monats-Einheiten — „15-20/Tag", „3-5/Woche"). **Erfolgskriterium H-1:** `frequency`/`duration` werden mit `einheit` in der ROH genannten Einheit gespeichert (`pro_tag`/`pro_woche`/`stunden`), NICHT vom LLM auf Monat/Minuten vorab-umgerechnet. Live-DB gegenchecken (`schritt_daten->potenzial->frequency->>einheit`).
+- `dialog_naturalness ≥ 0.65` halten (beweist, dass der Prompt-Deslop die Natürlichkeit nicht gebrochen hat).
+- Judge-Preflight zuerst (general.md): echter Anthropic-`claude-haiku-4-5`-Mini-Call (in dieser Session HTTP 200 verifiziert, aber pro Lauf neu prüfen).
+- M-1 (Dauer als Monats-Aggregat) mitbeobachten — straddle PROJ-43, kein Approved-Blocker für PROJ-45, aber im Transkript-Review vermerken.
+
+### Zustand am Ende dieser QA-Session (Working Tree, NICHT committet)
+- Ganzer PROJ-45-Backend-Diff (62 Dateien) aus der vorherigen `/backend`-Session — uncommittet.
+- Diese QA-Session zusätzlich: QA-Ergebnisse in diese Spec + INDEX Bugs `1:1:0` (Status In Review); **zwei Cleanups umgesetzt** — `src/lib/supabase-types.ts` gelöscht, substanzloser key-gated Test in [dialogNaturalness.test.ts](../../src/services/__evals__/interview/scorers/dialogNaturalness.test.ts) entfernt (+ tote `hasApiKey`-Konstante). Suite danach 66 Dateien / 807 grün / 0 Skip, `tsc` sauber.
+- Eval-Artefakte in `docs/evals/interview/2026-07-21/` (buchhalter + it-support, je `.md`/`.transcript.json`/`.slot-trail.jsonl`).
+- Nichts committet (kein Auftrag dazu). Vorschlag für die nächste Session: QA + Cleanups als `test(PROJ-45): …` committen, dann Stufe 1-3 als `fix(PROJ-45): einheiten-neutrale Feldnamen + Prompt-Deslop`.
 
 ## Deployment
 _To be added by /deploy_

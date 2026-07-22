@@ -229,12 +229,11 @@ function doneStep(overrides: Record<string, unknown> = {}) {
       outputs: { value: 'Buchung', nicht_befund_typ: null, source_turn: 1 },
       hilfsmittel: { value: 'SAP', nicht_befund_typ: null, source_turn: 1 },
     },
-    governance: { rolle: 'Buchhalter', nicht_befund_typ: null },
+    // PROJ-45: governance/friction_points/friction_tools/pain_point_primary were
+    // removed from StepEntry entirely (no replacement); process_steps was renamed
+    // to teilschritte — the only one of these still rendered by formatStepTracker.
     abhaengigkeiten: null,
-    process_steps: ['Prüfen', 'Buchen'],
-    friction_points: ['Doppelerfassung'],
-    friction_tools: ['SAP'],
-    pain_point_primary: null,
+    teilschritte: ['Prüfen', 'Buchen'],
     ...overrides,
   }
 }
@@ -254,10 +253,10 @@ describe('talkerPrompt — WP3 done-step compact rendering', () => {
     // absence here unambiguously confirms the per-slot checklist was dropped.
     expect(ctx).not.toMatch(/tazite_cues/)
     expect(ctx).not.toMatch(/ausnahmen/)
+    // governance no longer exists (PROJ-45); teilschritte context is retained for
+    // follow-up questions about other steps (renamed from process_steps).
     expect(ctx).not.toMatch(/governance: Buchhalter/)
-    // process_steps/friction context is retained for follow-up questions about other steps.
-    expect(ctx).toMatch(/process_steps: Prüfen → Buchen/)
-    expect(ctx).toMatch(/friction_points: Doppelerfassung/)
+    expect(ctx).toMatch(/teilschritte: Prüfen → Buchen/)
   })
 
   it('a walkthrough/exploring step still renders the full slot checklist (no over-truncation)', () => {
@@ -269,7 +268,10 @@ describe('talkerPrompt — WP3 done-step compact rendering', () => {
       }),
     )
     expect(ctx).toMatch(/frequency_per_month: ✓ erfasst/)
-    expect(ctx).toMatch(/governance: Buchhalter/)
+    // governance no longer exists (PROJ-45) — entscheidungslogik is still part of
+    // the full checklist for a non-done step, confirming the checklist wasn't
+    // over-truncated.
+    expect(ctx).toMatch(/entscheidungslogik\s*: ✓ erfasst/)
     expect(ctx).not.toMatch(/alle Pflichtslots erfasst/)
   })
 })

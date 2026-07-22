@@ -86,12 +86,11 @@ const WORKSPACE_ID = 'ws-uuid-1'
 const MOCK_STEP_WALKTHROUGH = {
   title: 'Angebotserstellung',
   reihenfolge: 1,
-  governance: { rolle: 'Account Manager', organisationseinheit: null, systeme: null, nicht_befund_typ: null },
   abhaengigkeiten: null,
   status: 'walkthrough' as const,
   potenzial: {
-    frequency_per_month: { value: 50, quote: '50 passt ganz gut', confidence: 'confirmed' as const },
-    duration_minutes: { value: 50, quote: 'so eine Stunde', confidence: 'estimate' as const },
+    frequency_per_month: { value: 50, quote: '50 passt ganz gut', confidence: 'confirmed' as const, nicht_befund_typ: null },
+    duration_minutes: { value: 50, quote: 'so eine Stunde', confidence: 'estimate' as const, nicht_befund_typ: null },
     error_rate_percent: null,
     media_breaks: null,
   },
@@ -102,11 +101,14 @@ const MOCK_STEP_WALKTHROUGH = {
     inputs: null,
     outputs: null,
     hilfsmittel: { value: ['Salesforce', 'Excel'], quote: 'Salesforce und Excel', nicht_befund_typ: null },
+    reibungspunkte: { value: ['Templates müssen angepasst werden'], quote: 'Templates müssen angepasst werden', nicht_befund_typ: null },
+    ausloeser: null,
+    aufgabentyp: null,
+    risiko_schwere: null,
+    standardisierungsgrad: null,
+    informationsdichte: null,
   },
-  process_steps: [],
-  friction_points: ['Templates müssen angepasst werden'],
-  friction_tools: ['Salesforce'],
-  pain_point_primary: 'Kein Zugriff auf Konditionen',
+  teilschritte: [],
 }
 
 const MOCK_STEP_EXPLORING = {
@@ -176,14 +178,15 @@ describe('createProcessStepsFromTracker', () => {
     expect(insertChain.insert).toHaveBeenCalledOnce()
     const arg = (insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
 
-    expect(arg.frequency_per_month).toBe(50)
-    expect(arg.duration_minutes).toBe(50)
-    expect(arg.rule_based).toBe(true)
-    expect(arg.data_sources).toEqual(['Salesforce', 'Excel'])
-    expect(arg.error_rate_percent).toBeNull()
-    expect(arg.media_breaks).toBe(0)
+    // PROJ-45 (ADR-025 D1): schritt_daten carries the tracker entry verbatim — no
+    // flat frequency_per_month/duration_minutes/rule_based/data_sources columns anymore.
+    expect(arg.schritt_daten.potenzial.frequency_per_month.value).toBe(50)
+    expect(arg.schritt_daten.potenzial.duration_minutes.value).toBe(50)
+    expect(arg.schritt_daten.slots.entscheidungslogik.value).toBe('feste Vorlage')
+    expect(arg.schritt_daten.slots.hilfsmittel.value).toEqual(['Salesforce', 'Excel'])
+    expect(arg.schritt_daten.potenzial.error_rate_percent).toBeNull()
+    expect(arg.schritt_daten.potenzial.media_breaks).toBeNull()
     expect(arg.title).toBe('Angebotserstellung')
-    expect(arg.role).toBe('Account Manager')
     expect(arg.description).toBe('Kundenanfragen per E-Mail oder Anruf entgegennehmen.')
     expect(arg.source_quote).toBe('Ich bekomme Anfragen per Mail')
   })
@@ -211,7 +214,7 @@ describe('createProcessStepsFromTracker', () => {
     const arg = (insertChain.insert as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(arg.description).toBeNull()
     expect(arg.source_quote).toBeNull()
-    expect(arg.frequency_per_month).toBe(50)
+    expect(arg.schritt_daten.potenzial.frequency_per_month.value).toBe(50)
 
     errorSpy.mockRestore()
   })

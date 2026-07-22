@@ -61,7 +61,7 @@
 | PROJ-42 | Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-42-interview-grenzfall-robustheit.md) | P0 | M | 0:4:1 |
 | PROJ-43 | Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards) | Revision | Interview Engine | PROJ-29 | Roadmap | — | P1 | L | — |
 | PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-44-pipeline-simplifikation.md) | P1 | XL | 1:5:2 |
-| PROJ-45 | Schema-Konsolidierung + AI-Wert-Faktoren | Revision | Wissensbank | PROJ-25 | Architected | [spec](wissensbank/PROJ-45-schema-konsolidierung-ai-wert-faktoren.md) | P1 | XL | — |
+| PROJ-45 | Schema-Konsolidierung + AI-Wert-Faktoren | Revision | Wissensbank | PROJ-25 | In Review | [spec](wissensbank/PROJ-45-schema-konsolidierung-ai-wert-faktoren.md) | P1 | XL | 1:1:0 |
 | PROJ-46 | Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst) | Revision | Interview Engine | PROJ-22 | In Review | [spec](interview-engine/PROJ-46-talker-briefing-konsolidierung.md) | P1 | XL | 0:1:1 |
 
 <!-- Add features above this line -->
@@ -175,6 +175,29 @@ Skip vorbestehend) grün. Zwei gezielte Regressionstests statt Tim-Nachbau (Orch
 BUG-1 und BUG-6). **Noch offen (gehört zu `/qa`):** Live-`/eval:interview`-Lauf (Pflicht-Gate vor
 `Approved`, general.md), manueller adversarialer Durchlauf, Latenz-Delta-Messung, Start/Reconnect
 curl-Verifikation. **Nächster Schritt:** `/qa PROJ-44`.
+
+### Etappe 5 (Schema-Konsolidierung, ab 2026-07-21)
+
+**PROJ-45 Backend gebaut 2026-07-21** (Status In Progress) — ADR-025 (D1–D6) umgesetzt. Migration angewendet
+(`process_steps.schritt_daten jsonb` ersetzt 10 Legacy-Spalten, kein Backfill). `StepEntry` auf einen generischen
+`SchemaSlotBase<T>`-Typ konsolidiert (ersetzt `SlotValue`/`TaziteSlot`/`TaziteSlotArray`/`GovernanceSlot`);
+bewusste Abweichung vom Tech-Design-Wortlaut: bestehende Feldnamen (`value`/`quote`/`confidence`/`nicht_befund_typ`,
+`title`, `frequency_per_month` etc.) beibehalten statt eines zusätzlichen Deutsch-Renames — reduziert Blast-Radius
+ohne die AC-Kernanforderung (vier Slot-Typen → einer) zu verfehlen, Details + Begründung im Backend-Abschnitt der
+Spec. `governance`/`friction_tools`/`pain_point_primary` entfernt, `friction_points`→`reibungspunkte` (jetzt
+aktives O-Feld), `process_steps`→`teilschritte`, `record_governance`+`update_walkthrough_data`-Tools entfernt
+(teilschritte jetzt regulärer `record_slot`-Slot). Neue Felder `aufgabentyp`/`risiko_schwere`/`ausloeser` (aktiv
+erfragt) + `standardisierungsgrad`/`informationsdichte` (Analyst-Klassifikation, keine eigene Frage). Einheiten-
+Unabhängigkeit für Häufigkeit/Dauer (`einheit`-Feld + deterministische Code-Umrechnung, adressiert KI-18s
+größte dokumentierte Einzelursache strukturell). `schemaValidator.ts`+`schemaConformanceRate`-Scorer gelöscht
+(maßen Konformität zu einem Schema, von dem die App laut ADR-025 D7 bewusst abweicht). Neuer
+`src/lib/schrittDatenView.ts`-Adapter hält alle Downstream-Konsumenten (useCaseEngine, Aggregation, Reports, UI)
+bei unveränderter eigener Logik. Zwei vorbestehende, durch die Typvereinheitlichung aufgedeckte Bugs mitgefixt
+(`interviewOrchestrator.ts` falsche Coverage-Funktion, `slotDepth.ts` Quote-Nullability). Test-Fixture-Reparatur
+(~19 Dateien, Subagent) + 3 selbst gefixte Tests mit echten `schritt_daten`-Assertion-Anpassungen abgeschlossen.
+**Endstand: `tsc --noEmit` sauber, 66/66 Testdateien / 807 Tests grün (1 Skip vorbestehend).** Noch offen vor
+`/qa PROJ-45`: Pflicht-`eval:interview`-Lauf (general.md, neue Slots noch nicht live gegen ein echtes LLM
+verifiziert).
 
 ## Architecture Notes
 

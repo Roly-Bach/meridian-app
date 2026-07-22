@@ -2,6 +2,7 @@ import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
 import { cosineSim } from './embeddings'
+import { deriveProcessStepDisplayFieldsFromRaw } from '@/lib/schrittDatenView'
 
 const SIMILARITY_THRESHOLD = parseFloat(
   process.env.CLUSTER_SIMILARITY_THRESHOLD ?? '0.78'
@@ -45,7 +46,6 @@ interface ProcessStepRow {
   id: string
   title: string
   description: string | null
-  role: string | null
   embedding: number[] | null
   interview_id: string
   interviews: {
@@ -72,10 +72,7 @@ interface ProcessStepForSynthesis {
   title: string
   description: string | null
   source_quote: string | null
-  frequency_per_month: number | null
-  duration_minutes: number | null
-  data_sources: string[] | null
-  rule_based: boolean | null
+  schritt_daten: unknown
   interviews: { employee_name: string; employee_role: string | null } | null
 }
 
@@ -84,7 +81,7 @@ async function synthesizeCluster(clusterId: string): Promise<void> {
 
   const { data: stepsRaw, error } = await supabase
     .from('process_steps')
-    .select('title, description, source_quote, frequency_per_month, duration_minutes, data_sources, rule_based, interviews(employee_name, employee_role)')
+    .select('title, description, source_quote, schritt_daten, interviews(employee_name, employee_role)')
     .eq('cluster_id', clusterId)
 
   if (error || !stepsRaw || stepsRaw.length < 2) return
@@ -96,11 +93,12 @@ async function synthesizeCluster(clusterId: string): Promise<void> {
       const info = Array.isArray(s.interviews) ? s.interviews[0] : s.interviews
       const name = info?.employee_name ?? 'Unbekannt'
       const role = info?.employee_role ?? 'Unbekannte Rolle'
+      const display = deriveProcessStepDisplayFieldsFromRaw(s.schritt_daten)
       const parts = [`**${name} (${role})**`]
       if (s.description) parts.push(`Beschreibung: ${s.description}`)
-      if (s.duration_minutes) parts.push(`Dauer: ${s.duration_minutes} Minuten`)
-      if (s.frequency_per_month) parts.push(`Häufigkeit: ${s.frequency_per_month}× pro Monat`)
-      if (s.data_sources?.length) parts.push(`Tools/Systeme: ${s.data_sources.join(', ')}`)
+      if (display.duration_minutes) parts.push(`Dauer: ${display.duration_minutes} Minuten`)
+      if (display.frequency_per_month) parts.push(`Häufigkeit: ${display.frequency_per_month}× pro Monat`)
+      if (display.data_sources.length) parts.push(`Tools/Systeme: ${display.data_sources.join(', ')}`)
       if (s.source_quote) parts.push(`Originalzitat: "${s.source_quote}"`)
       return parts.join('\n')
     })
@@ -134,7 +132,7 @@ export async function clusterProcessSteps(workspaceId: string): Promise<void> {
   // Load unclustered process_steps with embeddings for this workspace
   const { data: unclusteredRaw, error: fetchErr } = await supabase
     .from('process_steps')
-    .select('id, title, description, role, embedding, interview_id, interviews(employee_name, employee_role)')
+    .select('id, title, description, embedding, interview_id, interviews(employee_name, employee_role)')
     .eq('workspace_id', workspaceId)
     .is('cluster_id', null)
     .not('embedding', 'is', null)

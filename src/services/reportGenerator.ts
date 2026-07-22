@@ -2,6 +2,7 @@ import { generateText } from 'ai'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { resolveModel } from '@/lib/llm-provider'
 import { buildTraceMetadata, type TraceCtx } from './_telemetry'
+import { deriveProcessStepDisplayFieldsFromRaw } from '@/lib/schrittDatenView'
 import type {
   ReportData,
   ReportKnowledgeObject,
@@ -64,7 +65,7 @@ export async function generateReportData(interviewId: string, traceCtx?: TraceCt
       .single(),
     supabase
       .from('process_steps')
-      .select('id, title, description, role, frequency_per_month, duration_minutes, data_sources, rule_based, error_rate_percent, media_breaks')
+      .select('id, title, description, schritt_daten')
       .eq('interview_id', interviewId)
       .order('created_at', { ascending: true }),
     supabase
@@ -80,7 +81,12 @@ export async function generateReportData(interviewId: string, traceCtx?: TraceCt
   }
 
   const interview = interviewResult.data
-  const processSteps = (processStepsResult.data ?? []) as ReportProcessStep[]
+  const processSteps: ReportProcessStep[] = (processStepsResult.data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    ...deriveProcessStepDisplayFieldsFromRaw(row.schritt_daten),
+  }))
   const knowledgeObjects = (knowledgeObjectsResult.data ?? []) as ReportKnowledgeObject[]
 
   // Load use cases linked to this interview's process steps

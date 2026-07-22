@@ -5,11 +5,23 @@ import type { StepEntry, Abhaengigkeiten } from '@/services/interviewSemantic'
 const makeStep = (abhaengigkeiten: Abhaengigkeiten | null, title = 'Rechnungsprüfung', reihenfolge = 1): StepEntry => ({
   title,
   reihenfolge,
-  governance: null,
   abhaengigkeiten,
   potenzial: { frequency_per_month: null, duration_minutes: null, error_rate_percent: null, media_breaks: null },
   status: 'done',
-  slots: { entscheidungslogik: null, tazite_cues: null, ausnahmen: null, inputs: null, outputs: null, hilfsmittel: null },
+  slots: {
+    entscheidungslogik: null,
+    tazite_cues: null,
+    ausnahmen: null,
+    inputs: null,
+    outputs: null,
+    hilfsmittel: null,
+    reibungspunkte: null,
+    ausloeser: null,
+    aufgabentyp: null,
+    risiko_schwere: null,
+    standardisierungsgrad: null,
+    informationsdichte: null,
+  },
 })
 
 const deps = (o: Partial<Abhaengigkeiten> = {}): Abhaengigkeiten => ({ depends_on: [], influences: [], nicht_befund_typ: null, ...o })

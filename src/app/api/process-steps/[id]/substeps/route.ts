@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { generateSubsteps } from '@/services/substepGenerator'
+import { parseSchrittDaten } from '@/services/interviewSemantic'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -9,7 +10,7 @@ async function authorizeStep(id: string, userId: string) {
   const admin = getSupabaseAdmin()
   const { data: step } = await admin
     .from('process_steps')
-    .select('id, workspace_id, title, description, source_quote, data_sources, substeps, walkthrough_steps')
+    .select('id, workspace_id, title, description, source_quote, schritt_daten, substeps')
     .eq('id', id)
     .single()
 
@@ -52,14 +53,15 @@ export async function POST(_req: Request, { params }: RouteParams) {
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })
 
   const { step } = result
+  const schrittDaten = parseSchrittDaten(step.schritt_daten)
 
   try {
     const substeps = await generateSubsteps({
       title: step.title,
       description: step.description,
       sourceQuote: step.source_quote,
-      dataSources: (step.data_sources as string[]) ?? [],
-      walkthroughSteps: (step.walkthrough_steps as string[] | undefined) ?? [],
+      dataSources: schrittDaten?.slots.hilfsmittel?.value ?? [],
+      walkthroughSteps: schrittDaten?.teilschritte ?? [],
     })
 
     const admin = getSupabaseAdmin()

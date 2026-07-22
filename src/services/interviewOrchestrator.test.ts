@@ -27,15 +27,26 @@ const emptySlots: StepEntry['slots'] = {
   inputs: null,
   outputs: null,
   hilfsmittel: null,
+  reibungspunkte: null,
+  ausloeser: null,
+  aufgabentyp: null,
+  risiko_schwere: null,
+  standardisierungsgrad: null,
+  informationsdichte: null,
 }
 
 const fullPotenzial: StepEntry['potenzial'] = {
-  frequency_per_month: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate' as const },
-  duration_minutes: { value: 30, quote: '30 Minuten', confidence: 'confirmed' as const },
-  error_rate_percent: { value: 0, quote: 'keine Fehler', confidence: 'confirmed' as const },
-  media_breaks: { value: 0, quote: 'keine Brüche', confidence: 'confirmed' as const },
+  frequency_per_month: { value: 8, quote: 'zweimal pro Woche', confidence: 'estimate' as const, nicht_befund_typ: null },
+  duration_minutes: { value: 30, quote: '30 Minuten', confidence: 'confirmed' as const, nicht_befund_typ: null },
+  error_rate_percent: { value: 0, quote: 'keine Fehler', confidence: 'confirmed' as const, nicht_befund_typ: null },
+  media_breaks: { value: 0, quote: 'keine Brüche', confidence: 'confirmed' as const, nicht_befund_typ: null },
 }
 
+// PROJ-45: O_SLOT_FIELDS grew from 6 (entscheidungslogik/ausnahmen/inputs/outputs/
+// hilfsmittel/abhaengigkeiten) to 10 (+ reibungspunkte/aufgabentyp/risiko_schwere/
+// ausloeser) — "full O2–O6 coverage" now requires all 10 filled, not just the
+// original 6. tazite_cues stays filled too (Aspekt-i, opportunistic, not itself
+// in O_SLOT_FIELDS per ADR-025 D3, but harmless to have filled).
 const fullSlots: StepEntry['slots'] = {
   entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
   tazite_cues: { value: ['SAP-Wissen'], quote: 'SAP', nicht_befund_typ: null },
@@ -43,22 +54,37 @@ const fullSlots: StepEntry['slots'] = {
   inputs: { value: ['Rechnung'], quote: 'Rechnung', nicht_befund_typ: null },
   outputs: { value: ['Buchung'], quote: 'Buchung', nicht_befund_typ: null },
   hilfsmittel: { value: ['SAP'], quote: 'in SAP', nicht_befund_typ: null },
+  reibungspunkte: { value: ['Doppelerfassung'], quote: 'Doppelerfassung', nicht_befund_typ: null },
+  ausloeser: { value: 'Rechnungseingang per E-Mail', quote: 'kommt per E-Mail', nicht_befund_typ: null },
+  aufgabentyp: { value: ['entscheidung'], quote: 'ich entscheide', nicht_befund_typ: null },
+  risiko_schwere: { value: ['leicht_korrigierbar'], quote: 'leicht korrigierbar', nicht_befund_typ: null },
+  standardisierungsgrad: null,
+  informationsdichte: null,
 }
 
-// PROJ-46/ADR-024 (B/C, D3 Coverage-Sanity): exactly 2 filled O2–O6 fields —
+// PROJ-46/ADR-024 (B/C, D3 Coverage-Sanity): exactly 2 filled O_SLOT_FIELDS —
 // satisfies MIN_SUBSTANTIAL_O_FIELDS so discovery_exhausted can be honored,
 // without being fully covered (isolates the Coverage-Sanity guard from D3's
-// separate "full coverage exhausts a step" behavior).
+// separate "full coverage exhausts a step" behavior). PROJ-45 (ADR-025 D3):
+// tazite_cues is filled too but does NOT count toward O_SLOT_FIELDS coverage
+// (Aspekt-i, opportunistic, dropped from the Interview-Engine's own target set)
+// — entscheidungslogik + ausnahmen are the 2 fields that actually count here.
 const substantiallyCoveredSlots: StepEntry['slots'] = {
   entscheidungslogik: { value: 'regelbasiert', quote: 'immer gleich', nicht_befund_typ: null },
   tazite_cues: { value: ['SAP-Wissen'], quote: 'SAP', nicht_befund_typ: null },
-  ausnahmen: null,
+  ausnahmen: { value: ['Storno'], quote: 'Storno', nicht_befund_typ: null },
   inputs: null,
   outputs: null,
   hilfsmittel: null,
+  reibungspunkte: null,
+  ausloeser: null,
+  aufgabentyp: null,
+  risiko_schwere: null,
+  standardisierungsgrad: null,
+  informationsdichte: null,
 }
 
-// Full O2–O6 coverage (7 fields: 6 tazite + abhaengigkeiten) but streak still low —
+// Full O2–O6 coverage (10 O_SLOT_FIELDS, PROJ-45) but streak still low —
 // the D3 "exhaustion fires on full coverage" scenario. Potenzial is irrelevant to
 // O-coverage (O2–O6 only), left empty on purpose.
 const fullAbhaengigkeiten: StepEntry['abhaengigkeiten'] = {
@@ -68,7 +94,7 @@ const fullAbhaengigkeiten: StepEntry['abhaengigkeiten'] = {
 }
 
 function makeStep(title: string, status: 'exploring' | 'walkthrough' | 'done', slots: StepEntry['slots'] = emptySlots, extra: Partial<StepEntry> = {}): StepEntry {
-  return { title, reihenfolge: 1, governance: null, abhaengigkeiten: null, status, potenzial: emptyPotenzial, slots, process_steps: [], friction_points: [], friction_tools: [], pain_point_primary: null, ...extra }
+  return { title, reihenfolge: 1, abhaengigkeiten: null, status, potenzial: emptyPotenzial, slots, ...extra }
 }
 
 const emptyODrought: ODroughtState = { stepId: null, streak: 0, exhaustedStepIds: [] }
@@ -484,10 +510,13 @@ describe('computeFocusLock (M-3 Fokus-Lock)', () => {
 
 describe('updateODrought (M-1/M-3 shared primitive)', () => {
   it('resets the streak to 0 when the locked step gained a new O-field this turn', () => {
+    // PROJ-45 (ADR-025 D3): tazite_cues was dropped from O_SLOT_FIELDS (Aspekt-i,
+    // opportunistic only) — use 'ausnahmen', which still counts, so this exercises
+    // the same "genuinely new O-field" behavior the test name describes.
     const before = makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })
     const after = makeStep('Rechnungsprüfung', 'walkthrough', {
       ...emptySlots,
-      tazite_cues: { value: ['SAP-Wissen'], quote: 'SAP', nicht_befund_typ: null },
+      ausnahmen: { value: ['Storno'], quote: 'Storno', nicht_befund_typ: null },
     }, { id: 'S001' })
     const lock: ODroughtState = { stepId: 'S001', streak: 2, exhaustedStepIds: [] }
     const updated = updateODrought(lock, [before], [after])
@@ -528,6 +557,12 @@ describe('computeTargetOFieldFallback', () => {
       inputs: null,
       outputs: null,
       hilfsmittel: null,
+      reibungspunkte: null,
+      ausloeser: null,
+      aufgabentyp: null,
+      risiko_schwere: null,
+      standardisierungsgrad: null,
+      informationsdichte: null,
     }, { id: 'S001' })
     expect(computeTargetOFieldFallback(step)).toBe('ausnahmen')
   })

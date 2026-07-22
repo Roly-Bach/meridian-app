@@ -13,10 +13,10 @@
 import { analyzeConversationSignals } from './conversationSignals'
 import type {
   Phase,
-  SlotValue,
+  SchemaSlotNumber,
   StepEntry,
-  TaziteSlot,
-  TaziteSlotArray,
+  SchemaSlotString,
+  SchemaSlotStringArray,
   PotenzialSlotName,
   OSlotField,
 } from './interviewSemantic'
@@ -82,20 +82,25 @@ Keine Ankündigung von Phasenwechseln: "Damit haben wir X sehr detailliert erfas
 `
 
 // Deutsche Slot-Label für Talker-Prompt — kurz, ohne Zahlen-Vorgabe.
+// PROJ-45 (ADR-025 D3): tazite_cues hat keinen Eintrag mehr (kein target_o_field
+// mehr, bleibt aber schreibbarer Slot). 4 neue Einträge für die AI-Wert-Faktoren.
 const SLOT_PROMPT_HINT: Record<OSlotField | PotenzialSlotName, string> = {
   // Potenzial (quantitativ, opportunistisch — kein Talker-Ziel)
   frequency_per_month: 'wie oft pro Monat / Woche dieser Schritt vorkommt',
   duration_minutes: 'wie lange eine einzelne Durchführung dieses Schritts dauert',
   error_rate_percent: 'wie häufig Fehler oder Korrekturen auftreten',
   media_breaks: 'ob es Medienbrüche zwischen Systemen gibt',
-  // O2–O6 (qualitativ — Ziel-O-Feld-Menge, PROJ-46)
+  // O2–O6 (qualitativ — Ziel-O-Feld-Menge, PROJ-46/45)
   entscheidungslogik: 'ob der Schritt festen Regeln folgt oder eigener Einschätzung Spielraum lässt — und welche Kriterien entscheiden',
-  tazite_cues: 'was man aus Erfahrung wissen muss um diesen Schritt gut zu machen (implizites Wissen, Fingerspitzengefühl)',
-  ausnahmen: 'welche Ausnahmen oder Sonderfälle auftreten und wie sie behandelt werden',
-  inputs: 'welche Eingaben oder Voraussetzungen für diesen Schritt nötig sind',
+  ausnahmen: 'welche Ausnahmen oder Sonderfälle auftreten und wie sie behandelt werden — und ob der Normalfall sonst immer gleich abläuft oder stark variiert',
+  inputs: 'welche Eingaben oder Voraussetzungen für diesen Schritt nötig sind — achte auf Hinweise ob die Dokumente/Daten einheitlich strukturiert oder frei sind',
   outputs: 'was dieser Schritt produziert oder weitergibt',
-  hilfsmittel: 'welche Systeme, Tools oder Datenquellen dabei verwendet werden',
+  hilfsmittel: 'welche Systeme, Tools oder Datenquellen dabei verwendet werden — achte auf Hinweise ob die Dokumente/Daten einheitlich strukturiert oder frei sind',
   abhaengigkeiten: 'welche anderen Schritte dieser Schritt voraussetzt oder beeinflusst',
+  reibungspunkte: 'wo es in diesem Schritt hakt oder Zeit verloren geht',
+  aufgabentyp: 'ob dieser Schritt vor allem eine Entscheidung, Informationsübertragung, Zusammenfassung, Suche, Klassifikation oder Erstellung/Generierung ist',
+  risiko_schwere: 'wie schwerwiegend ein Fehler in diesem Schritt wäre (leicht korrigierbar, teuer, rechtlich kritisch, Kundenkontakt-relevant)',
+  ausloeser: 'was diesen Schritt von außen anstößt (z.B. eine E-Mail, ein Termin, eine Anfrage)',
 }
 
 // Strip markdown headings and control characters from LLM-generated strings
@@ -115,26 +120,24 @@ function formatStepTracker(steps: StepEntry[]): string {
     const idPrefix = step.id ? `${step.id} ` : ''
 
     const walkthrough: string[] = []
-    if (step.process_steps?.length) walkthrough.push(`  process_steps: ${step.process_steps.join(' → ')}`)
-    if (step.friction_points?.length) walkthrough.push(`  friction_points: ${step.friction_points.join(', ')}`)
-    if (step.friction_tools?.length) walkthrough.push(`  friction_tools: ${step.friction_tools.join(', ')}`)
-    if (step.pain_point_primary) walkthrough.push(`  pain_point_primary: "${step.pain_point_primary}"`)
+    if (step.teilschritte?.length) walkthrough.push(`  teilschritte: ${step.teilschritte.join(' → ')}`)
 
-    // WP3 (2026-07-14 design round): for 'done' steps the full 10-line slot checklist is
-    // dead weight — governance/dependencies are captured opportunistically by the Analyst,
-    // never actively re-asked by the Talker, and <no_repeat> already forbids re-asking a
-    // filled slot regardless. Keep only the conversational context (process_steps/friction*)
-    // that's still useful for follow-up questions about OTHER steps. walkthrough/exploring
-    // steps keep the full checklist — there it's the actual steering signal for open slots.
+    // WP3 (2026-07-14 design round): for 'done' steps the full slot checklist is
+    // dead weight — dependencies/classification fields are captured opportunistically
+    // by the Analyst, never actively re-asked by the Talker, and <no_repeat> already
+    // forbids re-asking a filled slot regardless. Keep only the conversational
+    // context (teilschritte) that's still useful for follow-up questions about OTHER
+    // steps. walkthrough/exploring steps keep the full checklist — there it's the
+    // actual steering signal for open slots.
     if (step.status === 'done') {
       return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge}) — alle Pflichtslots erfasst${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
     }
 
     // Fix 4 (ADR-015): mask raw slot values — show status only to prevent anchoring.
-    function fmtPotenzial(sv: SlotValue | null, label: string): string {
+    function fmtPotenzial(sv: SchemaSlotNumber | null, label: string): string {
       return `  ${label}: ${sv != null ? '✓ erfasst' : 'fehlt'}`
     }
-    function fmtTazite(sv: TaziteSlot | TaziteSlotArray | null, label: string): string {
+    function fmtTazite(sv: SchemaSlotString | SchemaSlotStringArray | { value: unknown; nicht_befund_typ: unknown } | null, label: string): string {
       if (sv == null) return `  ${label}: fehlt`
       const filled = sv.value != null || sv.nicht_befund_typ != null
       return `  ${label}: ${filled ? '✓ erfasst' : 'fehlt'}`
@@ -147,17 +150,17 @@ function formatStepTracker(steps: StepEntry[]): string {
       fmtPotenzial(step.potenzial.media_breaks,        'media_breaks       '),
     ]
     const taziteLines = [
-      fmtTazite(step.slots.entscheidungslogik, 'entscheidungslogik '),
-      fmtTazite(step.slots.tazite_cues,        'tazite_cues        '),
-      fmtTazite(step.slots.ausnahmen,          'ausnahmen          '),
-      fmtTazite(step.slots.inputs,             'inputs             '),
-      fmtTazite(step.slots.outputs,            'outputs            '),
-      fmtTazite(step.slots.hilfsmittel,        'hilfsmittel        '),
+      fmtTazite(step.slots.entscheidungslogik,    'entscheidungslogik   '),
+      fmtTazite(step.slots.tazite_cues,           'tazite_cues          '),
+      fmtTazite(step.slots.ausnahmen,             'ausnahmen            '),
+      fmtTazite(step.slots.inputs,                'inputs               '),
+      fmtTazite(step.slots.outputs,               'outputs              '),
+      fmtTazite(step.slots.hilfsmittel,           'hilfsmittel          '),
+      fmtTazite(step.slots.reibungspunkte,        'reibungspunkte       '),
+      fmtTazite(step.slots.ausloeser,             'ausloeser            '),
+      fmtTazite(step.slots.aufgabentyp,           'aufgabentyp          '),
+      fmtTazite(step.slots.risiko_schwere,        'risiko_schwere       '),
     ]
-
-    const govLine = step.governance != null
-      ? `  governance: ${step.governance.rolle ?? step.governance.nicht_befund_typ ?? '✓ teilweise erfasst'}`
-      : `  governance: fehlt`
 
     const depLine = (() => {
       const dep = step.abhaengigkeiten
@@ -171,7 +174,7 @@ function formatStepTracker(steps: StepEntry[]): string {
       return `  abhaengigkeiten: ✓ ${total} Kante(n) (depends_on: ${dep.depends_on.length}, influences: ${dep.influences.length})`
     })()
 
-    return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${govLine}\n${depLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
+    return `[${step.status}] ${idPrefix}"${title}" (Schritt ${step.reihenfolge})\n${potenzialLines.join('\n')}\n${taziteLines.join('\n')}\n${depLine}${walkthrough.length ? '\n' + walkthrough.join('\n') : ''}`
   }).join('\n\n')
 }
 
@@ -195,9 +198,9 @@ Nach 1–2 Austauschen zu explore übergehen.`
     return `## Methodik: explore
 Zwei Aktivitäten laufen nebeneinander, nicht nacheinander: Entdeckung und Vertiefung.
 
-Entdeckung: Gibt es einen weiteren wiederkehrenden Vorgang, der noch nicht registriert ist? Anker (Frequenz/Komplexität) vorhanden → diesen wählen, kurz begründen. Ist der aktive Schritt ausreichend erfasst (Ablauf, Treiber, Kontext — nicht zwingend jeder optionale Slot) → aktiv nach der nächsten wiederkehrenden Aufgabe fragen, z.B. "Welche andere regelmäßige Aufgabe nimmt bei dir viel Zeit ein?". Breite vor Tiefe: lieber mehrere Prozesse mit guten Basics als einer übertief. Ausnahmen/Sonderfälle sind kein eigener Prozess — friction_point am bestehenden Schritt.
+Entdeckung: Gibt es einen weiteren wiederkehrenden Vorgang, der noch nicht registriert ist? Anker (Frequenz/Komplexität) vorhanden → diesen wählen, kurz begründen. Ist der aktive Schritt ausreichend erfasst (Ablauf, Treiber, Kontext — nicht zwingend jeder optionale Slot) → aktiv nach der nächsten wiederkehrenden Aufgabe fragen, z.B. "Welche andere regelmäßige Aufgabe nimmt bei dir viel Zeit ein?". Breite vor Tiefe: lieber mehrere Prozesse mit guten Basics als einer übertief. Ausnahmen/Sonderfälle sind kein eigener Prozess — reibungspunkte am bestehenden Schritt.
 
-Vertiefung (aktiver Schritt, Status exploring/walkthrough): Ablauf und Reibungspunkte erfassen — eine Frage pro Turn. Signalwörter ("zuerst", "dann", "danach", "als nächstes") → sofort update_walkthrough_data mit process_steps. Spontan genannte Werte (Häufigkeit, Dauer, Systeme) → record_slot bzw. update_walkthrough_data, keine direkten Slot-Fragen. Verbleibende Pflichtslots natürlich nachfragen — max. 2–3 pro Turn, kein Listenformat, keine Ankündigung. Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → kurze Bestätigung (max. 1–2 Versuche), dann weiter. confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen. governance: record_governance wenn Rolle/OE genannt wird. abhaengigkeiten: record_dependency wenn ein Schritt einen anderen voraussetzt oder beeinflusst. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — nicht slot-relevant.
+Vertiefung (aktiver Schritt, Status exploring/walkthrough): Ablauf und Reibungspunkte erfassen — eine Frage pro Turn. Signalwörter ("zuerst", "dann", "danach", "als nächstes") → sofort record_slot mit teilschritte. Spontan genannte Werte (Häufigkeit, Dauer, Systeme, Reibungspunkte) → record_slot, keine direkten Slot-Fragen. Verbleibende Pflichtslots natürlich nachfragen — max. 2–3 pro Turn, kein Listenformat, keine Ankündigung. Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → kurze Bestätigung (max. 1–2 Versuche), dann weiter. confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen. abhaengigkeiten: record_dependency wenn ein Schritt einen anderen voraussetzt oder beeinflusst. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — nicht slot-relevant.
 Kontextregel: Beschreibt die Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt — andere Prozesse per register_step registrieren, Erkundung im nächsten Turn.
 
 Anker-Option (E3.3, PROJ-46): Wenn es gesprächslogisch passt, darf die Nachfrage ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns aufgreifen — ist aber nicht verpflichtet. Erfinde NIEMALS einen Anker, den es nicht gab. Verneinungen ("nutzen wir kein X", "passiert nie") sind kein Anker.
@@ -312,20 +315,17 @@ ${farewellMethodology}`
   if (ctx.phase === 'explore') {
     const filledLines = ctx.stepTracker.flatMap((step) => {
       // Fix 4 (ADR-015): mask raw slot values — only show that the slot is filled.
-      const filledPotenzial = (Object.entries(step.potenzial) as [string, SlotValue | null][])
+      const filledPotenzial = (Object.entries(step.potenzial) as [string, SchemaSlotNumber | null][])
         .filter(([, sv]) => sv !== null && sv.value !== null)
         .map(([name]) => `  ${name}: ✓ erfasst`)
-      const filledTazite = (Object.entries(step.slots) as [string, TaziteSlot | TaziteSlotArray | null][])
+      const filledTazite = (Object.entries(step.slots) as [string, SchemaSlotString | SchemaSlotStringArray | { value: unknown; nicht_befund_typ: unknown } | null][])
         .filter(([, sv]) => sv != null && (sv.value != null || sv.nicht_befund_typ != null))
         .map(([name]) => `  ${name}: ✓ erfasst`)
       const filledSlots = [...filledPotenzial, ...filledTazite]
-      if (filledSlots.length === 0 && !step.process_steps?.length && !step.friction_points?.length) return []
-      const govNote = step.governance?.rolle ? ` (${sanitizeForPrompt(step.governance.rolle)})` : ''
-      const header = `[${step.status}] "${sanitizeForPrompt(step.title)}"${govNote}`
+      if (filledSlots.length === 0 && !step.teilschritte?.length) return []
+      const header = `[${step.status}] "${sanitizeForPrompt(step.title)}"`
       const walkLines: string[] = []
-      if (step.process_steps?.length) walkLines.push(`  process_steps: ${step.process_steps.join(' → ')}`)
-      if (step.friction_points?.length) walkLines.push(`  friction_points: ${step.friction_points.join(', ')}`)
-      if (step.friction_tools?.length) walkLines.push(`  friction_tools: ${step.friction_tools.join(', ')}`)
+      if (step.teilschritte?.length) walkLines.push(`  teilschritte: ${step.teilschritte.join(' → ')}`)
       return [header, ...filledSlots, ...walkLines]
     })
 
