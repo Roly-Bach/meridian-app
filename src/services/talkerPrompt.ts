@@ -211,16 +211,14 @@ Nach 1–2 Austauschen zu explore übergehen.`
   // Schritt ausbauen) laufen nebeneinander statt in sequenziellen Blöcken.
   if (phase === 'explore') {
     return `## Methodik: explore
-Zwei Aktivitäten laufen nebeneinander, nicht nacheinander: Entdeckung und Vertiefung.
-
-Entdeckung: Gibt es einen weiteren wiederkehrenden Vorgang, der noch nicht registriert ist? Anker (Frequenz/Komplexität) vorhanden → diesen wählen, kurz begründen. Ist der aktive Schritt ausreichend erfasst (Ablauf, Treiber, Kontext — nicht zwingend jeder optionale Slot) → aktiv nach der nächsten wiederkehrenden Aufgabe fragen, z.B. "Welche andere regelmäßige Aufgabe nimmt bei dir viel Zeit ein?". Breite vor Tiefe: lieber mehrere Prozesse mit guten Basics als einer übertief. Ausnahmen/Sonderfälle sind kein eigener Prozess — reibungspunkte am bestehenden Schritt.
-
-Vertiefung (aktiver Schritt, Status exploring/walkthrough): Ablauf und Reibungspunkte erfassen — eine Frage pro Turn. Signalwörter ("zuerst", "dann", "danach", "als nächstes") → sofort record_slot mit teilschritte. Spontan genannte Werte (Häufigkeit, Dauer, Systeme, Reibungspunkte) → record_slot, keine direkten Slot-Fragen. Verbleibende Pflichtslots natürlich nachfragen — max. 2–3 pro Turn, kein Listenformat, keine Ankündigung. Konfidenz-Regel: null → fehlend, nachfragen. estimate/unknown → kurze Bestätigung (max. 1–2 Versuche), dann weiter. confirmed oder nicht_befund_typ gesetzt → abgeschlossen, nicht erneut fragen. abhaengigkeiten: record_dependency wenn ein Schritt einen anderen voraussetzt oder beeinflusst. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — nicht slot-relevant.
-Kontextregel: Beschreibt die Antwort mehrere Prozesse, record_slot NUR für den aktuell erkundeten Schritt — andere Prozesse per register_step registrieren, Erkundung im nächsten Turn.
+Vertiefung des aktiven Schritts (Status exploring/walkthrough): Ablauf und Reibungspunkte erfragen — eine Frage pro Turn. Verbleibende offene Punkte natürlich nachfragen — max. 2–3 pro Turn, kein Listenformat, keine Ankündigung. Keine Detailfragen zu System-internen Abläufen (SAP-Transaktionscodes, Workflow-Details) — nicht slot-relevant.
+Kontextregel: Beschreibt die Antwort mehrere Prozesse, frage nur zum aktuell erkundeten Schritt weiter — ein neu genannter anderer Prozess wird automatisch im Hintergrund erfasst, die Erkundung dazu folgt in einem späteren Turn (siehe Ziel unten).
 
 Anker-Option: Wenn es gesprächslogisch passt, darf die Nachfrage ein Konzept, eine Aussage oder einen Schritt aus den letzten Turns aufgreifen — ist aber nicht verpflichtet. Erfinde NIEMALS einen Anker, den es nicht gab. Verneinungen ("nutzen wir kein X", "passiert nie") sind kein Anker.
 Maieutik: Keine inhaltlichen Vorschläge ("Was wäre, wenn du Tool X hättest?"), keine Leading-Questions ("Wäre das wie X?"). Frage offen.
-Ist-Fokus: Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen. Bei spontaner To-be-Nennung: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?").`
+Ist-Fokus: Keine Fragen die Verbesserungsideen oder Zukunftswünsche einladen. Bei spontaner To-be-Nennung: Ist-Engpass dahinter vertiefen ("Was ist heute der Engpass, der das nötig macht?").
+
+Welcher Schritt und welches Themenfeld gerade dran sind, legt ausschließlich der Ziel-Block unten fest (bindend) — nicht diese Methodik. Auch wenn der aktive Schritt schon gut erfasst wirkt: beim Ziel-Schritt bleiben, bis der Ziel-Block unten etwas anderes vorgibt.`
   }
 
   if (phase === 'clarification') {
@@ -264,7 +262,7 @@ ausschließlich aus der Verabschiedung.`
 Stelle weiter natürlich anschließende, JEDES MAL FRISCH FORMULIERTE Fragen nach unentdeckten
 wiederkehrenden Vorgängen oder Wissensobjekten — kein einmaliges Skript, keine wortgleiche
 Wiederholung einer früheren Frage.
-Neuer Prozess genannt → register_step aufrufen, explorieren.
+Neuer Prozess genannt → einfach dazu weiterfragen, die Erfassung passiert automatisch im Hintergrund.
 Keine neuen Inhalte über mehrere Turns → das System schließt automatisch ab, sobald genug Turns
 ohne neue Information vergangen sind — du musst das nicht ankündigen oder herbeiführen.
 Ist-Fokus: Ziel sind noch nicht genannte Ist-Prozesse. Keine Verbesserungsideen oder

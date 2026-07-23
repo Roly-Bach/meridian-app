@@ -156,6 +156,13 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
     // farewell exchanges (12-14) — the Analyst judges discovery exhausted while
     // already in closing, Coverage-Sanity satisfied by REAL_FINAL_TRACKER's real
     // (non-empty, non-full) O-field coverage (PROJ-46/ADR-024 B/C).
+    // PROJ-48 (KI-30, verengt): resolvePhaseTransition's closing-case reentry is
+    // gated by hasUnexploredStep (= some step with 0 O-fields), NOT
+    // hasUnexhaustedStep. Both REAL_FINAL_TRACKER steps already have real O-field
+    // coverage (S001: 4, S002: 1), so neither is unexplored and the reentry check
+    // is false with the natural default oDrought — no hand-constructed
+    // "everything exhausted" state needed (that requirement was itself the
+    // symptom of the over-broad KI-30 predicate this fix removes).
     const ctx = ctxAt({
       phase: 'closing',
       stepTracker: REAL_FINAL_TRACKER, // real final tracker — neither step is 'done'

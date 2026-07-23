@@ -137,6 +137,14 @@ export function computeFocusLock(stepTracker: StepEntry[], previous: ODroughtSta
   }
 
   const stillLocked = previous?.stepId != null ? candidates.find((s) => s.id === previous.stepId) : undefined
+  // PROJ-48 (KI-29, revidiert): bei fehlendem fortführbaren Lock (Bootstrap oder
+  // vorheriger Lock gerade erschöpft/done) wird der erste noch offene Kandidat in
+  // Tracker-/Registrierungsreihenfolge gewählt. Die frühere
+  // pickMostSalientCandidate-Heuristik (am-meisten-abgedeckt zuerst) zog in die
+  // falsche Richtung — sie ließ frisch genannte 0-Feld-Schritte warten und brachte
+  // keinen belegten Nutzen. Start-/Relevanz-Ordering bleibt bewusst PROJ-49
+  // vorbehalten. Der updateODrought-Bootstrap-Recompute (Talker-Ziel-Block ab
+  // Turn 1) bleibt davon unberührt.
   const locked = stillLocked ?? candidates[0]
 
   return {
@@ -185,7 +193,17 @@ export function computeTransitionReason(
  * starting point — already reset to 0 if the lock just switched to a new step).
  */
 export function updateODrought(lock: ODroughtState, beforeTracker: StepEntry[], afterTracker: StepEntry[]): ODroughtState {
-  if (lock.stepId == null) return lock
+  // PROJ-48 (KI-29): previously returned `lock` unchanged here, silently
+  // carrying a null stepId forward even when the Analyst just registered one
+  // or more steps THIS turn (the common bootstrap-turn case — an employee's
+  // first substantial answer often names 2+ recurring tasks at once). That
+  // left this turn's Talker call without a Ziel-Block (buildZielBlock renders
+  // nothing for a null focusStepId) and delayed the lock by a turn. Re-running
+  // computeFocusLock against the now-populated afterTracker establishes a real
+  // lock (first candidate in registration order — PROJ-48 revidiert, kein
+  // pickMostSalient mehr) in the same turn the steps appear. Note: this only
+  // touches the null-lock branch; the streak logic below is unchanged.
+  if (lock.stepId == null) return computeFocusLock(afterTracker, lock)
   const before = beforeTracker.find((s) => s.id === lock.stepId)
   const after = afterTracker.find((s) => s.id === lock.stepId)
   const beforeCount = before ? countFilledOFields(before) : 0
@@ -208,6 +226,27 @@ function hasUnexhaustedStep(stepTracker: StepEntry[], lock: ODroughtState): bool
   const exhausted = new Set(lock.exhaustedStepIds)
   if (lock.stepId != null && lock.streak >= limit) exhausted.add(lock.stepId)
   return stepTracker.some((s) => s.status !== 'done' && !exhausted.has(s.id ?? '') && !isFullyCovered(s))
+}
+
+/**
+ * PROJ-48 (KI-30-Verengung): ein Schritt ist "unexplored", wenn er GAR KEIN
+ * O2–O6-Feld hat (countFilledOFields === 0) — mentioned-but-never-explored.
+ * Ersetzt hasUnexhaustedStep an den beiden KI-30-Stellen (explore→closing-Gate
+ * + closing→explore-Reentry): hasUnexhaustedStep (= nicht voll 10/10) war zu
+ * breit — bei 4–6 einzeln abgearbeiteten Prozessen fast immer true, wodurch das
+ * Interview nie sauber schließen konnte (Verabschiedungs-Schleife/Reopening).
+ * Diese Fassung fängt weiterhin den ursprünglichen 0/10-Steamroll (Schritt
+ * registriert + nur ein Potenzial-Feld wie frequency → walkthrough, 0 O-Felder),
+ * blockiert aber nicht wegen teil-abgedeckter Schritte. Ausgetrocknete Schritte
+ * sind ausgenommen (gleiche exhausted-Behandlung wie hasUnexhaustedStep): ein
+ * Schritt, der 3 Turns lang 0 O-Felder liefert, darf den Abschluss nicht ewig
+ * blockieren.
+ */
+function hasUnexploredStep(stepTracker: StepEntry[], lock: ODroughtState): boolean {
+  const limit = oDroughtLimit()
+  const exhausted = new Set(lock.exhaustedStepIds)
+  if (lock.stepId != null && lock.streak >= limit) exhausted.add(lock.stepId)
+  return stepTracker.some((s) => s.status !== 'done' && !exhausted.has(s.id ?? '') && countFilledOFields(s) === 0)
 }
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
@@ -264,7 +303,18 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
       // resolveTurnLifecycle's terminal check below can never complete on the
       // SAME turn Closing opens — at least one more discovery question is
       // always asked first (the D2 guarantee).
-      if (analystSuggestion?.discovery_exhausted === true && hasSubstantialCoverage(ctx.stepTracker)) {
+      // PROJ-48 (KI-30, verengt): hasSubstantialCoverage allein verlangt nur EINEN
+      // Schritt mit ≥2 O-Feldern — ein diesen Turn registrierter 0-Feld-Schritt
+      // könnte daneben in Closing gesteamrollt werden. Der Veto prüft daher, dass
+      // KEIN Schritt komplett unerkundet (0 O-Felder) ist. Ursprünglich (fälschlich)
+      // hasUnexhaustedStep (= nicht voll 10/10) — das blockierte den Abschluss bei
+      // mehreren teil-abgedeckten Prozessen dauerhaft; hasUnexploredStep trifft die
+      // KI-30-Absicht ("kein Schritt mit null Inhalt") ohne diesen Treadmill.
+      if (
+        analystSuggestion?.discovery_exhausted === true
+        && hasSubstantialCoverage(ctx.stepTracker)
+        && !hasUnexploredStep(ctx.stepTracker, ctx.oDrought)
+      ) {
         return 'closing'
       }
 
@@ -290,7 +340,21 @@ function resolvePhaseTransition(ctx: OrchestratorContext, analystSuggestion: Ana
       // former newStepThisTurn veto — a new step always applies a
       // register_step, so this subsumes it — to ANY applied knowledge write
       // this turn, not just a brand-new step.
-      if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.hadExtractionThisTurn) return 'explore'
+      // PROJ-48 (KI-30, verengt): hasStepInStatus('exploring') fängt einen Schritt
+      // nur im exakten Registrierungs-Turn — ein einziges gefülltes Slot (auch ein
+      // Potenzial-Feld wie frequency) kippt ihn sofort auf 'walkthrough'
+      // (applyIntent.ts:219), und hadExtractionThisTurn zählt nur O2–O6-Wachstum,
+      // keine Potenzial-Schreibungen. Ein Schritt, der diesen Turn an beiden vorbei
+      // rutschte, blieb unerkundet, während die Phase 'closing' blieb (realer Fall:
+      // buchhalter "Mahnlauf", registriert + frequency-gefüllt im selben Turn,
+      // Interview im selben Turn mit 0/10 O-Feldern abgeschlossen). hasUnexploredStep
+      // (= irgendein Schritt mit 0 O-Feldern) fängt genau diesen Fall. Vorher stand
+      // hier hasUnexhaustedStep (= nicht voll 10/10) — zu breit: das warf jeden
+      // ruhigen Verabschiedungs-Turn zurück nach explore, solange irgendein Prozess
+      // nicht vollständig abgedeckt war (Verabschiedungs-Schleife/Reopening). Dieser
+      // Check sichert transitiv auch resolveTurnLifecycles readyToComplete unten ab
+      // — der läuft nur, wenn dieser Case 'closing' zurückgibt.
+      if (hasStepInStatus(ctx.stepTracker, 'exploring') || ctx.hadExtractionThisTurn || hasUnexploredStep(ctx.stepTracker, ctx.oDrought)) return 'explore'
       return 'closing'
     }
 

@@ -181,9 +181,25 @@ describe('resolveTurnLifecycle — explore (content-driven, PROJ-42)', () => {
       expect(resolveTurnLifecycle(ctx, { discovery_exhausted: true }).phase).toBe('explore')
     })
 
-    it('opens closing when discovery_exhausted is true and at least one step is substantially covered', () => {
+    it('opens closing when discovery_exhausted is true, at least one step is substantially covered, and no step is completely unexplored', () => {
+      // PROJ-48 (KI-30, verengt): this branch is gated by hasUnexploredStep
+      // (= some step with 0 O-fields), NOT hasUnexhaustedStep (= not fully
+      // covered). A step with real O-coverage (substantiallyCoveredSlots ≥2)
+      // never counts as unexplored, so this opens closing regardless of its
+      // drought streak.
       const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
       const ctx = baseCtx({ phase: 'explore', stepTracker: tracker })
+      expect(resolveTurnLifecycle(ctx, { discovery_exhausted: true }).phase).toBe('closing')
+    })
+
+    it('opens closing even when a registered step is only PARTIALLY covered (not full), as long as none is completely unexplored', () => {
+      // Core regression fix: the old hasUnexhaustedStep gate blocked closing
+      // whenever ANY step was not fully 10/10 covered — with 4–6 partially
+      // covered processes it never closed (buchhalter run2/run3 farewell loop).
+      // A 6/10 step must NOT block closing.
+      const partiallyCovered = makeStep('Monatsabschluss', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })
+      const alsoPartial = makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S002' })
+      const ctx = baseCtx({ phase: 'explore', stepTracker: [partiallyCovered, alsoPartial] })
       expect(resolveTurnLifecycle(ctx, { discovery_exhausted: true }).phase).toBe('closing')
     })
 
@@ -192,6 +208,27 @@ describe('resolveTurnLifecycle — explore (content-driven, PROJ-42)', () => {
       const ctx = baseCtx({ phase: 'explore', stepTracker: tracker })
       expect(resolveTurnLifecycle(ctx, {}).phase).toBe('explore')
       expect(resolveTurnLifecycle(ctx, { discovery_exhausted: false }).phase).toBe('explore')
+    })
+
+    // PROJ-48 (KI-30): discovery_exhausted previously opened closing on
+    // hasSubstantialCoverage alone (any ONE step with ≥2 O-fields) — a second,
+    // freshly-registered, unexhausted step could be steamrolled right
+    // alongside it. Real case (buchhalter 34ca9cd4): the Analyst registered
+    // "Mahnlauf" (first mention) and set discovery_exhausted:true in the same
+    // tool-call batch, before a single question about Mahnlauf was asked.
+    it('does NOT open closing when discovery_exhausted is true and one step is substantially covered, but another registered step is still unexhausted', () => {
+      const covered = makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })
+      const freshlyRegistered = makeStep('Mahnlauf', 'exploring', emptySlots, { id: 'S002' })
+      const ctx = baseCtx({ phase: 'explore', stepTracker: [covered, freshlyRegistered] })
+      expect(resolveTurnLifecycle(ctx, { discovery_exhausted: true }).phase).toBe('explore')
+    })
+
+    it('opens closing via discovery_exhausted when multiple steps exist, each exhausted through a different mechanism (streak-fired vs. fully covered)', () => {
+      const droughtFired = makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })
+      const fullyCovered = makeStep('Mahnwesen: Bearbeitung', 'walkthrough', fullSlots, { id: 'S002', abhaengigkeiten: fullAbhaengigkeiten })
+      const oDrought: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+      const ctx = baseCtx({ phase: 'explore', stepTracker: [droughtFired, fullyCovered], oDrought })
+      expect(resolveTurnLifecycle(ctx, { discovery_exhausted: true }).phase).toBe('closing')
     })
   })
 
@@ -260,7 +297,10 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
   // never soft-confirm-complete on this same turn (≥1 discovery question guarantee).
   it('never completes on the explore→closing entry turn, even with discovery_exhausted already true', () => {
     // Well under the soft anchor (timerMinutes=5 vs. 24) so the transition is
-    // driven by discovery_exhausted itself, not the wall-clock branch.
+    // driven by discovery_exhausted itself, not the wall-clock branch. PROJ-48
+    // (KI-30, verengt): the gate is hasUnexploredStep — the substantially
+    // covered step (2 O-fields) is not unexplored, so closing opens regardless
+    // of its drought streak.
     const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
     const ctx = baseCtx({ phase: 'explore', timerMinutes: 5, maxDurationMinutes: 30, stepTracker: tracker })
     const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
@@ -271,7 +311,8 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
 
   it('stays in closing, not yet complete, when already in closing but discovery_exhausted is false/omitted', () => {
     const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
-    const ctx = baseCtx({ phase: 'closing', stepTracker: tracker })
+    const oDrought: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+    const ctx = baseCtx({ phase: 'closing', stepTracker: tracker, oDrought })
     const result = resolveTurnLifecycle(ctx, {})
     expect(result.phase).toBe('closing')
     expect(result.complete).toBe(false)
@@ -282,7 +323,8 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
     // to actually be filled — an empty potenzial (makeStep's default) would
     // otherwise trigger the deterministic Card gate and route to clarification.
     const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001', potenzial: fullPotenzial })]
-    const ctx = baseCtx({ phase: 'closing', stepTracker: tracker })
+    const oDrought: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+    const ctx = baseCtx({ phase: 'closing', stepTracker: tracker, oDrought })
     const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
     expect(result.phase).toBe('closing')
     expect(result.complete).toBe(true)
@@ -298,11 +340,12 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
 
   it('advances to clarification instead of completing when the Analyst provided clarification_cards', () => {
     const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+    const oDrought: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
     const analystSuggestion = {
       discovery_exhausted: true,
       clarification_cards: [{ process_step_id: 'uuid-1', step_title: 'Rechnungsprüfung', question: 'Wie oft?', options: ['Täglich', 'Wöchentlich', 'Andere'], slot_key: 'frequency' }],
     }
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: tracker }), analystSuggestion)
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: tracker, oDrought }), analystSuggestion)
     expect(result.phase).toBe('clarification')
     expect(result.complete).toBe(false)
   })
@@ -312,6 +355,50 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
     const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', stepTracker: [lateStep] }), null)
     expect(result.phase).toBe('explore')
     expect(result.complete).toBe(false)
+  })
+
+  // PROJ-48 (KI-30): hasStepInStatus('exploring') only catches a freshly-
+  // registered step in the exact turn it's created — a single filled slot
+  // (even a potenzial-only field, applyIntent.ts) already flips status to
+  // 'walkthrough', and hadExtractionThisTurn only counts O2–O6 growth, not
+  // potenzial writes. Real case (buchhalter 34ca9cd4): "Mahnlauf" registered +
+  // frequency-filled in the same turn, status already 'walkthrough' by the
+  // time this check runs, hadExtractionThisTurn false (potenzial-only) — the
+  // interview completed the same turn with 0/10 O-fields for Mahnlauf.
+  it('routes an unexhausted walkthrough-status step back to explore even when it is not "exploring" and no O-field grew this turn', () => {
+    const barelyStarted = makeStep('Mahnlauf', 'walkthrough', emptySlots, {
+      id: 'S002',
+      potenzial: { ...emptyPotenzial, frequency: { value: 1, quote: '...', confidence: 'estimate' as const, nicht_befund_typ: null } },
+    })
+    const ctx = baseCtx({ phase: 'closing', stepTracker: [barelyStarted], hadExtractionThisTurn: false })
+    const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
+    expect(result.phase).toBe('explore')
+    expect(result.complete).toBe(false)
+  })
+
+  // PROJ-48 (KI-30, verengt): the core closing regression. The old
+  // hasUnexhaustedStep reentry check bounced every quiet closing turn back to
+  // explore whenever ANY step was not fully 10/10 covered — with several
+  // partially-covered processes the interview could never hold closing and
+  // never completed (buchhalter run2 reopened at turn 29, run3 dragged through
+  // 4 goodbye turns). A partially-covered (non-exhausted, non-zero) step must
+  // NOT bounce closing back to explore.
+  it('stays in closing and completes when the only step is partially covered (not full) and no O-field grew this turn', () => {
+    const partiallyCovered = makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001', potenzial: fullPotenzial })
+    const ctx = baseCtx({ phase: 'closing', stepTracker: [partiallyCovered], hadExtractionThisTurn: false })
+    const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
+    expect(result.phase).toBe('closing')
+    expect(result.complete).toBe(true)
+    expect(result.reason).toBe('soft_confirm')
+  })
+
+  it('stays in closing (multiple partially-covered processes) instead of the pre-fix farewell loop', () => {
+    const p1 = makeStep('Monatsabschluss', 'walkthrough', substantiallyCoveredSlots, { id: 'S001', potenzial: fullPotenzial })
+    const p2 = makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S002', potenzial: fullPotenzial })
+    const ctx = baseCtx({ phase: 'closing', stepTracker: [p1, p2], hadExtractionThisTurn: false })
+    const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
+    expect(result.phase).toBe('closing')
+    expect(result.complete).toBe(true)
   })
 
   // PROJ-46 (ADR-023 D4, M7-b): generalizes the former H-1 newStepThisTurn veto —
@@ -432,7 +519,7 @@ describe('resolveTurnLifecycle — D2 terminination invariant', () => {
 // ─── computeFocusLock / updateODrought (PROJ-44/46 Remediation) ──────────────
 
 describe('computeFocusLock (M-3 Fokus-Lock)', () => {
-  it('locks onto the first candidate step when no previous lock exists', () => {
+  it('locks onto the first candidate step when no previous lock exists and all candidates are equally (un)covered — deterministic tie fallback', () => {
     const tracker = [
       makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' }),
       makeStep('Monatsabschluss', 'exploring', undefined, { id: 'S002' }),
@@ -441,6 +528,41 @@ describe('computeFocusLock (M-3 Fokus-Lock)', () => {
     expect(lock.stepId).toBe('S001')
     expect(lock.streak).toBe(0)
     expect(lock.exhaustedStepIds).toEqual([])
+  })
+
+  // PROJ-48 (KI-29, revidiert): the earlier pickMostSalientCandidate heuristic
+  // (prefer the candidate with the most filled O2–O6 fields) was removed — it
+  // pulled toward the already-advanced step and let freshly-mentioned 0-field
+  // steps wait, which is the wrong direction for breadth/closing (verified
+  // against the buchhalter regression runs). When no previous lock can be
+  // continued, the first still-open candidate in registration order wins.
+  // Start-/relevance ordering stays deliberately out of scope here → PROJ-49.
+  describe('PROJ-48 (KI-29): first-candidate (registration order) when no previous lock can be continued', () => {
+    it('locks the first still-open candidate in registration order, not the one with more filled O2–O6 fields', () => {
+      const firstRegistered = makeStep('HR: Event-Organisation', 'exploring', emptySlots, { id: 'S001' })
+      const deeperButLater = makeStep('Recruiting', 'walkthrough', {
+        ...emptySlots,
+        ausloeser: { value: 'Bedarfsanmeldung durch Manager', quote: '...', nicht_befund_typ: null },
+        entscheidungslogik: { value: 'Abstimmung mit Head of HR', quote: '...', nicht_befund_typ: null },
+      }, { id: 'S002' })
+      const lock = computeFocusLock([firstRegistered, deeperButLater], null)
+      expect(lock.stepId).toBe('S001')
+      expect(lock.streak).toBe(0)
+    })
+
+    it('picks the first non-exhausted candidate in array order when recovering from an exhausted previous lock', () => {
+      const exhaustedPrev = makeStep('Rechnungsprüfung', 'walkthrough', undefined, { id: 'S001' })
+      const shallowButFirst = makeStep('Mahnlauf', 'exploring', emptySlots, { id: 'S002' })
+      const deeperButLater = makeStep('Monatsabschluss', 'walkthrough', {
+        ...emptySlots,
+        hilfsmittel: { value: ['SAP FI', 'Excel'], quote: '...', nicht_befund_typ: null },
+        risiko_schwere: { value: ['teuer'], quote: '...', nicht_befund_typ: null },
+      }, { id: 'S003' })
+      const previous: ODroughtState = { stepId: 'S001', streak: 3, exhaustedStepIds: [] }
+      const lock = computeFocusLock([exhaustedPrev, shallowButFirst, deeperButLater], previous)
+      expect(lock.stepId).toBe('S002')
+      expect(lock.exhaustedStepIds).toContain('S001')
+    })
   })
 
   it('keeps the lock on the same step across turns while it is not yet drought-exhausted', () => {
@@ -536,10 +658,43 @@ describe('updateODrought (M-1/M-3 shared primitive)', () => {
     expect(updated.streak).toBe(2)
   })
 
-  it('is a no-op when nothing is locked (stepId=null)', () => {
+  it('stays a no-op when nothing is locked and the tracker is still empty (no candidates to lock onto)', () => {
     const lock: ODroughtState = { stepId: null, streak: 0, exhaustedStepIds: ['S001'] }
     const updated = updateODrought(lock, [], [])
     expect(updated).toEqual(lock)
+  })
+
+  // PROJ-48 (KI-29): previously `if (lock.stepId == null) return lock` short-
+  // circuited unconditionally, silently discarding steps the Analyst just
+  // registered THIS turn (the common bootstrap case — a first substantive
+  // answer naming 2+ recurring tasks at once). Real cases (buchhalter
+  // 34ca9cd4, Giorgia bcecd7ba): both steps got registered in the same turn,
+  // the null lock was carried forward untouched, and the NEXT turn's
+  // computeFocusLock fell back to array-order candidates[0] instead of the
+  // step actually being discussed.
+  describe('PROJ-48 (KI-29): bootstrap recompute when stepId was null but the tracker just gained content', () => {
+    it('establishes a real lock in the SAME turn multiple steps get registered (first candidate in registration order)', () => {
+      const lock: ODroughtState = { stepId: null, streak: 0, exhaustedStepIds: [] }
+      const eventOrg = makeStep('HR: Event-Organisation', 'exploring', emptySlots, { id: 'S001' })
+      const recruiting = makeStep('Recruiting', 'walkthrough', {
+        ...emptySlots,
+        ausloeser: { value: 'Bedarfsanmeldung durch Manager', quote: '...', nicht_befund_typ: null },
+        entscheidungslogik: { value: 'Abstimmung mit Head of HR', quote: '...', nicht_befund_typ: null },
+      }, { id: 'S002' })
+      // KI-29's kept benefit: a real lock IS established this turn (vs. carrying
+      // null forward) so the Talker gets a Ziel-Block from turn 1. Which step it
+      // picks is plain registration order (pickMostSalientCandidate removed).
+      const updated = updateODrought(lock, [], [eventOrg, recruiting])
+      expect(updated.stepId).toBe('S001')
+      expect(updated.streak).toBe(0)
+    })
+
+    it('stays stepId=null when the tracker gained steps but all are already done/fully covered', () => {
+      const lock: ODroughtState = { stepId: null, streak: 0, exhaustedStepIds: [] }
+      const doneStep = makeStep('Mahnwesen: Bearbeitung', 'done', fullSlots, { potenzial: fullPotenzial, id: 'S001' })
+      const updated = updateODrought(lock, [], [doneStep])
+      expect(updated.stepId).toBeNull()
+    })
   })
 })
 

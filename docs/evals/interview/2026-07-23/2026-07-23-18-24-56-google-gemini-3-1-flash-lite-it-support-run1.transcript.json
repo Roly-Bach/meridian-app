@@ -1,0 +1,6192 @@
+{
+  "evalRunId": "df0e2f56-e2ef-4dda-861d-24f84e13e807",
+  "interviewId": "4322b59c-1603-4519-a42d-3cc8becabf0c",
+  "model": "google/gemini-3.1-flash-lite",
+  "persona": "it-support",
+  "testerModel": "google/gemini-3.1-flash-lite",
+  "disclosureMode": "withhold_numbers_only",
+  "status": "completed",
+  "turns": [
+    {
+      "turnNumber": 1,
+      "userInput": "Ticket-Bearbeitung in Jira. Nutze Remote Desktop sowie das interne Wiki zur Fehleranalyse. Manchmal Hardware-Tausch nötig. Alles recht arbeitsreich.",
+      "agentText": "Auf welchem Weg erreichen dich die Anfragen, die dann als Ticket in Jira landen?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Ticket-Bearbeitung: Bearbeitung und Fehleranalyse"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Tausch und Dokumentation"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "ticket-bearbeitung"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "hardware-tausch"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "internes Wiki"
+            ],
+            "evidence_span": "Jira. Nutze Remote Desktop sowie das interne Wiki"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Ticket-Bearbeitung",
+              "Fehleranalyse"
+            ],
+            "evidence_span": "Ticket-Bearbeitung in Jira. ... Fehleranalyse"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausloeser"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "step_id": "S001",
+            "slot": "aufgabentyp",
+            "evidence_span": "Ticket-Bearbeitung in Jira. Nutze Remote Desktop sowie das interne Wiki zur Fehleranalyse",
+            "value": [
+              "Ticket-Bearbeitung",
+              "Fehleranalyse"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Ticket-Bearbeitung",
+              "Fehleranalyse"
+            ],
+            "evidence_span": "Ticket-Bearbeitung in Jira. Nutze Remote Desktop zur Fehleranalyse"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Fehleranalyse"
+            ],
+            "evidence_span": "zur Fehleranalyse"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "aufgabentyp",
+            "value": [
+              "suche"
+            ],
+            "evidence_span": "zur Fehleranalyse"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 2,
+      "userInput": "Über Jira. Direkte Anfragen oder E-Mails. Landet alles im System.",
+      "agentText": "Wie viele dieser Anfragen erreichen dich im Durchschnitt pro Woche?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Tickets",
+              "direkte Anfragen",
+              "E-Mails"
+            ],
+            "evidence_span": "Über Jira. Direkte Anfragen oder E-Mails.",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "hohe Arbeitslast"
+            ],
+            "evidence_span": "Alles recht arbeitsreich.",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausloeser"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "hohe Arbeitslast"
+            ],
+            "evidence_span": "Alles recht arbeitsreich",
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "hohe Arbeitslast"
+            ],
+            "evidence_quote": "Alles recht arbeitsreich.",
+            "source_turn": 2
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 3,
+      "userInput": "Etwa 75 bis 100 Tickets. Schwankt je nach Woche.",
+      "agentText": "Folgst du bei der Bearbeitung festen Prozessvorgaben, oder entscheidest du von Fall zu Fall, welche Analyse-Schritte du priorisierst?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 88,
+            "einheit": "pro_woche",
+            "evidence_span": "75 bis 100 Tickets",
+            "confidence": "estimate",
+            "qualifier": "Spanne: 75 bis 100",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "entscheidungslogik"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 4,
+      "userInput": "Erst Jira-Ticket prüfen. Dann Fernwartung oder Vor-Ort-Analyse. Lösungsbuch oder Eigenrecherche nutzen. Kommt drauf an.",
+      "agentText": "Du hast angedeutet, dass die Vorgehensweise je nach Fall variiert. Woran liegt es, dass du bei bestimmten Tickets vom Standard-Prozess abweichen musst?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "teilschritte",
+            "evidence_span": "Erst Jira-Ticket prüfen. Dann Fernwartung oder Vor-Ort-Analyse. Lösungsbuch oder Eigenrecherche nutzen.",
+            "step_id": "S001",
+            "value": [
+              "Erst Jira-Ticket prüfen",
+              "Fernwartung oder Vor-Ort-Analyse",
+              "Lösungsbuch oder Eigenrecherche nutzen"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "evidence_span": "Kommt drauf an",
+            "slot": "entscheidungslogik",
+            "step_id": "S001",
+            "value": "Kommt drauf an"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "Lösungsbuch",
+              "Eigenrecherche",
+              "internes Wiki"
+            ],
+            "step_id": "S001",
+            "evidence_span": "Jira-Ticket prüfen. Dann Fernwartung. Lösungsbuch oder Eigenrecherche. Internes Wiki.",
+            "slot": "hilfsmittel"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "teilschritte",
+            "value": [
+              "Erst Jira-Ticket prüfen",
+              "Fernwartung oder Vor-Ort-Analyse",
+              "Lösungsbuch oder Eigenrecherche nutzen"
+            ],
+            "evidence_span": "Erst Jira-Ticket prüfen. Dann Fernwartung. Lösungsbuch nutzen."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "Kommt drauf an",
+            "evidence_span": "Kommt drauf an."
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "Lösungsbuch",
+              "Eigenrecherche",
+              "internes Wiki"
+            ],
+            "evidence_span": "Jira-Ticket prüfen. Remote Desktop. Internes Wiki."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "teilschritte",
+            "value": [
+              "Erst Jira-Ticket prüfen",
+              "Fernwartung oder Vor-Ort-Analyse",
+              "Lösungsbuch oder Eigenrecherche nutzen"
+            ],
+            "evidence_span": "Erst Jira-Ticket prüfen. Dann Fernwartung oder Vor-Ort-Analyse."
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Lösungsbuch",
+              "Eigenrecherche"
+            ],
+            "evidence_span": "Lösungsbuch oder Eigenrecherche nutzen."
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 5,
+      "userInput": "Individuelle Probleme. Standard-Wiki reicht nicht immer aus. Eigene Recherche nötig. Kommt drauf an.",
+      "agentText": "Welche Quellen oder Tools ziehst du für die Eigenrecherche über das Lösungsbuch hinaus heran und in welcher Form liegen die Informationen dort vor?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "ausnahmen",
+            "value": [
+              "Individuelle Probleme bei denen Standard-Wiki nicht ausreicht"
+            ],
+            "evidence_span": "Standard-Wiki reicht nicht immer aus"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "Variiert je nach Komplexität und Verfügbarkeit von Informationen im Wiki",
+            "evidence_span": "Individuelle Probleme"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Standard-Wiki reicht nicht immer aus"
+            ],
+            "evidence_span": "Standard-Wiki reicht nicht immer aus"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "standardisierungsgrad",
+            "value": "stark_variabel"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "hilfsmittel"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "standardisierungsgrad",
+            "value": "stark_variabel",
+            "evidence_span": "Standard-Wiki reicht nicht immer aus"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "hilfsmittel"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 6,
+      "userInput": "Nutze Asset-Management-System und Imaging-Tool. Recherche meist individuell. Kommt drauf an.",
+      "agentText": "An welcher Stelle bei der individuellen Recherche oder der Nutzung des Imaging-Tools verlierst du am meisten Zeit?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "internes Wiki",
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "step_id": "S001",
+            "slot": "hilfsmittel",
+            "evidence_span": "Asset-Management-System und Imaging-Tool"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": "variiert je nach Fall / individuelle Probleme erfordern Eigenrecherche",
+            "step_id": "S001",
+            "slot": "entscheidungslogik",
+            "evidence_span": "Recherche meist individuell. Kommt drauf an."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "evidence_span": "Standard-Wiki reicht nicht immer aus.",
+            "slot": "standardisierungsgrad",
+            "step_id": "S001",
+            "value": "stark_variabel"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "informationsdichte",
+            "evidence_span": "Nutze Asset-Management-System und Imaging-Tool",
+            "value": "strukturiert",
+            "step_id": "S001"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "reibungspunkte",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "internes Wiki",
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "evidence_span": "Asset-Management-System und Imaging-Tool"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "variiert je nach Fall / individuelle Probleme erfordern Eigenrecherche",
+            "evidence_span": "Recherche meist individuell. Kommt drauf an."
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "standardisierungsgrad",
+            "value": "stark_variabel",
+            "evidence_span": "Standard-Wiki reicht nicht immer aus."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "informationsdichte",
+            "value": "strukturiert",
+            "evidence_span": "Nutze Asset-Management-System und Imaging-Tool"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "standardisierungsgrad",
+            "value": "stark_variabel",
+            "evidence_span": "Recherche meist individuell"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 7,
+      "userInput": "Bestandsführung im Lager. Fehlende Komponenten. Suchen dauert eine Weile.",
+      "agentText": "Wie viel Zeit nimmt die Suche nach den fehlenden Komponenten im Lager typischerweise in Anspruch?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Komponentensuche und Bereitstellung"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Prozessdurchführung"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Komponentensuche und Bereitstellung"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "hardware-tausch"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Hardware-Tausch: Komponentensuche und Bereitstellung"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "reibungspunkte",
+            "value": [
+              "Suchen von Komponenten im Lager"
+            ],
+            "evidence_span": "Suchen dauert eine weile"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "hardware-tausch",
+            "description": "Zeitverlust durch Suche nach fehlenden Komponenten im Lager",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausloeser"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "reibungspunkte",
+            "value": [
+              "Suchen von Komponenten im Lager"
+            ],
+            "evidence_span": "Suchen dauert eine Weile"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 8,
+      "userInput": "Dauert oft recht lange. Kommt drauf an.",
+      "agentText": "Zieht sich die Suche nach den Komponenten eher über einen Großteil der Zeit, die du für den Tausch einplanst, oder ist das eher ein kleinerer Zeitanteil?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "reibungspunkte",
+            "value": [
+              "Suchen von Komponenten im Lager bei fehlenden Beständen"
+            ],
+            "evidence_span": "Suchen dauert eine Weile"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "hardware-tausch",
+            "description": "Suchen von Komponenten im Lager bei fehlenden Beständen im Rahmen des Hardware-Tauschs",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "duration",
+            "einheit": "minuten",
+            "richtung": "hoch",
+            "evidence_span": "Dauert oft recht lange"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "reibungspunkte",
+            "value": [
+              "Suchen von Komponenten im Lager bei fehlenden Beständen"
+            ],
+            "evidence_span": "Dauert oft recht lange"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 9,
+      "userInput": "Großer Zeitanteil. Bestandsführung oft fehlerhaft. Physische Suche schwierig.",
+      "agentText": "Läuft der Hardware-Tausch abseits dieser Suchproblematik im Lager nach einem festen Standard ab, oder gibt es weitere Szenarien, die den Prozessverlauf stark verändern?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "reibungspunkte",
+            "value": [
+              "Bestandsführung fehlerhaft",
+              "physische Suche schwierig"
+            ],
+            "evidence_span": "Bestandsführung oft fehlerhaft. Physische Suche schwierig.",
+            "qualifier": "Bestandsführung fehlerhaft, physische Suche schwierig",
+            "source_turn": 13
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "duration",
+            "richtung": "hoch",
+            "evidence_span": "Großer Zeitanteil",
+            "source_turn": 13
+          },
+          "applied": true
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "hardware-tausch",
+            "description": "Bestandsführung ist häufig fehlerhaft, was die physische Suche im Lager erschwert und zu hohem Zeitaufwand führt.",
+            "severity": "high"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 10,
+      "userInput": "Anwender einweisen. Daten migrieren. Imaging-Software für Einrichtung nutzen. Kommt drauf an.",
+      "agentText": "Du hast die Einweisung, Datenmigration und das Imaging als Schritte genannt. Sind diese Abläufe für jeden Tausch fest vorgegeben, oder entscheidest du je nach Fall, welche davon notwendig sind?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software für Einrichtung nutzen"
+            ],
+            "source_turn": 13
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "standardisierungsgrad",
+            "value": "stark_variabel",
+            "source_turn": 13
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "entscheidungslogik"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software für Einrichtung nutzen"
+            ],
+            "evidence_span": "Anwender einweisen. Daten migrieren. Imaging-Software für Einrichtung nutzen.",
+            "source_turn": 13
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "standardisierungsgrad",
+            "value": "stark_variabel",
+            "evidence_span": "Kommt drauf an.",
+            "source_turn": 13
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 11,
+      "userInput": "Standardablauf meist fix. Einweisung und Migration fast immer nötig. Kommt drauf an.",
+      "agentText": "Welche weiteren Aufgaben oder Prozesse, die nicht direkt mit der Ticket-Bearbeitung oder dem Hardware-Tausch zusammenhängen, nehmen regelmäßig Zeit in deinem Arbeitsalltag in Anspruch?",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software für Einrichtung nutzen"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "standardisierungsgrad",
+            "value": "standardisiert"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "aufgabentyp",
+            "value": [
+              "Zusammenfassung",
+              "Klassifikation"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "hardware-tausch",
+            "description": "Bestandsführung im Lager oft fehlerhaft, physische Suche schwierig.",
+            "severity": "high"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software für Einrichtung nutzen"
+            ],
+            "evidence_span": "Anwender einweisen. Daten migrieren. Imaging-Software für Einrichtung nutzen"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "standardisierungsgrad",
+            "value": "standardisiert",
+            "evidence_span": "Standardablauf meist fix"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software für Einrichtung nutzen"
+            ],
+            "evidence_span": "Anwender einweisen. Daten migrieren. Imaging-Software für Einrichtung nutzen"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software für Einrichtung nutzen"
+            ],
+            "evidence_span": "Anwender einweisen. Daten migrieren"
+          },
+          "applied": false
+        }
+      ]
+    },
+    {
+      "turnNumber": 12,
+      "userInput": "Software-Genehmigungsprozesse. Warten auf IT-Leiter. Verzögert Dringliches. Kommt drauf an.",
+      "agentText": "Auf welchem Weg gehen die Anfragen für Software-Genehmigungen bei dir ein?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira",
+              "Direkte Anfragen",
+              "E-Mails"
+            ],
+            "evidence_quote": "Über Jira. Direkte Anfragen oder E-Mails.",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 75,
+            "einheit": "pro_woche",
+            "evidence_quote": "Etwa 75 bis 100 Tickets.",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "teilschritte",
+            "value": [
+              "Jira-Ticket prüfen",
+              "Fernwartung oder Vor-Ort-Analyse",
+              "Lösungsbuch oder Eigenrecherche nutzen",
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software für Einrichtung nutzen"
+            ],
+            "evidence_quote": "Erst Jira-Ticket prüfen. Dann Fernwartung oder Vor-Ort-Analyse. Lösungsbuch oder Eigenrecherche nutzen. [...] Anwender einweisen. Daten migrieren. Imaging-Software für Einrichtung nutzen.",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "ausnahmen",
+            "value": [
+              "Individuelle Probleme",
+              "Standard-Wiki reicht nicht aus"
+            ],
+            "evidence_quote": "Individuelle Probleme. Standard-Wiki reicht nicht immer aus.",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "internes Wiki",
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "evidence_quote": "Nutze Remote Desktop sowie das interne Wiki [...] Nutze Asset-Management-System und Imaging-Tool.",
+            "source_turn": 1
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Bestandsführung im Lager",
+              "Fehlende Komponenten",
+              "Software-Genehmigungsprozesse"
+            ],
+            "evidence_quote": "Bestandsführung im Lager. Fehlende Komponenten [...] Software-Genehmigungsprozesse.",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "Software-Genehmigung: Abstimmung und Freigabe"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "Software-Genehmigung: Abstimmung und Freigabe",
+            "description": "Warten auf IT-Leiter führt zu Verzögerungen bei dringenden Anforderungen.",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "Software-Genehmigung: Abstimmung und Freigabe",
+            "slot": "reibungspunkte",
+            "value": [
+              "Warten auf IT-Leiter"
+            ],
+            "evidence_span": "Warten auf IT-Leiter. Verzögert Dringliches.",
+            "source_turn": 14
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausloeser",
+            "discovery_exhausted": false
+          },
+          "applied": true
+        },
+        {
+          "toolName": "register_step",
+          "args": {
+            "title": "software-genehmigung"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "software-genehmigung",
+            "description": "Warten auf IT-Leiter führt zu Verzögerungen bei dringenden Anforderungen.",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "software-genehmigung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Warten auf IT-Leiter"
+            ],
+            "evidence_span": "Warten auf IT-Leiter. Verzögert Dringliches.",
+            "source_turn": 14
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausloeser",
+            "discovery_exhausted": false
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 13,
+      "userInput": "Über Jira. Manchmal E-Mail oder direkt. Kommt drauf an.",
+      "agentText": "Welche anderen Aufgaben in deinem Arbeitsalltag musst du unterbrechen oder zurückstellen, während du auf die Rückmeldung des IT-Leiters wartest?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "evidence_span": "Über Jira. Manchmal E-Mail oder direkt",
+            "value": [
+              "Jira",
+              "E-Mail",
+              "Direkt"
+            ],
+            "slot": "inputs"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "inputs",
+            "value": [
+              "Jira",
+              "E-Mail",
+              "Direkt"
+            ],
+            "evidence_span": "Über Jira. Manchmal E-Mail oder direkt"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 14,
+      "userInput": "Ticket-Bearbeitung läuft weiter. Wartezeit auf Genehmigung stört nur den Abschluss. Kommt drauf an.",
+      "agentText": "Gibt es für die Prüfung dieser Software-Anfragen klare Richtlinien, anhand derer du entscheidest, ob eine Freigabe durch den IT-Leiter zwingend erforderlich ist?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "reibungspunkte",
+            "value": [
+              "Wartezeit auf IT-Leiter"
+            ],
+            "source_turn": 14,
+            "step_id": "S003",
+            "evidence_span": "Warten auf IT-Leiter. Verzögert Dringliches."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "entscheidungslogik",
+            "step_advance_ready": false
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Wartezeit auf IT-Leiter"
+            ],
+            "evidence_span": "Warten auf IT-Leiter. Verzögert Dringliches.",
+            "source_turn": 14
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Wartezeit auf IT-Leiter"
+            ],
+            "evidence_span": "Wartezeit auf Genehmigung",
+            "source_turn": 14
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 15,
+      "userInput": "Bestehen fest definierte Genehmigungsprozesse. Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter. Kommt drauf an.",
+      "agentText": "Du hast erwähnt, dass alle Anfragen zur Prüfung an den IT-Leiter gehen. Gibt es Kategorien von Software, bei denen dieser Weg umgangen wird oder andere Freigabestufen greifen?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "source_turn": 17,
+            "value": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter",
+            "slot": "entscheidungslogik",
+            "evidence_span": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 17,
+            "value": "standardisiert",
+            "slot": "standardisierungsgrad",
+            "step_id": "S003"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter",
+            "evidence_span": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter",
+            "source_turn": 17
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "standardisierungsgrad",
+            "value": "standardisiert",
+            "source_turn": 17
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "standardisierungsgrad",
+            "value": "standardisiert",
+            "evidence_span": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter",
+            "source_turn": 17
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 16,
+      "userInput": "Nein. Prozess gilt für alles. IT-Leiter muss immer ran. Kommt drauf an.",
+      "agentText": "Du sagst, der Prozess gilt für alle Anfragen, erwähnst aber gleichzeitig, dass es auf den Einzelfall ankommt – worin unterscheiden sich diese Fälle in der Praxis?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter.",
+            "evidence_span": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "standardisierungsgrad",
+            "value": "standardisiert",
+            "evidence_span": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true,
+            "discovery_exhausted": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 17,
+      "userInput": "Software-Art. Sicherheitsanforderungen. Kommt drauf an.",
+      "agentText": "Wie beeinflussen die Art der Software und die Sicherheitsanforderungen den Aufwand, den du in die Vorbereitung für die Freigabe durch den IT-Leiter investieren musst?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Software-Art und Sicherheitsanforderungen bestimmen die Prüfung durch den IT-Leiter",
+            "evidence_span": "Software-Art. Sicherheitsanforderungen."
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 18,
+      "userInput": "Gründliche Prüfung notwendig. Sicherheitscheck kostet Zeit. Dokumentation für IT-Leiter muss stimmen. Kommt drauf an.",
+      "agentText": "Gibt es Situationen, in denen die Dokumentation für den IT-Leiter weniger umfangreich ausfällt als bei sicherheitskritischen Anwendungen?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Sicherheitscheck kostet Zeit"
+            ],
+            "evidence_span": "Sicherheitscheck kostet Zeit",
+            "source_turn": 19
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "outputs",
+            "value": [
+              "Dokumentation für IT-Leiter"
+            ],
+            "evidence_span": "Dokumentation für IT-Leiter muss stimmen",
+            "source_turn": 19
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Klassifikation",
+              "Zusammenfassung"
+            ],
+            "evidence_span": "Gründliche Prüfung notwendig",
+            "source_turn": 19
+          },
+          "applied": false
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "software-genehmigung",
+            "description": "Sicherheitscheck kostet Zeit",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true,
+            "discovery_exhausted": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "aufgabentyp",
+            "value": [
+              "klassifikation",
+              "zusammenfassung"
+            ],
+            "evidence_span": "Gründliche Prüfung notwendig",
+            "source_turn": 19
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 19,
+      "userInput": "Grundlegende Anforderungen bleiben. Sicherheitskritische Software erfordert mehr Aufwand. Standard-Anwendungen weniger. Kommt drauf an.",
+      "agentText": "Die Anforderungen an die Dokumentation unterscheiden sich also je nach Sicherheitsrelevanz. Gibt es für diese Unterlagen feste Vorlagen oder Formulare, oder erstellst du die Dokumentation für den IT-Leiter jedes Mal individuell?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Sicherheitskritische Software erfordert mehr Aufwand als Standard-Anwendungen, Prüfung durch IT-Leiter jedoch zwingend.",
+            "evidence_span": "Sicherheitskritische Software erfordert mehr Aufwand als Standard-Anwendungen."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "risiko_schwere",
+            "value": [
+              "rechtlich_kritisch"
+            ],
+            "evidence_span": "Sicherheitscheck kostet Zeit. Dokumentation für IT-Leiter muss stimmen."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Entscheidung",
+              "Zusammenfassung"
+            ],
+            "evidence_span": "Gründliche Prüfung notwendig. Dokumentation für IT-Leiter muss stimmen."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "inputs"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "slot": "entscheidungslogik",
+            "value": "Sicherheitskritische Software erfordert mehr Aufwand als Standard-Anwendungen.",
+            "step_title": "software-genehmigung",
+            "evidence_span": "Sicherheitskritische Software erfordert mehr Aufwand. Standard-Anwendungen weniger."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "risiko_schwere",
+            "value": [
+              "rechtlich_kritisch"
+            ],
+            "evidence_span": "Sicherheitscheck kostet Zeit."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Entscheidung",
+              "Zusammenfassung"
+            ],
+            "evidence_span": "Dokumentation für IT-Leiter muss stimmen."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Sicherheitskritische Software erfordert mehr Aufwand als Standard-Anwendungen.",
+            "evidence_span": "Sicherheitskritische Software erfordert mehr Aufwand."
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 20,
+      "userInput": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell. Kommt drauf an.",
+      "agentText": "Wie wirkt sich der Zeitaufwand für die Erstellung dieser individuellen Dokumentation auf die Bearbeitung der anderen Tickets aus, die währenddessen bei dir auflaufen?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "hilfsmittel",
+            "value": [
+              "keine Vorlagen"
+            ],
+            "evidence_span": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell.",
+            "source_turn": 22
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Dokumentation wird individuell für den IT-Leiter erstellt, da keine festen Vorlagen existieren.",
+            "evidence_span": "Erstelle Unterlagen meist individuell",
+            "source_turn": 22
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "standardisierungsgrad",
+            "value": "stark_variabel",
+            "evidence_span": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell.",
+            "source_turn": 22
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten",
+            "step_advance_ready": true,
+            "discovery_exhausted": false
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 21,
+      "userInput": "Prioritäten verschieben sich. Andere Tickets warten länger. Zeitdruck steigt. Kommt drauf an.",
+      "agentText": "Woher beziehst du die Informationen oder technischen Daten, die du in diese individuellen Unterlagen für den IT-Leiter einbaust?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "confidence": "confirmed",
+            "step_id": "S003",
+            "value": "Keine festen Vorlagen, individuelle Erstellung der Dokumentation je nach Sicherheitsrelevanz. Prüfung durch IT-Leiter für alle Anfragen zwingend.",
+            "evidence_span": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell",
+            "slot": "entscheidungslogik"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "confidence": "confirmed",
+            "slot": "aufgabentyp",
+            "evidence_span": "Sicherheitscheck kostet Zeit. Dokumentation für IT-Leiter muss stimmen.",
+            "value": [
+              "Klassifikation",
+              "Generierung"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "reibungspunkte",
+            "evidence_span": "Warten auf IT-Leiter. Verzögert Dringliches.",
+            "value": [
+              "wartezeit_auf_it_leiter",
+              "keine_vorlagen_dokumentation",
+              "manuelle_dokumentationserstellung"
+            ],
+            "step_id": "S003",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "software-genehmigung",
+            "description": "Wartezeit auf IT-Leiter verzögert den Abschluss dringlicher Software-Genehmigungen.",
+            "severity": "high"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "link_bottleneck",
+          "args": {
+            "step_title": "software-genehmigung",
+            "description": "Fehlende Vorlagen führen zu hohem manuellen Aufwand bei der Dokumentationserstellung für den IT-Leiter.",
+            "severity": "medium"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "hilfsmittel"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Keine festen Vorlagen, individuelle Erstellung der Dokumentation je nach Sicherheitsrelevanz. Prüfung durch IT-Leiter für alle Anfragen zwingend.",
+            "evidence_span": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Klassifikation",
+              "Generierung"
+            ],
+            "evidence_span": "Sicherheitscheck kostet Zeit. Dokumentation für IT-Leiter muss stimmen.",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "reibungspunkte",
+            "value": [
+              "wartezeit_auf_it_leiter",
+              "keine_vorlagen_dokumentation",
+              "manuelle_dokumentationserstellung"
+            ],
+            "evidence_span": "Warten auf IT-Leiter. Verzögert Dringliches.",
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "Keine festen Vorlagen, individuelle Erstellung der Dokumentation je nach Sicherheitsrelevanz. Prüfung durch IT-Leiter für alle Anfragen zwingend.",
+            "evidence_quote": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell.",
+            "confidence": "confirmed",
+            "source_turn": 22
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Klassifikation",
+              "Generierung"
+            ],
+            "evidence_quote": "Sicherheitskritische Software erfordert mehr Aufwand. Standard-Anwendungen weniger.",
+            "confidence": "confirmed",
+            "source_turn": 20
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "reibungspunkte",
+            "value": [
+              "wartezeit_auf_it_leiter",
+              "keine_vorlagen_dokumentation",
+              "manuelle_dokumentationserstellung"
+            ],
+            "evidence_span": "Zeitdruck steigt.",
+            "confidence": "confirmed",
+            "source_turn": 24
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "aufgabentyp",
+            "value": [
+              "klassifikation",
+              "generierung"
+            ],
+            "evidence_quote": "Sicherheitskritische Software erfordert mehr Aufwand. Standard-Anwendungen weniger.",
+            "confidence": "confirmed",
+            "source_turn": 20
+          },
+          "applied": true
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "hilfsmittel",
+            "step_advance_ready": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 22,
+      "userInput": "Recherche im Internet. Herstellerdatenblätter nutzen. Internes Wiki prüfen. Kommt drauf an.",
+      "agentText": "Wie unterscheidet sich dein Vorgehen bei der Vorbereitung, wenn eine Software-Anfrage als besonders dringlich eingestuft ist?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": [
+              "Internet-Recherche",
+              "Herstellerdatenblätter"
+            ],
+            "evidence_span": "Recherche im Internet. Herstellerdatenblätter nutzen",
+            "slot": "inputs",
+            "step_id": "S003"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "slot": "hilfsmittel",
+            "evidence_span": "Internes Wiki prüfen",
+            "value": [
+              "Internes Wiki"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "ausnahmen",
+            "step_advance_ready": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "inputs",
+            "value": [
+              "Internet-Recherche",
+              "Herstellerdatenblätter"
+            ],
+            "evidence_span": "Recherche im Internet. Herstellerdatenblätter nutzen"
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Internes Wiki"
+            ],
+            "evidence_span": "Internes Wiki prüfen"
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 23,
+      "userInput": "Dringlichkeit ändert wenig. Genehmigungsprozess bleibt gleich. Trotzdem Wartezeit. Kommt drauf an.",
+      "agentText": "Gibt es neben der Ticket-Bearbeitung, dem Hardware-Tausch und den Software-Freigaben noch weitere administrative Routinetätigkeiten, die einen festen Platz in deinem Arbeitsalltag haben?",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "slot": "entscheidungslogik",
+            "evidence_span": "Bestehen fest definierte Genehmigungsprozesse. Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter. Kommt drauf an.",
+            "step_id": "S003",
+            "value": "Alle Software-Anfragen erfordern eine Freigabe durch den IT-Leiter.",
+            "confidence": "confirmed",
+            "source_turn": 22
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "value": [
+              "Internet-Recherche",
+              "Herstellerdatenblätter",
+              "internes Wiki"
+            ],
+            "evidence_span": "Recherche im Internet. Herstellerdatenblätter nutzen. Internes Wiki prüfen. Kommt drauf an.",
+            "slot": "inputs",
+            "source_turn": 24,
+            "confidence": "confirmed"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 20,
+            "confidence": "confirmed",
+            "slot": "hilfsmittel",
+            "evidence_span": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell. Kommt drauf an.",
+            "step_id": "S003",
+            "value": [
+              "keine festen Vorlagen für Dokumentation"
+            ]
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "target_o_field": "abhaengigkeiten",
+            "step_advance_ready": true,
+            "discovery_exhausted": true
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 24,
+      "userInput": "Keine weiteren Routinen. Fokus auf Tickets und Hardware. Kommt drauf an.",
+      "agentText": "Gibt es noch einen Aspekt in deinem Arbeitsalltag, der bisher nicht zur Sprache kam, aber für das Verständnis deiner Arbeit wichtig ist?",
+      "phase": "explore",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 75,
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 100,
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Tickets",
+              "Direkte Anfragen",
+              "E-Mails"
+            ],
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "Internes Wiki"
+            ],
+            "source_turn": 1
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "source_turn": 6
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "teilschritte",
+            "value": [
+              "Ticket prüfen",
+              "Fernwartung/Vor-Ort-Analyse",
+              "Lösungsbuch/Recherche nutzen"
+            ],
+            "source_turn": 4
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Bestandsführung im Lager",
+              "fehlende Komponenten"
+            ],
+            "source_turn": 7
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "ausnahmen",
+            "value": [
+              "Individuelle Probleme",
+              "Standard-Wiki reicht nicht aus"
+            ],
+            "source_turn": 5
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software nutzen"
+            ],
+            "source_turn": 10
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter.",
+            "source_turn": 15
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": "Warten auf Genehmigung durch IT-Leiter verzögert Abschluss",
+            "source_turn": 12
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 87.5,
+            "evidence_quote": "Etwa 75 bis 100 Tickets.",
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 87.5,
+            "einheit": "pro_woche",
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Tickets",
+              "Direkte Anfragen",
+              "E-Mails"
+            ],
+            "evidence_quote": "Über Jira. Direkte Anfragen oder E-Mails.",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "Internes Wiki"
+            ],
+            "evidence_quote": "Nutze Remote Desktop sowie das interne Wiki",
+            "source_turn": 1
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "evidence_quote": "Nutze Asset-Management-System und Imaging-Tool.",
+            "source_turn": 6
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "teilschritte",
+            "value": [
+              "Ticket prüfen",
+              "Fernwartung/Vor-Ort-Analyse",
+              "Lösungsbuch/Recherche nutzen"
+            ],
+            "evidence_quote": "Erst Jira-Ticket prüfen. Dann Fernwartung oder Vor-Ort-Analyse. Lösungsbuch oder Eigenrecherche nutzen.",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Bestandsführung im Lager",
+              "fehlende Komponenten"
+            ],
+            "evidence_quote": "Bestandsführung im Lager. Fehlende Komponenten. Suchen dauert eine Weile.",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "ausnahmen",
+            "value": [
+              "Individuelle Probleme",
+              "Standard-Wiki reicht nicht aus"
+            ],
+            "evidence_quote": "Standard-Wiki reicht nicht immer aus. Eigene Recherche nötig.",
+            "source_turn": 5
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "teilschritte",
+            "value": [
+              "Anwender einweisen",
+              "Daten migrieren",
+              "Imaging-Software nutzen"
+            ],
+            "evidence_quote": "Anwender einweisen. Daten migrieren. Imaging-Software für Einrichtung nutzen.",
+            "source_turn": 10
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "Alle Software-Anfragen müssen vom IT-Leiter geprüft werden.",
+            "evidence_quote": "Alle Software-Anfragen gehen zur Prüfung an den IT-Leiter.",
+            "source_turn": 15
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Warten auf Genehmigung durch IT-Leiter verzögert Abschluss"
+            ],
+            "evidence_quote": "Warten auf IT-Leiter. Verzögert Dringliches.",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 87.5,
+            "einheit": "pro_woche",
+            "evidence_quote": "Etwa 75 bis 100 Tickets.",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": "variiert je nach Fall, Analyse individuell",
+            "evidence_span": "Keine weiteren Routinen. Fokus auf Tickets und Hardware.",
+            "step_id": "S001",
+            "slot": "entscheidungslogik",
+            "source_turn": 28
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 28,
+            "slot": "entscheidungslogik",
+            "step_id": "S002",
+            "value": "Standardablauf meist fix, aber Einzelfallentscheidung bei Suche und Vorbereitung",
+            "evidence_span": "Keine weiteren Routinen. Fokus auf Tickets und Hardware."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "source_turn": 28,
+            "slot": "entscheidungslogik",
+            "step_id": "S003",
+            "value": "fester Genehmigungsprozess für alles, Dokumentationsaufwand variiert nach Sicherheitsrelevanz",
+            "evidence_span": "Keine weiteren Routinen. Fokus auf Tickets und Hardware."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "clarification_cards": [
+              {
+                "process_step_id": "S001",
+                "step_title": "ticket-bearbeitung",
+                "question": "Welche Faktoren behindern die Bearbeitung der Tickets am stärksten?",
+                "options": [
+                  "Automatisierungspotenzial vorhanden",
+                  "Zu viele Schnittstellen/Abstimmungsbedarf",
+                  "Fehlende Dokumentation/Wissenstransfer",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "qualitative",
+                "answer_type": "multi"
+              },
+              {
+                "process_step_id": "S002",
+                "step_title": "hardware-tausch",
+                "question": "Was sind die kritischen Hindernisse beim Hardware-Tausch?",
+                "options": [
+                  "Bestandsmanagement fehlerhaft",
+                  "Ersatzteilbeschaffung schwierig",
+                  "Hoher manueller Aufwand bei Einrichtung",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "qualitative",
+                "answer_type": "multi"
+              },
+              {
+                "process_step_id": "S003",
+                "step_title": "software-genehmigung",
+                "question": "Wie lässt sich der Software-Genehmigungsprozess verbessern?",
+                "options": [
+                  "Wartezeit auf IT-Leiter ist Hauptblockade",
+                  "Hoher Dokumentationsaufwand für IT-Leiter",
+                  "Mangel an standardisierten Freigabevorlagen",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "qualitative",
+                "answer_type": "multi"
+              }
+            ],
+            "discovery_exhausted": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "variiert je nach Fall, Analyse individuell",
+            "evidence_span": "Keine weiteren Routinen. Fokus auf Tickets und Hardware.",
+            "source_turn": 28
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S002",
+            "step_title": "hardware-tausch",
+            "slot": "entscheidungslogik",
+            "value": "Standardablauf meist fix, aber Einzelfallentscheidung bei Suche und Vorbereitung",
+            "evidence_span": "Keine weiteren Routinen. Fokus auf Tickets und Hardware.",
+            "source_turn": 28
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S003",
+            "step_title": "software-genehmigung",
+            "slot": "entscheidungslogik",
+            "value": "fester Genehmigungsprozess für alles, Dokumentationsaufwand variiert nach Sicherheitsrelevanz",
+            "evidence_span": "Keine weiteren Routinen. Fokus auf Tickets und Hardware.",
+            "source_turn": 28
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 25,
+      "userInput": "Wechsel zwischen Tools. Jira, Remote Desktop und Wiki ständig parallel. Hoher Mehraufwand. Kommt drauf an.",
+      "agentText": "Der ständige Wechsel zwischen Jira, Remote Desktop und dem Wiki bindet offenbar viel Kapazität. Gibt es neben den genannten Aufgaben noch weitere wiederkehrende Tätigkeiten, etwa im Austausch mit anderen Abteilungen, die wir bisher nicht betrachtet haben?",
+      "phase": "closing",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "value": [
+              "Wechsel zwischen Jira, Remote Desktop und Wiki erzeugt Mehraufwand"
+            ],
+            "source_turn": 22,
+            "step_id": "S001",
+            "evidence_span": "Wechsel zwischen Tools. Jira, Remote Desktop und Wiki ständig parallel. Hoher Mehraufwand.",
+            "slot": "reibungspunkte"
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "step_advance_ready": true,
+            "discovery_exhausted": true
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Wechsel zwischen Jira, Remote Desktop und Wiki erzeugt Mehraufwand"
+            ],
+            "evidence_span": "Wechsel zwischen Jira, Remote Desktop und Wiki ständig parallel.",
+            "source_turn": 22
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Wechsel zwischen Jira, Remote Desktop und Wiki erzeugt Mehraufwand"
+            ],
+            "evidence_span": "Jira, Remote Desktop und Wiki ständig parallel",
+            "source_turn": 22
+          },
+          "applied": true
+        }
+      ]
+    },
+    {
+      "turnNumber": 26,
+      "userInput": "Abstimmung mit anderen Abteilungen meist per E-Mail oder Jira-Kommentar. Fokus bleibt auf technischer Ticket-Lösung. Kommt drauf an.",
+      "agentText": "Deine Schilderungen haben mir ein detailliertes Bild der Abläufe vermittelt. Damit bin ich am Ende unserer Runde. Im Interface erscheinen jetzt noch einige kurze Abschlussfragen für dich.",
+      "phase": "clarification",
+      "toolCalls": [
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency",
+            "value": 75,
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency",
+            "value": 100,
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency",
+            "value": 87.5,
+            "einheit": "pro_woche",
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Fehleranalyse",
+              "Hardware-Tausch"
+            ],
+            "source_turn": 1
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "Wiki"
+            ],
+            "source_turn": 1
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Tickets",
+              "E-Mails",
+              "Direkte Anfragen"
+            ],
+            "source_turn": 2
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "Erst Ticket prüfen, dann Fernwartung/Vor-Ort-Analyse, Lösungsbuch/Recherche.",
+            "source_turn": 4
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency",
+            "value": 87,
+            "evidence_quote": "Etwa 75 bis 100 Tickets.",
+            "source_turn": 3
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "frequency",
+            "value": 87,
+            "einheit": "pro_woche",
+            "evidence_quote": "Etwa 75 bis 100 Tickets.",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "aufgabentyp",
+            "value": [
+              "Fehleranalyse",
+              "Hardware-Tausch"
+            ],
+            "evidence_quote": "Nutze Remote Desktop sowie das interne Wiki zur Fehleranalyse. Manchmal Hardware-Tausch nötig.",
+            "source_turn": 1
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Jira",
+              "Remote Desktop",
+              "Wiki"
+            ],
+            "evidence_quote": "Nutze Remote Desktop sowie das interne Wiki zur Fehleranalyse.",
+            "source_turn": 1
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "inputs",
+            "value": [
+              "Jira-Tickets",
+              "E-Mails",
+              "Direkte Anfragen"
+            ],
+            "evidence_quote": "Über Jira. Direkte Anfragen oder E-Mails.",
+            "source_turn": 2
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "Ticket-Bearbeitung",
+            "slot": "entscheidungslogik",
+            "value": "Erst Jira-Ticket prüfen, dann Fernwartung oder Vor-Ort-Analyse, Lösungsbuch oder Eigenrecherche.",
+            "evidence_quote": "Erst Jira-Ticket prüfen. Dann Fernwartung oder Vor-Ort-Analyse. Lösungsbuch oder Eigenrecherche nutzen.",
+            "source_turn": 4
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "frequency",
+            "value": 87,
+            "einheit": "pro_woche",
+            "evidence_quote": "Etwa 75 bis 100 Tickets.",
+            "source_turn": 3
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "aufgabentyp",
+            "value": [
+              "suche",
+              "entscheidung"
+            ],
+            "evidence_quote": "Nutze Remote Desktop sowie das interne Wiki zur Fehleranalyse. Manchmal Hardware-Tausch nötig.",
+            "source_turn": 1
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Bestandsführung im Lager",
+              "Fehlende Komponenten"
+            ],
+            "evidence_quote": "Bestandsführung im Lager. Fehlende Komponenten. Suchen dauert eine Weile.",
+            "source_turn": 7
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "duration",
+            "nicht_befund_typ": "unbekannt",
+            "einheit": "stunden",
+            "evidence_quote": "Dauert oft recht lange.",
+            "source_turn": 8
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Warten auf IT-Leiter"
+            ],
+            "evidence_quote": "Software-Genehmigungsprozesse. Warten auf IT-Leiter. Verzögert Dringliches.",
+            "source_turn": 12
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "hilfsmittel",
+            "value": [
+              "Internes Wiki",
+              "Jira",
+              "Remote Desktop",
+              "Asset-Management-System",
+              "Imaging-Tool"
+            ],
+            "evidence_quote": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell.",
+            "source_turn": 20
+          },
+          "applied": true
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Tool-Wechsel zwischen Jira, Remote Desktop und Wiki ist hoher Mehraufwand"
+            ],
+            "evidence_span": "Wechsel zwischen Tools. Jira, Remote Desktop und Wiki ständig parallel."
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "clarification_cards": [
+              {
+                "answer_type": "single",
+                "step_title": "hardware-tausch",
+                "slot_key": "entscheidungslogik",
+                "question": "Könntest du den Ablauf des Hardware-Tauschs (Einweisung, Datenmigration, Imaging) in deiner Entscheidungslogik präzisieren? Welche Kriterien bestimmen, ob alle Schritte nötig sind?",
+                "process_step_id": "S002"
+              },
+              {
+                "process_step_id": "S003",
+                "question": "Wie unterscheidet sich die Dokumentation der Software-Anfrage für den IT-Leiter bei sicherheitskritischen Anwendungen im Vergleich zu Standard-Anwendungen? Gibt es hier Kriterien?",
+                "answer_type": "single",
+                "step_title": "software-genehmigung",
+                "slot_key": "entscheidungslogik"
+              }
+            ],
+            "discovery_exhausted": true,
+            "step_advance_ready": true
+          },
+          "applied": false
+        },
+        {
+          "toolName": "record_slot",
+          "args": {
+            "step_id": "S001",
+            "step_title": "ticket-bearbeitung",
+            "slot": "reibungspunkte",
+            "value": [
+              "Tool-Wechsel zwischen Jira, Remote Desktop und Wiki ist hoher Mehraufwand"
+            ],
+            "evidence_span": "Wechsel zwischen Tools. Jira, Remote Desktop und Wiki ständig parallel.",
+            "source_turn": 19
+          },
+          "applied": false
+        },
+        {
+          "toolName": "produce_briefing",
+          "args": {
+            "clarification_cards": [
+              {
+                "process_step_id": "S002",
+                "step_title": "hardware-tausch",
+                "question": "Könntest du kurz präzisieren, nach welchem Schema du entscheidest, ob Einweisung, Datenmigration und Imaging in jedem Einzelfall zwingend notwendig sind?",
+                "options": [
+                  "Standard: immer volle Dokumentation",
+                  "Sicherheitskritisch: erweiterte Dokumentation (z.B. Security-Check)",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "entscheidungslogik",
+                "answer_type": "single"
+              },
+              {
+                "process_step_id": "S003",
+                "step_title": "software-genehmigung",
+                "question": "Wie unterscheiden sich die Anforderungen an die Dokumentation für den IT-Leiter zwischen sicherheitskritischen Anwendungen und Standard-Anwendungen?",
+                "options": [
+                  "Sicherheitskritisch: erfordert umfassenden Security-Check und Dokumentation",
+                  "Standard: reduzierte Dokumentation ausreichend",
+                  "Weiß ich nicht"
+                ],
+                "slot_key": "entscheidungslogik",
+                "answer_type": "single"
+              }
+            ],
+            "step_advance_ready": true,
+            "discovery_exhausted": true
+          },
+          "applied": true
+        }
+      ]
+    }
+  ],
+  "finalStepTracker": [
+    {
+      "id": "S001",
+      "slots": {
+        "inputs": {
+          "quote": "Über Jira. Direkte Anfragen oder E-Mails.",
+          "value": [
+            "Jira-Tickets",
+            "E-Mails",
+            "Direkte Anfragen"
+          ],
+          "nicht_befund_typ": null
+        },
+        "outputs": null,
+        "ausloeser": null,
+        "ausnahmen": {
+          "quote": "Individuelle Probleme. Standard-Wiki reicht nicht immer aus.",
+          "value": [
+            "Individuelle Probleme",
+            "Standard-Wiki reicht nicht aus"
+          ],
+          "nicht_befund_typ": null
+        },
+        "aufgabentyp": {
+          "quote": "Nutze Remote Desktop sowie das interne Wiki zur Fehleranalyse. Manchmal Hardware-Tausch nötig.",
+          "value": [
+            "suche",
+            "entscheidung"
+          ],
+          "nicht_befund_typ": null
+        },
+        "hilfsmittel": {
+          "quote": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell.",
+          "value": [
+            "Internes Wiki",
+            "Jira",
+            "Remote Desktop",
+            "Asset-Management-System",
+            "Imaging-Tool"
+          ],
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": null,
+        "reibungspunkte": {
+          "quote": "Software-Genehmigungsprozesse. Warten auf IT-Leiter. Verzögert Dringliches.",
+          "value": [
+            "Warten auf IT-Leiter"
+          ],
+          "nicht_befund_typ": null
+        },
+        "risiko_schwere": null,
+        "entscheidungslogik": {
+          "quote": "Erst Jira-Ticket prüfen. Dann Fernwartung oder Vor-Ort-Analyse. Lösungsbuch oder Eigenrecherche nutzen.",
+          "value": "Erst Jira-Ticket prüfen, dann Fernwartung oder Vor-Ort-Analyse, Lösungsbuch oder Eigenrecherche.",
+          "nicht_befund_typ": null
+        },
+        "informationsdichte": {
+          "quote": "Nutze Asset-Management-System und Imaging-Tool.",
+          "value": "strukturiert",
+          "nicht_befund_typ": null
+        },
+        "standardisierungsgrad": {
+          "quote": "Standard-Wiki reicht nicht immer aus.",
+          "value": "stark_variabel",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "ticket-bearbeitung",
+      "status": "walkthrough",
+      "embedding": [
+        0.13220365,
+        -0.14018835,
+        0.10049303,
+        0.13950394,
+        0.0777937,
+        0.00004545,
+        -0.0346336,
+        0.11554987,
+        0.08458068,
+        -0.03638738,
+        -0.04123522,
+        0.11298337,
+        -0.04137781,
+        -0.03705752,
+        -0.02583618,
+        -0.12279314,
+        -0.08252747,
+        0.14121495,
+        -0.02469016,
+        0.07323102,
+        -0.0068106,
+        0.01203229,
+        -0.15022624,
+        0.0343912,
+        -0.0617958,
+        -0.00969213,
+        0.03697197,
+        0.07499906,
+        -0.03189955,
+        0.10174777,
+        0.0560069,
+        0.01537677,
+        -0.09518892,
+        -0.02910135,
+        -0.08577839,
+        0.02431053,
+        0.04040824,
+        -0.06327867,
+        -0.03296536,
+        0.05905819,
+        0.03755656,
+        0.01455067,
+        0.01981201,
+        0.0006795,
+        -0.0165112,
+        -0.01557817,
+        -0.00731366,
+        0.034049,
+        -0.01656467,
+        0.0198334,
+        0.02053919,
+        0.01615117,
+        -0.04405838,
+        0.04847848,
+        0.00106865,
+        0.001752,
+        0.00809876,
+        0.00618635,
+        -0.00778151,
+        0.0910825,
+        -0.01564322,
+        0.02176541,
+        0.03684364,
+        0.03988068,
+        0.00739653,
+        0.07499906,
+        0.02021838,
+        -0.00758189,
+        0.0640914,
+        0.0186367,
+        -0.02103823,
+        0.03453378,
+        0.01082211,
+        0.02439006,
+        -0.01525201,
+        -0.07596863,
+        0.09387714,
+        -0.03854039,
+        0.0229845,
+        -0.00141158,
+        0.0211024,
+        0.0903981,
+        0.02770402,
+        0.00840175,
+        -0.02874489,
+        0.05760384,
+        0.01938515,
+        0.04663914,
+        -0.0869761,
+        0.05888709,
+        0.05449551,
+        -0.04591197,
+        -0.05358297,
+        0.0214446,
+        0.03378522,
+        0.04659637,
+        -0.05364001,
+        0.05931484,
+        0.02907283,
+        -0.00013635,
+        -0.00027358,
+        -0.00093125,
+        -0.00672282,
+        -0.04417245,
+        -0.0808735,
+        0.08127274,
+        0.05014671,
+        -0.04956212,
+        -0.02417708,
+        0.08726126,
+        0.0016562,
+        -0.02726914,
+        -0.02891599,
+        0.06185284,
+        -0.02090634,
+        -0.00442901,
+        0.10847773,
+        -0.01919177,
+        0.12285016,
+        -0.02406814,
+        0.0141051,
+        -0.00785013,
+        -0.07123484,
+        0.07152001,
+        0.02697685,
+        -0.01609058,
+        -0.00063093,
+        0.01457562,
+        -0.03343589,
+        0.01296621,
+        -0.00047587,
+        0.0388113,
+        -0.00014882,
+        -0.00516242,
+        -0.00194783,
+        0.06484709,
+        0.0658737,
+        0.00819678,
+        -0.03122584,
+        -0.03701474,
+        -0.01727135,
+        0.02483809,
+        -0.01520656,
+        -0.01537766,
+        0.03022776,
+        -0.00652677,
+        -0.0779648,
+        -0.03449101,
+        -0.01517269,
+        0.01664799,
+        0.04927695,
+        -0.02662751,
+        -0.03403474,
+        -0.04097857,
+        -0.00415142,
+        -0.00684781,
+        0.0100379,
+        0.06721398,
+        -0.0294578,
+        -0.06382049,
+        -0.03510412,
+        -0.03609864,
+        -0.03316498,
+        0.04566958,
+        -0.00801499,
+        0.02777532,
+        -0.0244246,
+        0.00568553,
+        0.00165308,
+        -0.04622565,
+        -0.00634141,
+        0.01814378,
+        0.05783197,
+        0.00126008,
+        0.03099771,
+        0.0088393,
+        0.00601703,
+        0.11794528,
+        0.07574049,
+        0.01520656,
+        0.01649338,
+        0.01523597,
+        0.0212022,
+        0.0214143,
+        0.0388113,
+        0.05632058,
+        0.05326929,
+        0.03300814,
+        -0.02098833,
+        0.03279426,
+        -0.01305354,
+        -0.05252786,
+        0.00246046,
+        0.01169187,
+        -0.01648981,
+        0.01907771,
+        -0.02378297,
+        -0.02482383,
+        -0.03155379,
+        -0.0043488,
+        0.04140632,
+        0.0338779,
+        0.00781448,
+        0.01177029,
+        -0.04819331,
+        0.01540618,
+        0.00331596,
+        0.0213234,
+        0.01291096,
+        -0.04739484,
+        -0.03935312,
+        0.0223607,
+        -0.00102304,
+        -0.00088402,
+        -0.0188674,
+        -0.00891861,
+        -0.01122506,
+        0.03367828,
+        0.02938651,
+        -0.06034144,
+        0.01989756,
+        0.00541996,
+        0.00061133,
+        0.02803197,
+        -0.02487374,
+        -0.01544182,
+        0.02006153,
+        -0.01608701,
+        -0.01629019,
+        0.01918108,
+        -0.02318412,
+        -0.04642527,
+        0.00827075,
+        -0.00772091,
+        0.00637617,
+        -0.01898592,
+        -0.04063637,
+        -0.03598814,
+        -0.03234513,
+        -0.00279247,
+        0.00593861,
+        0.00267345,
+        0.03811264,
+        0.05629207,
+        0.01376022,
+        -0.02984278,
+        0.0556647,
+        -0.01022682,
+        -0.03712881,
+        -0.00226708,
+        0.02151589,
+        -0.01331376,
+        0.03748527,
+        0.04779407,
+        0.01095043,
+        0.00524352,
+        0.04363063,
+        -0.01195208,
+        0.02498068,
+        0.00769774,
+        0.03188173,
+        0.01139957,
+        0.01634366,
+        0.01224082,
+        -0.03309369,
+        0.00621754,
+        -0.007231,
+        -0.02904431,
+        -0.01333336,
+        -0.04029417,
+        -0.05027503,
+        0.02048394,
+        -0.03655848,
+        -0.006312,
+        -0.00283964,
+        0.01568065,
+        -0.03384938,
+        0.03402048,
+        0.03139694,
+        0.00712117,
+        0.01493208,
+        0.00040191,
+        -0.03655848,
+        -0.01081498,
+        0.00092858,
+        -0.0011361,
+        -0.00495033,
+        0.05597838,
+        0.00003921,
+        -0.03282278,
+        0.01861074,
+        -0.00902733,
+        0.05110202,
+        0.03526096,
+        -0.04722374,
+        0.01382973,
+        0.01981914,
+        -0.00374995,
+        0.00948806,
+        0.00316803,
+        -0.02441034,
+        0.08851599,
+        0.05306967,
+        0.00366262,
+        -0.00787909,
+        -0.04702412,
+        0.0036013,
+        -0.0333646,
+        -0.05418183,
+        0.04745187,
+        -0.00216995,
+        0.03801283,
+        0.00588052,
+        -0.00872434,
+        0.02177967,
+        0.00521322,
+        -0.02214326,
+        0.02730479,
+        0.03563168,
+        0.00232946,
+        -0.01487349,
+        0.0207602,
+        -0.07459982,
+        0.00915744,
+        -0.01245469,
+        0.00000891,
+        -0.0103801,
+        -0.02831713,
+        0.02308431,
+        0.02053919,
+        -0.02666316,
+        -0.00663816,
+        -0.00862384,
+        0.04719522,
+        0.01104489,
+        -0.0244246,
+        -0.06986604,
+        0.01883531,
+        0.02040374,
+        0.01401598,
+        0.06364939,
+        0.01683112,
+        0.04152039,
+        0.01043891,
+        -0.01043357,
+        -0.04763723,
+        0.0083661,
+        -0.02228584,
+        -0.01945912,
+        -0.00006594,
+        -0.05803159,
+        -0.04902029,
+        -0.03045589,
+        -0.02556527,
+        -0.02209335,
+        0.02253269,
+        0.01423966,
+        -0.01487861,
+        0.00566592,
+        -0.01407302,
+        0.02065326,
+        0.01379498,
+        0.01398747,
+        0.00480864,
+        0.02271359,
+        0.01677052,
+        0.00163214,
+        0.01418708,
+        0.024888,
+        0.00711671,
+        0.00178363,
+        -0.03630183,
+        -0.02049998,
+        -0.00461437,
+        0.01114292,
+        -0.01248677,
+        -0.09507485,
+        -0.03148249,
+        -0.00982447,
+        -0.05332632,
+        -0.01354724,
+        -0.01657536,
+        -0.03186034,
+        -0.00782607,
+        0.02516603,
+        -0.02482383,
+        0.09709954,
+        -0.02991407,
+        0.01955536,
+        -0.00063405,
+        0.01209467,
+        -0.00862988,
+        -0.0110391,
+        -0.00917527,
+        0.00024239,
+        -0.00484206,
+        0.00368935,
+        -0.04642527,
+        0.03538929,
+        0.02739034,
+        0.03352144,
+        0.01797981,
+        -0.01107163,
+        0.00874484,
+        0.04873513,
+        0.00994967,
+        -0.01154126,
+        -0.06427675,
+        0.01428377,
+        -0.01276838,
+        0.010954,
+        0.05512288,
+        0.0092323,
+        0.00076862,
+        -0.00452436,
+        0.00324623,
+        0.01547568,
+        -0.00976164,
+        -0.01053427,
+        -0.02418221,
+        -0.03410603,
+        -0.0210311,
+        -0.01307783,
+        -0.00354209,
+        -0.0120412,
+        0.03126862,
+        0.01034802,
+        -0.02937225,
+        -0.01544895,
+        -0.07214738,
+        0.00591901,
+        0.02311639,
+        0.00965559,
+        -0.04062211,
+        -0.02035739,
+        -0.00560354,
+        -0.00265919,
+        0.00637349,
+        -0.00572296,
+        -0.00264849,
+        0.06019887,
+        0.00689036,
+        -0.01083815,
+        -0.04572661,
+        -0.01291809,
+        0.00523104,
+        0.02893024,
+        0.02360652,
+        -0.01844321,
+        -0.02234288,
+        0.02605005,
+        0.00134831,
+        -0.00443101,
+        0.0133601,
+        -0.01894938,
+        -0.02427488,
+        0.01329237,
+        -0.01563431,
+        -0.04993283,
+        0.04554125,
+        -0.01389122,
+        -0.0103293,
+        -0.01358467,
+        -0.02452441,
+        0.04559829,
+        0.01129263,
+        -0.00174665,
+        -0.00620596,
+        0.00381055,
+        0.0461401,
+        0.0195411,
+        0.04231886,
+        0.02111665,
+        -0.02341938,
+        0.03168211,
+        -0.04730929,
+        0.00585462,
+        0.01354546,
+        0.04832163,
+        0.02458144,
+        -0.06687178,
+        -0.01291809,
+        0.01071517,
+        -0.023398,
+        -0.02503058,
+        -0.00967486,
+        -0.02785374,
+        -0.00887183,
+        0.05820269,
+        0.02873063,
+        0.02147668,
+        -0.00035111,
+        0.01049595,
+        -0.02978574,
+        0.01802615,
+        0.00321526,
+        0.01561292,
+        -0.0158268,
+        -0.00279286,
+        -0.01841469,
+        -0.02796067,
+        -0.05649168,
+        0.03928183,
+        0.00695675,
+        0.0021245,
+        0.05326929,
+        -0.00425256,
+        -0.00533263,
+        0.02904431,
+        -0.00314397,
+        0.00787419,
+        -0.04434355,
+        0.01166692,
+        -0.04214776,
+        0.02304154,
+        0.04414393,
+        -0.00506707,
+        -0.02449232,
+        -0.02078158,
+        -0.02513752,
+        0.01822577,
+        0.00688501,
+        0.04294623,
+        -0.02134479,
+        0.03483321,
+        -0.00171546,
+        -0.01153503,
+        -0.03245206,
+        0.01310701,
+        -0.00271444,
+        0.0188674,
+        -0.0207602,
+        -0.00391036,
+        -0.02231436,
+        -0.0246456,
+        -0.00557859,
+        0.05335484,
+        -0.03427713,
+        -0.01534201,
+        -0.01465048,
+        0.01954823,
+        0.00533085,
+        -0.05329781,
+        -0.00573632,
+        0.00611863,
+        0.02696259,
+        -0.00054271,
+        0.01610484,
+        0.0171457,
+        0.03764211,
+        -0.03989493,
+        -0.03087651,
+        0.00137098,
+        0.02349067,
+        0.02375802,
+        0.00314397,
+        0.01760909,
+        -0.01613335,
+        -0.00461258,
+        -0.01667517,
+        0.03487599,
+        -0.00153456,
+        0.0385689,
+        -0.00914274,
+        0.02368316,
+        -0.02155153,
+        0.02288469,
+        -0.01658962,
+        -0.01841291,
+        0.001711,
+        -0.01057971,
+        -0.0243034,
+        -0.01508536,
+        0.00763001,
+        -0.03213838,
+        -0.02729053,
+        -0.01514952,
+        0.04139207,
+        0.00270374,
+        -0.02577914,
+        -0.00192488,
+        0.00957205,
+        -0.00172348,
+        -0.00075012,
+        -0.01979776,
+        -0.02937225,
+        -0.01039079,
+        -0.0123834,
+        -0.04733781,
+        -0.01021078,
+        -0.01981914,
+        -0.03541781,
+        -0.0299711,
+        0.00670901,
+        0.00965292,
+        0.02464917,
+        0.01106093,
+        0.0330224,
+        -0.01082567,
+        -0.03547484,
+        0.00260795,
+        -0.00778596,
+        0.0568624,
+        -0.01034534,
+        0.01620464,
+        -0.00271756,
+        0.00574256,
+        -0.00014325,
+        -0.01104668,
+        -0.03774192,
+        -0.00698527,
+        0.02513752,
+        -0.00138529,
+        -0.01568778,
+        0.02335522,
+        -0.0118701,
+        0.02387565,
+        -0.04070766,
+        -0.01342961,
+        -0.00397452,
+        0.01549886,
+        -0.0028089,
+        -0.00401284,
+        0.02492364,
+        0.01462196,
+        0.03312933,
+        0.01904919,
+        0.03259465,
+        -0.00253086,
+        0.00608922,
+        -0.02592173,
+        0.04488537,
+        -0.02659187,
+        -0.01303928,
+        0.00576038,
+        0.03805026,
+        -0.01479306,
+        -0.01081854,
+        0.02912986,
+        0.00233436,
+        0.02804622,
+        -0.0449424,
+        0.02189017,
+        -0.02801771,
+        0.04140632,
+        0.00049281,
+        0.01689974,
+        -0.00066636,
+        -0.01646842,
+        -0.02254962,
+        0.00538967,
+        0.01807249,
+        0.00152654,
+        -0.00870474,
+        -0.00280088,
+        -0.0451135,
+        -0.00187988,
+        0.00786171,
+        -0.0007606,
+        -0.01006641,
+        -0.05150125,
+        0.00568553,
+        0.02982852,
+        0.0054966,
+        -0.04152039,
+        -0.00407077,
+        -0.01989044,
+        -0.02041799,
+        -0.00200508,
+        -0.00156486,
+        -0.00536561,
+        0.0265491,
+        0.05580729,
+        0.02707665,
+        -0.0342201,
+        -0.01832201,
+        -0.01045317,
+        0.01363814,
+        0.01130154,
+        0.01129976,
+        -0.00239541,
+        0.02237674,
+        0.03453378,
+        -0.02764699,
+        -0.02346216,
+        0.0036038,
+        0.00792231,
+        -0.01240835,
+        0.0259146,
+        -0.01444507,
+        0.01715996,
+        -0.02157292,
+        0.00848017,
+        0.00715882,
+        0.01055476,
+        -0.00092902,
+        0.03601666,
+        -0.01357397,
+        -0.00442901,
+        0.00916457,
+        -0.00731098,
+        -0.04474278,
+        -0.00584237,
+        -0.0076494,
+        0.00183911,
+        0.01216596,
+        -0.00555553,
+        0.01052625,
+        0.00584237,
+        0.00041099,
+        -0.01301077,
+        0.00013545,
+        0.02052493,
+        -0.02220742,
+        -0.04114967,
+        -0.03382087,
+        -0.00647508,
+        -0.00453574,
+        -0.02390417,
+        -0.0184646,
+        0.03607369,
+        0.00634854,
+        0.01825072,
+        0.00816648,
+        -0.01577689,
+        0.05740422,
+        0.02606431,
+        0.00089627,
+        0.01909197,
+        0.01192891,
+        0.06479006,
+        -0.04833589,
+        -0.03427713,
+        -0.00717553,
+        0.01329014,
+        0.0033496,
+        -0.00218242,
+        -0.00101591,
+        -0.02784661,
+        0.02921541,
+        0.00906164,
+        0.05018948,
+        -0.00368044,
+        0.03537503,
+        0.02633522,
+        0.00790983,
+        0.03350718,
+        0.01508893,
+        -0.02139469,
+        -0.01827924,
+        -0.01892799,
+        0.0031511,
+        0.00181126,
+        0.03096919,
+        0.00335785,
+        0.00099185,
+        -0.00455555,
+        0.01343495,
+        -0.0401801,
+        -0.03128288,
+        -0.00154469,
+        -0.02409665,
+        -0.02770402,
+        0.02294173,
+        0.03700048,
+        -0.03236651,
+        -0.05523695,
+        0.03958125,
+        -0.03400623,
+        0.03176766,
+        -0.00250546,
+        -0.02439608,
+        -0.00711939,
+        0.01807606,
+        0.03292259,
+        0.01867045,
+        -0.02917263,
+        -0.02931522,
+        0.01229785,
+        -0.00457694,
+        -0.05594986,
+        -0.0076817,
+        -0.00414651,
+        -0.00594663,
+        -0.00704007,
+        -0.01101994,
+        -0.00560176,
+        0.0145578,
+        -0.00658737,
+        -0.01297434,
+        -0.03073393,
+        -0.04050805,
+        -0.02159431,
+        -0.00311189,
+        -0.01039792,
+        -0.01241904,
+        -0.02566507,
+        -0.00894847,
+        0.01494278,
+        0.0451135,
+        0.02167986,
+        -0.01656823,
+        -0.02433905,
+        -0.01241192,
+        -0.00707126,
+        -0.01898503,
+        0.00904694,
+        0.00350294,
+        -0.01235845,
+        -0.0612825,
+        0.0022956,
+        -0.00341867,
+        -0.01470395,
+        -0.0201257,
+        -0.003373,
+        -0.01032306,
+        -0.0084873,
+        -0.00648622,
+        -0.02393981,
+        0.00669743,
+        0.00831531,
+        -0.02767551,
+        -0.01136036,
+        -0.02922967,
+        -0.00020987,
+        -0.01354902,
+        -0.03447675,
+        0.02917263,
+        -0.01009137,
+        -0.02038948,
+        0.01272204,
+        0.00069331,
+        -0.00149824,
+        -0.04274661,
+        -0.01431184,
+        -0.00380788,
+        -0.01575551,
+        -0.00489241,
+        -0.00333111,
+        0.00431138,
+        -0.01059397,
+        -0.00019516,
+        -0.01984766,
+        -0.01877115,
+        -0.0119307,
+        -0.00004901,
+        -0.00178408,
+        -0.01306067,
+        -0.01788,
+        -0.00708463,
+        -0.01227646,
+        0.01192,
+        -0.0068262,
+        -0.01167761,
+        -0.04226182,
+        -0.02423924,
+        0.01191822,
+        -0.00941409,
+        -0.02833139,
+        -0.00043516,
+        -0.05751828,
+        -0.00526312,
+        -0.0500469,
+        0.01125699,
+        0.01888522,
+        0.01398034,
+        -0.02867359,
+        -0.01165266,
+        -0.06986604,
+        0.00730742,
+        -0.01785862,
+        -0.01452928,
+        0.00973312,
+        0.03095493,
+        -0.00797043,
+        -0.03263742,
+        0.00309318,
+        -0.02150876,
+        0.00416701,
+        -0.01240835,
+        0.03024201,
+        0.02288469,
+        -0.01110015,
+        0.00446599,
+        0.01920603,
+        -0.02174402,
+        0.04571235,
+        0.00424632,
+        -0.00625675,
+        0.01596403,
+        0.02524445,
+        -0.01132104,
+        -0.01552381,
+        -0.03252336,
+        -0.02175115,
+        -0.0129466,
+        -0.00704007,
+        -0.01338505,
+        0.00867533,
+        0.00347191,
+        0.03168211,
+        0.0015653,
+        0.00272959,
+        -0.00055162,
+        -0.01858579,
+        -0.01403559,
+        -0.000614,
+        -0.01644882,
+        0.00883797,
+        -0.01723837,
+        0.00669386,
+        -0.03675809,
+        0.00971174,
+        -0.00864592,
+        -0.00532461,
+        0.02172976,
+        -0.00686363,
+        0.07092116,
+        0.00922873,
+        0.01691043,
+        0.02182601,
+        -0.00169675,
+        -0.00563562,
+        -0.04819331,
+        0.00384976,
+        0.01575194,
+        -0.01016533,
+        -0.01120073,
+        -0.01746651,
+        -0.04517053,
+        -0.01176316,
+        0.01523597,
+        -0.01547747,
+        0.01090409,
+        0.00213497,
+        -0.0381269,
+        -0.00118879,
+        -0.01546677,
+        0.00934993,
+        0.00886515,
+        -0.04055082,
+        -0.02167986,
+        0.00819946,
+        0.00085016,
+        0.00835006,
+        -0.02412517,
+        0.0050341,
+        -0.00499717,
+        -0.01313196,
+        -0.01006998,
+        0.0163401,
+        0.01388409,
+        -0.01725976,
+        0.03899666,
+        0.01656823,
+        -0.01317474,
+        0.04191962,
+        -0.0100379,
+        -0.00613199,
+        0.01538122,
+        0.01584105,
+        -0.00712919,
+        0.03407752,
+        0.02691981,
+        0.0394957,
+        -0.01588739,
+        -0.01363101,
+        0.00825382,
+        -0.02748302,
+        -0.00350221,
+        0.00205053,
+        -0.03527522,
+        0.00272736,
+        0.03704326,
+        -0.00623715,
+        0.00971352,
+        0.00358776,
+        0.01504259,
+        0.02670594,
+        0.02998536,
+        -0.03061273,
+        0.02305579,
+        0.03245206,
+        0.01324603,
+        -0.02013282,
+        0.01815448,
+        -0.01848598,
+        -0.00170922,
+        0.00996822,
+        0.00769596,
+        -0.01730254,
+        0.00742549,
+        0.00274474,
+        -0.01560579,
+        -0.00452748,
+        -0.01039436,
+        0.04468575,
+        -0.00567127,
+        0.00902332,
+        -0.02426776,
+        -0.00066836,
+        0.0148501,
+        -0.00954108,
+        0.00474715,
+        -0.01520656,
+        -0.01073656,
+        -0.01460058,
+        -0.02801771,
+        -0.02215752,
+        0.01951972,
+        -0.01905186,
+        0.01285036,
+        -0.00985878,
+        -0.01048347,
+        -0.02354771,
+        -0.01530637,
+        -0.0119806,
+        -0.01497842,
+        0.03727139,
+        -0.01831577,
+        0.01659675,
+        -0.01289804,
+        -0.02174402,
+        0.01114292
+      ],
+      "potenzial": {
+        "duration": {
+          "quote": "Dauert oft recht lange.",
+          "value": null,
+          "einheit": "stunden",
+          "writeSource": "analyst_catchup",
+          "nicht_befund_typ": "unbekannt"
+        },
+        "frequency": {
+          "quote": "Etwa 75 bis 100 Tickets.",
+          "value": 87,
+          "einheit": "pro_woche",
+          "writeSource": "analyst_catchup",
+          "nicht_befund_typ": null
+        },
+        "media_breaks": null,
+        "error_rate_percent": {
+          "quote": "[manuelle Korrektur]",
+          "value": 10,
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      },
+      "reihenfolge": 1,
+      "teilschritte": [
+        "Anwender einweisen",
+        "Daten migrieren",
+        "Imaging-Software nutzen"
+      ],
+      "abhaengigkeiten": null
+    },
+    {
+      "id": "S002",
+      "slots": {
+        "inputs": null,
+        "outputs": null,
+        "ausloeser": null,
+        "ausnahmen": null,
+        "aufgabentyp": null,
+        "hilfsmittel": null,
+        "tazite_cues": null,
+        "reibungspunkte": {
+          "quote": "Bestandsführung oft fehlerhaft. Physische Suche schwierig.",
+          "value": [
+            "Bestandsführung fehlerhaft",
+            "physische Suche schwierig"
+          ],
+          "nicht_befund_typ": null
+        },
+        "risiko_schwere": null,
+        "entscheidungslogik": {
+          "quote": "Keine weiteren Routinen. Fokus auf Tickets und Hardware. Kommt drauf an.",
+          "value": "Standardablauf meist fix, aber Einzelfallentscheidung bei Suche und Vorbereitung",
+          "nicht_befund_typ": null
+        },
+        "informationsdichte": null,
+        "standardisierungsgrad": {
+          "quote": "Standardablauf meist fix.",
+          "value": "standardisiert",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "hardware-tausch",
+      "status": "walkthrough",
+      "embedding": [
+        0.11782772,
+        -0.0693012,
+        0.02214659,
+        0.05977621,
+        0.0866265,
+        0.04444998,
+        0.01159021,
+        0.15239991,
+        0.00557585,
+        -0.09219255,
+        -0.05432775,
+        0.08756724,
+        0.00771211,
+        -0.01311157,
+        -0.03124041,
+        -0.13766167,
+        -0.16243449,
+        0.05542528,
+        -0.01223942,
+        0.12002278,
+        0.0046498,
+        0.07847342,
+        0.06973237,
+        0.13060611,
+        -0.04154936,
+        0.01654135,
+        -0.04903609,
+        0.11053699,
+        -0.06165769,
+        0.04213732,
+        0.06052095,
+        0.08450983,
+        -0.02819281,
+        -0.10826353,
+        -0.05072158,
+        0.02387129,
+        -0.05852189,
+        -0.01117619,
+        -0.07180984,
+        -0.03639489,
+        -0.07510243,
+        0.03872714,
+        -0.01372403,
+        -0.05268145,
+        0.05146633,
+        0.02171542,
+        0.01099735,
+        0.044058,
+        -0.03598332,
+        -0.01591419,
+        0.0566796,
+        0.00375316,
+        -0.06828206,
+        0.01238641,
+        0.01085036,
+        -0.01047799,
+        -0.08106045,
+        -0.02151943,
+        -0.03108363,
+        0.07518083,
+        0.02257777,
+        0.02059584,
+        0.03715924,
+        0.09462279,
+        -0.03077005,
+        0.06949719,
+        -0.04519473,
+        -0.00234848,
+        -0.07471046,
+        -0.01358194,
+        -0.05079998,
+        -0.00527696,
+        0.01062222,
+        -0.0016365,
+        -0.01904019,
+        0.04715461,
+        0.09642588,
+        0.01469907,
+        0.01699335,
+        -0.03039767,
+        0.03482454,
+        0.01166126,
+        -0.02474343,
+        -0.03974628,
+        -0.0347094,
+        0.07674873,
+        -0.04319566,
+        0.04691942,
+        -0.02688949,
+        0.04492035,
+        0.03704165,
+        0.00739363,
+        -0.0142434,
+        0.04166695,
+        0.01015583,
+        -0.00051814,
+        -0.09391724,
+        0.01172986,
+        -0.01335533,
+        -0.03947189,
+        -0.10199193,
+        0.0441364,
+        -0.02250917,
+        -0.0219996,
+        -0.04111819,
+        0.09031107,
+        0.04774257,
+        -0.01837016,
+        -0.05644442,
+        0.01652175,
+        0.02174972,
+        0.01213408,
+        -0.02555678,
+        0.03790399,
+        0.03321989,
+        0.02102946,
+        0.03994226,
+        -0.05260306,
+        0.09477958,
+        -0.05485692,
+        0.02304814,
+        0.00128984,
+        -0.02759505,
+        0.03018208,
+        -0.06534225,
+        0.00405694,
+        -0.0361401,
+        0.00079375,
+        -0.03970708,
+        -0.08106045,
+        -0.04281348,
+        -0.00830987,
+        -0.01890423,
+        0.00403734,
+        -0.01509594,
+        0.05373979,
+        0.0062814,
+        -0.05111355,
+        -0.09673946,
+        0.0074953,
+        0.02865338,
+        0.01146527,
+        -0.00826187,
+        -0.01304297,
+        0.05217189,
+        0.00739853,
+        -0.08247156,
+        -0.05060399,
+        0.02126465,
+        -0.04002066,
+        0.0378452,
+        -0.0129854,
+        0.00045077,
+        -0.02784003,
+        0.00286509,
+        0.01159266,
+        0.00385116,
+        0.00815186,
+        0.00086663,
+        0.02549798,
+        -0.08247156,
+        0.0110929,
+        0.01616836,
+        -0.02655631,
+        -0.05031001,
+        0.0078297,
+        0.00843665,
+        -0.01873641,
+        0.03332768,
+        0.02611534,
+        0.03012329,
+        0.02957452,
+        0.09572032,
+        0.02693849,
+        0.03367066,
+        0.03013309,
+        -0.05495491,
+        0.10136477,
+        0.06879164,
+        0.0235577,
+        0.0252677,
+        -0.0314462,
+        -0.00304761,
+        0.02824181,
+        0.00099954,
+        -0.00083785,
+        0.05001602,
+        0.03229875,
+        -0.03129921,
+        0.00316275,
+        -0.00517407,
+        -0.0220878,
+        0.00218771,
+        0.00660478,
+        0.02429266,
+        0.0260296,
+        -0.00575713,
+        0.02546858,
+        -0.00253804,
+        -0.04652745,
+        0.06977157,
+        0.00678607,
+        0.01122886,
+        0.01480074,
+        -0.02384189,
+        0.07917897,
+        0.03688486,
+        0.00333179,
+        -0.00217546,
+        -0.01019135,
+        0.02321473,
+        0.01760458,
+        -0.01329286,
+        0.02230338,
+        -0.03947189,
+        0.01470397,
+        0.01919331,
+        0.03069165,
+        -0.02910415,
+        -0.01933417,
+        -0.01915135,
+        -0.02445925,
+        -0.00203306,
+        0.05280885,
+        -0.0125579,
+        -0.0394131,
+        0.02314123,
+        0.00521327,
+        0.02924134,
+        0.00053284,
+        -0.01213653,
+        -0.01587499,
+        0.02888856,
+        -0.0866265,
+        0.00960339,
+        0.03498378,
+        -0.00544355,
+        0.02373409,
+        0.01207283,
+        0.01866782,
+        -0.03476819,
+        0.01225902,
+        -0.03063286,
+        0.01275879,
+        -0.01661729,
+        0.02796742,
+        -0.00435705,
+        -0.02308733,
+        -0.01144567,
+        -0.02700709,
+        -0.00869205,
+        -0.0268601,
+        -0.00160511,
+        0.03539535,
+        0.00914159,
+        0.0362773,
+        0.05652281,
+        0.00653496,
+        -0.00534066,
+        -0.01129378,
+        -0.0031162,
+        0.04444998,
+        0.00648719,
+        0.03741402,
+        -0.00747922,
+        0.04127498,
+        -0.01316056,
+        -0.01167596,
+        0.00656558,
+        -0.05307343,
+        -0.03951109,
+        0.02160273,
+        -0.01824644,
+        0.00082529,
+        0.01497345,
+        -0.00747203,
+        0.02928054,
+        0.01718811,
+        0.0472722,
+        0.00480506,
+        0.02341071,
+        0.01283718,
+        -0.05248547,
+        0.02745786,
+        -0.01555651,
+        -0.01312382,
+        0.01540952,
+        0.06252003,
+        -0.00672727,
+        -0.03067205,
+        0.01223942,
+        0.01722731,
+        0.00432153,
+        0.00370172,
+        -0.04354843,
+        -0.01025015,
+        -0.01681573,
+        0.00121512,
+        0.01609058,
+        -0.01311647,
+        -0.01317281,
+        0.08388267,
+        0.00065166,
+        0.01660995,
+        0.01431689,
+        -0.03668887,
+        0.01224922,
+        -0.02241118,
+        -0.00213871,
+        0.0220633,
+        -0.00809184,
+        -0.04217652,
+        -0.00798159,
+        0.03639489,
+        -0.03235755,
+        0.01268529,
+        0.01377994,
+        0.03408223,
+        0.05111355,
+        0.03165444,
+        0.02584096,
+        0.03715924,
+        -0.0031505,
+        0.02747745,
+        -0.02487082,
+        0.01945177,
+        0.02560577,
+        -0.03290631,
+        0.02765385,
+        0.01985354,
+        0.01323896,
+        0.02479243,
+        0.00422843,
+        0.04934967,
+        0.02663471,
+        0.01525273,
+        -0.03594412,
+        0.025204,
+        0.03280832,
+        0.00396477,
+        0.00914282,
+        0.03284752,
+        0.00074965,
+        -0.00920407,
+        -0.02751665,
+        -0.00302556,
+        0.05687559,
+        -0.06338237,
+        -0.02587036,
+        -0.00168549,
+        -0.04539072,
+        -0.03555214,
+        0.00369927,
+        0.00591515,
+        -0.02189916,
+        0.03529736,
+        -0.02539999,
+        -0.03051526,
+        0.0173694,
+        -0.00604622,
+        0.01427769,
+        -0.00554155,
+        -0.03406264,
+        0.02735986,
+        0.00822168,
+        0.01620817,
+        0.0377864,
+        0.01335655,
+        -0.00414024,
+        0.02022592,
+        0.00511528,
+        -0.06012898,
+        0.0062863,
+        0.00065411,
+        0.0424509,
+        0.01924598,
+        -0.04073602,
+        0.01113087,
+        -0.00929961,
+        -0.02452784,
+        -0.04558671,
+        0.00246627,
+        0.00826577,
+        0.00484089,
+        0.00121512,
+        -0.03827637,
+        0.10990982,
+        -0.02222499,
+        -0.015679,
+        -0.03120122,
+        -0.01279799,
+        -0.01409885,
+        0.00247924,
+        -0.05174071,
+        0.02930014,
+        -0.00677137,
+        0.01699212,
+        -0.00155688,
+        0.00254294,
+        0.04934967,
+        0.00565792,
+        0.02720307,
+        -0.03839396,
+        0.0165634,
+        0.00772681,
+        0.0283986,
+        0.03180878,
+        -0.01124479,
+        -0.01230802,
+        0.01818275,
+        -0.01480686,
+        0.06875243,
+        -0.0110635,
+        0.02417506,
+        -0.04131418,
+        0.01040694,
+        -0.03016248,
+        -0.01347414,
+        -0.01214449,
+        -0.03947189,
+        -0.02753625,
+        0.01141138,
+        -0.03371966,
+        -0.01662954,
+        0.00138661,
+        0.04672343,
+        -0.00626425,
+        -0.01633556,
+        0.00731524,
+        -0.01383427,
+        -0.00934861,
+        -0.01663934,
+        0.0125824,
+        -0.01895322,
+        -0.0076429,
+        0.0488793,
+        -0.0378452,
+        -0.01224922,
+        0.01618237,
+        -0.01488525,
+        0.01804066,
+        -0.02316879,
+        0.00698696,
+        -0.03248494,
+        -0.0015973,
+        -0.00848626,
+        0.00127759,
+        0.03527776,
+        -0.03301655,
+        -0.0268307,
+        0.01118109,
+        -0.00326319,
+        0.01166616,
+        -0.01145792,
+        0.00709475,
+        -0.01172006,
+        0.02853579,
+        -0.01241091,
+        -0.02741866,
+        -0.02892776,
+        0.00917834,
+        -0.00370416,
+        -0.00822903,
+        -0.01042049,
+        0.05475892,
+        -0.00811389,
+        0.02025531,
+        -0.00765576,
+        0.02004953,
+        0.00395405,
+        0.00924081,
+        0.0252236,
+        -0.01961835,
+        0.0000196,
+        -0.03472899,
+        -0.0220584,
+        -0.01948116,
+        -0.00060021,
+        0.05287744,
+        0.01711951,
+        -0.02428286,
+        -0.01854042,
+        0.00107242,
+        0.04774257,
+        -0.04617467,
+        -0.0126755,
+        -0.02449844,
+        -0.00830987,
+        0.01776627,
+        0.01940767,
+        -0.03218115,
+        0.00166099,
+        -0.0363165,
+        0.02062769,
+        0.01705092,
+        0.00825108,
+        0.09062465,
+        0.02582136,
+        -0.01361455,
+        -0.04801695,
+        -0.02570132,
+        -0.00816288,
+        0.03541495,
+        0.0046988,
+        -0.04107899,
+        0.01827094,
+        -0.00967689,
+        -0.00131189,
+        -0.04699782,
+        0.02662491,
+        0.04715461,
+        -0.01635577,
+        -0.0331219,
+        -0.00275592,
+        0.02648772,
+        0.01993193,
+        -0.03296511,
+        -0.00115633,
+        -0.00390628,
+        0.00370906,
+        0.00888804,
+        -0.01010316,
+        0.00568486,
+        -0.040883,
+        0.02285215,
+        0.03382745,
+        0.01371545,
+        -0.0077311,
+        -0.02317063,
+        -0.00423149,
+        -0.02197021,
+        -0.01605138,
+        -0.01917738,
+        -0.01858942,
+        0.00370845,
+        0.01585539,
+        0.00096922,
+        -0.01682063,
+        0.00087567,
+        -0.00434419,
+        -0.00861855,
+        0.00414759,
+        0.00749652,
+        0.01069847,
+        -0.01248441,
+        -0.00142091,
+        -0.00827557,
+        0.02104906,
+        -0.00353268,
+        0.02787923,
+        -0.01185725,
+        -0.03078965,
+        0.00830007,
+        0.0189226,
+        0.04982004,
+        -0.00168059,
+        0.07863021,
+        0.00166651,
+        0.00654598,
+        0.00344938,
+        0.02594875,
+        0.0236949,
+        -0.0047576,
+        0.0378256,
+        0.00535536,
+        -0.00208482,
+        0.0266935,
+        0.03120122,
+        -0.03104443,
+        0.03911912,
+        -0.02688949,
+        -0.04590029,
+        -0.00349838,
+        -0.01438549,
+        -0.00806489,
+        0.00308068,
+        0.00003736,
+        0.06428392,
+        -0.01664914,
+        -0.01029425,
+        0.00016965,
+        -0.00649944,
+        0.00154218,
+        -0.01759968,
+        -0.01071072,
+        -0.00487182,
+        -0.02101967,
+        0.01018155,
+        -0.02704628,
+        -0.0644407,
+        -0.01330265,
+        -0.03073085,
+        0.00748305,
+        -0.00132047,
+        -0.03668887,
+        -0.0039516,
+        -0.00575713,
+        0.00962299,
+        0.03035847,
+        0.00165793,
+        -0.01878051,
+        -0.01324386,
+        0.00224498,
+        0.01010561,
+        0.00434725,
+        0.0047086,
+        0.0362773,
+        0.00819228,
+        -0.03790399,
+        -0.0535438,
+        0.01351579,
+        0.02618394,
+        0.03994226,
+        -0.00545335,
+        -0.02084328,
+        0.00744018,
+        -0.00123472,
+        -0.04397961,
+        0.00073985,
+        0.0205003,
+        0.00427498,
+        -0.01182785,
+        -0.00933881,
+        -0.01837383,
+        -0.04076541,
+        0.04931047,
+        0.0409222,
+        0.0298881,
+        0.02105886,
+        -0.04019705,
+        -0.0216309,
+        0.0063157,
+        -0.01362114,
+        -0.01234722,
+        -0.02543919,
+        0.044058,
+        -0.03029968,
+        -0.0173743,
+        0.01859922,
+        0.00456651,
+        -0.02063749,
+        -0.0063647,
+        0.03994226,
+        0.02898656,
+        0.01840323,
+        -0.01351334,
+        0.02091187,
+        0.03949149,
+        -0.01524048,
+        -0.01386612,
+        -0.02236218,
+        0.06056016,
+        -0.01622777,
+        -0.02012547,
+        -0.02495901,
+        -0.06836046,
+        -0.00884884,
+        0.01433649,
+        -0.0188344,
+        -0.03370986,
+        0.00798833,
+        -0.02935894,
+        0.06020738,
+        -0.0173008,
+        -0.05056479,
+        0.03762961,
+        -0.02547838,
+        0.00580123,
+        0.01853062,
+        0.00142091,
+        -0.01130542,
+        -0.00374183,
+        0.03094643,
+        0.00502708,
+        -0.01789366,
+        0.01672264,
+        0.02389088,
+        0.02621333,
+        -0.00391485,
+        -0.01911859,
+        0.03682606,
+        0.0598938,
+        0.04401881,
+        -0.03069165,
+        -0.0315344,
+        0.0031015,
+        0.0204709,
+        -0.02322453,
+        0.03014289,
+        -0.02933934,
+        -0.02058359,
+        -0.01692352,
+        0.02484877,
+        0.01987314,
+        0.01289598,
+        0.02100987,
+        0.01807005,
+        -0.00479802,
+        0.01458882,
+        0.00603152,
+        0.02182321,
+        -0.03051526,
+        -0.0130099,
+        -0.01205323,
+        0.00579388,
+        0.00830497,
+        -0.02730107,
+        0.03723764,
+        -0.00258106,
+        0.01984374,
+        -0.00132292,
+        -0.00766801,
+        0.0050381,
+        0.01054536,
+        -0.03984427,
+        -0.01452268,
+        -0.00459223,
+        0.02087267,
+        0.02802622,
+        -0.01833464,
+        0.06538145,
+        -0.00148951,
+        0.04478316,
+        0.03410184,
+        0.00341018,
+        0.01661485,
+        0.06428392,
+        0.0361401,
+        0.03418023,
+        0.00443544,
+        0.00641859,
+        -0.01215735,
+        -0.02947653,
+        0.03110323,
+        -0.02071588,
+        0.00013719,
+        -0.00685222,
+        -0.0161408,
+        0.00274873,
+        0.02099027,
+        -0.00250864,
+        0.02655631,
+        -0.03055446,
+        0.01441978,
+        0.01785447,
+        -0.00960584,
+        -0.00461061,
+        0.00301208,
+        -0.01110147,
+        -0.01824644,
+        -0.02196041,
+        -0.03126001,
+        -0.00554645,
+        0.04350924,
+        0.01471377,
+        0.00250987,
+        -0.01013868,
+        0.00448322,
+        0.01156878,
+        -0.04166695,
+        0.00657783,
+        -0.00959359,
+        -0.02418486,
+        0.00394425,
+        0.01992214,
+        -0.00298391,
+        -0.03267112,
+        -0.01227862,
+        -0.01663934,
+        -0.01013348,
+        0.02077713,
+        -0.02626233,
+        -0.00586983,
+        0.00297901,
+        0.0346114,
+        -0.00715355,
+        -0.01065192,
+        0.00959359,
+        0.01103042,
+        -0.02765385,
+        -0.0378844,
+        0.00172959,
+        0.01357214,
+        0.01395676,
+        -0.00097014,
+        0.00489479,
+        0.00445872,
+        0.003077,
+        -0.00885864,
+        -0.00332199,
+        -0.01698232,
+        -0.01077932,
+        -0.02003973,
+        -0.00625445,
+        0.02099027,
+        -0.01061763,
+        -0.01694312,
+        -0.04029504,
+        0.00478455,
+        0.02583116,
+        0.01438549,
+        0.01210223,
+        0.03445461,
+        -0.01493425,
+        0.04290168,
+        0.00464246,
+        0.00921876,
+        0.0110537,
+        0.0141748,
+        -0.02636033,
+        -0.02324412,
+        -0.00483109,
+        -0.00980918,
+        -0.01525641,
+        -0.03002529,
+        -0.0078738,
+        -0.0046841,
+        -0.0330827,
+        -0.02430246,
+        0.00970138,
+        0.01781527,
+        -0.0095299,
+        0.01547322,
+        -0.006252,
+        -0.01428749,
+        -0.01336635,
+        0.01008968,
+        0.04276448,
+        -0.00555625,
+        0.02005933,
+        0.03084844,
+        -0.01211693,
+        -0.00702217,
+        -0.03547375,
+        -0.00258949,
+        -0.02659551,
+        -0.03265153,
+        -0.00874349,
+        -0.00092849,
+        0.01337125,
+        -0.03829597,
+        0.01369953,
+        -0.00500748,
+        -0.01670794,
+        -0.00807959,
+        0.00275791,
+        -0.01090426,
+        -0.03833517,
+        -0.02443965,
+        -0.02296974,
+        -0.00808449,
+        0.02122545,
+        0.01197974,
+        -0.03649288,
+        -0.01856982,
+        -0.04217652,
+        0.00031848,
+        0.02918255,
+        -0.00834417,
+        -0.0205003,
+        -0.02939813,
+        -0.03218115,
+        -0.06310799,
+        -0.03731603,
+        -0.00351675,
+        0.02436125,
+        -0.04272529,
+        0.00066728,
+        0.00180309,
+        0.00953969,
+        -0.00396875,
+        -0.03555214,
+        -0.00399815,
+        -0.00285652,
+        -0.0031309,
+        -0.01629147,
+        -0.01353784,
+        -0.0110537,
+        0.00589923,
+        0.0188883,
+        0.03876634,
+        0.01912961,
+        -0.0126608,
+        0.02598795,
+        0.02079428,
+        0.01453248,
+        0.05146633,
+        -0.01117129,
+        0.00366007,
+        0.01146527,
+        0.02483162,
+        -0.02148024,
+        0.00071535,
+        0.0034255,
+        0.01648745,
+        -0.00456651,
+        0.00783215,
+        -0.00226733,
+        0.0172959,
+        -0.00683507,
+        -0.01554181,
+        -0.01458637,
+        0.02761465,
+        0.00587963,
+        0.00619321,
+        -0.03649288,
+        -0.01990254,
+        -0.00321665,
+        -0.02394968,
+        -0.00401652,
+        -0.00674197,
+        -0.00769374,
+        0.04347004,
+        -0.0314756,
+        -0.01502245,
+        0.02498841,
+        -0.01351334,
+        0.0566012,
+        -0.02349891,
+        0.02173502,
+        0.01817785,
+        -0.00722704,
+        -0.02318533,
+        -0.06248083,
+        -0.00296841,
+        0.01227862,
+        -0.01048533,
+        -0.00848932,
+        -0.00544845,
+        -0.03911912,
+        -0.01643356,
+        -0.02270516,
+        -0.01806025,
+        0.04676263,
+        -0.01272204,
+        -0.0235969,
+        -0.02308733,
+        -0.03024088,
+        -0.01272939,
+        0.0156692,
+        -0.02077468,
+        0.00184902,
+        -0.03751202,
+        0.02009363,
+        0.00941965,
+        -0.04644905,
+        0.0110635,
+        -0.00567384,
+        -0.02696789,
+        -0.03161279,
+        -0.00235675,
+        0.00697226,
+        -0.03496418,
+        0.03245554,
+        0.01262405,
+        -0.03809998,
+        0.0362185,
+        -0.00914343,
+        -0.00702125,
+        0.00885374,
+        0.00751122,
+        0.00273403,
+        0.03246534,
+        -0.00065166,
+        -0.010233,
+        -0.01018155,
+        -0.00112877,
+        0.0030966,
+        -0.03369026,
+        -0.00009309,
+        -0.00290613,
+        -0.01834444,
+        0.00219506,
+        0.01504694,
+        0.00564444,
+        -0.00147358,
+        0.01718811,
+        0.01361623,
+        -0.0173743,
+        -0.00957767,
+        -0.02489042,
+        0.00223594,
+        0.00309538,
+        0.02620354,
+        0.00217546,
+        0.00923408,
+        -0.02132345,
+        -0.01174455,
+        0.00993412,
+        0.0016564,
+        -0.02904535,
+        -0.0235773,
+        -0.01324876,
+        -0.02878077,
+        -0.00598068,
+        0.02117156,
+        0.01329286,
+        -0.01087241,
+        0.01532255,
+        -0.01270489,
+        0.01816805,
+        -0.00486539,
+        0.00206277,
+        -0.00796199,
+        -0.01092631,
+        -0.00620056,
+        0.00010167,
+        -0.01312137,
+        -0.0158015,
+        0.00561994,
+        -0.04758578,
+        0.0126608,
+        -0.01500285,
+        -0.0027524,
+        -0.01306073,
+        -0.0055832,
+        0.01853552,
+        0.00989982,
+        0.03374906,
+        -0.03061326,
+        -0.0109851,
+        0.0063696,
+        -0.05236788,
+        0.00619229
+      ],
+      "potenzial": {
+        "duration": {
+          "quote": "Großer Zeitanteil.",
+          "value": 20,
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "frequency": {
+          "quote": "[manuelle Korrektur]",
+          "value": 4,
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "media_breaks": null,
+        "error_rate_percent": {
+          "quote": "[manuelle Korrektur]",
+          "value": 10,
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      },
+      "reihenfolge": 2,
+      "teilschritte": [
+        "Anwender einweisen",
+        "Daten migrieren",
+        "Imaging-Software für Einrichtung nutzen"
+      ],
+      "abhaengigkeiten": null
+    },
+    {
+      "id": "S003",
+      "slots": {
+        "inputs": {
+          "quote": "Recherche im Internet. Herstellerdatenblätter nutzen.",
+          "value": [
+            "Internet-Recherche",
+            "Herstellerdatenblätter"
+          ],
+          "nicht_befund_typ": null
+        },
+        "outputs": {
+          "quote": "Dokumentation für IT-Leiter muss stimmen.",
+          "value": [
+            "Dokumentation für IT-Leiter"
+          ],
+          "nicht_befund_typ": null
+        },
+        "ausloeser": null,
+        "ausnahmen": null,
+        "aufgabentyp": {
+          "quote": "Sicherheitskritische Software erfordert mehr Aufwand. Standard-Anwendungen weniger.",
+          "value": [
+            "klassifikation",
+            "generierung"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "hilfsmittel": {
+          "quote": "Internes Wiki prüfen.",
+          "value": [
+            "Internes Wiki"
+          ],
+          "nicht_befund_typ": null
+        },
+        "tazite_cues": null,
+        "reibungspunkte": {
+          "quote": "Zeitdruck steigt. Kommt drauf an.",
+          "value": [
+            "wartezeit_auf_it_leiter",
+            "keine_vorlagen_dokumentation",
+            "manuelle_dokumentationserstellung"
+          ],
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "risiko_schwere": null,
+        "entscheidungslogik": {
+          "quote": "Keine weiteren Routinen. Fokus auf Tickets und Hardware. Kommt drauf an.",
+          "value": "fester Genehmigungsprozess für alles, Dokumentationsaufwand variiert nach Sicherheitsrelevanz",
+          "nicht_befund_typ": null
+        },
+        "informationsdichte": null,
+        "standardisierungsgrad": {
+          "quote": "Keine festen Vorlagen. Erstelle Unterlagen meist individuell. Kommt drauf an.",
+          "value": "stark_variabel",
+          "nicht_befund_typ": null
+        }
+      },
+      "title": "software-genehmigung",
+      "status": "walkthrough",
+      "embedding": [
+        0.11568014,
+        -0.04755864,
+        0.13096184,
+        0.02204468,
+        -0.01224782,
+        0.00351581,
+        0.01759747,
+        0.07640845,
+        0.0012922,
+        -0.01355144,
+        -0.00424882,
+        0.14596261,
+        0.00724054,
+        -0.03057742,
+        0.07064972,
+        -0.09067885,
+        -0.06435726,
+        0.1696717,
+        -0.0215882,
+        0.08702698,
+        -0.01495864,
+        -0.01194716,
+        0.0313078,
+        0.19697648,
+        0.01367873,
+        0.07211047,
+        -0.03606928,
+        0.06674502,
+        -0.07180147,
+        0.08567859,
+        0.01738152,
+        -0.01283906,
+        -0.07034072,
+        -0.06466627,
+        -0.0323542,
+        0.01642641,
+        -0.0515757,
+        0.04753055,
+        -0.04188946,
+        -0.02827394,
+        0.02045401,
+        0.00039855,
+        0.05688496,
+        0.01981844,
+        -0.01309232,
+        0.02559121,
+        0.01558367,
+        0.01262706,
+        -0.0338922,
+        0.05444102,
+        -0.00881717,
+        -0.083038,
+        -0.01170729,
+        0.01335743,
+        0.10045464,
+        0.01628947,
+        0.02852676,
+        -0.06708212,
+        -0.0742735,
+        -0.00973102,
+        -0.00118247,
+        0.01165264,
+        -0.03215054,
+        0.05469384,
+        -0.00546377,
+        0.03630806,
+        0.04168755,
+        -0.0210966,
+        -0.00303957,
+        -0.04806428,
+        -0.04269884,
+        0.05786816,
+        0.04946885,
+        0.0124234,
+        -0.01018487,
+        -0.05623886,
+        0.0302333,
+        0.05475002,
+        0.01094158,
+        -0.02820371,
+        0.04137503,
+        0.07292512,
+        -0.01851922,
+        0.02879363,
+        -0.05528376,
+        -0.02523656,
+        -0.11472504,
+        0.03588669,
+        -0.01497795,
+        0.05236226,
+        0.04590125,
+        -0.03254382,
+        -0.00082562,
+        0.04500233,
+        -0.03571814,
+        0.04921603,
+        -0.06924515,
+        0.0541601,
+        -0.00625844,
+        -0.00957476,
+        -0.05241844,
+        0.02126163,
+        -0.01303263,
+        0.05078914,
+        -0.06601465,
+        0.11545542,
+        -0.01018136,
+        0.0243587,
+        -0.04021275,
+        -0.02040836,
+        0.03633264,
+        -0.06722258,
+        -0.03845705,
+        0.07146437,
+        -0.02683777,
+        0.01810838,
+        0.07972322,
+        -0.05101387,
+        0.10629763,
+        0.02536824,
+        0.05219371,
+        0.04545179,
+        -0.04359776,
+        0.04371013,
+        -0.03620974,
+        -0.03927169,
+        0.00652449,
+        -0.02567373,
+        0.0025032,
+        0.00420887,
+        0.03584455,
+        -0.02774722,
+        -0.01895814,
+        -0.03545127,
+        -0.00786163,
+        -0.01346365,
+        0.00358749,
+        -0.04137855,
+        -0.07107109,
+        0.00141741,
+        -0.01612267,
+        -0.0208508,
+        0.00162952,
+        -0.03372366,
+        0.08719552,
+        -0.01885807,
+        -0.07174528,
+        -0.02547183,
+        -0.03386411,
+        0.02965041,
+        0.0606773,
+        -0.03464365,
+        -0.04685636,
+        -0.00881893,
+        -0.02594235,
+        -0.04142068,
+        0.00209983,
+        0.02247307,
+        -0.00463046,
+        -0.02307704,
+        -0.02053477,
+        0.00930175,
+        0.05997501,
+        0.03672943,
+        -0.00471539,
+        0.01351545,
+        0.00441034,
+        -0.0039284,
+        0.02012745,
+        -0.04019871,
+        0.0105799,
+        0.04028298,
+        0.0629246,
+        0.03238932,
+        -0.03134994,
+        0.02553415,
+        -0.05659001,
+        0.08961138,
+        0.04286738,
+        0.00964762,
+        0.00140983,
+        -0.00175922,
+        -0.01684778,
+        0.0671383,
+        0.06005928,
+        -0.04309212,
+        0.04837329,
+        0.00432607,
+        -0.03635019,
+        0.01418964,
+        -0.00071545,
+        -0.0671383,
+        0.01976226,
+        0.06534046,
+        -0.01415804,
+        0.06022783,
+        -0.02195338,
+        0.0088558,
+        -0.01973417,
+        -0.00014902,
+        0.00028267,
+        -0.01058429,
+        0.02944675,
+        -0.03206627,
+        -0.06935752,
+        0.04149091,
+        0.01132081,
+        0.03283175,
+        -0.05446911,
+        -0.05017113,
+        -0.01018311,
+        0.02093507,
+        0.03136398,
+        -0.03112521,
+        -0.04321853,
+        0.06550901,
+        0.03022628,
+        0.02982949,
+        0.01610863,
+        -0.02365291,
+        -0.00225784,
+        0.05368255,
+        -0.05268531,
+        0.0262022,
+        -0.04269884,
+        -0.01338728,
+        0.01516757,
+        -0.00998296,
+        -0.00697872,
+        -0.04640689,
+        -0.01472315,
+        -0.041519,
+        0.02340009,
+        -0.04118191,
+        -0.00060967,
+        -0.01887738,
+        -0.0219446,
+        0.00042927,
+        0.0282059,
+        -0.0075513,
+        -0.02201571,
+        -0.00815,
+        -0.03525463,
+        -0.00024843,
+        0.03801812,
+        0.0209895,
+        0.00148709,
+        -0.02203063,
+        -0.03952452,
+        -0.01772564,
+        0.03831659,
+        -0.0421651,
+        0.0124866,
+        0.03274046,
+        -0.0071352,
+        0.00903839,
+        0.00157399,
+        -0.00119213,
+        -0.0077181,
+        0.00073081,
+        0.04158923,
+        -0.03443647,
+        0.05817717,
+        0.01031479,
+        0.02710814,
+        -0.00693066,
+        -0.01799953,
+        -0.01120669,
+        0.02742242,
+        -0.03205222,
+        -0.03674347,
+        0.0127324,
+        -0.03068979,
+        -0.00076549,
+        -0.0013604,
+        0.01000052,
+        -0.02487488,
+        0.01781518,
+        -0.00807473,
+        -0.01173867,
+        0.01077303,
+        0.0230349,
+        -0.01216706,
+        -0.03694011,
+        -0.012455,
+        0.00886633,
+        -0.00929999,
+        0.06421681,
+        0.00617307,
+        0.00294345,
+        -0.00557657,
+        0.01095211,
+        -0.00074618,
+        -0.0258019,
+        -0.04230556,
+        0.03672943,
+        -0.04663163,
+        -0.0009573,
+        0.02889195,
+        -0.04651926,
+        -0.00325102,
+        0.06227851,
+        0.03578837,
+        0.01491299,
+        0.00446784,
+        -0.04396295,
+        0.02375123,
+        0.00881454,
+        -0.01374369,
+        0.03578837,
+        -0.03039483,
+        0.01762117,
+        0.00425145,
+        -0.02984705,
+        -0.00791825,
+        -0.01533612,
+        0.00874562,
+        0.03682775,
+        0.05168807,
+        -0.00313921,
+        0.01289744,
+        0.0233281,
+        -0.03411693,
+        0.03435571,
+        -0.02945377,
+        -0.01235668,
+        0.00881015,
+        -0.01026168,
+        0.01175447,
+        0.00443492,
+        -0.00443558,
+        0.03393434,
+        -0.0065128,
+        0.07233521,
+        0.0008384,
+        -0.0110715,
+        -0.0837122,
+        0.01778884,
+        0.03590073,
+        -0.00636971,
+        0.01611741,
+        0.01221271,
+        0.03036674,
+        0.02263899,
+        -0.03158871,
+        0.01875448,
+        0.04660353,
+        -0.04238983,
+        -0.02309811,
+        0.0275576,
+        -0.0450866,
+        -0.04755864,
+        -0.00842038,
+        0.00383096,
+        -0.04064817,
+        -0.00778481,
+        -0.01329072,
+        -0.02146178,
+        -0.01408605,
+        0.02499427,
+        0.0311533,
+        0.004093,
+        -0.00344039,
+        0.0480362,
+        0.07444206,
+        -0.01455131,
+        -0.00258281,
+        0.01441612,
+        -0.01268149,
+        0.02071034,
+        0.01210386,
+        -0.01282721,
+        -0.01548184,
+        0.04149091,
+        0.02664464,
+        -0.01160063,
+        -0.02665868,
+        -0.02230628,
+        -0.01894059,
+        -0.01386308,
+        -0.04685636,
+        -0.0183634,
+        0.03177131,
+        0.00841775,
+        0.03442243,
+        -0.04220724,
+        0.08331892,
+        -0.01279561,
+        -0.01540459,
+        -0.01093104,
+        0.01563985,
+        -0.04196846,
+        0.02271185,
+        -0.05769961,
+        -0.02987514,
+        0.00920847,
+        0.06865524,
+        -0.05949746,
+        -0.00931404,
+        0.01299751,
+        0.04848566,
+        0.03080215,
+        -0.05233417,
+        -0.01905997,
+        0.01838929,
+        0.04000207,
+        0.0090735,
+        -0.04076054,
+        0.04449669,
+        -0.01523604,
+        0.00842389,
+        0.05876709,
+        -0.01641237,
+        0.00385905,
+        -0.03301259,
+        -0.05452529,
+        -0.03443998,
+        0.03281069,
+        0.00507224,
+        -0.04351349,
+        -0.03372366,
+        0.00738802,
+        0.00826588,
+        -0.00856435,
+        -0.01181592,
+        0.04047962,
+        -0.01304141,
+        -0.02215002,
+        -0.04657545,
+        -0.04255838,
+        -0.00022144,
+        0.00797092,
+        0.01314872,
+        -0.02157415,
+        0.03262107,
+        0.03501585,
+        -0.00071633,
+        -0.04126618,
+        -0.01124005,
+        0.01915127,
+        0.05604222,
+        -0.00626613,
+        -0.00695261,
+        -0.02576678,
+        0.02364589,
+        0.0019541,
+        0.0071352,
+        0.00592201,
+        -0.02454393,
+        0.02970308,
+        -0.01013571,
+        0.01236721,
+        -0.04932839,
+        -0.05247463,
+        0.04918794,
+        -0.00879259,
+        0.02557717,
+        -0.02136347,
+        -0.0632617,
+        0.03334442,
+        0.01476024,
+        -0.02913072,
+        -0.01368048,
+        -0.03743171,
+        0.01526589,
+        -0.00890583,
+        0.00345172,
+        0.00152396,
+        0.03085834,
+        0.01413214,
+        0.010899,
+        0.0136502,
+        0.02796493,
+        -0.00582193,
+        0.03465067,
+        -0.01041311,
+        -0.00197824,
+        -0.01694259,
+        0.02899026,
+        0.02724158,
+        -0.02616708,
+        -0.00097969,
+        0.03519845,
+        0.04028298,
+        -0.0277402,
+        -0.01164386,
+        -0.03163085,
+        0.00463507,
+        -0.0083203,
+        0.0131011,
+        -0.01056937,
+        -0.00914461,
+        -0.02570358,
+        0.01481116,
+        0.04722155,
+        0.01856135,
+        0.06986316,
+        -0.00907789,
+        -0.0210966,
+        -0.03295114,
+        -0.02976278,
+        0.00773653,
+        0.00104728,
+        0.02884981,
+        0.03104093,
+        0.02881667,
+        0.00686833,
+        -0.01435468,
+        -0.05960982,
+        0.06244705,
+        -0.00140193,
+        0.01643168,
+        -0.05865472,
+        0.03344274,
+        0.02486786,
+        0.03063361,
+        -0.01421773,
+        -0.00925522,
+        -0.00349035,
+        -0.0019067,
+        -0.00088751,
+        -0.00385905,
+        0.03002262,
+        -0.00992678,
+        0.04163137,
+        0.02786661,
+        -0.00393981,
+        0.03214351,
+        -0.01064662,
+        -0.01409483,
+        -0.00490808,
+        -0.00086513,
+        -0.00820618,
+        -0.0282318,
+        -0.00897431,
+        -0.02528221,
+        0.03096368,
+        0.01833311,
+        0.00018962,
+        -0.0287234,
+        0.02217811,
+        -0.01364471,
+        -0.02729074,
+        -0.00710711,
+        0.02420069,
+        0.00717383,
+        -0.00276173,
+        -0.02382146,
+        0.02818966,
+        0.01401231,
+        -0.0180206,
+        -0.04479165,
+        -0.0040434,
+        0.02900431,
+        0.00977228,
+        0.00430149,
+        0.0561265,
+        0.01017258,
+        0.04466523,
+        0.00031252,
+        0.02925713,
+        0.00732262,
+        -0.00426111,
+        0.02239116,
+        0.01500078,
+        -0.02203766,
+        -0.00712203,
+        -0.00403462,
+        -0.01587161,
+        0.0402268,
+        -0.01550642,
+        -0.02294887,
+        -0.00056183,
+        0.00595723,
+        -0.01907051,
+        -0.01114524,
+        0.02354054,
+        0.04699681,
+        -0.00440244,
+        0.00043015,
+        0.01884227,
+        0.01241637,
+        -0.03049315,
+        0.02055584,
+        -0.03368152,
+        0.03524059,
+        -0.00466667,
+        0.00190231,
+        -0.02868126,
+        -0.05219371,
+        0.01764444,
+        -0.00726512,
+        -0.01627893,
+        -0.0245729,
+        -0.01590672,
+        0.00909984,
+        -0.00915679,
+        -0.01957264,
+        -0.00094808,
+        -0.01742365,
+        0.00111071,
+        0.00379058,
+        -0.0060392,
+        0.01203539,
+        0.04382249,
+        0.00777987,
+        0.02035218,
+        0.00909721,
+        -0.03826041,
+        -0.0201134,
+        0.00187927,
+        0.02255735,
+        0.02061202,
+        0.02585808,
+        -0.05539612,
+        0.00111751,
+        0.00938251,
+        -0.04871038,
+        0.0214653,
+        0.03517036,
+        0.02863912,
+        -0.00519251,
+        0.03686988,
+        0.00490523,
+        0.00809031,
+        -0.00977842,
+        0.00681391,
+        0.04458096,
+        0.02863912,
+        -0.00176975,
+        -0.03393434,
+        -0.00530707,
+        -0.01991413,
+        0.00774882,
+        -0.01023227,
+        0.04293761,
+        -0.00810286,
+        -0.00129286,
+        0.02433412,
+        0.02703791,
+        0.02362482,
+        -0.00222624,
+        0.02199552,
+        -0.0350299,
+        -0.02360024,
+        0.00167143,
+        0.03640638,
+        -0.00582632,
+        -0.03311969,
+        0.02370909,
+        -0.01489018,
+        0.03216458,
+        0.00971609,
+        -0.05410392,
+        -0.03802163,
+        -0.01838929,
+        -0.09444309,
+        0.02028195,
+        -0.00766608,
+        -0.01739556,
+        0.00562683,
+        -0.01275347,
+        0.01922501,
+        0.0253419,
+        -0.00794283,
+        -0.00496251,
+        -0.01795739,
+        -0.00654089,
+        -0.00909984,
+        0.01936196,
+        0.00158716,
+        0.00197868,
+        0.02220269,
+        -0.020605,
+        0.04188419,
+        0.00519514,
+        0.00012992,
+        0.01712167,
+        -0.02868828,
+        -0.03243145,
+        -0.01615362,
+        0.04747437,
+        -0.01181241,
+        -0.03809186,
+        -0.03861155,
+        0.01279209,
+        0.0188844,
+        -0.02988919,
+        0.03052826,
+        0.0030997,
+        0.00033358,
+        -0.00015253,
+        -0.00046219,
+        -0.01202397,
+        0.02529977,
+        0.01389117,
+        0.05340164,
+        0.00103499,
+        -0.00164312,
+        -0.00265463,
+        -0.02404619,
+        -0.0528679,
+        -0.01149002,
+        0.0066515,
+        0.0065962,
+        -0.00367618,
+        0.01606825,
+        0.01762732,
+        -0.00201731,
+        -0.02338604,
+        -0.01828746,
+        -0.0025212,
+        0.00443053,
+        0.01213546,
+        -0.00940533,
+        0.00093887,
+        0.00184876,
+        0.01081736,
+        0.01090844,
+        -0.01637813,
+        0.04649117,
+        0.01669679,
+        0.01629649,
+        -0.0072344,
+        -0.00387309,
+        0.04240388,
+        0.04430005,
+        -0.01036922,
+        0.00392225,
+        0.0121776,
+        0.04438432,
+        -0.01046051,
+        -0.00336394,
+        0.01641237,
+        -0.00381691,
+        -0.02522602,
+        0.0003011,
+        -0.01425636,
+        -0.01116982,
+        0.01023754,
+        0.04275502,
+        0.06604274,
+        0.00221922,
+        0.01435116,
+        -0.01560123,
+        0.01368751,
+        0.00555506,
+        0.0011377,
+        0.01684076,
+        0.01622275,
+        -0.03177131,
+        -0.02880767,
+        -0.00045824,
+        0.01080463,
+        0.01545726,
+        0.0167916,
+        -0.01166669,
+        -0.04469332,
+        0.00046351,
+        -0.03175726,
+        -0.02130728,
+        0.00250364,
+        -0.03177131,
+        -0.00335955,
+        0.02092805,
+        0.00567533,
+        -0.05817717,
+        0.0155626,
+        -0.01388766,
+        -0.02252926,
+        0.02989972,
+        -0.01400353,
+        -0.02347031,
+        0.0314623,
+        0.02110362,
+        0.01727266,
+        -0.01024368,
+        -0.00830472,
+        0.0197447,
+        -0.00801481,
+        -0.0475165,
+        -0.022452,
+        0.00494715,
+        0.01906875,
+        0.01336446,
+        0.01041662,
+        -0.00981046,
+        0.01478307,
+        -0.02409535,
+        -0.0093351,
+        -0.00562529,
+        -0.01275347,
+        -0.00708077,
+        -0.00085591,
+        0.02705196,
+        -0.0197131,
+        -0.00390996,
+        -0.00503011,
+        -0.02004317,
+        0.04208083,
+        0.01927417,
+        0.00024755,
+        -0.00610987,
+        -0.02410237,
+        -0.01534489,
+        -0.00796389,
+        0.01116631,
+        -0.00892602,
+        -0.00946167,
+        -0.01568901,
+        -0.00844145,
+        0.00435921,
+        0.01796441,
+        -0.0049748,
+        -0.04466523,
+        0.00792439,
+        -0.01678457,
+        -0.02875851,
+        -0.052896,
+        0.0168548,
+        -0.01967798,
+        -0.01220569,
+        -0.02351948,
+        -0.01936898,
+        -0.00817107,
+        0.02483275,
+        0.02736096,
+        0.03671538,
+        0.01518864,
+        0.00540319,
+        -0.01436521,
+        -0.01858769,
+        -0.00105037,
+        -0.00134092,
+        -0.0193128,
+        -0.00354242,
+        -0.00784802,
+        0.03476303,
+        0.00066541,
+        0.01894761,
+        -0.03747385,
+        -0.02208682,
+        -0.02760676,
+        0.00113068,
+        -0.0139333,
+        -0.0166529,
+        -0.03882223,
+        -0.01967096,
+        -0.00033271,
+        -0.00309194,
+        -0.0210053,
+        0.00871336,
+        0.00677704,
+        -0.0118089,
+        -0.0123953,
+        -0.02128972,
+        0.00074091,
+        0.01303263,
+        0.00611469,
+        -0.00373264,
+        -0.03387816,
+        0.00648427,
+        -0.04238983,
+        -0.01203012,
+        0.01272582,
+        0.01517635,
+        -0.00680995,
+        -0.01003212,
+        -0.03326015,
+        0.01739512,
+        0.00582983,
+        -0.02031706,
+        -0.01668977,
+        0.01035342,
+        -0.01527818,
+        -0.02956614,
+        -0.01714801,
+        -0.02439031,
+        -0.00591674,
+        -0.02229399,
+        0.02998751,
+        0.04539561,
+        -0.02351245,
+        0.00339335,
+        0.01426338,
+        0.01665114,
+        0.05472193,
+        0.00787699,
+        0.01310988,
+        0.02674296,
+        -0.02954507,
+        -0.0277402,
+        0.00092169,
+        -0.02305597,
+        -0.03668729,
+        -0.02118789,
+        -0.0038458,
+        0.00868022,
+        0.01017258,
+        0.00386958,
+        0.0146075,
+        -0.01724457,
+        0.02939759,
+        -0.00872938,
+        -0.00238952,
+        -0.00452973,
+        0.02238178,
+        0.00999262,
+        -0.00896816,
+        -0.00756184,
+        0.00940731,
+        -0.0003608,
+        0.0305072,
+        -0.02627945,
+        0.00109644,
+        0.01437838,
+        0.00335077,
+        0.03972116,
+        -0.03109711,
+        0.00924995,
+        0.01830151,
+        -0.00387178,
+        0.00731187,
+        -0.04708109,
+        0.03313374,
+        0.02179888,
+        -0.03109711,
+        -0.01458643,
+        -0.01653088,
+        -0.04828902,
+        -0.01915829,
+        -0.00240181,
+        -0.00483039,
+        0.04786764,
+        -0.01791525,
+        -0.02699578,
+        -0.02897622,
+        -0.0203592,
+        0.00246326,
+        -0.00118137,
+        -0.01016029,
+        0.02618815,
+        -0.01891952,
+        0.01797144,
+        -0.00790069,
+        -0.02994537,
+        -0.00355597,
+        -0.00726337,
+        -0.01498673,
+        -0.01877204,
+        0.01019935,
+        0.01466368,
+        -0.00591059,
+        0.02130728,
+        0.02695364,
+        -0.00954403,
+        -0.01214073,
+        -0.01991325,
+        -0.02754356,
+        -0.03240336,
+        0.00861351,
+        0.01188615,
+        0.05921655,
+        0.0023487,
+        0.02439733,
+        -0.00895763,
+        0.01227372,
+        0.00967483,
+        0.01589268,
+        -0.01866143,
+        -0.01340133,
+        -0.00653738,
+        -0.0180838,
+        0.01503765,
+        -0.00533417,
+        -0.01689694,
+        -0.0145996,
+        -0.01919341,
+        -0.02764188,
+        -0.00545988,
+        -0.03033865,
+        0.00386563,
+        0.01123654,
+        -0.00055929,
+        0.00036497,
+        -0.02032408,
+        -0.0019383,
+        -0.00904805,
+        -0.01125936,
+        -0.00638771,
+        -0.05202517,
+        0.01414926,
+        -0.01570833,
+        0.00068122,
+        -0.00942991,
+        -0.00179609,
+        -0.00587636,
+        -0.00398941,
+        -0.00412065,
+        -0.03318992,
+        0.00555506,
+        -0.03132185,
+        0.0156539,
+        -0.00751597,
+        0.00069877,
+        -0.01398598,
+        -0.02713273,
+        -0.02282421,
+        -0.00504591,
+        -0.00076417,
+        0.00272486,
+        0.02504343,
+        0.00592552,
+        -0.02594235,
+        0.00260723,
+        -0.01588565,
+        -0.00555506,
+        -0.01557138,
+        -0.02065416,
+        -0.00095159,
+        0.00424179,
+        -0.0123953,
+        -0.06621129,
+        0.02299979
+      ],
+      "potenzial": {
+        "duration": {
+          "quote": "[manuelle Korrektur]",
+          "value": 20,
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "frequency": {
+          "quote": "[manuelle Korrektur]",
+          "value": 4,
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        },
+        "media_breaks": null,
+        "error_rate_percent": {
+          "quote": "[manuelle Korrektur]",
+          "value": 10,
+          "confidence": "confirmed",
+          "nicht_befund_typ": null
+        }
+      },
+      "reihenfolge": 3,
+      "teilschritte": [],
+      "abhaengigkeiten": null
+    }
+  ],
+  "scores": {
+    "slotCoverage": 0.56,
+    "dedupSlotCoverage": 0.56,
+    "slotCoveragePreClarification": 0.56,
+    "dedupSlotCoveragePreClarification": 0.56,
+    "clarificationCoverageDelta": 0,
+    "potenzialCoverage": 0.75,
+    "dedupPotenzialCoverage": 0.75,
+    "dependencyCapture": 0,
+    "slotsPerTurn": 1.04,
+    "turnsToCompletion": 26,
+    "phaseAdherence": 1,
+    "phaseProgression": 1,
+    "anchoringViolations": 0,
+    "anchoringViolationRate": 0,
+    "toolCallPlausibility": 0.9,
+    "dialogNaturalness": 1,
+    "dialogNaturalnessRationale": "Die Agent-Texte zeigen durchgehend natürliche, höflich formulierte Fragen ohne generische Floskeln. Die Du-Form wird konsequent eingehalten. Die Fragen bauen logisch aufeinander auf, greifen vorherige Aussagen auf und vermeiden abrupte Sprünge. Die Abschlussfrage wirkt authentisch und respektvoll. Insgesamt ein sehr natürliches Gesprächsverhalten.",
+    "completionCorrectness": true,
+    "stepRegistrationCoverage": 1,
+    "hallucinationRate": 0,
+    "confidenceTriggerRate": null,
+    "depth_score": 1.58,
+    "depth_distribution": {
+      "p1": 0.54,
+      "p2": 0.35,
+      "p3": 0.12
+    },
+    "slotDepthRationale": "[ticket-bearbeitung/aufgabentyp] Stufe 1: Der Wert nennt zwei Aufgabentypen (Suche, Entscheidung) und wird durch ein Zitat belegt, das konkrete Tätigkeiten beschreibt (Remote Desktop, Wiki, Hardware-Tausch). Es wird jedoch weder erklärt, unter welchen Bedingungen welcher Typ auftritt, noch wird eine Kausalstruktur zwischen den Aufgabentypen und situativen Faktoren hergestellt. Die Aussage bleibt deskriptiv ohne erklärenden Kontext.\n[ticket-bearbeitung/ausnahmen] Stufe 2: Der Slot identifiziert Ausnahmefälle (individuelle Probleme, unzureichendes Standard-Wiki) und wird durch ein direktes Zitat gestützt. Das Gespräch zeigt jedoch, dass der Agent gezielt nachfragt, warum vom Standard abgewichen wird, und der Mitarbeiter antwortet mit einer Bedingung (wenn Standard-Wiki nicht ausreicht). Dies etabliert einen erkennbaren Kontext für die Ausnahme.\n[ticket-bearbeitung/entscheidungslogik] Stufe 2: Der Wert beschreibt eine sequenzielle Abfolge von Schritten (Ticket prüfen → Fernwartung/Vor-Ort → Lösungsbuch/Eigenrecherche). Das Zitat belegt diese Reihenfolge. Allerdings wird in der Aussage selbst ('Kommt drauf an') und im Gesprächsverlauf deutlich, dass diese Logik variabel ist und von Fallmerkmalen abhängt. Der Agent fragt nach den Gründen für Abweichungen, und der Mitarbeiter deutet an, dass die Vorgehensweise kontextabhängig ist, ohne aber die konkrete Kausalstruktur zu explizieren.\n[ticket-bearbeitung/hilfsmittel] Stufe 1: Der Wert listet fünf Tools auf (Wiki, Jira, Remote Desktop, Asset-Management-System, Imaging-Tool). Das angegebene Zitat ('Keine festen Vorlagen...') steht jedoch in keinem direkten Bezug zu den genannten Hilfsmitteln und belegt die Liste nicht. Die Hilfsmittel werden an verschiedenen Stellen des Gesprächs genannt, aber es wird nicht erläutert, unter welchen Bedingungen welches Tool eingesetzt wird oder welche Kausalbeziehung zwischen Problemtyp und Toolwahl besteht.\n[ticket-bearbeitung/informationsdichte] Stufe 1: Der Wert 'strukturiert' wird mit einem Zitat belegt, das nur die Nennung von zwei Tools enthält. Das Zitat selbst sagt nichts über die Struktur oder Dichte von Informationen aus. Es wird im Gespräch nicht erläutert, wie die Informationen in diesen Systemen organisiert sind oder unter welchen Bedingungen sie als strukturiert oder unstrukturiert wahrgenommen werden.\n[ticket-bearbeitung/inputs] Stufe 2: Der Slot nennt drei Inputkanäle (Jira-Tickets, E-Mails, Direkte Anfragen) und wird durch ein Zitat belegt, das diese Kanäle bestätigt. Das Gespräch zeigt, dass der Agent nachfragt, auf welchem Weg Anfragen eingehen, und der Mitarbeiter antwortet mit den Kanälen. Es wird jedoch nicht erläutert, unter welchen Bedingungen welcher Kanal genutzt wird oder welche Auswirkungen die Kanalwahl auf die Bearbeitung hat.\n[ticket-bearbeitung/reibungspunkte] Stufe 2: Der Wert identifiziert einen Reibungspunkt (Warten auf IT-Leiter) und wird durch ein Zitat belegt, das den Kontext erklärt: Software-Genehmigungsprozesse verzögern dringende Tickets. Das Gespräch zeigt, dass der Agent gezielt nachfragt, wo Zeit verloren geht, und der Mitarbeiter antwortet mit einer konkreten Bedingung und Konsequenz. Dies etabliert einen erkennbaren Kontext für den Reibungspunkt.\n[ticket-bearbeitung/standardisierungsgrad] Stufe 2: Der Wert 'stark_variabel' wird mit einem Zitat belegt, das aussagt, dass das Standard-Wiki nicht immer ausreicht. Das Gespräch zeigt durch wiederholte Nachfragen des Agenten, dass die Vorgehensweise fallabhängig ist. Es wird jedoch nicht expliziert, welche Faktoren die Variabilität bestimmen oder unter welchen spezifischen Bedingungen Standardisierung möglich wäre.\n[ticket-bearbeitung/frequency] Stufe 1: Der Wert 87 wird aus einem Bereich von 75 bis 100 Tickets pro Woche abgeleitet. Das Zitat belegt die Spannweite, nicht aber die konkrete Zahl 87. Es wird nicht erläutert, woran die Schwankungen liegen oder unter welchen Bedingungen die Frequenz höher oder niedriger ausfällt.\n[ticket-bearbeitung/error_rate_percent] Stufe 1: Der Wert 10 wird als '[manuelle Korrektur]' gekennzeichnet und hat keinen Beleg im Gesprächsauszug. Die Fehlerquote wird im Gespräch überhaupt nicht thematisiert. Es gibt keine Grundlage für die Bewertung dieser Metrik aus dem vorliegenden Material.\n[hardware-tausch/entscheidungslogik] Stufe 1: Der Wert beschreibt eine Entscheidungslogik mit zwei Komponenten: fester Standardablauf und Einzelfallentscheidungen. Das Gesprächsbeleg zeigt jedoch nur eine oberflächliche Aussage ohne konkrete Bedingungen oder Kausalstrukturen. Die Aussage 'Kommt drauf an' deutet auf Variabilität hin, wird aber nicht konkretisiert. Der extrahierte Wert geht über das Beleg hinaus und interpretiert die Entscheidungslogik, ohne dass im Gespräch explizit erklärt wurde, unter welchen Bedingungen welche Entscheidungen getroffen werden.\n[hardware-tausch/reibungspunkte] Stufe 3: Der Wert benennt zwei konkrete Reibungspunkte: fehlerhafte Bestandsführung und schwierige physische Suche. Das Gesprächsbeleg liefert diese Sachverhalte direkt. Im vorangegangenen Gesprächsverlauf wird zudem die Kausalstruktur deutlich: Die fehlerhafte Bestandsführung führt zu schwieriger physischer Suche, was wiederum einen großen Zeitanteil des Prozesses ausmacht. Diese Kausalverbindung wurde durch konversationelles Nachfragen herausgearbeitet.\n[hardware-tausch/standardisierungsgrad] Stufe 2: Der Wert 'standardisiert' wird mit dem Beleg 'Standardablauf meist fix' begründet. Dies benennt den Sachverhalt, dass ein Standardablauf existiert. Allerdings fehlt die differenzierende Information, dass dieser Standardablauf 'meist' fix ist, also Ausnahmen existieren. Die Aussage 'Kommt drauf an' im Gesprächsverlauf deutet auf Bedingungen hin, unter denen der Standardablauf variiert, wird aber nicht konkretisiert.\n[hardware-tausch/frequency] Stufe 1: Der Wert 4 wird mit '[manuelle Korrektur]' begründet. Dies ist kein Gesprächsbeleg, sondern eine nachträgliche Anpassung ohne Referenz zu Gesprächsinhalten. Im Gesprächsverlauf gibt es keine Aussage zur Häufigkeit oder Frequenz des Hardware-Tauschs. Der Wert kann daher nicht aus dem Gesprächsmaterial validiert werden.\n[hardware-tausch/duration] Stufe 1: Der Wert 20 wird mit 'Großer Zeitanteil' begründet. Das Gesprächsbeleg beschreibt nur, dass die Suche nach Komponenten einen großen Zeitanteil des Tauschs ausmacht, nicht die absolute Dauer. Die konkrete Zahl 20 (vermutlich Minuten) wird nicht genannt oder hergeleitet. Es fehlt die Bedingung oder der Kontext, unter dem diese Dauer typischerweise anfällt.\n[hardware-tausch/error_rate_percent] Stufe 1: Der Wert 10 wird mit '[manuelle Korrektur]' begründet. Dies ist kein Gesprächsbeleg, sondern eine nachträgliche Anpassung ohne Referenz zu Gesprächsinhalten. Im Gesprächsverlauf wird zwar erwähnt, dass die Bestandsführung 'oft fehlerhaft' ist, aber keine konkrete Fehlerquote oder Prozentsatz genannt. Der Wert kann nicht aus dem Gesprächsmaterial hergeleitet werden.\n[software-genehmigung/aufgabentyp] Stufe 2: Der Wert beschreibt zwei Aufgabentypen (Klassifikation und Generierung) mit erklärendem Kontext: Die Unterscheidung basiert auf Sicherheitsrelevanz, was eine Bedingung darstellt. Es wird jedoch keine Kausalstruktur oder Ausnahmefälle durch konversationelles Nachfragen entwickelt. Die Antwort bleibt bei der Benennung der Unterscheidung stehen.\n[software-genehmigung/entscheidungslogik] Stufe 3: Der Wert enthält eine Kausalstruktur: Ein fester Genehmigungsprozess für alle Anfragen wird mit variierendem Dokumentationsaufwand je nach Sicherheitsrelevanz verknüpft. Dies wurde durch mehrere konversationelle Nachfragen des Agenten entwickelt (Unterscheidung zwischen Kategorien, Einfluss von Sicherheitsanforderungen auf Aufwand, Unterschiede in Dokumentationsumfang). Die Begründung des Wertes durch das Beleg-Zitat ist jedoch schwach; das Zitat selbst enthält wenig Substanz.\n[software-genehmigung/hilfsmittel] Stufe 1: Der Wert benennt ein spezifisches Hilfsmittel (Internes Wiki) mit direktem Beleg. Es fehlt jedoch jeder erklärende Kontext: Wann wird es genutzt, unter welchen Bedingungen, welche Rolle spielt es im Prozess. Keine Kausalstruktur oder Ausnahmefälle werden erklärt.\n[software-genehmigung/inputs] Stufe 1: Der Wert nennt zwei Inputquellen (Internet-Recherche, Herstellerdatenblätter) mit direktem Beleg. Es wird benannt, woher Informationen kommen, aber kein erklärender Kontext zur Auswahl oder Bedingung der Nutzung. Keine Kausalstruktur oder Ausnahmefälle werden entwickelt.\n[software-genehmigung/outputs] Stufe 2: Der Wert benennt den Output (Dokumentation für IT-Leiter) mit Beleg. Der Gesprächsverlauf zeigt jedoch erklärendes Kontext: Die Dokumentation variiert in Umfang und Aufwand je nach Sicherheitsrelevanz der Software. Dies wurde durch konversationelle Nachfragen entwickelt und zeigt eine Bedingungsabhängigkeit.\n[software-genehmigung/reibungspunkte] Stufe 3: Der Wert identifiziert drei Reibungspunkte mit erklärendem Kontext: Wartezeit auf IT-Leiter verzögert Dringliches, fehlende Vorlagen führen zu individueller Dokumentationserstellung, was Zeitdruck erzeugt. Der Gesprächsverlauf entwickelt diese Zusammenhänge durch mehrere Nachfragen. Eine Kausalstruktur ist erkennbar: Fehlende Standardisierung → individueller Aufwand → Zeitdruck → Verzögerung anderer Tickets.\n[software-genehmigung/standardisierungsgrad] Stufe 2: Der Wert beschreibt den Grad als stark variabel mit direktem Beleg. Der Gesprächsverlauf zeigt erklärendes Kontext: Es gibt keine festen Vorlagen, Unterlagen werden individuell erstellt, und der Aufwand variiert nach Sicherheitsrelevanz. Dies wurde durch konversationelle Nachfragen entwickelt und zeigt Bedingungsabhängigkeit.\n[software-genehmigung/frequency] Stufe 1: Der Wert ist eine numerische Angabe (4) ohne Kontext oder Beleg. Es ist unklar, worauf sich diese Zahl bezieht (Häufigkeit pro Woche/Monat, Anzahl von Anfragen, etc.). Keine Bedingung, Kausalstruktur oder Ausnahmefälle sind erkennbar. Das Beleg-Zitat '[manuelle Korrektur]' enthält keine inhaltliche Begründung.\n[software-genehmigung/duration] Stufe 1: Der Wert ist eine numerische Angabe (20) ohne Kontext oder Beleg. Es ist unklar, welche Zeiteinheit gemeint ist oder worauf sich die Dauer bezieht. Keine Bedingung, Kausalstruktur oder Ausnahmefälle sind erkennbar. Das Beleg-Zitat '[manuelle Korrektur]' enthält keine inhaltliche Begründung.\n[software-genehmigung/error_rate_percent] Stufe 1: Der Wert ist eine numerische Angabe (10) ohne Kontext oder Beleg. Es ist unklar, welche Art von Fehlern gemeint sind oder unter welchen Bedingungen diese auftreten. Keine Bedingung, Kausalstruktur oder Ausnahmefälle sind erkennbar. Das Beleg-Zitat '[manuelle Korrektur]' enthält keine inhaltliche Begründung.",
+    "talkerGroundingViolations": 0
+  },
+  "cost": {
+    "interviewEngine": {
+      "analyst_online": {
+        "calls": 26,
+        "inputTokens": 305549,
+        "cacheReadTokens": 193710,
+        "outputTokens": 2919,
+        "estimatedCostUsd": 0.0372
+      },
+      "talker": {
+        "calls": 26,
+        "inputTokens": 90866,
+        "cacheReadTokens": 0,
+        "outputTokens": 17889,
+        "estimatedCostUsd": 0.0496
+      },
+      "grounding_guard": {
+        "calls": 26,
+        "inputTokens": 73833,
+        "cacheReadTokens": 0,
+        "outputTokens": 1724,
+        "estimatedCostUsd": 0.0825
+      },
+      "analyst_catchup": {
+        "calls": 3,
+        "inputTokens": 17933,
+        "cacheReadTokens": 7713,
+        "outputTokens": 166,
+        "estimatedCostUsd": 0.003
+      }
+    },
+    "testEngine": {
+      "tester": {
+        "calls": 26,
+        "inputTokens": 45219,
+        "cacheReadTokens": 0,
+        "outputTokens": 586,
+        "estimatedCostUsd": 0.0122
+      }
+    },
+    "evalEngine": {
+      "judge_dialog_naturalness": {
+        "calls": 1,
+        "inputTokens": 945,
+        "cacheReadTokens": 0,
+        "outputTokens": 130,
+        "estimatedCostUsd": 0.0016
+      },
+      "judge_talker_grounding": {
+        "calls": 1,
+        "inputTokens": 3289,
+        "cacheReadTokens": 0,
+        "outputTokens": 8,
+        "estimatedCostUsd": 0.0033
+      },
+      "judge_slot_depth": {
+        "calls": 3,
+        "inputTokens": 5577,
+        "cacheReadTokens": 0,
+        "outputTokens": 3794,
+        "estimatedCostUsd": 0.0245
+      }
+    },
+    "totalInputTokens": 543211,
+    "totalCacheReadTokens": 201423,
+    "totalOutputTokens": 27216,
+    "totalEstimatedCostUsd": 0.2139,
+    "pricing": {
+      "google/gemini-3.1-flash-lite": {
+        "inputPer1M": 0.25,
+        "cachePer1M": 0.025,
+        "outputPer1M": 1.5
+      },
+      "anthropic/claude-haiku-4-5": {
+        "inputPer1M": 1,
+        "cachePer1M": 0.1,
+        "outputPer1M": 5
+      }
+    }
+  },
+  "generatedAt": "2026-07-23T16:24:56.218Z"
+}
