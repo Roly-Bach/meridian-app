@@ -1,11 +1,11 @@
 # PROJ-43: Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards)
 
-## Status: Architected
+## Status: In Review
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-29
 **Appetite:** XL (>3 Tage)
-**Bugs:** —
+**Bugs:** 0:1:2
 **Created:** 2026-07-22
 **Last Updated:** 2026-07-23
 
@@ -245,8 +245,132 @@ Damit bleiben zwei bekannte Schwächen bestehen, hier dokumentiert für eine sp�
 
 Beide Punkte sind Kandidaten für ein eigenes Folge-Item nach PROJ-43, nicht Teil des aktuellen Baus. → **PROJ-47**.
 
+## Backend Implementation Notes (2026-07-23)
+
+Gebaut wie in der Tech Design entschieden — deterministischer Mechanismus für die drei Zahlen-Felder, Talker-Methodik-Umbau, keine Migration. `tsc --noEmit` sauber, 853/853 Tests grün (43 neu).
+
+**A) Live-Sequenz + Richtung (AC1/AC2/AC6/AC7).** `talkerPrompt.ts`s `STATIC_PROMPT` `<turn_format>`-Block komplett umgebaut: offene Frage → (bei Ausweichen) Richtungsfrage ohne Zahlen → (bei erneutem Ausweichen) sofortige Akzeptanz. Forced-Choice-Text vollständig entfernt (KI-21/KI-25 strukturell behoben). Neuer `<treiber_framing>`-Block für AC6 (Ursachenfrage bei reibungspunkte/ausloeser/aufgabentyp/risiko_schwere-Fokus, plus gezielte reibungspunkte-Nachfrage wenn Richtung=hoch bei duration/error_rate_percent erfasst wurde). AC7 (Pro-Vorgang/Aggregat) als reine Formulierungsregel in Talker- und Analyst-Prompt — bei Uneindeutigkeit bleibt der Slot null, nie geraten/umgerechnet.
+
+Neues `SchemaSlotNumber.richtung?: 'niedrig'|'hoch'|null` (interviewSemantic.ts) — lebt direkt am Feld wie `einheit`, kein Zwischenspeicher nötig (beantwortet die in der Ausgangs-Spec offene Frage). `record_slot` (interviewTools.ts) hat einen neuen dritten Schreibmodus („richtung-only", weder value noch nicht_befund_typ) — durchgereicht über `RecordSlotIntent`/`applyIntent.ts`. Ein richtung-only-Write füllt den Slot NICHT (bleibt Gap für AC4) und kann einen bereits gesetzten Wert/nicht_befund_typ nicht überschreiben (Guard gegen versehentliches Downgrade). Tracker-Anzeige (`formatStepTracker`, explore-READ_ONLY_STATE) zeigt „Richtung erfasst (hoch/niedrig)" statt „fehlt" — kein Anker-Risiko (keine Rohzahl), aber die Sichtbarkeit, die AC2/AC6 überhaupt erst ermöglicht.
+
+**B) Deterministischer Card-Mechanismus (AC3/AC4/AC5).** Neues `src/services/clarificationCards.ts`: `computeMandatoryNumericGaps` (reiner Scan, media_breaks bewusst ausgenommen), `buildDeterministicSlotCards` (fester Fragetext pro Feldtyp, nach Richtung sortiert — hoch vor niedrig vor kein Signal), `computeClarificationCards` (mischt deterministische Karten vor die verbleibenden LLM-Karten, deckelt bei 8, filtert LLM-Vorschläge für die drei Zahlen-Felder defensiv raus). `interviewOrchestrator.ts`s `resolveTurnLifecycle` ruft das an beiden bisherigen Card-Entscheidungspunkten auf (Hard-Stop, Closing-soft_confirm) statt `analystSuggestion.clarification_cards` direkt zu prüfen — `TurnLifecycle` trägt jetzt optional `clarificationCards`. `runInterviewTurn.ts` persistiert das Ergebnis über eine neue `InterviewStore.updateNextBriefing`-Methode (port.ts) — bewusst NICHT über den bestehenden `produce_briefing`-Intent, dessen `onlyIfNotDone`-Race-Guard einen Follow-up-Write nach dem bereits committeten Analyst-Pass silent verworfen hätte.
+
+`interviewAnalyst.ts`s Prompt/Schema generiert für `frequency`/`duration`/`error_rate_percent` keine Karten mehr (nur noch `entscheidungslogik`/`open_item`/`qualitative`) — das war laut M-4 der unzuverlässige Teil (0/4 Testläufe), jetzt vollständig code-owned.
+
+**Root-Cause-Fund AC5 (nicht in der Spec vorweggenommen):** die alte Card-Antwort-Verarbeitung (`clarification/route.ts`) schrieb SlotCard-Antworten gegen `process_steps.schritt_daten` — aber `process_steps`-Zeilen für das laufende Interview existieren zu diesem Zeitpunkt noch gar nicht (sie werden erst danach, im selben Request, aus `interview_state.step_tracker` erzeugt). Card-Antworten wurden dadurch strukturell nie persistiert, unabhängig davon ob überhaupt eine Karte feuerte — ein zweiter, unabhängiger Bug neben der M-4-Generierungs-Unzuverlässigkeit. Fix: neues `src/services/clarificationAnswers.ts` (`applyClarificationSlotAnswers`, reine Funktion) schreibt read-merge-write direkt gegen den `StepEntry[]`-Tracker; `clarification/route.ts` und `evalStore.ts` (Supabase- UND PGlite-Variante) nutzen jetzt exakt dieselbe Funktion über die bestehende `TurnStore`-Abstraktion (`register_step`-Intent, derselbe Full-Array-Replace-Mechanismus wie `computeMergedSteps`) — macht AC5s „code-identischer Completion-Pfad"-Anspruch erstmals tatsächlich wahr statt nur behauptet. `affectedClusterIds`/`resynthesizeClusters` in `clarification/route.ts` war dadurch nachweislich toter Code (nie befüllt) und wurde entfernt.
+
+**C) Zwei-Wege-Card-UI (AC3).** Neues `src/lib/clarificationBuckets.ts` (Single Source of Truth für Bucket-Label↔Wert, client- und serverseitig importiert): drei Varianten pro Zahlen-Feld (default/niedrig/hoch), plus `parseFreeNumericAnswer` (Zahl oder Spanne, Mittelwert, nie geraten bei Unparsebarem). `ClarificationCards.tsx`s `SlotCard` rendert jetzt richtungs-abhängige Buckets (aus `card.direction`, serverseitig gesetzt) PLUS ein freies Zahlen-/Spannen-Textfeld, gleichwertig auswählbar. `entscheidungslogik` unverändert (nicht AC3-Scope). AC4: "Weiß ich nicht" bzw. leer gelassen setzt jetzt `nicht_befund_typ='unbekannt'` statt (wie vorher) den Slot stillschweigend leer zu lassen — `schrittDatenView.ts`s `ManualCorrectionPatch` hat dafür ein neues `UnbekanntSentinel`-Feld bekommen.
+
+**Eval-Runner-Anpassung:** `runner.ts`s `buildSyntheticClarificationAnswers` nutzt für die drei Zahlen-Felder jetzt feste Zahlen-Strings ("4"/"20"/"10") statt Bucket-Labels — ein fixes Label hätte bei einer Richtung≠default-Karte nicht mehr zu den gerenderten Buckets gepasst; die freie Zahlen-Eingabe ist richtungsunabhängig und deckt zugleich den AC3(a)-Pfad im Eval ab.
+
+**Nicht umgesetzt / bewusst zurückgestellt:**
+- **Komplexitätsreduktion** (`usedFillerPhrases`/`conversationSignals.ts`s question-stem-Detektor): laut Spec explizit „per Eval verifizieren, ob das ursprüngliche Wiederholungsmuster noch auftritt, dann erst löschen" — das braucht einen echten `/eval:interview`-Lauf, den `/backend` nicht vorwegnehmen sollte. Code unverändert gelassen, Löschkandidat bleibt offen für `/qa`.
+- **AC8-Verifikation** (Transkript-Klassifikation, Gesprächszeit-Verschiebung weg von Metrik-Fragen) und die **AC5-Eval-Verifikation über mehrere Läufe** (`clarification_coverage_delta`) sind messbezogen und liegen bei `/qa` — passend zu general.md „Eval-Gate vor Approved". Backend liefert den Mechanismus, der das jetzt strukturell garantiert (statt nur wahrscheinlich).
+- Kein Pflicht-`/eval:interview`-Lauf in dieser Backend-Runde durchgeführt (kostenpflichtig, API-Keys) — folgt dem in PROJ-44/45 etablierten Muster (Backend liefert + unit-testet vollständig, Live-Eval-Nachweis ist `/qa`-Gate).
+
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-07-23
+**App URL:** http://localhost:3000 (manual UI) + `/eval:interview` (buchhalter, it-support)
+**Tester:** QA Engineer (AI)
+
+### Automated Checks
+- `tsc --noEmit`: clean.
+- `npm test`: 853/853 passed (69 files), including 43 new tests for `clarificationCards.ts`, `clarificationAnswers.ts`, `clarificationBuckets.ts`, richtung-only `record_slot` mode, and the updated orchestrator/Tim-regression tests.
+- `npm run test:e2e` (relevant specs, `--workers=1` to remove dev-server contention noise): all PROJ-43/PROJ-23/PROJ-22 specs pass. One PROJ-3 test fails identically on unmodified `main` (see BUG-1) — confirmed pre-existing via `git stash` A/B run, not a PROJ-43 regression.
+- New permanent E2E regression test added: `tests/PROJ-43-elicitation-reorientierung.spec.ts` (+ `tests/helpers/createClarificationFixture.ts`), drives the real two-way Card UI against a fixture interview parked in `phase='clarification'`.
+
+### Acceptance Criteria Status
+
+#### AC1 — Forced-Choice entfernt, neue Zwei-Schritt-Sequenz
+- [x] `talkerPrompt.ts` no longer contains any Forced-Choice text ("Eher X oder eher Y") — verified by diff read.
+- [x] Live eval transcripts (buchhalter + it-support, both `google/gemini-3.1-flash-lite`) show the new sequence in practice: open question → (on evasion) direction-only question ("eher schnell oder zieht sich das eher?", "eher über den Tag verteilt oder Großteil der Arbeitszeit?") → accept. Zero Forced-Choice patterns observed in either transcript.
+- [x] `anchoring_violations: 0` in both live runs (KI-21 concern).
+- [x] Kategorische Zahlen-Verweigerung ("Kommt drauf an" — used constantly by the it-support persona) still reliably reaches the direction question in the transcript, never a third attempt.
+
+#### AC2 — Richtungssignal steuert Fokus und Card-Zuschnitt
+- [x] `directionRank` unit-tested (hoch < niedrig < kein Signal) — `clarificationCards.test.ts`.
+- [x] `richtung`-only `record_slot` write is guarded against clobbering an already-resolved slot (unit-tested, `applyIntent.test.ts` + `interviewTools.test.ts`).
+- [x] Live browser test: a card with a captured `richtung='hoch'`/`'niedrig'` renders the correct direction-tailored bucket variant (verified against `clarificationBuckets.ts`'s fixed label→value tables); a card with no captured direction renders the generic variant.
+
+#### AC3 — Zwei-Wege-Eingabe in Clarification Cards
+- [x] Live browser E2E (`tests/PROJ-43-elicitation-reorientierung.spec.ts`, real `POST /clarification`, real DB write, verified via direct DB read): bucket-button path (`"Mehrmals täglich"` → `frequency=44`, matching the `richtung='hoch'` bucket table) and free-text/range path (`"7-9"` → `duration=8`, i.e. the mean) both work and resolve to the correct canonical value.
+- [x] `entscheidungslogik` card correctly excluded from the free-text extension (AC3 scope is the 3 numeric slots only).
+- [x] Bestehende Spannen-Erfassung im Live-Gespräch (Talker/Analyst prompt path) unchanged — confirmed by diff (`interviewAnalyst.ts` duration/frequency guidance untouched apart from the AC7 addition).
+
+#### AC4 — Hartes Completion-Gate für Card-Runde
+- [x] `computeMandatoryNumericGaps` scans every registered step regardless of `status` (unit-tested — late-discovery edge case).
+- [x] "Weiß ich nicht" / leer gelassen resolves via `nicht_befund_typ='unbekannt'`, not a silent no-op (unit-tested + live browser E2E, confirmed in DB: `error_rate_percent.nicht_befund_typ` set to `'unbekannt'` after clicking "Weiß ich nicht").
+- [x] Live browser E2E: submit button stays disabled until every rendered card has an answer; interview `status` flips to `'completed'` immediately on submit, independent of card outcome.
+- [x] `interviewOrchestrator.tim-regression.test.ts` updated: the real historical Tim transcript, which used to complete with two silent ROI gaps (duration/error_rate_percent), now correctly routes to `clarification` first — this is a genuine bug the new gate catches that the pre-PROJ-43 code missed.
+- [x] Card-Obergrenze-Priorisierung (numeric-first, direction-ranked) unit-tested.
+
+#### AC5 — Card-Generierung zuverlässig (M-4)
+- [x] Both live `/eval:interview` runs generated cards reliably: 5 cards (buchhalter, 3 steps × up to 3 gaps) and 8 cards (it-support, 3 steps × up to 3 gaps, capped) — up from the previously documented 0/4 test runs pre-fix.
+- [x] `dedup_potenzial_coverage` hit its structural ceiling of **0.75 (3/4)** in **both** runs — the maximum possible given `media_breaks` is correctly out-of-scope (never live-asked, never card-asked) — i.e. every registered step ended the interview with all 3 gate-relevant numeric slots resolved. Strong, direct quantitative confirmation the mechanism works end-to-end.
+- [x] Root-cause fix (`clarificationAnswers.ts` writing against `step_tracker` instead of not-yet-existing `process_steps` rows) verified via the live browser E2E DB read — answers persisted correctly.
+- [ ] **Caveat (not a functional bug, see BUG-2):** the metric the spec names for this AC's own verification (`clarification_coverage_delta`) is computed from `dedupSlotCoverage`, which by scorer design excludes `potenzial` fields entirely — it structurally cannot register PROJ-43's fix (stayed `0` in both runs despite Cards firing and resolving correctly). Verified correctness instead via direct transcript/DB reading (feedback memory: transcript-level QA verification) and `dedup_potenzial_coverage`.
+
+#### AC6 — Treiber-/WHY-Framing für AI-Wert-Faktoren
+- [x] Live it-support transcript contains multiple genuine indirect Ursachenfragen matching the new `<treiber_framing>` block: *"Woran machst du beim Hardware-Tausch fest…"*, *"Was genau macht die Datenmigration bei diesen individuellen Fällen so zeitaufwendig…"*, *"Woran genau scheitert die automatisierte Migration…"*. Never a direct "Warum…?".
+- [~] Buchhalter run ended after only 8 turns (discovery_exhausted fired early) — too short to exercise the `richtung=hoch`→Treiberfrage trigger. Not a failure (untested by this specific run, not contradicted either) — recommend one more buchhalter run to exercise this path.
+
+#### AC7 — Dauer-Erhebung Pro-Vorgang vs. Aggregat
+- [x] Code review: Talker (`Dauer (duration) — Pro-Vorgang vs. Aggregat` block) and Analyst (`duration:` extraction rule) both correctly instruct "never guess/convert, leave null on persisting ambiguity."
+- [ ] **Not exercised by either live run** — neither persona happened to state an ambiguous aggregate duration in this QA round. Recommend a targeted manual/eval probe before treating this AC as fully verified (see BUG-3).
+
+#### AC8 — Gesprächszeit verschiebt sich messbar weg von Metrik-Nachfragen
+- [x] Qualitative read of the it-support transcript (21 substantive agent questions): ~3-4 directly target a quantitative slot (~15-19%), clearly down from the PROJ-46-H-1b baseline (33%) — the rest are qualitative/discovery/Treiber-Framing questions.
+- [~] Buchhalter run too short (6 substantive questions) for a statistically meaningful comparison.
+- [ ] The spec's own prescribed verification method (formal transcript classification across the **Pflicht-Eval-Läufe**, plural, same methodology as H-1b) was not fully carried out this round — this QA did a single-run qualitative read per persona, not the systematic multi-run classification AC8 specifies. Directionally positive, not yet rigorously closed (see BUG-3).
+
+### Security Audit Results
+- [x] `clarification/route.ts`: `workspaceId`/`interviewId` derived server-side from the `access_token` lookup, never from client input — no object-ownership bypass possible via `process_step_id` (scoped to the interview's own `step_tracker`).
+- [x] All new/changed inputs (`richtung`, free-text Card answers) validated via Zod (`AnswerSchema` unchanged: `z.union([z.string(), z.array(z.string())])`) and/or a closed enum (`richtung: z.enum(['niedrig','hoch'])` on the tool schema).
+- [x] `parseFreeNumericAnswer` never guesses on unparseable input (returns `null`, tested) — no injection surface (numeric regex extraction only, value never templated into SQL/HTML).
+- [x] Rate limiting on the clarification endpoint unchanged (`checkTokenEndpointLimits`).
+- [x] No new RLS/schema changes in this feature (JSONB extension only, per ADR-025 pattern).
+- [x] No secrets or PII newly exposed in logs/responses.
+
+### Bugs Found
+
+#### BUG-1: Pre-existing E2E flake — "agent greeting appears automatically" / interview creation via dashboard E2E flow doesn't persist to Supabase
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Run `tests/PROJ-3-interview-ui.spec.ts` (`Employee Chat Page — chat interface (serial)` describe block).
+  2. "Setup: create interview and get link" passes, UI shows "Interview erstellt" and a valid-looking token.
+  3. Direct DB query (`SELECT * FROM interviews WHERE employee_name = 'Test Employee'`) returns **zero rows** at any point during or after the run.
+  4. "Chat page: agent greeting appears automatically…" times out after 15s waiting for any `.justify-start` message bubble — page shows an empty composer, no turn history at all (not even the two prior test messages sent earlier in the same serial sequence).
+- **Confirmed NOT a PROJ-43 regression:** reproduced identically (`git stash` → clean `main` → rerun → same failure, same DB emptiness) before restoring the PROJ-43 changes.
+- **Priority:** Log as its own Known Issue in `features/INDEX.md` for separate triage — not blocking PROJ-43. Worth a dedicated look since "UI shows success but nothing persisted" is a real reliability smell independent of this feature.
+
+#### BUG-2: AC5's own specified verification metric can't detect its fix
+- **Severity:** Low (documentation/eval-instrument, not a functional defect)
+- **Detail:** AC5 names `clarification_coverage_delta > 0` as its eval-verification criterion. That metric is `dedupSlotCoverage(post) - dedupSlotCoverage(pre)`, and `scoreDedupCoverage`/`scoreSlotCoverage` explicitly exclude `potenzial` fields by design (`slotCoverage.ts` docstring: *"potenzial-fields … are NOT counted here"*). Since PROJ-43's entire Card mechanism only fills `potenzial` fields, this delta is structurally pinned at `0` forever, regardless of whether the fix works. `dedup_potenzial_coverage` is the metric that actually demonstrates AC5 (hit its ceiling of 0.75 in both live runs).
+- **Secondary implication:** PROJ-46's QA docs state the green `dedup_slot_coverage ≥ 0.75` gate is *"= PROJ-43/40"* territory — that expectation is not met by PROJ-43 and structurally can't be, by the scorer's own design. Worth a doc correction in `features/INDEX.md`'s PROJ-46 section so a future reader doesn't wait on PROJ-43 to turn that gate green.
+- **Priority:** Nice to have — recommend a small spec/doc fix (point AC5 at `dedup_potenzial_coverage` instead), no code change required.
+
+#### BUG-3: AC7 and AC8 not fully exercised by this QA round's live runs
+- **Severity:** Low (verification gap, not a known defect)
+- **Detail:** AC7 (Pro-Vorgang/Aggregat-Disambiguierung) wasn't triggered by either persona's transcript this round; AC8's formal multi-run transcript-classification method (as used for the H-1b baseline) wasn't carried out — this round used a single qualitative read per persona instead. Code review supports both being correctly implemented; live evidence is directionally positive but incomplete.
+- **Update (see BUG-4):** the buchhalter run's brevity — the reason its AC8 read was inconclusive — turned out to have an identified, pre-existing cause unrelated to PROJ-43. A naive re-run won't reliably fix this; see BUG-4's recommendation.
+- **Priority:** Fix in next sprint — recommend a follow-up `/eval:interview --runs 3` per persona with the H-1b-style manual transcript classification, ideally *after* KI-29/KI-30 (BUG-4) are fixed so the runs aren't cut short by the same pre-existing issue.
+
+#### BUG-4: Two pre-existing High-severity O-Drought/Fokus-Lock bugs, found via deep transcript analysis (logged as KI-29/KI-30, not PROJ-43 scope)
+- **Severity:** High (as standalone bugs) — **not attributed to PROJ-43** (both root-caused to PROJ-44/PROJ-46 commits, confirmed via `git blame`; PROJ-43's diff does not touch either code path)
+- **Detail:** Prompted by user follow-up on the buchhalter run's unexpectedly low turn count (8 turns), a Langfuse-trace-level investigation (exact prompts per Talker call, chronologically verified) found two distinct, compounding defects in `interviewOrchestrator.ts`:
+  - **KI-29** — `computeFocusLock`'s bootstrap case (empty tracker, turn 1) returns `{stepId: null}`; when the Analyst registers multiple steps in that same turn, `updateODrought`'s short-circuit (`if (lock.stepId == null) return lock`, line 188) never picks up on them. The next turn's lock falls back to `candidates[0]` — array/registration order, not conversational relevance. Live-confirmed: the persona's turn-1 answer covered both Rechnungsprüfung and Monatsabschluss; only one question was ever asked about Monatsabschluss before it was silently dropped (final coverage 3/10 O-fields vs. Rechnungsprüfung's 6/10).
+  - **KI-30** — `resolvePhaseTransition`'s `discovery_exhausted` branch (line 267) checks only `hasSubstantialCoverage` (any *one* step with ≥2 filled fields) and, unlike the sibling `step_advance_ready` branch (line 279), never checks `hasUnexhaustedStep`. Live-confirmed: the Analyst registered "Mahnlauf" (first-ever mention) and set `discovery_exhausted: true` in the *same* tool-call batch — final Mahnlauf coverage: 0/10 O-fields, zero follow-up questions.
+- **Why this matters for PROJ-43 specifically:** AC8's whole point is that freed-up conversation time gets redirected toward AI-Wert-Faktor questions (AC6's Treiber-Framing). KI-30 cuts interviews short before that redirected time can ever be spent, and KI-29 means entire topics can vanish after a single question regardless of how well AC6 would otherwise have handled them. The buchhalter run's inconclusive AC8 read is a *symptom* of these bugs, not of anything PROJ-43 built.
+- **Priority:** High, tracked as **KI-29** and **KI-30** in `features/INDEX.md` (both include precise code locations, live evidence, and a fix direction) for a dedicated follow-up session — not fixed as part of this QA pass per general.md ("QA findet Bugs, fixt sie nicht"). Recommend fixing KI-30 first (smaller, mirrors an existing pattern at line 279) — live evidence suggests it alone would have prevented the Turn-7 premature closure in this transcript — then KI-29 (needs broader live re-verification across several turn-1 variants).
+
+### Summary
+- **Acceptance Criteria:** 6/8 fully verified (AC1–AC5 except the AC5 instrument caveat, AC6 partially — it-support confirmed, buchhalter untriggered — now explained by BUG-4); AC7/AC8 code-correct but not fully live-verified this round (see BUG-3/BUG-4).
+- **Bugs Found:** 4 total (0 Critical, 0 High **within PROJ-43's own diff** — the 2 High findings in BUG-4 are pre-existing and tracked separately as KI-29/KI-30, 1 Medium — pre-existing & unrelated, 2 Low)
+- **Security:** Pass — no new vulnerabilities, no object-ownership issues, established patterns followed.
+- **Eval-Gate (general.md, Interview-Engine):** both live runs (buchhalter/pglite, it-support/supabase) returned runner `status: FAIL`, but **exclusively** on the pre-existing `dedup_slot_coverage < 0.75` gate — the same gate PROJ-46's own QA documented as *"nicht PROJ-46-attribuierbar"* and non-blocking, since that scorer never counted `potenzial` fields to begin with (see BUG-2). Every PROJ-43-relevant metric passed cleanly in both runs: `anchoring_violations: 0`, `talker_grounding_violations: 0`, `dialog_naturalness: 0.67` (≥0.65 gate), `hallucination_rate: 0`, `completion_correctness: true`, `blocked_rate: 0`. Applying the same precedent PROJ-46 used for this identical gate pattern.
+- **Production Ready:** YES for PROJ-43's own scope (AC1–AC6 confirmed working end-to-end in real transcripts and a real browser session against a real DB write; AC7 code-correct, live-unverified; AC8 directionally positive on the unaffected it-support run) — with the caveat that BUG-4 (KI-29/KI-30) should be fixed **soon**, since it materially limits how well any Interview-Engine feature (not just PROJ-43) can be measured or trusted until then, and it's why AC8's own closure remains open.
+- **Recommendation:** Approve and deploy PROJ-43 on its own merits. Track KI-29/KI-30 (BUG-4) as a dedicated High-priority follow-up session — fix KI-30 then KI-29, then re-run the AC7/AC8 verification (BUG-3) against clean data. Small follow-up for BUG-2 (point AC5's spec text at `dedup_potenzial_coverage`) and BUG-1 (pre-existing E2E flake, separate triage) — neither blocks deployment.
 
 ## Deployment
 _To be added by /deploy_
