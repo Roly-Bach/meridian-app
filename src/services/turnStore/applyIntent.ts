@@ -93,7 +93,7 @@ function noWrite(snapshot: TurnSnapshot, status: 'skipped' | 'blocked', reason: 
 // ─── record_slot — the conflict core (verbatim) ──────────────────────────────
 
 function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: ApplyContext): ApplyOutcome {
-  const { stepId, stepTitle, slot, value, nichtBefundTyp, isNichtBefundMode, quote, confidence, qualifier, einheit, sourceTurn, isCorrection, writeSource } = intent
+  const { stepId, stepTitle, slot, value, nichtBefundTyp, isNichtBefundMode, quote, confidence, qualifier, einheit, richtung, sourceTurn, isCorrection, writeSource } = intent
   const tracker = snapshot.stepTracker
 
   // ID-first lookup (PROJ-27/BL-E1.4): stable reference, falls back to fuzzy title.
@@ -199,10 +199,28 @@ function applyRecordSlot(snapshot: TurnSnapshot, intent: RecordSlotIntent, ctx: 
   let newSlotValue: SchemaSlotNumber | SchemaSlotString | SchemaSlotStringArray | SchemaSlotBase<unknown>
   let newStep: StepEntry
 
+  // PROJ-43 (AC1/AC2): "Richtungsfrage beantwortet, aber keine Zahl" — value AND
+  // nicht_befund_typ both absent, only richtung present. Distinct from
+  // isNichtBefundMode: it must NOT count as "filled" (isFieldFilled/
+  // computeMandatoryNumericGaps keep scanning this slot as a gap) so the
+  // Closing-phase Card round still fires for it, now direction-tailored.
+  const isRichtungOnlyMode = !isNichtBefundMode && value === undefined && richtung !== undefined
+
+  // A richtung-only write must never clobber an already-resolved slot (real
+  // value or an explicit nicht_befund_typ) — it's a weaker signal than either.
+  if (isRichtungOnlyMode && isPotenzial) {
+    const prevAsSlot = prevSlotValue as SchemaSlotNumber | null
+    if (prevAsSlot != null && (prevAsSlot.value != null || prevAsSlot.nicht_befund_typ != null)) {
+      return noWrite(snapshot, 'skipped', 'idempotent', { slot, stepTitle: step.title })
+    }
+  }
+
   if (isPotenzial) {
     const newStatus = step.status === 'exploring' ? 'walkthrough' : step.status
     newSlotValue = isNichtBefundMode
       ? ({ value: null, quote, writeSource: writeSource as WriteSource, nicht_befund_typ: nichtBefundTyp!, ...(einheit !== undefined ? { einheit } : {}) } as SchemaSlotNumber)
+      : isRichtungOnlyMode
+      ? ({ value: null, quote, writeSource: writeSource as WriteSource, nicht_befund_typ: null, richtung, ...(einheit !== undefined ? { einheit } : {}) } as SchemaSlotNumber)
       : ({
           value: value!,
           quote,

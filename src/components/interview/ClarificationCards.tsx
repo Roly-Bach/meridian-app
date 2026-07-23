@@ -1,16 +1,22 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { bucketsFor, type Direction } from '@/lib/clarificationBuckets'
+import type { MandatoryNumericSlot } from '@/services/interviewSemantic'
 import type { ClarificationCard } from '@/services/interviewTypes'
 
 // ─── Fixed options per slot type ─────────────────────────────────────────────
+// PROJ-43 (AC2/AC3): frequency/duration/error_rate_percent buckets are no
+// longer a single fixed array — clarificationBuckets.ts picks the variant
+// based on the direction captured live (card.direction), same source of
+// truth the server uses to resolve the chosen label back to a value.
+const NUMERIC_SLOT_KEYS: ReadonlySet<string> = new Set(['frequency', 'duration', 'error_rate_percent'])
 
 const SLOT_OPTIONS: Record<string, string[]> = {
-  frequency: ['Täglich', 'Wöchentlich', 'Mehrfach/Monat', 'Monatlich', 'Weiß ich nicht'],
-  duration: ['< 5 Min', '5–15 Min', '15–30 Min', '> 30 Min', 'Weiß ich nicht'],
   entscheidungslogik: ['Immer gleich', 'Meistens gleich', 'Variiert stark', 'Weiß ich nicht'],
-  error_rate_percent: ['Selten Fehler', 'Gelegentlich', 'Häufig', 'Weiß ich nicht'],
 }
 
 const OPEN_ITEM_OPTIONS = ['Ja', 'Nein', 'Manchmal']
@@ -53,8 +59,19 @@ function SlotCard({
   answer: string | string[] | undefined
   onAnswer: (value: string) => void
 }) {
-  const options = SLOT_OPTIONS[card.slot_key] ?? card.options
+  const isNumeric = NUMERIC_SLOT_KEYS.has(card.slot_key)
+  const buckets = isNumeric ? bucketsFor(card.slot_key as MandatoryNumericSlot, card.direction as Direction) : []
+  const options = isNumeric
+    ? [...buckets.map((b) => b.label), 'Weiß ich nicht']
+    : (SLOT_OPTIONS[card.slot_key] ?? card.options)
   const selected = typeof answer === 'string' ? answer : undefined
+  const [freeText, setFreeText] = useState('')
+  const isFreeTextAnswer = isNumeric && selected !== undefined && !options.includes(selected)
+
+  function submitFreeText() {
+    const trimmed = freeText.trim()
+    if (trimmed) onAnswer(trimmed)
+  }
 
   return (
     <Card className="border border-[#E5E5E5]">
@@ -73,6 +90,24 @@ function SlotCard({
             />
           ))}
         </div>
+        {isNumeric && (
+          <div className="mt-2 flex items-center gap-2">
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="Eigene Zahl oder Spanne, z.B. 12 oder 10-15"
+              value={isFreeTextAnswer && freeText === '' ? (selected ?? '') : freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitFreeText()
+              }}
+              className={`h-8 text-[13px] ${isFreeTextAnswer ? 'border-[#E040FB]' : ''}`}
+            />
+            <Button variant="outline" size="sm" onClick={submitFreeText} disabled={!freeText.trim()}>
+              Übernehmen
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

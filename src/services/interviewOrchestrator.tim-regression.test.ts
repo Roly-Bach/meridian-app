@@ -164,10 +164,15 @@ describe('PROJ-42 Tim regression (Supabase 09c2052c-ad69-40fc-bb38-d934ece47fc6)
     })
     const analystSuggestion: AnalystBriefing = { discovery_exhausted: true }
 
+    // PROJ-43 (AC4/AC5): REAL_FINAL_TRACKER genuinely has duration/error_rate_percent
+    // gaps on both steps (S001 has neither, S002 has no error_rate_percent) — the new
+    // deterministic Card gate now catches exactly the ROI-data hole this real interview
+    // would otherwise have completed with silently. Routes to 'clarification' first
+    // instead of completing directly — still terminates (the KI-23 concern), just via
+    // one extra, now-reliable step that recovers the missing numbers.
     const lifecycle = resolveTurnLifecycle(ctx, analystSuggestion)
-    expect(lifecycle.phase).toBe('closing')
-    expect(lifecycle.complete).toBe(true)
-    expect(lifecycle.reason).toBe('soft_confirm')
+    expect(lifecycle.phase).toBe('clarification')
+    expect(lifecycle.complete).toBe(false)
   })
 
   // Turns 15-17 (KI-24: Tim's VW-Golf-price and flight-price questions, answered by

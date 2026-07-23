@@ -68,13 +68,22 @@ const EMPTY_STEP_ENTRY: StepEntry = {
   },
 }
 
+/** Sentinel for a resolved-but-unanswered numeric slot — PROJ-43 AC4 ("Weiß ich nicht" / left blank in a Card round). */
+export interface UnbekanntSentinel {
+  unbekannt: true
+}
+
 export interface ManualCorrectionPatch {
-  frequency?: number | null
-  duration?: number | null
+  frequency?: number | UnbekanntSentinel | null
+  duration?: number | UnbekanntSentinel | null
   data_sources?: string[]
   rule_based?: boolean
-  error_rate_percent?: number | null
+  error_rate_percent?: number | UnbekanntSentinel | null
   media_breaks?: number
+}
+
+function isUnbekanntSentinel(v: unknown): v is UnbekanntSentinel {
+  return typeof v === 'object' && v !== null && (v as UnbekanntSentinel).unbekannt === true
 }
 
 /**
@@ -96,18 +105,33 @@ export function mergeManualCorrection(current: StepEntry | null, patch: ManualCo
     ...(existing?.einheit !== undefined ? { einheit: existing.einheit } : {}),
   })
 
+  // PROJ-43 (AC4): a Card round that resolves to "Weiß ich nicht" / no answer
+  // still counts as a completed round — explicit nicht_befund_typ='unbekannt'
+  // instead of leaving the slot as an open (re-triggering) gap.
+  const unbekanntSlot = (existing: StepEntry['potenzial']['frequency']) => ({
+    value: null,
+    quote: existing?.quote ?? '[manuelle Korrektur]',
+    confidence: 'confirmed' as const,
+    nicht_befund_typ: 'unbekannt' as const,
+    ...(existing?.einheit !== undefined ? { einheit: existing.einheit } : {}),
+  })
+
+  function resolvePotenzial(
+    value: number | UnbekanntSentinel | null | undefined,
+    existing: StepEntry['potenzial']['frequency'],
+  ): StepEntry['potenzial']['frequency'] {
+    if (value === undefined) return existing
+    if (value === null) return null
+    if (isUnbekanntSentinel(value)) return unbekanntSlot(existing)
+    return numberSlot(value, existing)
+  }
+
   return {
     ...base,
     potenzial: {
-      frequency: patch.frequency !== undefined
-        ? (patch.frequency == null ? null : numberSlot(patch.frequency, base.potenzial.frequency))
-        : base.potenzial.frequency,
-      duration: patch.duration !== undefined
-        ? (patch.duration == null ? null : numberSlot(patch.duration, base.potenzial.duration))
-        : base.potenzial.duration,
-      error_rate_percent: patch.error_rate_percent !== undefined
-        ? (patch.error_rate_percent == null ? null : numberSlot(patch.error_rate_percent, base.potenzial.error_rate_percent))
-        : base.potenzial.error_rate_percent,
+      frequency: resolvePotenzial(patch.frequency, base.potenzial.frequency),
+      duration: resolvePotenzial(patch.duration, base.potenzial.duration),
+      error_rate_percent: resolvePotenzial(patch.error_rate_percent, base.potenzial.error_rate_percent),
       media_breaks: patch.media_breaks !== undefined
         ? numberSlot(patch.media_breaks, base.potenzial.media_breaks)
         : base.potenzial.media_breaks,

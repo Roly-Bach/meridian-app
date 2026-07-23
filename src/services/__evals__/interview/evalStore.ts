@@ -16,12 +16,11 @@
  */
 
 import { randomUUID } from 'crypto'
-import { parseSchrittDaten } from '@/services/interviewSemantic'
 import type { Phase, StepEntry, RawExtraction } from '@/services/interviewSemantic'
 import type { TurnMessage, AnalystBriefing } from '@/services/interviewTypes'
 import type { InterviewStore } from '@/services/turnStore/port'
 import type { RunTurnPorts } from '@/services/runInterviewTurn'
-import { mergeManualCorrection, type ManualCorrectionPatch } from '@/lib/schrittDatenView'
+import { applyClarificationSlotAnswers } from '@/services/clarificationAnswers'
 import type { Json } from '@/lib/database.types'
 
 // ─── Public shapes ──────────────────────────────────────────────────────────
@@ -78,17 +77,6 @@ export interface EvalStore {
   /** Teardown — closes the PGlite instance; no-op for Supabase. */
   close(): Promise<void>
 }
-
-// ─── Clarification slot maps (mirror of POST /clarification route) ────────────
-
-const FREQUENCY_MAP: Record<string, number> = { 'Täglich': 22, 'Wöchentlich': 4, 'Mehrfach/Monat': 8, 'Monatlich': 1 }
-const DURATION_MAP: Record<string, number> = { '< 5 Min': 3, '5–15 Min': 10, '15–30 Min': 22, '> 30 Min': 45 }
-// PROJ-45: rule_based (boolean column) is gone — entscheidungslogik is free text since PROJ-25.
-const ENTSCHEIDUNGSLOGIK_MAP: Record<string, boolean> = { 'Immer gleich': true, 'Meistens gleich': true, 'Variiert stark': false }
-const ERROR_RATE_MAP: Record<string, number> = { 'Selten Fehler': 2, 'Gelegentlich': 10, 'Häufig': 30 }
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-const SLOT_KEYS = ['frequency', 'duration', 'entscheidungslogik', 'error_rate_percent']
 
 // ─── Supabase backend (default — verbatim of the pre-PROJ-34 runner) ──────────
 
@@ -229,31 +217,14 @@ async function createSupabaseEvalStore(): Promise<EvalStore> {
         .update({ clarification_answers: clarificationRecord as unknown as Json })
         .eq('id', interviewId)
 
-      // Process SlotCards — read-merge-write into schritt_daten (PROJ-45/ADR-025).
-      for (const a of answers) {
-        if (!SLOT_KEYS.includes(a.slot_key) || typeof a.answer !== 'string' || a.answer === 'Weiß ich nicht') continue
-        const patch: ManualCorrectionPatch = {}
-        if (a.slot_key === 'frequency' && FREQUENCY_MAP[a.answer] !== undefined) patch.frequency = FREQUENCY_MAP[a.answer]
-        else if (a.slot_key === 'duration' && DURATION_MAP[a.answer] !== undefined) patch.duration = DURATION_MAP[a.answer]
-        else if (a.slot_key === 'entscheidungslogik' && ENTSCHEIDUNGSLOGIK_MAP[a.answer] !== undefined) patch.rule_based = ENTSCHEIDUNGSLOGIK_MAP[a.answer]
-        else if (a.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[a.answer] !== undefined) patch.error_rate_percent = ERROR_RATE_MAP[a.answer]
-        if (Object.keys(patch).length === 0) continue
-
-        const isUuid = UUID_RE.test(a.process_step_id)
-        const stepIds: string[] = []
-        if (isUuid) {
-          stepIds.push(a.process_step_id)
-        } else {
-          const { data: matched } = await supabase.from('process_steps').select('id').eq('title', a.process_step_id).eq('interview_id', interviewId)
-          for (const s of matched ?? []) stepIds.push(s.id)
-        }
-        for (const stepId of stepIds) {
-          const { data: row } = await supabase.from('process_steps').select('schritt_daten').eq('id', stepId).single()
-          if (!row) continue
-          const merged = mergeManualCorrection(parseSchrittDaten(row.schritt_daten), patch)
-          await supabase.from('process_steps').update({ schritt_daten: merged as unknown as Json }).eq('id', stepId)
-        }
-      }
+      // PROJ-43: SlotCard answers are read-merge-write against
+      // interview_state.step_tracker via the shared TurnStore — the exact same
+      // path the production route (/api/interview/[token]/clarification) uses,
+      // so this stays provably code-identical (AC5's eval-verifiability claim).
+      const session = await store.openTurn(interviewId, workspaceId)
+      const updatedTracker = applyClarificationSlotAnswers(session.snapshot().stepTracker, answers)
+      session.stage({ kind: 'register_step', tracker: updatedTracker })
+      await session.commit()
 
       // Process OpenItemCards (Ja/Manchmal) → insert knowledge_objects
       for (const a of answers) {
@@ -364,16 +335,24 @@ async function createPGliteEvalStore(): Promise<EvalStore> {
       return iv?.status ?? 'created'
     },
 
-    async executeClarificationCompletion(interviewId, _workspaceId, answers): Promise<void> {
+    async executeClarificationCompletion(interviewId, workspaceId, answers): Promise<void> {
       // DB-free path (ADR-018 §C): persist clarification_answers + mark complete.
-      // process_steps / knowledge_objects / pipeline are skipped — none feed the
-      // scored step_tracker, so the comparison stays faithful.
+      // process_steps / knowledge_objects / pipeline are still skipped (no
+      // process_steps table in this DB-free path). PROJ-43: SlotCard answers DO
+      // feed the scored step_tracker (clarificationCoverageDelta diffs
+      // pre-/post-clarification step_tracker) — applied via the same shared
+      // function + TurnStore path as the Supabase variant, so PGlite stays a
+      // faithful fidelity-proof target instead of silently diverging.
       const clarificationRecord: Record<string, string | string[]> = {}
       for (const a of answers) clarificationRecord[`${a.process_step_id}__${a.slot_key}`] = a.answer
       await db.query(
         `UPDATE interviews SET clarification_answers = $2::jsonb WHERE id = $1`,
         [interviewId, JSON.stringify(clarificationRecord)],
       )
+      const session = await store.openTurn(interviewId, workspaceId)
+      const updatedTracker = applyClarificationSlotAnswers(session.snapshot().stepTracker, answers)
+      session.stage({ kind: 'register_step', tracker: updatedTracker })
+      await session.commit()
       await store.completeInterview(interviewId)
     },
 

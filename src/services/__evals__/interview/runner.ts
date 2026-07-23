@@ -180,13 +180,20 @@ function parseArgs(): RunArgs {
 // now persistence-agnostic (PROJ-34 / ADR-018 §C). Only the pure card→answer
 // mapping stays here.
 
-// Deterministic synthetic answers for each card type
+// Deterministic synthetic answers for each card type. PROJ-43: frequency/
+// duration/error_rate_percent cards now render direction-tailored bucket
+// labels (clarificationBuckets.ts) — a fixed label default would break once a
+// card's direction differs from 'default'. Free-text numeric input (AC3a) is
+// direction-independent, so the synthetic answers use that path instead —
+// implicit canonical unit (frequency → pro Monat, duration → Minuten),
+// exercising the same parseFreeNumericAnswer path a real free-text submission
+// would hit.
 function buildSyntheticClarificationAnswers(cards: ClarificationCard[]): ClarificationAnswer[] {
   const SLOT_DEFAULTS: Record<string, string> = {
-    frequency: 'Wöchentlich',
-    duration: '15–30 Min',
+    frequency: '4',
+    duration: '20',
     rule_based: 'Meistens gleich',
-    error_rate_percent: 'Gelegentlich',
+    error_rate_percent: '10',
     open_item: 'Ja',
   }
   return cards.map(card => {

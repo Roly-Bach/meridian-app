@@ -293,6 +293,63 @@ describe('Tool Handlers', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('Array')
     })
+
+    // ── PROJ-43 (AC1/AC2): richtung-only mode ─────────────────────────────────
+    describe('richtung-only mode', () => {
+      it('accepts richtung without value or nicht_befund_typ for a potenzial slot', async () => {
+        const { tools, session } = await setup([makeStep({ title: 'Rechnungseingang' })])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (tools.record_slot as any).execute({
+          step_title: 'Rechnungseingang',
+          slot: 'frequency',
+          richtung: 'niedrig',
+          evidence_quote: 'das kommt eher selten vor',
+        })
+
+        expect(result.success).toBe(true)
+        const slot = session.snapshot().stepTracker[0].potenzial.frequency
+        expect(slot).toMatchObject({ value: null, nicht_befund_typ: null, richtung: 'niedrig' })
+      })
+
+      it('rejects richtung for a non-potenzial slot', async () => {
+        const { tools } = await setup([makeStep({ title: 'Rechnungseingang' })])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (tools.record_slot as any).execute({
+          step_title: 'Rechnungseingang',
+          slot: 'entscheidungslogik',
+          richtung: 'hoch',
+          evidence_quote: 'das hat mit Regeln nichts zu tun',
+        })
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('richtung')
+      })
+
+      it('rejects when neither value, nicht_befund_typ nor richtung is set', async () => {
+        const { tools } = await setup([makeStep({ title: 'Rechnungseingang' })])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (tools.record_slot as any).execute({
+          step_title: 'Rechnungseingang',
+          slot: 'frequency',
+          einheit: 'pro_monat',
+          evidence_quote: 'irgendwas dazu gesagt',
+        })
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('richtung')
+      })
+
+      it('a richtung-only write does not auto-transition the step to done', async () => {
+        const { tools, session } = await setup([makeStep({ title: 'Rechnungseingang' })])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (tools.record_slot as any).execute({
+          step_title: 'Rechnungseingang',
+          slot: 'duration',
+          richtung: 'hoch',
+          evidence_quote: 'das zieht sich schon ziemlich lange',
+        })
+        expect(session.snapshot().stepTracker[0].status).toBe('walkthrough')
+        expect(session.snapshot().stepTracker[0].status).not.toBe('done')
+      })
+    })
   })
 
   // update_walkthrough_data was removed by PROJ-45 — its functionality (teilschritte,

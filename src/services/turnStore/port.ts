@@ -185,7 +185,22 @@ export interface OrchestrationStore {
 
 export interface InterviewStoreBackend extends TurnStoreBackend, OrchestrationStore {}
 
-export interface InterviewStore extends TurnStore, OrchestrationStore {}
+export interface InterviewStore extends TurnStore, OrchestrationStore {
+  /**
+   * PROJ-43 (AC4/AC5): unconditional next_briefing update — used by
+   * runInterviewTurn.ts to persist the turn's final, deterministically-computed
+   * clarification_cards (interviewOrchestrator.ts's computeClarificationCards)
+   * AFTER the Analyst's own session already committed and set
+   * analyst_status='done' this turn. Deliberately bypasses the produce_briefing
+   * intent's `onlyIfNotDone` race guard (applyIntent.ts) — that guard exists to
+   * stop a STALE out-of-order Analyst pass from re-writing after a fresher one
+   * already finished, not to block this same-turn follow-up write. Not part of
+   * `OrchestrationStore` (which InterviewStoreBackend also implements) — this
+   * is a consumer-facing convenience built from the backend's existing
+   * `updateInterview`, not a new backend-level primitive.
+   */
+  updateNextBriefing(interviewId: string, briefing: AnalystBriefing): Promise<void>
+}
 
 export function createInterviewStore(backend: InterviewStoreBackend): InterviewStore {
   const base = createTurnStore(backend)
@@ -199,5 +214,6 @@ export function createInterviewStore(backend: InterviewStoreBackend): InterviewS
     completeInterview: (id) => backend.completeInterview(id),
     setAnalystStatus: (id, status) => backend.setAnalystStatus(id, status),
     updateStateAfterTurn: (id, fields) => backend.updateStateAfterTurn(id, fields),
+    updateNextBriefing: (id, briefing) => backend.updateInterview(id, { next_briefing: briefing }, false),
   }
 }

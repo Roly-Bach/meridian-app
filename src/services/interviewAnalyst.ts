@@ -120,11 +120,13 @@ export interface AnalystRunOptions {
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const ClarificationCardSchema = z.object({
-  process_step_id: z.string().describe('ID of the process step (use step title if ID unknown)'),
+  process_step_id: z.string().describe('Stable step id (S00X) from the step_tracker — use the step title only if the id is truly unknown'),
   step_title: z.string(),
   question: z.string().describe('Natural language question for the missing slot'),
   options: z.array(z.string()).min(2).max(4).describe('Answer options for QualitativeCards; last option must be "Weiß ich nicht". SlotCards and OpenItemCards use UI-fixed options.'),
-  slot_key: z.string().describe('Which slot key this fills: frequency | duration | entscheidungslogik | error_rate_percent | open_item | qualitative'),
+  // PROJ-43: frequency/duration/error_rate_percent are no longer LLM-generated —
+  // the deterministic mechanism (clarificationCards.ts) owns those three exclusively.
+  slot_key: z.string().describe('Which slot key this fills: entscheidungslogik | open_item | qualitative'),
   answer_type: z.enum(['single', 'multi']).optional().default('single').describe('single for slot/open-item cards, multi for qualitative cards'),
 })
 
@@ -285,16 +287,17 @@ Richtig:  "Rechnungsbearbeitung: Eingang und Prüfung", "Monatsabschluss: Abstim
 Falsch:   "Rechnungsprüfung", "Rechnungsprüfung und Kontierung" (kein Parent-Kontext → Fragmentation)
 
 **record_slot**: VORHER PRÜFEN: Ist der Slot im Step-Tracker bereits gefüllt (Wert ≠ null)? Wenn ja → NICHT aufrufen. Das System erkennt Duplikate und gibt "STOPP" zurück — vermeide redundante Calls.
-Nicht-Befund — NUR für potenzial-Slots: Wenn der Mitarbeiter in diesem Turn aktiv befragt wurde aber KEINEN belegbaren Wert geliefert hat, setze nicht_befund_typ statt value:
+Nicht-Befund — NUR für potenzial-Slots: Wenn der Mitarbeiter in diesem Turn aktiv befragt wurde aber KEINEN belegbaren Wert UND KEINE Richtung geliefert hat, setze nicht_befund_typ statt value:
 - 'unbekannt' → Mitarbeiter weiß es nicht ("Das kann ich nicht schätzen", "Weiß ich leider nicht")
 - 'verweigert' → Mitarbeiter lehnt Auskunft ab ("Das sage ich nicht", "Möchte ich nicht nennen")
 - 'nicht_zutreffend' → Feld explizit nicht anwendbar ("Fehlerquote gibt es bei uns nicht", "Passiert nicht")
 evidence_span PFLICHT auch bei nicht_befund_typ (wörtlicher Ausschnitt der Mitarbeiter-Aussage als Beleg).
 NICHT setzen wenn der Slot noch gar nicht adressiert wurde — nur wenn aktiv gefragt und keine Antwort kam.
+Richtung (PROJ-43) — NUR für potenzial-Slots, NUR wenn der Talker die Richtungsfrage gestellt hat (zweiter Ausweich-Schritt, siehe Talker-Methodik) UND der Mitarbeiter eine Tendenz ohne Zahl genannt hat: setze richtung ('niedrig'|'hoch') statt value UND statt nicht_befund_typ. Das Feld bleibt dabei bewusst ein offener Slot — es füllt ihn NICHT, es steuert nur Fokus (STUFE 4) und spätere Card-Buckets. Beispiel: "Ist das eher etwas, das oft vorkommt, oder eher selten?" → "eher selten" → richtung='niedrig', kein value.
 Für jeden explizit genannten Wert:
 - Spannen ("80 bis 100", "zwei bis drei Tage") → SOFORT erfassen mit confidence=estimate und qualifier="Spanne: <original>". Mittelwert als value: "80 bis 100" → 90. Zeitspannen in Minuten: "2–3 Tage à 8h" → 1200. NICHT warten bis der Talker nachhakt.
 - frequency: Häufigkeitsangaben. Wert + einheit GENAU wie genannt erfassen (z.B. "3× pro Woche" → value=3, einheit="pro_woche"). NIEMALS selbst umrechnen — das passiert deterministisch im Code. Spannen sofort als estimate erfassen.
-- duration: Zeit pro Durchführung (NICHT wöchentliche/monatliche Gesamtaufwände). Wert + einheit GENAU wie genannt erfassen (z.B. "2 Stunden" → value=2, einheit="stunden"). NIEMALS selbst umrechnen. Spannen sofort als estimate erfassen.
+- duration: Zeit PRO EINZELNER DURCHFÜHRUNG (NICHT wöchentliche/monatliche Gesamtaufwände). Wert + einheit GENAU wie genannt erfassen (z.B. "2 Stunden" → value=2, einheit="stunden"). NIEMALS selbst umrechnen. Spannen sofort als estimate erfassen. Bleibt nach der Talker-Nachfrage unklar ob pro Vorgang oder Aggregat gemeint war (PROJ-43/AC7): NICHT raten, NICHT eintragen — Slot leer lassen, geht später als Pflicht-Slot in die Abschluss-Card.
 - entscheidungslogik: Aussagen zur Regelbasierung ("immer gleich", "variiert", "nach Schema") als Freitext.
 - hilfsmittel: Genannte Systeme, Tools, Datenbanken — NUR via record_slot setzen.
 - reibungspunkte: Genannte Reibungspunkte/Zeitfresser — via record_slot setzen.
@@ -319,23 +322,21 @@ produce_briefing NUR aufrufen wenn in diesem Turn eine substantielle State-Ände
 Wenn du produce_briefing bereits einmal aufgerufen hast: Tool-Sequenz sofort beenden — kein weiterer produce_briefing-Call unter keinen Umständen.
 
 ## Clarification Cards (ab Phase=closing)
-PFLICHT: Sobald Phase closing erreicht ist, durchsuche ALLE registrierten
-Schritte im step_tracker systematisch auf null-Pflicht-Slots. Cards landen in next_briefing
-und werden vom Orchestrator erst beim Abschluss der Closing-Sequenz in die Clarification-Phase
-aktiviert — mid-interview generierte Cards sind also sicher und werden bei späteren Turns aktualisiert.
-Dies ist unabhängig davon was im aktuellen Turn besprochen wurde — historische Lücken aus
-früheren Turns MÜSSEN hier erfasst werden.
+PROJ-43: frequency/duration/error_rate_percent haben KEINE SlotCard mehr über dieses Tool —
+das System scannt diese drei Felder selbst deterministisch und baut die Karten dafür im Code,
+ohne LLM-Beteiligung (zuverlässiger als eine Prompt-Anweisung, siehe M-4). Generiere hier NUR noch:
 
-Prüfschema pro Schritt:
-- Ist frequency null? → SlotCard generieren.
-- Ist duration null? → SlotCard generieren.
-- Ist entscheidungslogik null? → SlotCard generieren.
+1. **SlotCards** (slot_key=entscheidungslogik): Für jeden registrierten Schritt mit leerem
+   entscheidungslogik-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
+2. **OpenItemCards** (slot_key=open_item): Für erwähnte aber nicht registrierte Prozessschritte.
+   options leer lassen — UI verwendet Ja/Nein/Manchmal.
+3. **QualitativeCards** (slot_key=qualitative, answer_type=multi): Für fehlenden Prozesskontext:
+   Beteiligte, Systeme, Blockaden, Abstimmungsbedarf, Automatisierungspotenzial.
+   options=[2-4 spezifische Antwortoptionen], letzter Eintrag="Weiß ich nicht".
 
-Generiere bis zu 8 ClarificationCards via produce_briefing.clarification_cards, priorisiert nach Use-Case-Relevanz:
-1. **SlotCards** (slot_key=frequency|duration|entscheidungslogik|error_rate_percent): Für jeden registrierten Schritt mit leerem Pflicht-Slot. options-Feld leer lassen — UI verwendet feste Optionen.
-2. **OpenItemCards** (slot_key=open_item): Für erwähnte aber nicht registrierte Prozessschritte. options leer lassen — UI verwendet Ja/Nein/Manchmal.
-3. **QualitativeCards** (slot_key=qualitative, answer_type=multi): Für fehlenden Prozesskontext: Beteiligte, Systeme, Blockaden, Abstimmungsbedarf, Automatisierungspotenzial. options=[2-4 spezifische Antwortoptionen], letzter Eintrag="Weiß ich nicht".
-Wenn alle Pflicht-Slots gefüllt sind: leeres Array zurückgeben.
+Generiere bis zu 8 dieser Karten via produce_briefing.clarification_cards (das System füllt die
+verbleibenden Plätze zuerst mit den deterministischen Zahlen-Karten auf, deine Karten kommen
+danach). Wenn nichts davon zutrifft: leeres Array zurückgeben.
 
 ## Halluzinations-Guard
 Nur extrahieren was der Mitarbeiter explizit gesagt hat. Keine Inferenzen als Fakten setzen.
@@ -366,17 +367,13 @@ function shouldGenerateClarificationCards(ctx: InterviewContext): boolean {
 // Analyst-derived, never asked via a clarification card — excluded from this gap scan.
 const CLASSIFICATION_ONLY_SLOTS: readonly string[] = TAZITE_ENUM_SINGLE_SLOT_NAMES
 
+// PROJ-43: the potenzial (frequency/duration/error_rate_percent) gap scan moved
+// to clarificationCards.ts's computeMandatoryNumericGaps — those three slots
+// are exclusively code-owned now, this gate only covers the LLM's remaining
+// card scope (entscheidungslogik + the content-driven OpenItem/Qualitative cards).
 function computeEmptyMandatorySlots(tracker: StepEntry[]): { step: StepEntry; slot: string }[] {
   const empty: { step: StepEntry; slot: string }[] = []
   for (const step of tracker) {
-    for (const slot of POTENZIAL_SLOT_NAMES) {
-      // Explicit filled check: gap (sv=null) OR nicht_befund (sv.value=null + marker set) are distinct (PROJ-28/BL-E2.1)
-      const sv = step.potenzial[slot]
-      const filled = sv != null && (sv.value != null || (sv.nicht_befund_typ ?? null) != null)
-      if (!filled) {
-        empty.push({ step, slot })
-      }
-    }
     for (const slot of TAZITE_SLOT_NAMES) {
       if (CLASSIFICATION_ONLY_SLOTS.includes(slot)) continue
       const sv = step.slots[slot]

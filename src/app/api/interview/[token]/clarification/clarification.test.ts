@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { StepEntry } from '@/services/interviewSemantic'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,21 @@ vi.mock('@/services/embeddings', () => ({
   generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
 }))
 
+// PROJ-43: the route now applies SlotCard answers against interview_state.step_tracker
+// via the shared TurnStore abstraction (same path production/eval use) instead of
+// reading/writing process_steps directly — mock the TurnStore boundary rather than
+// the raw supabase chain, and exercise the REAL applyClarificationSlotAnswers logic
+// against a controllable in-memory tracker snapshot.
+const { mockOpenTurn, mockStage, mockCommit } = vi.hoisted(() => ({
+  mockOpenTurn: vi.fn(),
+  mockStage: vi.fn().mockReturnValue({ status: 'accepted' }),
+  mockCommit: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/services/turnStore/supabaseTurnStore', () => ({
+  createSupabaseTurnStore: () => ({ openTurn: mockOpenTurn }),
+}))
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { POST } from './route'
@@ -43,7 +59,6 @@ import { POST } from './route'
 const VALID_TOKEN = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 const INTERVIEW_ID = '11111111-2222-3333-4444-555555555555'
 const WORKSPACE_ID = 'wwwwwwww-xxxx-yyyy-zzzz-aaaaaaaaaaaa'
-const STEP_UUID = 'cccccccc-dddd-eeee-ffff-000000000000'
 
 function makeParams(token = VALID_TOKEN) {
   return { params: Promise.resolve({ token }) }
@@ -82,11 +97,60 @@ function buildChain(overrides: Partial<MockChain> = {}): MockChain {
   return chain
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+const emptyPotenzial: StepEntry['potenzial'] = {
+  frequency: null,
+  duration: null,
+  error_rate_percent: null,
+  media_breaks: null,
+}
+const emptySlots: StepEntry['slots'] = {
+  entscheidungslogik: null,
+  tazite_cues: null,
+  ausnahmen: null,
+  inputs: null,
+  outputs: null,
+  hilfsmittel: null,
+  reibungspunkte: null,
+  ausloeser: null,
+  aufgabentyp: null,
+  risiko_schwere: null,
+  standardisierungsgrad: null,
+  informationsdichte: null,
+}
+
+function makeStep(overrides: Partial<StepEntry> = {}): StepEntry {
+  return {
+    id: 'S001',
+    title: 'Rechnungsprüfung',
+    reihenfolge: 1,
+    abhaengigkeiten: null,
+    status: 'walkthrough',
+    potenzial: emptyPotenzial,
+    slots: emptySlots,
+    ...overrides,
+  }
+}
+
+/** Configures mockOpenTurn to hand out a session over the given tracker, capturing the staged intent. */
+function stubSession(tracker: StepEntry[]) {
+  mockOpenTurn.mockResolvedValue({
+    snapshot: () => ({ stepTracker: tracker }),
+    stage: mockStage,
+    commit: mockCommit,
+  })
+}
+
+function stagedTracker(): StepEntry[] {
+  const call = mockStage.mock.calls.find((c) => c[0]?.kind === 'register_step')
+  return call?.[0]?.tracker ?? []
+}
 
 describe('POST /api/interview/[token]/clarification', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockStage.mockReturnValue({ status: 'accepted' })
+    mockCommit.mockResolvedValue(undefined)
+    stubSession([]) // default: empty tracker, overridden per test as needed
   })
 
   it('returns 404 for invalid token format', async () => {
@@ -165,7 +229,7 @@ describe('POST /api/interview/[token]/clarification', () => {
     expect(body.success).toBe(true)
   })
 
-  it('processes SlotCard answers and completes interview — happy path', async () => {
+  it('processes SlotCard bucket-label answers and completes interview — happy path', async () => {
     const updateSpy = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockResolvedValue({ error: null }),
@@ -177,7 +241,6 @@ describe('POST /api/interview/[token]/clarification', () => {
       if (table === 'interviews') {
         callCount++
         if (callCount === 1) {
-          // Initial fetch
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
@@ -192,38 +255,18 @@ describe('POST /api/interview/[token]/clarification', () => {
             }),
           }
         }
-        // Subsequent updates (clarification_answers + completed status)
-        return {
-          update: updateSpy,
-        }
-      }
-      if (table === 'process_steps') {
-        // PROJ-45: SlotCard answers are now read-merge-write on schritt_daten —
-        // select('schritt_daten').eq('id', ...).single() then update({schritt_daten}).eq('id', ...).
-        // Chainable mock supports both that shape and the pre-existing
-        // select().in().not() (affectedClusterIds lookup).
-        const chainable = (): Record<string, unknown> => {
-          const obj: Record<string, unknown> = {}
-          obj.eq = vi.fn().mockReturnValue(obj)
-          obj.in = vi.fn().mockReturnValue(obj)
-          obj.not = vi.fn().mockResolvedValue({ data: [], error: null })
-          obj.single = vi.fn().mockResolvedValue({ data: { schritt_daten: null }, error: null })
-          obj.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(resolve)
-          return obj
-        }
-        return {
-          update: vi.fn().mockReturnValue(chainable()),
-          select: vi.fn().mockReturnValue(chainable()),
-        }
+        return { update: updateSpy }
       }
       return buildChain()
     })
 
+    stubSession([makeStep()])
+
     const res = await POST(
       makeRequest({
         answers: [
-          { process_step_id: STEP_UUID, slot_key: 'frequency', answer: 'Täglich' },
-          { process_step_id: STEP_UUID, slot_key: 'duration', answer: '5–15 Min' },
+          { process_step_id: 'S001', slot_key: 'frequency', answer: 'Täglich' },
+          { process_step_id: 'S001', slot_key: 'duration', answer: '5–15 Min' },
         ],
       }),
       makeParams()
@@ -232,41 +275,90 @@ describe('POST /api/interview/[token]/clarification', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as { success: boolean }
     expect(body.success).toBe(true)
+
+    expect(mockCommit).toHaveBeenCalled()
+    const [updated] = stagedTracker()
+    expect(updated.potenzial.frequency?.value).toBe(22)
+    expect(updated.potenzial.duration?.value).toBe(10)
+    expect(updated.status).toBe('walkthrough')
   })
 
-  it('"Weiß ich nicht" answer skips slot update', async () => {
-    const processStepsUpdateSpy = vi.fn()
-
-    let callCount = 0
+  it('AC3(a): free numeric input is accepted equally to a bucket label', async () => {
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'interviews') {
-        callCount++
-        if (callCount === 1) {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            single: vi.fn().mockResolvedValue({
-              data: {
-                id: INTERVIEW_ID,
-                workspace_id: WORKSPACE_ID,
-                status: 'active',
-                token_expires_at: new Date(Date.now() + 86400000).toISOString(),
-              },
-              error: null,
-            }),
-          }
-        }
         return {
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: INTERVIEW_ID, workspace_id: WORKSPACE_ID, status: 'active', token_expires_at: new Date(Date.now() + 86400000).toISOString() },
+            error: null,
           }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
         }
-      }
-      if (table === 'process_steps') {
-        return { update: processStepsUpdateSpy }
       }
       return buildChain()
     })
+
+    stubSession([makeStep()])
+
+    const res = await POST(
+      makeRequest({ answers: [{ process_step_id: 'S001', slot_key: 'frequency', answer: '12' }] }),
+      makeParams()
+    )
+
+    expect(res.status).toBe(200)
+    const [updated] = stagedTracker()
+    expect(updated.potenzial.frequency?.value).toBe(12)
+  })
+
+  it('AC2: bucket label resolves against the direction captured live (richtung=niedrig)', async () => {
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'interviews') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: INTERVIEW_ID, workspace_id: WORKSPACE_ID, status: 'active', token_expires_at: new Date(Date.now() + 86400000).toISOString() },
+            error: null,
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        }
+      }
+      return buildChain()
+    })
+
+    const step = makeStep({
+      potenzial: { ...emptyPotenzial, frequency: { value: null, quote: 'eher selten', nicht_befund_typ: null, richtung: 'niedrig' } },
+    })
+    stubSession([step])
+
+    const res = await POST(
+      makeRequest({ answers: [{ process_step_id: 'S001', slot_key: 'frequency', answer: 'Seltener' }] }),
+      makeParams()
+    )
+
+    expect(res.status).toBe(200)
+    const [updated] = stagedTracker()
+    expect(updated.potenzial.frequency?.value).toBe(0.05)
+  })
+
+  it('AC4: "Weiß ich nicht" answer resolves the slot as nicht_befund_typ="unbekannt" (not a silent skip)', async () => {
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'interviews') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: INTERVIEW_ID, workspace_id: WORKSPACE_ID, status: 'active', token_expires_at: new Date(Date.now() + 86400000).toISOString() },
+            error: null,
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        }
+      }
+      return buildChain()
+    })
+
+    stubSession([makeStep({ title: 'Step A' })])
 
     await POST(
       makeRequest({
@@ -275,7 +367,9 @@ describe('POST /api/interview/[token]/clarification', () => {
       makeParams()
     )
 
-    expect(processStepsUpdateSpy).not.toHaveBeenCalled()
+    const [updated] = stagedTracker()
+    expect(updated.potenzial.frequency?.value).toBeNull()
+    expect(updated.potenzial.frequency?.nicht_befund_typ).toBe('unbekannt')
   })
 
   it('OpenItem "Ja" inserts knowledge_object row', async () => {

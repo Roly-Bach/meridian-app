@@ -125,6 +125,8 @@ export interface RecordSlotIntent {
   qualifier?: string | null
   /** PROJ-45 (ADR-025 D5): unit as stated by the employee — potenzial slots only. */
   einheit?: string | null
+  /** PROJ-43 (AC1/AC2): coarse tendency captured instead of a number — potenzial slots only. See SchemaSlotNumber.richtung. */
+  richtung?: 'niedrig' | 'hoch'
   sourceTurn?: number | null
   isCorrection?: boolean
   writeSource: WriteSource

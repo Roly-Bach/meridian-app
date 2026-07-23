@@ -278,7 +278,10 @@ describe('resolveTurnLifecycle — closing (PROJ-46 discovery continuation)', ()
   })
 
   it('completes once already in closing AND discovery_exhausted is true, Coverage-Sanity satisfied, no cards', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+    // PROJ-43 (AC4): "no cards" now requires the three mandatory numeric slots
+    // to actually be filled — an empty potenzial (makeStep's default) would
+    // otherwise trigger the deterministic Card gate and route to clarification.
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001', potenzial: fullPotenzial })]
     const ctx = baseCtx({ phase: 'closing', stepTracker: tracker })
     const result = resolveTurnLifecycle(ctx, { discovery_exhausted: true })
     expect(result.phase).toBe('closing')
@@ -365,19 +368,22 @@ describe('resolveTurnLifecycle — hard stop', () => {
   })
 
   it('does not regress a hard-stopped, actively-exploring step back to explore', () => {
-    const tracker = [makeStep('Rechnungsprüfung', 'exploring')]
+    // PROJ-43 (AC4): fullPotenzial so this test isolates the hard-stop/phase
+    // regression concern it's actually about — an empty potenzial (makeStep's
+    // default) would otherwise route to clarification via the deterministic gate.
+    const tracker = [makeStep('Rechnungsprüfung', 'exploring', emptySlots, { potenzial: fullPotenzial })]
     const result = resolveTurnLifecycle(baseCtx({ phase: 'closing', timerMinutes: 30, maxDurationMinutes: 30, stepTracker: tracker }), null)
     expect(result.phase).toBe('closing')
     expect(result.complete).toBe(true)
   })
 
-  // ADR-022 (Nutzer-Korrektur 2026-07-17): Trigger A must not discard already-
-  // generated clarification cards — they carry the quantitative ROI slots.
-  it('routes to clarification instead of completing when clarification_cards are already pending', () => {
-    const analystSuggestion = {
-      clarification_cards: [{ process_step_id: 'x', step_title: 'Test', question: 'Wie oft?', options: ['A', 'B'], slot_key: 'frequency' }],
-    }
-    const result = resolveTurnLifecycle(baseCtx({ phase: 'explore', timerMinutes: 30, maxDurationMinutes: 30 }), analystSuggestion)
+  // ADR-022 (Nutzer-Korrektur 2026-07-17): Trigger A must not discard a still-open
+  // mandatory numeric slot — it carries the quantitative ROI data. PROJ-43: the
+  // Card is now deterministically computed from the tracker itself rather than
+  // relying on the Analyst having already proposed one.
+  it('routes to clarification instead of completing when a mandatory numeric slot is still open', () => {
+    const tracker = [makeStep('Rechnungsprüfung', 'walkthrough', substantiallyCoveredSlots, { id: 'S001' })]
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'explore', timerMinutes: 30, maxDurationMinutes: 30, stepTracker: tracker }), null)
     expect(result.phase).toBe('clarification')
     expect(result.complete).toBe(false)
   })

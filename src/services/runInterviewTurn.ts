@@ -453,6 +453,18 @@ export async function runInterviewTurn(input: RunTurnInput, ports?: RunTurnPorts
     await store.updatePhase(interviewId, orchestratedPhase)
   }
 
+  // PROJ-43 (AC4/AC5): persist this turn's final, deterministically-computed
+  // Card list — the Analyst's own session already committed next_briefing
+  // earlier this turn (analyst_status='done'), so this is a deliberate
+  // follow-up write (updateNextBriefing bypasses the onlyIfNotDone race guard,
+  // see port.ts). Fires exactly once, on the turn that transitions INTO
+  // clarification — resolvePhaseTransition keeps 'clarification' pinned on
+  // every later turn, so this branch only runs on the entry turn.
+  if (orchestratedPhase === 'clarification' && lifecycle.clarificationCards) {
+    analystBriefing = { ...(analystBriefing ?? {}), clarification_cards: lifecycle.clarificationCards }
+    await store.updateNextBriefing(interviewId, analystBriefing)
+  }
+
   // ── Binding Absicht for the Talker (PROJ-46 / ADR-023 D1/D3) ────────────────
   // Ziel-Schritt is the fresh (this-turn) O-Drought lock; Übergang-Grund is
   // code-computed, per-turn ephemeral (never persisted) — compares this turn's

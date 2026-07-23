@@ -1,5 +1,6 @@
 import { type Phase, type StepEntry, type OSlotField, countFilledOFields, O_SLOT_FIELDS, isOFieldFilled } from './interviewSemantic'
-import type { AnalystBriefing, ODroughtState, TransitionReason } from './interviewTypes'
+import type { AnalystBriefing, ClarificationCard, ODroughtState, TransitionReason } from './interviewTypes'
+import { computeClarificationCards } from './clarificationCards'
 
 export type { TransitionReason }
 
@@ -38,6 +39,13 @@ export interface TurnLifecycle {
   phase: Phase
   complete: boolean
   reason: 'hard_stop' | 'soft_confirm' | null
+  /**
+   * PROJ-43 (AC4/AC5): the turn's final, deterministically-computed Card list —
+   * only set when phase='clarification'. The caller (runInterviewTurn.ts)
+   * persists this into interviews.next_briefing.clarification_cards; this
+   * function itself never touches the DB (pure, ADR-018/022).
+   */
+  clarificationCards?: ClarificationCard[]
 }
 
 /**
@@ -348,9 +356,9 @@ export function resolveTurnLifecycle(ctx: OrchestratorContext, analystSuggestion
   // cards — they carry the quantitative ROI slots — so a pending-cards turn
   // routes to 'clarification' instead of completing out from under them.
   if (ctx.timerMinutes >= ctx.maxDurationMinutes) {
-    const cards = analystSuggestion?.clarification_cards
-    if (cards && cards.length > 0) {
-      return { phase: 'clarification', complete: false, reason: null }
+    const cards = computeClarificationCards(ctx.stepTracker, analystSuggestion?.clarification_cards)
+    if (cards.length > 0) {
+      return { phase: 'clarification', complete: false, reason: null, clarificationCards: cards }
     }
     return { phase: 'closing', complete: true, reason: 'hard_stop' }
   }
@@ -366,9 +374,9 @@ export function resolveTurnLifecycle(ctx: OrchestratorContext, analystSuggestion
       && analystSuggestion?.discovery_exhausted === true
       && hasSubstantialCoverage(ctx.stepTracker)
     if (readyToComplete) {
-      const cards = analystSuggestion?.clarification_cards
-      if (cards && cards.length > 0) {
-        return { phase: 'clarification', complete: false, reason: null }
+      const cards = computeClarificationCards(ctx.stepTracker, analystSuggestion?.clarification_cards)
+      if (cards.length > 0) {
+        return { phase: 'clarification', complete: false, reason: null, clarificationCards: cards }
       }
       return { phase: 'closing', complete: true, reason: 'soft_confirm' }
     }

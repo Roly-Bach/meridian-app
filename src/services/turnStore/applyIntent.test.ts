@@ -169,6 +169,47 @@ describe('record_slot — accept + status transition', () => {
   })
 })
 
+// ─── record_slot: richtung-only mode (PROJ-43 AC1/AC2) ───────────────────────
+
+describe('record_slot — richtung-only mode', () => {
+  it('stores richtung without filling value or nicht_befund_typ, bumps exploring → walkthrough', () => {
+    const snap = makeSnapshot([makeStep({ status: 'exploring' })])
+    const out = applyIntent(snap, recordSlot({ slot: 'frequency', value: undefined, richtung: 'niedrig' }), CTX)
+    expect(out.result.status).toBe('accepted')
+    expect(out.snapshot.stepTracker[0].potenzial.frequency).toMatchObject({ value: null, nicht_befund_typ: null, richtung: 'niedrig' })
+    expect(out.snapshot.stepTracker[0].status).toBe('walkthrough')
+  })
+
+  // AC2: a richtung-only write must NOT count as "filled" — the Closing-phase
+  // Card gate (clarificationCards.ts) has to keep scanning this slot as a gap.
+  it('does not auto-transition the step to done (slot stays an open gap)', () => {
+    const step = makeFullStep(['frequency'])
+    const snap = makeSnapshot([step])
+    const out = applyIntent(snap, recordSlot({ slot: 'frequency', value: undefined, richtung: 'hoch' }), CTX)
+    expect(out.snapshot.stepTracker[0].status).not.toBe('done')
+  })
+
+  it('never clobbers an already-filled value with a stray richtung-only write', () => {
+    const snap = makeSnapshot([makeStep({
+      status: 'walkthrough',
+      potenzial: { frequency: pslot(8), duration: null, error_rate_percent: null, media_breaks: null },
+    })])
+    const out = applyIntent(snap, recordSlot({ slot: 'frequency', value: undefined, richtung: 'niedrig' }), CTX)
+    expect(out.result.status).toBe('skipped')
+    expect(out.snapshot.stepTracker[0].potenzial.frequency).toMatchObject({ value: 8 })
+  })
+
+  it('never clobbers an already-set nicht_befund_typ with a stray richtung-only write', () => {
+    const snap = makeSnapshot([makeStep({
+      status: 'walkthrough',
+      potenzial: { frequency: { value: null, quote: 'q', nicht_befund_typ: 'verweigert' }, duration: null, error_rate_percent: null, media_breaks: null },
+    })])
+    const out = applyIntent(snap, recordSlot({ slot: 'frequency', value: undefined, richtung: 'hoch' }), CTX)
+    expect(out.result.status).toBe('skipped')
+    expect(out.snapshot.stepTracker[0].potenzial.frequency).toMatchObject({ nicht_befund_typ: 'verweigert' })
+  })
+})
+
 // ─── record_slot: idempotency ────────────────────────────────────────────────
 
 describe('record_slot — idempotency', () => {

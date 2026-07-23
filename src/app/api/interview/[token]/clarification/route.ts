@@ -3,12 +3,12 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { createProcessStepsFromTracker } from '@/services/processEnrichment'
-import { clusterProcessSteps, resynthesizeClusters } from '@/services/processClustering'
+import { clusterProcessSteps } from '@/services/processClustering'
 import { deduplicateKnowledgeObjects } from '@/services/extraction'
 import { generateEmbedding } from '@/services/embeddings'
 import { checkTokenEndpointLimits, extractIP } from '@/lib/ratelimit'
-import { parseSchrittDaten } from '@/services/interviewSemantic'
-import { mergeManualCorrection, type ManualCorrectionPatch } from '@/lib/schrittDatenView'
+import { createSupabaseTurnStore } from '@/services/turnStore/supabaseTurnStore'
+import { applyClarificationSlotAnswers } from '@/services/clarificationAnswers'
 import type { Json } from '@/lib/database.types'
 
 const TOKEN_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -22,36 +22,6 @@ const AnswerSchema = z.object({
 const ClarificationInputSchema = z.object({
   answers: z.array(AnswerSchema).min(1),
 })
-
-// ─── Slot answer → typed schritt_daten patch ─────────────────────────────────
-
-const FREQUENCY_MAP: Record<string, number> = {
-  'Täglich': 22,
-  'Wöchentlich': 4,
-  'Mehrfach/Monat': 8,
-  'Monatlich': 1,
-}
-
-const DURATION_MAP: Record<string, number> = {
-  '< 5 Min': 3,
-  '5–15 Min': 10,
-  '15–30 Min': 22,
-  '> 30 Min': 45,
-}
-
-// PROJ-45: rule_based (boolean column) is gone — entscheidungslogik is free text
-// since PROJ-25. The closed-choice SlotCard answer is stored verbatim.
-const ENTSCHEIDUNGSLOGIK_MAP: Record<string, boolean> = {
-  'Immer gleich': true,
-  'Meistens gleich': true,
-  'Variiert stark': false,
-}
-
-const ERROR_RATE_MAP: Record<string, number> = {
-  'Selten Fehler': 2,
-  'Gelegentlich': 10,
-  'Häufig': 30,
-}
 
 // ─── POST /api/interview/[token]/clarification ────────────────────────────────
 
@@ -113,78 +83,21 @@ export async function POST(
   // Persist clarification_answers to interviews table
   await supabase
     .from('interviews')
-    .update({ clarification_answers: clarificationAnswers as unknown as import('@/lib/database.types').Json })
+    .update({ clarification_answers: clarificationAnswers as unknown as Json })
     .eq('id', interviewId)
 
-  // Process SlotCards — read-merge-write into schritt_daten (PROJ-45/ADR-025:
-  // frequency/duration/entscheidungslogik/error_rate_percent
-  // no longer have their own columns).
-  const slotAnswers = answers.filter(
-    (a) => ['frequency', 'duration', 'entscheidungslogik', 'error_rate_percent'].includes(a.slot_key)
-      && typeof a.answer === 'string'
-      && a.answer !== 'Weiß ich nicht'
-  )
-
-  const updatedStepIds = new Set<string>()
-
-  async function applyPatchToStep(stepId: string, patch: ManualCorrectionPatch) {
-    const { data: row } = await supabase.from('process_steps').select('schritt_daten').eq('id', stepId).single()
-    if (!row) return
-    const merged = mergeManualCorrection(parseSchrittDaten(row.schritt_daten), patch)
-    await supabase.from('process_steps').update({ schritt_daten: merged as unknown as Json }).eq('id', stepId)
-    updatedStepIds.add(stepId)
-  }
-
-  for (const sa of slotAnswers) {
-    const answerStr = sa.answer as string
-    const patch: ManualCorrectionPatch = {}
-
-    if (sa.slot_key === 'frequency' && FREQUENCY_MAP[answerStr] !== undefined) {
-      patch.frequency = FREQUENCY_MAP[answerStr]
-    } else if (sa.slot_key === 'duration' && DURATION_MAP[answerStr] !== undefined) {
-      patch.duration = DURATION_MAP[answerStr]
-    } else if (sa.slot_key === 'entscheidungslogik' && ENTSCHEIDUNGSLOGIK_MAP[answerStr] !== undefined) {
-      patch.rule_based = ENTSCHEIDUNGSLOGIK_MAP[answerStr]
-    } else if (sa.slot_key === 'error_rate_percent' && ERROR_RATE_MAP[answerStr] !== undefined) {
-      patch.error_rate_percent = ERROR_RATE_MAP[answerStr]
-    }
-
-    if (Object.keys(patch).length === 0) continue
-
-    // Try to match by UUID first, fall back to title match
-    const isUuid = TOKEN_UUID_RE.test(sa.process_step_id)
-    if (isUuid) {
-      await applyPatchToStep(sa.process_step_id, patch)
-    } else {
-      const { data: matchedSteps } = await supabase
-        .from('process_steps')
-        .select('id')
-        .eq('title', sa.process_step_id)
-        .eq('interview_id', interviewId)
-      for (const s of matchedSteps ?? []) {
-        await applyPatchToStep(s.id, patch)
-      }
-    }
-  }
-
-  // Collect cluster_ids of updated steps so synthesis can be re-run with fresh slot values
-  const affectedClusterIds: string[] = []
-  if (updatedStepIds.size > 0) {
-    const { data: clusteredSteps } = await supabase
-      .from('process_steps')
-      .select('cluster_id')
-      .in('id', [...updatedStepIds])
-      .not('cluster_id', 'is', null)
-    if (clusteredSteps) {
-      const seen = new Set<string>()
-      for (const row of clusteredSteps) {
-        if (row.cluster_id && !seen.has(row.cluster_id)) {
-          seen.add(row.cluster_id)
-          affectedClusterIds.push(row.cluster_id)
-        }
-      }
-    }
-  }
+  // PROJ-43 (AC3/AC4/AC5): SlotCard answers (frequency/duration/error_rate_percent/
+  // entscheidungslogik) are read-merge-write against interview_state.step_tracker —
+  // NOT process_steps, which doesn't have rows for this interview yet at this point
+  // (process_steps is only ever created FROM step_tracker, in the after() pipeline
+  // below). Going through the TurnStore's register_step intent (a plain full-array
+  // replace, same mechanic computeMergedSteps/data_sources-backfill already use)
+  // keeps this route and the eval runner's evalStore.ts on the exact same write path.
+  const store = createSupabaseTurnStore()
+  const session = await store.openTurn(interviewId, workspaceId)
+  const updatedTracker = applyClarificationSlotAnswers(session.snapshot().stepTracker, answers)
+  session.stage({ kind: 'register_step', tracker: updatedTracker })
+  await session.commit()
 
   // Process OpenItemCards — register confirmed steps as process_steps (+ KO for audit)
   const openItemAnswers = answers.filter(
@@ -252,11 +165,6 @@ export async function POST(
     deduplicateKnowledgeObjects(workspaceId).catch((err) =>
       console.error('[clarification] deduplicateKnowledgeObjects failed:', err)
     )
-    if (affectedClusterIds.length > 0) {
-      resynthesizeClusters(affectedClusterIds).catch((err) =>
-        console.error('[clarification] resynthesizeClusters failed:', err)
-      )
-    }
   })
 
   return NextResponse.json({ success: true })

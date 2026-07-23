@@ -60,6 +60,16 @@ export interface SchemaSlotNumber extends SchemaSlotBase<number> {
    * never by the LLM at elicitation time (KI-18's largest documented cause).
    */
   einheit?: string | null
+  /**
+   * PROJ-43 (AC1/AC2): a coarse tendency the employee gave when they answered
+   * the Talker's direction question ("eher selten"/"zieht sich lange") instead
+   * of a number. Lives directly on the field, like `einheit` — no separate
+   * turn-scoped transport needed, it survives to the Closing-phase Card round
+   * automatically. Does NOT fill the slot (value/nicht_befund_typ stay the
+   * source of truth for "is this slot done") — it only steers the eventual
+   * Clarification Card's bucket options and Card-priority ordering.
+   */
+  richtung?: 'niedrig' | 'hoch' | null
 }
 
 /** Getypte Abhängigkeitskante (depends_on-Array) — PROJ-26/BL-E1.2 */
@@ -286,6 +296,16 @@ export const POTENZIAL_SLOT_NAMES = [
 ] as const
 
 export type PotenzialSlotName = (typeof POTENZIAL_SLOT_NAMES)[number]
+
+/**
+ * PROJ-43 (AC3/AC4/AC5): the three potenzial fields that get the new
+ * deterministic Card mechanism — `media_breaks` stays out of scope (derived
+ * only, never live-asked, unchanged since the original Strom-3 decision, see
+ * PROJ-43 spec "Out of Scope").
+ */
+export const MANDATORY_NUMERIC_SLOTS = ['frequency', 'duration', 'error_rate_percent'] as const
+
+export type MandatoryNumericSlot = (typeof MANDATORY_NUMERIC_SLOTS)[number]
 
 /** Single free-text string slots (SchemaSlotString) writable via record_slot. */
 export const TAZITE_STRING_SLOT_NAMES = ['entscheidungslogik', 'ausloeser'] as const

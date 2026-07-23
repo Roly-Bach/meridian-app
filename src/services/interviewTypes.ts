@@ -68,6 +68,12 @@ export interface ClarificationCard {
   options: string[]
   slot_key: string
   answer_type?: 'single' | 'multi'
+  /**
+   * PROJ-43 (AC2): the direction captured live for this slot (SchemaSlotNumber.richtung),
+   * carried onto the deterministically-built numeric SlotCards so the UI can render
+   * direction-tailored buckets (clarificationBuckets.ts). Absent/null → generic buckets.
+   */
+  direction?: 'niedrig' | 'hoch' | null
 }
 
 export interface AnalystBriefing {

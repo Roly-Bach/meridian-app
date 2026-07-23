@@ -279,7 +279,7 @@ export function buildTools(
     }),
 
     record_slot: tool({
-      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency, duration, error_rate_percent, media_breaks), qualitative O-Felder (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, reibungspunkte, ausloeser, aufgabentyp, risiko_schwere) und die Analyst-Klassifikationsfelder (standardisierungsgrad, informationsdichte — aus bereits erhobenen Antworten abgeleitet, keine eigene Frage) sowie teilschritte (additive Ablauf-Liste). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert. Nicht-Befund (PROJ-28): Für potenzial-Slots kann statt value ein nicht_befund_typ gesetzt werden wenn der Mitarbeiter keine Angabe machen konnte.',
+      description: 'Füllt einen Slot im Schritt-Tracker. Schreibbare Slots: potenzial (frequency, duration, error_rate_percent, media_breaks), qualitative O-Felder (entscheidungslogik, tazite_cues, ausnahmen, inputs, outputs, hilfsmittel, reibungspunkte, ausloeser, aufgabentyp, risiko_schwere) und die Analyst-Klassifikationsfelder (standardisierungsgrad, informationsdichte — aus bereits erhobenen Antworten abgeleitet, keine eigene Frage) sowie teilschritte (additive Ablauf-Liste). EVIDENZ-MODELL (ADR-015, Fix 3): Übergib evidence_span — einen kurzen WÖRTLICHEN Ausschnitt (5–60 Zeichen) aus dem aktuellen Mitarbeiter-Turn. Das System erweitert ihn deterministisch zum vollständigen Satz. Fallback: evidence_quote + source_turn. ⚠️ NIEMALS einen Wert eintragen, den der Mitarbeiter nicht selbst genannt hat. is_correction=true NUR wenn der Mitarbeiter einen früher genannten Wert explizit korrigiert. Nicht-Befund (PROJ-28): Für potenzial-Slots kann statt value ein nicht_befund_typ gesetzt werden wenn der Mitarbeiter keine Angabe machen konnte. Richtung (PROJ-43): Für potenzial-Slots kann statt value auch NUR richtung gesetzt werden, wenn der Mitarbeiter auf die Richtungsfrage eine Tendenz genannt hat, aber keine Zahl — das Feld bleibt dabei bewusst offen (kein value, kein nicht_befund_typ), die Card-Runde übernimmt später die Zahl.',
       inputSchema: z.object({
         step_id: z.string().regex(/^S[0-9]{3}$/).optional().describe('Stabiler Schritt-ID (z.B. S001). Bevorzugt gegenüber step_title. Aus register_step-Antwort.'),
         step_title: z.string().min(1),
@@ -297,9 +297,10 @@ export function buildTools(
           // Additive Ablauf-Liste (PROJ-45/ADR-025 D4: absorbiert von update_walkthrough_data)
           'teilschritte',
         ]),
-        value: z.union([z.string(), z.number(), z.array(z.string())]).optional().describe('String für Einzel-Slots (entscheidungslogik, ausloeser, standardisierungsgrad, informationsdichte), String-Array für Mehrwert-/Enum-/Ablauf-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel/reibungspunkte/aufgabentyp/risiko_schwere/teilschritte), Zahl für potenzial-Slots. Optional wenn nicht_befund_typ gesetzt.'),
-        nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Nur für potenzial-Slots: Setze wenn Mitarbeiter keine belegbare Angabe machen konnte. unbekannt=weiß nicht, verweigert=Auskunft abgelehnt, nicht_zutreffend=nicht anwendbar. Nicht setzen wenn value vorhanden.'),
+        value: z.union([z.string(), z.number(), z.array(z.string())]).optional().describe('String für Einzel-Slots (entscheidungslogik, ausloeser, standardisierungsgrad, informationsdichte), String-Array für Mehrwert-/Enum-/Ablauf-Slots (tazite_cues/ausnahmen/inputs/outputs/hilfsmittel/reibungspunkte/aufgabentyp/risiko_schwere/teilschritte), Zahl für potenzial-Slots. Optional wenn nicht_befund_typ oder richtung gesetzt.'),
+        nicht_befund_typ: z.enum(['nicht_zutreffend', 'unbekannt', 'verweigert']).optional().describe('Nur für potenzial-Slots: Setze wenn Mitarbeiter keine belegbare Angabe machen konnte — auch keine Richtung. unbekannt=weiß nicht, verweigert=Auskunft abgelehnt, nicht_zutreffend=nicht anwendbar. Nicht setzen wenn value oder richtung vorhanden.'),
         einheit: z.string().optional().describe('PFLICHT bei frequency/duration sobald value gesetzt ist: die vom Mitarbeiter genannte Einheit — z.B. "pro_tag"/"pro_woche"/"pro_monat"/"pro_quartal"/"pro_jahr" (Häufigkeit) oder "minuten"/"stunden"/"tage" (Dauer). Speichere den Wert in der genannten Einheit — rechne NIEMALS selbst um, die Umrechnung passiert deterministisch im Code.'),
+        richtung: z.enum(['niedrig', 'hoch']).optional().describe('Nur für potenzial-Slots (frequency/duration/error_rate_percent), nur wenn WEDER value NOCH nicht_befund_typ gesetzt wird: die grobe Tendenz aus der Richtungsfrage ("eher selten"/"kommt oft vor" → hoch bei frequency; "geht schnell"/"zieht sich lange" → hoch bei duration/error_rate_percent). Füllt den Slot NICHT — steuert nur Fokus und spätere Card-Buckets.'),
         evidence_span: z.string().min(2).max(80).optional().describe('Wörtlicher Ausschnitt aus dem aktuellen Mitarbeiter-Turn. System extrahiert den umgebenden Satz als Beleg.'),
         evidence_quote: z.string().min(3).optional().describe('Fallback wenn evidence_span nicht im aktuellen Turn vorkommt (Catch-up). Pflicht: source_turn setzen.'),
         confidence: z.enum(['confirmed', 'estimate', 'unknown']).optional(),
@@ -307,7 +308,7 @@ export function buildTools(
         source_turn: z.number().int().positive().optional(),
         is_correction: z.boolean().optional().describe('Setze auf true wenn der Mitarbeiter einen früher genannten Wert explizit widerspricht oder korrigiert. Hebt Prioritäts-Konflikt-Sperre auf.'),
       }),
-      execute: async ({ step_id, step_title, slot, value, nicht_befund_typ, einheit, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
+      execute: async ({ step_id, step_title, slot, value, nicht_befund_typ, einheit, richtung, evidence_span, evidence_quote, confidence, qualifier, source_turn, is_correction }) => {
         // Fix 3 (ADR-015): prefer deterministic span-based extraction.
         const userInputText = currentUserInput?.trim() ?? ''
         let resolvedQuote: string | null = null
@@ -357,15 +358,24 @@ export function buildTools(
 
         // PROJ-28/BL-E2.1 — Nicht-Befund mode: only for potenzial slots, no value required
         const isNichtBefundMode = resolvedNichtBefundTyp !== undefined && resolvedValue === undefined
+        // PROJ-43 (AC1/AC2) — Richtung-only mode: employee answered the direction
+        // question but gave no number. Distinct from Nicht-Befund: the slot stays
+        // an open gap for the Closing-phase Card round.
+        const isRichtungOnlyMode = !isNichtBefundMode && resolvedValue === undefined && richtung !== undefined
         if (isNichtBefundMode) {
           if (!isPotenzial) {
             return { success: false, error: `nicht_befund_typ ist nur für potenzial-Slots gültig (frequency, duration, error_rate_percent, media_breaks). Für alle anderen Slots: Slot leer lassen.` }
           }
           // Falls through to step lookup + write below with isNichtBefundMode=true
+        } else if (isRichtungOnlyMode) {
+          if (!isPotenzial) {
+            return { success: false, error: `richtung ist nur für potenzial-Slots gültig (frequency, duration, error_rate_percent). Für alle anderen Slots: Slot leer lassen.` }
+          }
+          // Falls through to step lookup + write below with isRichtungOnlyMode=true
         } else {
           // Normal value mode — value must be present
           if (value === undefined) {
-            return { success: false, error: 'Entweder value oder nicht_befund_typ muss gesetzt sein.' }
+            return { success: false, error: 'Entweder value, nicht_befund_typ oder richtung muss gesetzt sein.' }
           }
           if (isPotenzial) {
             if (slot === 'media_breaks' && typeof value !== 'number') {
@@ -424,6 +434,7 @@ export function buildTools(
           ...(confidence !== undefined ? { confidence } : {}),
           ...(qualifier !== undefined ? { qualifier } : {}),
           ...(einheit !== undefined ? { einheit } : {}),
+          ...(richtung !== undefined ? { richtung } : {}),
           sourceTurn: source_turn ?? null,
           isCorrection: is_correction,
           writeSource,

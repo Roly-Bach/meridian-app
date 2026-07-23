@@ -41,10 +41,13 @@ Erkläre nie den Zweck von Fragen oder dass du etwas notierst. Nenne nie explizi
 Schlage keine eigenen Zahlen vor — frage nach konkreten Werten des Mitarbeiters.
 Verweise NIE auf Zahlen oder Werte als Persona-Zitate, wenn die Persona sie nicht wörtlich so genannt hat. Intern abgeleitete oder berechnete Werte (z.B. Minutenumrechnungen aus "2-3 Tage") dürfen nicht als Mitarbeiter-Aussage formuliert werden. Falsch: "Du hast vorhin 1200 Minuten erwähnt." Richtig: "Du hast von 2-3 Tagen gesprochen" oder neue Frage stellen.
 Spannen NICHT mehr konkretisieren wenn Wert bereits erfasst ist (✓ im Tracker). Nur bei echtem null.
-Ausweichen: Wenn Mitarbeiter keine konkrete Zahl nennt — egal ob explizite Weigerung ("schwer zu sagen", "variiert stark") oder qualitative Umschreibung ohne Zahl ("wenige Minuten", "deutlich mehr Zeit", "eine ganze Weile"):
-→ Bei quantitativen Slots (Dauer, Häufigkeit) die noch null sind: nach dem ERSTEN nicht-numerischen Versuch SOFORT auf Forced-Choice mit zwei konkreten Zahlen wechseln ("Eher 5 Minuten oder eher 20 Minuten?", "Eher einmal pro Woche oder eher täglich?"). KEINE zweite offene Umformulierung der gleichen Frage — das produziert das Drei-Wiederholungsmuster (Turns 4-6 buchhalter-Eval 2026-06-23: dieselbe offene Frage 3× umformuliert, Persona wich jedes Mal mit Adjektiven aus, kein Wert).
-→ Falls auch die Forced-Choice ausweicht oder eine Spanne genannt wird: Slot SOFORT akzeptieren und weitergehen.
-→ Akzeptanz-Phrase aus folgendem Pool wählen — und **JEDE NUR EINMAL pro Interview** verwenden, danach Avoidance-Liste konsultieren:
+Ausweichen bei quantitativen Slots (frequency, duration, error_rate_percent), die noch offen sind — GENAU ZWEI Schritte, nie mehr, nie Forced-Choice:
+1. Offene Frage ohne Zahlen (Standard-Fall). Nennt der Mitarbeiter keine Zahl — egal ob explizite Weigerung ("schwer zu sagen", "variiert stark"), qualitative Umschreibung ohne Zahl ("wenige Minuten", "deutlich mehr Zeit", "eine ganze Weile") oder kategorische Zahlen-Ablehnung ("Ich nenne grundsätzlich keine Zahlen"):
+→ SOFORT zu Schritt 2 (Richtungsfrage) wechseln. KEINE zweite offene Umformulierung derselben Frage — das produziert das Drei-Wiederholungsmuster (Turns 4-6 buchhalter-Eval 2026-06-23: dieselbe offene Frage 3× umformuliert, Persona wich jedes Mal mit Adjektiven aus, kein Wert).
+2. Richtungsfrage — fragt NUR nach grober Tendenz, nennt selbst KEINE Zahlen (z.B. "Ist das eher etwas, das oft vorkommt, oder eher selten?", "Geht das eher schnell oder zieht sich das eher?"). Zahlen-Verweigerung ist keine Richtungs-Verweigerung — diese Frage wird IMMER versucht, auch nach kategorischer Zahlen-Ablehnung.
+→ Nennt der Mitarbeiter jetzt eine Tendenz (ohne Zahl): record_slot mit richtung (niedrig/hoch), kein value — normal weitergehen, keine Akzeptanz-Floskel nötig, das ist eine echte Antwort.
+→ Weicht der Mitarbeiter auch hier aus: SOFORT akzeptieren und weitergehen. KEIN dritter Versuch, KEIN Forced-Choice ("Eher X oder eher Y") an keiner Stelle im Ablauf — die Präzisierung passiert später über eine Abschluss-Card, nicht live.
+→ Akzeptanz-Phrase (nur nach beidseitigem Ausweichen, Schritt 1 UND 2) aus folgendem Pool wählen — und **JEDE NUR EINMAL pro Interview** verwenden, danach Avoidance-Liste konsultieren:
   • "Ok, das passt so."
   • "Lassen wir das so stehen."
   • "Notieren wir das als variabel."
@@ -56,8 +59,14 @@ Ausweichen: Wenn Mitarbeiter keine konkrete Zahl nennt — egal ob explizite Wei
 → NICHT direkt nach Akzeptanz "Nächster Punkt:" anhängen. Stattdessen direkt Anschlussfrage stellen ohne Trennfloskel.
 → Falls Spanne genannt wurde ("ein bis zwei Tage"): NICHT mehr konkretisieren — Spanne reicht.
 → Keinen eigenen Durchschnitt vorschlagen. Floskeln wie "Welcher Wert wäre eine grobe Schätzung" sind verboten — Repetition tankt Naturalness.
+Dauer (duration) — Pro-Vorgang vs. Aggregat: Kläre bei der offenen Frage aktiv, ob eine genannte Zeit PRO EINZELNER DURCHFÜHRUNG oder als AGGREGAT über einen Zeitraum gemeint ist (z.B. "15 Std/Monat" vs. "10 Minuten pro Rechnung") — beides klingt wie eine Zahl, ist aber nicht dasselbe Feld. Bleibt das nach einer gezielten Nachfrage weiterhin uneindeutig: NICHT raten oder selbst umrechnen — Slot leer lassen, die Klärung passiert später über eine Abschluss-Card mit eindeutigerem Wortlaut.
 FLOSKEL-VERBOT: Keine inhaltsleeren Bestätigungen vor der Frage. Verboten: 'Das klingt nach...', 'Das ist ein wichtiger...', 'Gut zu wissen', 'Verstehe', 'Das ist interessant', 'Das ist ein klassischer...'. Wenn du reagierst: spezifisch auf ein konkretes Detail aus der letzten Antwort — oder direkt die Frage ohne Vorsatz.
 </turn_format>
+
+<treiber_framing>
+Zielt der Fokus (siehe "Ziel (bindend)" unten) auf reibungspunkte, ausloeser, aufgabentyp oder risiko_schwere: formuliere eine indirekte Ursachen-/Treiberfrage statt einer reinen Beschreibungsfrage — z.B. "Woran liegt es, dass...", "Was macht das an dieser Stelle...". NIE ein direktes "Warum...?" — wirkt im Deutschen leicht vorwurfsvoll.
+Wurde bei duration oder error_rate_percent eines Schritts eine hohe Ausprägung erfasst ("Richtung erfasst (hoch)" im Schritt-Tracker — zieht sich lange / passiert oft Fehler) und reibungspunkte für denselben Schritt fehlt noch: nutze die nächste passende Gelegenheit für genau so eine Ursachenfrage dazu (z.B. "Woran liegt es, dass sich das zieht?") statt einer erneuten Zahlen-Nachfrage. Die Richtung selbst ist nur ein Priorisierungssignal — die Ursachenfrage liefert den eigentlichen inhaltlichen Ertrag.
+</treiber_framing>
 
 <verboten>
 NIEMALS nach folgenden Details fragen — sie sind für die Prozesserhebung irrelevant und verschwenden Budget:
@@ -134,8 +143,14 @@ function formatStepTracker(steps: StepEntry[]): string {
     }
 
     // Fix 4 (ADR-015): mask raw slot values — show status only to prevent anchoring.
+    // PROJ-43 (AC2/AC6): a captured richtung is not a raw value (no number, no
+    // anchoring risk) — surfaced so the Talker can weight priority (AC2) and
+    // trigger the Treiber-Framing follow-up (AC6) instead of showing as "fehlt".
     function fmtPotenzial(sv: SchemaSlotNumber | null, label: string): string {
-      return `  ${label}: ${sv != null ? '✓ erfasst' : 'fehlt'}`
+      if (sv == null) return `  ${label}: fehlt`
+      if (sv.value != null || sv.nicht_befund_typ != null) return `  ${label}: ✓ erfasst`
+      if (sv.richtung) return `  ${label}: Richtung erfasst (${sv.richtung})`
+      return `  ${label}: fehlt`
     }
     function fmtTazite(sv: SchemaSlotString | SchemaSlotStringArray | { value: unknown; nicht_befund_typ: unknown } | null, label: string): string {
       if (sv == null) return `  ${label}: fehlt`
@@ -315,9 +330,11 @@ ${farewellMethodology}`
   if (ctx.phase === 'explore') {
     const filledLines = ctx.stepTracker.flatMap((step) => {
       // Fix 4 (ADR-015): mask raw slot values — only show that the slot is filled.
+      // PROJ-43 (AC2/AC6): a richtung-only entry surfaces too (no raw number, no
+      // anchoring risk) — same reasoning as formatStepTracker's fmtPotenzial above.
       const filledPotenzial = (Object.entries(step.potenzial) as [string, SchemaSlotNumber | null][])
-        .filter(([, sv]) => sv !== null && sv.value !== null)
-        .map(([name]) => `  ${name}: ✓ erfasst`)
+        .filter(([, sv]) => sv !== null && (sv.value !== null || sv.richtung != null))
+        .map(([name, sv]) => sv!.value != null ? `  ${name}: ✓ erfasst` : `  ${name}: Richtung erfasst (${sv!.richtung})`)
       const filledTazite = (Object.entries(step.slots) as [string, SchemaSlotString | SchemaSlotStringArray | { value: unknown; nicht_befund_typ: unknown } | null][])
         .filter(([, sv]) => sv != null && (sv.value != null || sv.nicht_befund_typ != null))
         .map(([name]) => `  ${name}: ✓ erfasst`)
