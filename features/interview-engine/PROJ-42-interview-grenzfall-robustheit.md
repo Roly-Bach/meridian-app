@@ -1,12 +1,13 @@
 # PROJ-42: Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard)
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** M (½–1 Tag)
-**Bugs:** 0:4:1
+**Bugs:** 0:1:1
 **Created:** 2026-07-15
+**Joint-Gate (2026-07-24):** BUG-2/BUG-3/BUG-5 waren bereits am 2026-07-16 gefixt (BUG-3 Medium, stale `wrap_up`-Referenz — Vokabular vollständig entfernt). BUG-1 (Advance-Signal zu früh, High), BUG-4 (Closing-Sonde ohne Gedächtnis, High) und BUG-6 (Doppel-Abschied, Medium) transkript-belegt geschlossen — über PROJ-44 (frischer stepTracker statt Vorturn-Snapshot, ADR-021) + PROJ-46 (Completion-Readiness, ADR-024) + 6 frische Läufe (3 buchhalter, 3 it-support: je genau ein sauberer Abschied, kein Reopening, Closing-Sonden zählen die erfassten Prozesse korrekt auf). Kein offener High-Bug mehr. Rollen-Guard-Falschpositiv bleibt als [KI-26](../INDEX.md) offen (Medium). → Approved.
 **Last Updated:** 2026-07-16
 
 ## Context

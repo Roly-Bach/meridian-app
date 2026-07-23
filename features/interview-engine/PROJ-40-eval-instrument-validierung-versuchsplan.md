@@ -1,12 +1,13 @@
 # PROJ-40: Eval-Instrument-Validierung + Versuchsplan
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-31
 **Appetite:** L
-**Bugs:** —
+**Bugs:** 0:0:0
 **Created:** 2026-06-30
+**Joint-Gate (2026-07-24):** dedup-Gate-Ruling als [ADR-026](../../docs/adr/ADR-026-dedup-slot-coverage-gate-schema-divergenz.md) festgehalten — `dedup_slot_coverage < 0.75` ist nach der PROJ-45-Schema-Divergenz (`tazite_cues` de-targetet, im Nenner belassen) nicht Feature-attribuierbar → Waiver für PROJ-42/43/44/46/48, Gate-Nachkalibrierung als PROJ-40-Follow-up. Eval-Gate für PROJ-40 selbst über die 8 Stufe-2-Interviews (2026-07-03) nachgewiesen. → Approved.
 **Last Updated:** 2026-07-03 (Stufe 2 ausgeführt — GO; alle Acceptance-Kriterien erfüllt)
 
 ## Dependencies

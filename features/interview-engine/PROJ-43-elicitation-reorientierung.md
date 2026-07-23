@@ -1,12 +1,13 @@
 # PROJ-43: Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards)
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-29
 **Appetite:** XL (>3 Tage)
 **Bugs:** 0:1:2
 **Created:** 2026-07-22
+**Joint-Gate (2026-07-24):** KI-29/KI-30 (in der PROJ-43-QA gefunden, per git-blame auf PROJ-44/46 zurückgeführt) via PROJ-48 behoben und Eval-belegt. AC8 auf den frischen post-KI-29/30-Buchhalter-Transkripten nachgezogen: Zahlen-Slot-Fragen-Anteil von 33% (H-1b-Baseline) auf ~12% gefallen. Card-Mechanismus + AC5-Completion-Pfad live verifiziert (it-support: 8 Cards feuern und werden persistiert). AC7 (ungetriggert, code-korrekt) + BUG-1 (E2E-Flake) als Folge-KI. Eval-Gate: it-support run2 PASS + dedup-Waiver ([ADR-026](../../docs/adr/ADR-026-dedup-slot-coverage-gate-schema-divergenz.md)). → Approved.
 **Last Updated:** 2026-07-23
 
 ## Context

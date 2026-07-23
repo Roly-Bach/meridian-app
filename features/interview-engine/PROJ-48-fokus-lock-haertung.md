@@ -1,11 +1,12 @@
 # PROJ-48: Fokus-Lock-Härtung (Bootstrap, Discovery-Exhausted-Guard, Talker-Zieltreue)
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-44
 **Appetite:** L
-**Bugs:** — (vor QA)
+**Bugs:** 0:0:1
+**Joint-Gate (2026-07-24):** KI-29 (Fokus-Lock-Bootstrap) + KI-30 (Abschluss-Regression, verengt zu `hasUnexploredStep`) + Talker-Adherence-Bug über 6 Läufe (3 buchhalter + 3 it-support) verifiziert behoben — step_registration 1.0, kein Reopening, dialog_naturalness bis 1.0. it-support-Re-Eval nachgezogen (run2 PASS, dedup 0.78). Rotations-Fairness-Lücke (bei >3 entdeckten Schritten bleibt je ein Schritt bei 0/9) als Low-Residual → PROJ-49; Ordering-/Observability-Watch-Item ebenfalls → PROJ-49. Eval-Gate: run2 PASS + dedup-Waiver ([ADR-026](../../docs/adr/ADR-026-dedup-slot-coverage-gate-schema-divergenz.md)). → Approved.
 **Created:** 2026-07-23
 **Last Updated:** 2026-07-23 (Nachtrag spätere Session: KI-30-`hasUnexhaustedStep` verursachte Abschluss-Regression → verengt zu `hasUnexploredStep`, KI-29-`pickMostSalientCandidate` neutralisiert; buchhalter-Eval bestätigt Abschluss sauber, dialog_naturalness 0.67→1.0)
 **ADR:** kein neuer ADR — reine Fehlerbehebung gegen die in [ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md) D1/D3 bereits getroffene Entscheidung ("Ziel-Schritt deterministisch, nicht LLM"; "kein eigenständiger Themenwechsel des Talkers gegen den Lock")

@@ -1,11 +1,12 @@
 # PROJ-46: Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst)
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** XL
 **Bugs:** 0:1:1
+**Joint-Gate (2026-07-24):** Mechanismus-Ziele erfüllt — Non-Termination via Completion-Readiness (ADR-024) behoben, H-1 (8/8 completion_correctness true in Runde 3), Briefing-Konsolidierung steht. Die **Prompt-Deslop-Approval-Vorbedingung wurde per Nutzer-Entscheidung (2026-07-24) nach PROJ-53 verschoben** (Analyst/Talker-Prompt-Audit, Extends PROJ-46) — nicht mehr Approved-blockierend für PROJ-46. Pflicht-Eval-Gate: it-support run2 PASS + dedup-Waiver ([ADR-026](../../docs/adr/ADR-026-dedup-slot-coverage-gate-schema-divergenz.md)). Intermittierender Abschieds-Schwanz + Floskel-Slot-Rausch bleiben als KI (Medium/Low). → Approved.
 **Created:** 2026-07-18
 **Last Updated:** 2026-07-19 (QA-Runde 3: B/C Re-Eval — Non-Termination behoben; flacher Abschluss = PROJ-43-Wurzel, nächster Schritt PROJ-43); 2026-07-22 (PROJ-45 Stufe-3b-Deslop hier gebündelt, `/grilling` als Approval-Vorbedingung, siehe Strom C + G)
 **ADR:** [ADR-023](../../docs/adr/ADR-023-rollen-vertrag-briefing-traegt-absicht.md) (Rollen-Vertrag-Amendment), [ADR-024](../../docs/adr/ADR-024-analyst-completion-readiness-geguardetes-boolean.md) (Completion-Readiness-Amendment, Accepted)

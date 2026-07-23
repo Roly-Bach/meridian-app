@@ -1,14 +1,15 @@
 # PROJ-44: Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad)
 
-## Status: In Review
+## Status: Approved
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22
 **Appetite:** XL (>3 Tage; ursprünglich L geschätzt, faktisch XL durch das H-1/M-1/M-3-Remediation-Bündel — siehe Scope-Hinweis im Remediation Plan)
-**Bugs:** 1:5:2 (Runde 3 nach `resolveTurnLifecycle`-Merge-Verifikation + Mess-Eval: H-3 code-verifiziert UND live über 3 Läufe bestätigt behoben — kein Repro des Ein-Turn-Phasenlag-Musters. H-2 Farewell-Limbo bleibt offen, intermittierend (0 von 3 bis 6 von 3 Läufen betroffen), Worst-Case diese Runde schwerer als Runde 2 (6 Abschieds-Turns inkl. einem wortgleichen Duplikat vs. vorher max. 4). M-2, M-4, M-5, M-6, M-7, L-1, L-2 unverändert offen (Ursachen von der Runde-2-Remediation nicht adressiert, teils in dieser Runde erneut bestätigt).)
+**Bugs:** 0:2:0 (H-2 Farewell-Limbo + M-4/M-6/L-1/L-2 im Joint-Gate 2026-07-24 geschlossen, siehe Joint-Gate-Note unten — vorheriger Stand nach Runde 3 nach `resolveTurnLifecycle`-Merge-Verifikation + Mess-Eval: H-3 code-verifiziert UND live über 3 Läufe bestätigt behoben — kein Repro des Ein-Turn-Phasenlag-Musters. H-2 Farewell-Limbo bleibt offen, intermittierend (0 von 3 bis 6 von 3 Läufen betroffen), Worst-Case diese Runde schwerer als Runde 2 (6 Abschieds-Turns inkl. einem wortgleichen Duplikat vs. vorher max. 4). M-2, M-4, M-5, M-6, M-7, L-1, L-2 unverändert offen (Ursachen von der Runde-2-Remediation nicht adressiert, teils in dieser Runde erneut bestätigt).)
 **Created:** 2026-07-16
 **Last Updated:** 2026-07-17/18
 **ADR:** ADR-021 (Timing-Amendment zu ADR-011 D2) — Status: Accepted · ADR-022 (Phasen-/Lifecycle-Merge `resolveTurnLifecycle`, supersediert die BUG-6-Aussage von ADR-021) — Status: Proposed
+**Joint-Gate (2026-07-24):** H-2 (Farewell-Limbo/Analyst-Split-Brain) via PROJ-46 Completion-Readiness (ADR-024) transkript-belegt geschlossen — 6 frische Läufe (3 buchhalter + 3 it-support) zeigen durchgängig genau einen sauberen Abschied, completion_correctness true, kein Reopening, Turns beschränkt (15–35). Kein offener High-Bug mehr. Pflicht-Eval-Gate: it-support run2 PASS (dedup 0.78 ≥ 0.75, dialog 0.67, blocked 0); die sub-0.75-Läufe sind per [ADR-026](../../docs/adr/ADR-026-dedup-slot-coverage-gate-schema-divergenz.md) nicht-attribuierbar (Schema-Divergenz-Waiver). Im Joint-Gate zusätzlich geschlossen: **M-4** (Cards feuern nie — it-support-Lauf zeigt 8 Cards feuern + persistieren, PROJ-43-Mechanismus), **L-2** (Forced-Choice-Fragen — PROJ-43 code-verifiziert entfernt), **L-1/M-6** (fehlende Übergänge / Themensprünge — PROJ-48 Talker-Adherence, 6 Läufe ohne abrupten Sprung). Genuin offen bleiben **M-5** (`dependency_capture` ≈0, Instrument-/Coverage-Grenze) und **M-7** (Abschluss würdigt substanziellen Sonden-Inhalt nicht immer) als KIs; **M-2** ist als KI-26 bei PROJ-42 geführt (nicht doppelt gezählt). → Approved.
 
 ## Context
 
