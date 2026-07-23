@@ -55,6 +55,7 @@ All features tracked in `features/INDEX.md`. Every skill reads it at start and u
 
 ## Key Conventions
 
+- **Code ist SSOT:** jede Verhaltensaussage am aktuellen `src/` (datei.ts:zeile) verifizieren, nie allein Doku/Spec/Kommentar/Memory vertrauen. Bei Widerspruch Doku ↔ Code gilt der Code. (Voll: `.claude/rules/general.md`)
 - **Feature IDs:** PROJ-1, PROJ-2, etc. (sequential)
 - **Commits:** `feat(PROJ-X): description`, `fix(PROJ-X): description`
 - **Single Responsibility:** One feature per spec file

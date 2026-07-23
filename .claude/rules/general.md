@@ -1,5 +1,14 @@
 # General Project Rules
 
+## Source of Truth: der Code in `src/` (MANDATORY)
+
+SSOT ist ausschließlich der aktuelle Code unter `src/`. Jede Aussage über Systemverhalten
+(Kontrollfluss, Bedingungen, Feldnamen, Status-/Phasen-Übergänge, Schwellenwerte) MUSS vor der
+Behauptung am Code verifiziert werden (Read/Grep an konkreter `datei.ts:zeile`). Kommentare,
+`features/`-Specs, ADRs, `docs/`, Memory und diese Regeln selbst sind Kontext, KEIN Beleg — sie
+können veraltet oder falsch sein. Bei Widerspruch Doku ↔ Code gilt der Code. Belege mit
+`datei.ts:zeile`, leite nichts aus Erinnerung oder Doku ab.
+
 ## New Project Detection (MANDATORY)
 Before starting ANY work, check if the project has been initialized:
 1. Read `docs/PRD.md` - if it still contains placeholder text like "_Describe what you are building_", the project is NOT initialized
