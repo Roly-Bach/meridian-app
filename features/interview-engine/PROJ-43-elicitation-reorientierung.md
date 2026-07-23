@@ -1,13 +1,13 @@
 # PROJ-43: Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards)
 
-## Status: Planned
+## Status: Architected
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-29
 **Appetite:** XL (>3 Tage)
 **Bugs:** —
 **Created:** 2026-07-22
-**Last Updated:** 2026-07-22
+**Last Updated:** 2026-07-23
 
 ## Context
 
@@ -25,6 +25,7 @@ PROJ-43 bündelt außerdem zwei bereits als PROJ-43-Straddle dokumentierte Neben
 - **Requires: PROJ-46** (Talker-Briefing-Konsolidierung) — In Review. Liefert den bindenden Fokus-Lock (`target_o_field`) und `resolveTurnLifecycle`, auf denen AC2 (Richtungssignal→Fokus) und AC4 (Completion-Gate) aufbauen. PROJ-42/44/46 bleiben gemeinsam In Review bis zum Joint-Gate nach PROJ-43.
 - **Extends: PROJ-29** (Gesprächsführungs-Revision) — revidiert das dort eingeführte Forced-Choice-Pattern (BL-E3.4) direkt.
 - **Touches: PROJ-44** (Pipeline-Simplifikation) — Completion-Gate (AC4) erweitert die dort bereits Cards-aware gemachte Trigger-A-Logik in `resolveTurnLifecycle` um eine aktive Erzwingung statt nur Respektierung bestehender Cards.
+- **Spinnt ab: PROJ-47** (Clarification-Card-Generierung entkoppeln, LLM-Teil) — bewusst ausgeklammerte Folgearbeit aus dieser Architektur-Runde (2026-07-23), siehe Tech Design Abschnitt F.
 
 ## User Stories
 
@@ -119,7 +120,130 @@ PROJ-43 hat wie PROJ-44/45/46 explizit auch das Ziel, Mechanik abzubauen, die du
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Überblick
+
+PROJ-43 ist überwiegend eine **Verhaltens-Revision** (Gesprächsmethodik im Talker-Prompt) plus eine **strukturelle Zuverlässigkeits-Korrektur** (Clarification Cards und Completion-Gate). Es gibt keinen neuen Nutzerfluss und keine neue Seite. Die bestehenden drei Bausteine (Talker, Analyst, Clarification-UI) werden angepasst, keiner wird neu gebaut.
+
+**Zentrale Entscheidung dieser Spec:** AC3, AC4 und AC5 betreffen ausschließlich die drei Zahlen-Felder Häufigkeit, Dauer und Fehlerquote. Für genau diese drei wird ein neuer, vollständig deterministischer Mechanismus gebaut. Weder die Entscheidung, ob eine Karte entsteht, noch ihr Inhalt hängen danach vom LLM ab (Details Abschnitt B, Begründung Abschnitt D). Der bestehende LLM-basierte Mechanismus für offene Prozess-Bestätigungen und qualitative Zusatzkarten wird in dieser Runde bewusst nicht angefasst, Status und Begründung in Abschnitt F „Offene Baustelle".
+
+---
+
+### A) Gesprächsfluss: Live-Sequenz für Zahlen-Slots (AC1, AC6, AC7)
+
+Ersetzt die heutige Forced-Choice-Eskalation. Gilt für `frequency`, `duration`, `error_rate_percent`.
+
+```
+Talker fragt offen (keine Zahlen im Fragetext)
+        │
+        ▼
+   Zahl genannt? ──Ja──► Slot erfasst, weiter im Gespräch
+        │
+        Nein (Ausweichen, egal ob Verweigerung
+        oder qualitative Umschreibung)
+        │
+        ▼
+Talker fragt Richtung, ohne Zahlen zu nennen
+("Ist das eher etwas, das oft vorkommt, oder eher selten?")
+        │
+        ▼
+   Richtung genannt? ──Ja──► Richtungssignal erfasst (kein Zahlenwert),
+        │                     Gespräch geht weiter
+        Nein (auch hier Ausweichen)
+        │
+        ▼
+Talker akzeptiert sofort (Akzeptanz-Phrasen-Pool, wie heute),
+kein dritter Versuch, kein Forced-Choice
+```
+
+Zusatzregel (AC6, Treiber-Framing): Signalisiert die Richtungsfrage bei `duration` oder `error_rate_percent` eine hohe Ausprägung ("zieht sich lange", "passiert oft"), stellt der Talker im nächsten passenden Moment eine indirekte Ursachenfrage zu `reibungspunkte` für denselben Schritt. Kein neuer Slot, nur eine Priorisierungsregel für das ohnehin bestehende Ziel-O-Feld.
+
+Zusatzregel (AC7, Dauer-Disambiguierung): Die offene Frage nach `duration` klärt aktiv, ob eine genannte Zeit pro Vorgang oder als Zeitraum-Aggregat gemeint ist. Bleibt das unklar, wird **nichts umgerechnet**. Der Slot bleibt leer und landet im Card-Mechanismus (Abschnitt B), wo die Frage im Wortlaut eindeutig gemacht wird ("Meintest du pro Rechnung oder insgesamt pro Monat?"). Reine Gesprächs- und Formulierungs-Disziplin, kein neues Datenfeld nötig (siehe Tech-Entscheidungen).
+
+Betroffen: nur der Talker-Prompt (Methodik-Text) + eine kleine Erweiterung der Analyst-Extraktionsregel für `duration` (Aggregat-Fall erkennen und NICHT als `duration` fehlinterpretieren, stattdessen offenlassen).
+
+---
+
+### B) Datenmodell (Klartext, keine Migration nötig)
+
+Alle Prozessschritt-Daten liegen bereits (seit PROJ-45) in einem flexiblen Datenfeld pro Schritt (`schritt_daten`), keine starren Datenbankspalten mehr. Neue Attribute darin sind eine reine Erweiterung, keine Schema-Änderung.
+
+**Neu: „Richtung" je Zahlen-Feld.** Jedes der drei Zahlen-Felder (Häufigkeit, Dauer, Fehlerquote) bekommt neben dem eigentlichen Wert ein optionales Attribut „Richtung" mit den Werten niedrig, hoch oder leer. Gesetzt wird es, wenn der Mitarbeiter bei der Richtungsfrage eine Tendenz genannt hat, aber keine Zahl. Es lebt direkt am Feld selbst, genau wie die bereits bestehende „Einheit"-Angabe (z.B. „pro Woche"), nicht in einem separaten, nur-für-diesen-Turn gültigen Zwischenspeicher. Damit übersteht es beliebig viele Turns bis zur Abschlussphase automatisch, ohne eigenen Transportmechanismus. Das beantwortet die in der Ausgangs-Spec offen gelassene Frage nach einem Zwischenspeicher-Feld: keins nötig.
+
+**Kein neues Feld für „pro Vorgang vs. Aggregat" (AC7).** Wird die Zeitangabe nicht eindeutig, bleibt der Wert leer (bestehender Mechanismus: „nicht erfasst, Grund unbekannt") und die Klärung passiert über die Abschluss-Card mit eindeutigerem Wortlaut. Kein neues Attribut.
+
+**Card-Mechanismus für Häufigkeit, Dauer, Fehlerquote (AC3, AC4, AC5): ein neuer, vollständig deterministischer Baustein.**
+
+So funktioniert er, Schritt für Schritt:
+
+1. Genau in dem Moment, in dem das Interview enden würde (Zeit abgelaufen, oder das System urteilt „Gespräch wirkt inhaltlich fertig"), prüft der Code direkt im aktuellen Prozessschritt-Datenstand: fehlt bei irgendeinem Schritt Häufigkeit, Dauer oder Fehlerquote?
+2. Fehlt nichts: Interview endet wie bisher.
+3. Fehlt etwas: für jede Lücke wird eine Karte gebaut. Der Fragetext ist ein fester Satz pro Feldtyp (z.B. immer dieselbe Formulierung für Häufigkeit, nur der Schritt-Titel wird eingesetzt). Die Buttons kommen aus einer festen, an die erfasste „Richtung" angepassten Auswahl (Begründung Abschnitt D, Punkt 5).
+4. Bis zu 8 dieser Karten werden angezeigt, priorisiert nach „Richtung" (Details Abschnitt D, Punkt 6).
+
+Diese Prüfung läuft ausschließlich an diesem einen Entscheidungspunkt, nicht bei jedem Turn ab der Abschlussphase. Kein LLM-Aufruf ist beteiligt, weder für die Auswahl noch für den Karteninhalt. Der feste Fragetext ist bewusst der einfache Startpunkt für diese Spec-Runde, siehe Abschnitt F für die mögliche spätere Verfeinerung.
+
+**Completion-Gate (AC4):** keine neue Tabelle, kein neues Statusfeld nötig. Die Prüfung aus Schritt 1 oben ist bereits das gesamte Gate: findet sie eine Lücke, wird nicht abgeschlossen, sondern zur Card-Runde geleitet. Sie ist automatisch korrekt für spät entdeckte Schritte (AC4, Edge Case „Späte Prozess-Entdeckung"), weil sie immer den aktuellen Stand liest, nie einen gespeicherten Verlauf. Das bereits bestehende Verhalten „eine durchlaufene Card-Runde zählt immer, auch bei 'Weiß ich nicht'" (Interview wird nach Einreichen der Card-Antworten unbedingt abgeschlossen) bleibt unverändert und erfüllt AC4s Anti-Wiederholungs-Anforderung bereits heute strukturell.
+
+---
+
+### C) Komponentenstruktur (UI)
+
+Nur eine bestehende Komponente wird erweitert, keine neue Seite:
+
+```
+ClarificationView (unverändert)
+└── ClarificationCards (unverändert als Container)
+    └── SlotCard (erweitert, AC3)
+        ├── Bucket-Auswahl (wie heute, Buttons)
+        │   └── NEU: Buckets passen sich der erfassten "Richtung" an
+        │        (z.B. bei Richtung=niedrig feinere Abstufungen im
+        │        unteren Bereich statt der heutigen Pauschal-Buckets)
+        └── NEU: freie Zahlen-/Spannen-Eingabe (Textfeld),
+             gleichwertig zur Bucket-Auswahl, Mitarbeiter nutzt
+             frei, welchen Weg er will
+```
+
+`OpenItemCard` und `QualitativeCard` bleiben unverändert (AC3 betrifft nur die drei Zahlen-Kartentypen).
+
+---
+
+### D) Tech-Entscheidungen (begründet)
+
+**1. Forced-Choice raus, Zwei-Schritt-Sequenz rein.** Reine Prompt-Textänderung im Talker. Kein Architektur-Risiko.
+
+**2. Richtungssignal wird am Prozessschritt-Feld gespeichert, nicht in einem turn-übergreifenden Zwischenspeicher.** Robuster (siehe Abschnitt B), folgt demselben Muster wie die bestehende „Einheit"-Angabe, keine neue Synchronisations-Fehlerquelle.
+
+**3. Der Card-Mechanismus für Häufigkeit, Dauer, Fehlerquote wird vollständig deterministisch, Auswahl und Inhalt.** Heute entscheidet ausschließlich das Analyst-LLM, ob und welche Karten es vorschlägt, in einem Turn mit vielen anderen Aufgaben gleichzeitig. Das ist der dokumentierte Grund, warum Karten in der Praxis fast nie ausgelöst werden (M-4-Befund: 0 in 4 von 4 Testläufen). Diese Codebase hat mit reinen Prompt-Verschärfungen bei ähnlichen Zuverlässigkeitsproblemen wiederholt schlechte Erfahrungen gemacht (dokumentiert bei KI-18, wo zwei Prompt-only-Fixversuche scheiterten und erst ein architektonischer Fix half). Derselbe Ansatz gilt hier: die Prüfung, welcher Schritt welche Lücke hat, ist eine reine Ja/Nein-Frage an die Daten, kein Urteilsvermögen nötig, und wird deshalb vollständig im Code erledigt, inklusive Fragetext. Das macht AC4 (hartes Gate) und AC5 (zuverlässige Generierung) strukturell garantiert statt „wahrscheinlich, wenn das Prompt befolgt wird".
+
+**4. Die Prüfung läuft nur einmal, genau am Entscheidungspunkt, nicht bei jedem Turn.** Sowohl der Zeit-Timeout-Pfad als auch der „Gespräch wirkt erschöpft"-Pfad (beide bereits bestehende Abschluss-Auslöser) laufen vor der endgültigen Abschluss-Entscheidung durch dieselbe deterministische Lücken-Prüfung. Nur wenn sie nichts findet, schließt das Interview tatsächlich ab, sonst wird zur Card-Runde geleitet, mit frisch berechneten Karten. Ein wiederholtes Scannen bei jedem Turn ab der Abschlussphase, wie es der heutige LLM-Mechanismus versucht (Abschnitt F), ist nicht nötig, weil ohnehin nur der eine Moment zählt, an dem das Interview tatsächlich enden würde.
+
+**5. Bucket-Optionen bleiben Code, nicht LLM.** Die Buttons sind keine Prosa, sondern werden über eine feste Wörterbuch-Zuordnung (Label-Text zu Zahlenwert, z.B. „Wöchentlich" zu 4) in echte Werte übersetzt. Frei formulierte LLM-Label würden entweder eine robustere Zuordnung (Positions- statt Text-Matching) erfordern oder ein stilles Verlustrisiko schaffen, falls ein Label zu keinem Wörterbucheintrag passt. Das widerspricht der seit KI-18 etablierten Projektregel, Zahlenumrechnung immer deterministisch im Code zu halten statt sie dem LLM zu überlassen.
+
+**6. Karten-Priorisierung bei Obergrenze 8 (AC4).** Zahlen-Karten für Häufigkeit, Dauer, Fehlerquote gehen immer zuerst, sortiert nach erfasster „Richtung" (hohe Ausprägung zuerst). Danach werden die restlichen Plätze mit dem aufgefüllt, was der bestehende LLM-Mechanismus (offene und qualitative Karten, Abschnitt F) zu diesem Zeitpunkt bereits vorgeschlagen hat, in dessen eigener Reihenfolge, bis zur Obergrenze von 8.
+
+**7. Treiber-Framing (AC6) und Dauer-Disambiguierung (AC7).** Reine Methodik- und Formulierungsregeln, kein neuer Slot, keine neue Analyst-Klassifikationslogik, wie in der Spec vorgegeben.
+
+**8. Löschkandidaten** (`usedFillerPhrases`, `conversationSignals.ts` question-stem, alter Forced-Choice-Textblock). Prüfreihenfolge wie in der Spec: nach Umbau der Live-Sequenz per Eval verifizieren, ob das ursprüngliche Wiederholungsmuster noch auftritt, dann erst löschen. Architektur trifft hier keine Vorwegentscheidung, das ist `/backend`-Verifikationsarbeit.
+
+---
+
+### E) Dependencies
+
+Keine neuen Pakete. Alles mit bestehenden Bausteinen umsetzbar (Zod-Schema-Erweiterung, bestehende AI-SDK-Nutzung, bestehende shadcn-Komponenten für das Textfeld).
+
+---
+
+### F) Offene Baustelle, bewusst nicht Teil dieser Runde
+
+Der bestehende LLM-basierte Mechanismus für offene Prozess-Bestätigungen (`OpenItemCards`) und qualitative Zusatzkarten (`QualitativeCards`, inklusive der heutigen `entscheidungslogik`-Karte) wird in dieser Spec-Runde nicht verändert. Begründung: keines der acht Akzeptanzkriterien verlangt eine Verbesserung dieser Kartentypen, sie blockieren den Abschluss nicht, und die Priorität liegt auf dem strukturell zuverlässigen Mechanismus für die drei gate-kritischen Zahlen-Felder. Festgehalten als eigenes Feature: **PROJ-47** (Roadmap).
+
+Damit bleiben zwei bekannte Schwächen bestehen, hier dokumentiert für eine spätere Runde:
+
+- Der Analyst wird weiterhin bei jedem Turn ab der Abschlussphase angewiesen, nach Kandidaten für diese Kartentypen zu suchen, obwohl nur der eine Entscheidungspunkt zählt, dieselbe Erkenntnis, die für den neuen deterministischen Teil bereits umgesetzt wird (Abschnitt D, Punkt 4). Eine Umstellung auf einen einzigen Aufruf am Entscheidungspunkt wäre eine naheliegende, aber eigenständige Vereinfachung.
+- Die Zuverlässigkeit dieses Mechanismus bleibt unverändert die von heute. Er kann weiterhin Kandidaten übersehen oder in manchen Interviews gar nichts vorschlagen. Kein neuer Regressionspunkt durch PROJ-43, aber auch keine Verbesserung.
+
+Beide Punkte sind Kandidaten für ein eigenes Folge-Item nach PROJ-43, nicht Teil des aktuellen Baus. → **PROJ-47**.
 
 ## QA Test Results
 _To be added by /qa_
