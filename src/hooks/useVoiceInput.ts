@@ -74,6 +74,16 @@ export function useVoiceInput({
   useEffect(() => {
     onCommittedRef.current = onCommitted
   }, [onCommitted])
+  // Mirrors partialText for synchronous reads inside WS handlers/cleanup (state updates are async)
+  const partialTextRef = useRef('')
+  // Set right before we ourselves close the WS, so onclose can tell a deliberate
+  // close apart from an unexpected server/network drop (both fire the same event).
+  const intentionalCloseRef = useRef(false)
+
+  const updatePartialText = useCallback((text: string) => {
+    partialTextRef.current = text
+    setPartialText(text)
+  }, [])
 
   const clearRefreshTimer = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -82,11 +92,12 @@ export function useVoiceInput({
     }
   }, [])
 
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback((opts?: { flushPartialAsFallback?: boolean }) => {
     clearRefreshTimer()
 
     // Close WS
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      intentionalCloseRef.current = true
       wsRef.current.close()
     }
     wsRef.current = null
@@ -101,11 +112,18 @@ export function useVoiceInput({
       streamRef.current = null
     }
 
+    // If the session ends without a final committed_transcript (dropped connection,
+    // manual stop mid-sentence), use the last partial text instead of losing it.
+    const leftoverPartial = partialTextRef.current.trim()
+    if (opts?.flushPartialAsFallback && leftoverPartial) {
+      onCommittedRef.current(leftoverPartial)
+    }
+    partialTextRef.current = ''
     setPartialText('')
   }, [clearRefreshTimer])
 
   const stop = useCallback(() => {
-    cleanup()
+    cleanup({ flushPartialAsFallback: true })
     setState('idle')
   }, [cleanup])
 
@@ -114,8 +132,10 @@ export function useVoiceInput({
   const openWebSocketRef = useRef<((sessionToken: string) => void) | null>(null)
 
   const openWebSocket = useCallback((sessionToken: string) => {
-    // Close existing WS without touching the audio pipeline
+    // Close existing WS without touching the audio pipeline (e.g. token-refresh reconnect —
+    // mark intentional so the old socket's onclose doesn't report a false disconnect)
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      intentionalCloseRef.current = true
       wsRef.current.close()
     }
     wsRef.current = null
@@ -125,7 +145,7 @@ export function useVoiceInput({
     wsUrl.searchParams.set('token', sessionToken)
     wsUrl.searchParams.set('model_id', 'scribe_v2_realtime')
     wsUrl.searchParams.set('commit_strategy', 'vad')
-    wsUrl.searchParams.set('vad_silence_threshold_secs', '1.5')
+    wsUrl.searchParams.set('vad_silence_threshold_secs', '2.5')
     wsUrl.searchParams.set('audio_format', 'pcm_16000')
     const ws = new WebSocket(wsUrl.toString())
     wsRef.current = ws
@@ -155,9 +175,9 @@ export function useVoiceInput({
       }
 
       if (msg.message_type === 'partial_transcript') {
-        setPartialText(msg.text ?? '')
+        updatePartialText(msg.text ?? '')
       } else if (msg.message_type === 'committed_transcript') {
-        setPartialText('')
+        updatePartialText('')
         const trimmed = (msg.text ?? '').trim()
         if (trimmed) {
           onCommittedRef.current(trimmed)
@@ -177,12 +197,19 @@ export function useVoiceInput({
     }
 
     ws.onclose = () => {
-      cleanup()
+      const wasIntentional = intentionalCloseRef.current
+      intentionalCloseRef.current = false
+      cleanup({ flushPartialAsFallback: !wasIntentional })
       if (!closedByError) {
+        if (!wasIntentional) {
+          // Neither our own stop() nor a normal commit closed this — the connection
+          // dropped unexpectedly (e.g. network blip) without ever firing onerror.
+          toast.error('Verbindung zur Sprachaufnahme verloren — bitte erneut versuchen')
+        }
         setState('idle')
       }
     }
-  }, [token, cleanup, clearRefreshTimer])
+  }, [token, cleanup, clearRefreshTimer, updatePartialText])
 
   // Keep ref current so the refresh timer callback always calls the latest version
   useEffect(() => {
