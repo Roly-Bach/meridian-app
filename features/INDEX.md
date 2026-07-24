@@ -67,7 +67,7 @@
 | PROJ-48 | Fokus-Lock-Härtung (Bootstrap, Discovery-Exhausted-Guard, Talker-Zieltreue) | Revision | Interview Engine | PROJ-44 | Deployed | [spec](interview-engine/PROJ-48-fokus-lock-haertung.md) | P1 | L | 0:0:1 |
 | PROJ-49 | Prozess-Priorisierungsmechanik (KI-Relevanz-Bewertung entdeckter Prozesse) | Epic | Use Case Engine | — | Roadmap | — | P2 | — | — |
 | PROJ-50 | Opener-Frage-Überarbeitung (Hauptaufgaben/Arbeitstag mischt zwei Antworten) | Revision | Interview Engine | PROJ-2 | Roadmap | — | P2 | — | — |
-| PROJ-51 | Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung) | Extension | Interview Engine | PROJ-43 | Approved | [spec](interview-engine/PROJ-51-uebergang-vor-clarification-cards.md) | P2 | S | 0:0:2 |
+| PROJ-51 | Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung) | Extension | Interview Engine | PROJ-43 | Deployed | [spec](interview-engine/PROJ-51-uebergang-vor-clarification-cards.md) | P2 | S | 0:0:2 |
 | PROJ-52 | Clarification-Card-Plausibilität (Schritt-Titel-Mehrdeutigkeit, Bucket-Passung) | Revision | Interview Engine | PROJ-43 | Roadmap | — | P2 | — | — |
 | PROJ-53 | Analyst/Talker-Prompt-Audit (Inhalt/Struktur/Prägnanz/Konsistenz/Redundanz) | Revision | Interview Engine | PROJ-46 | Roadmap | — | P2 | — | — |
 

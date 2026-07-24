@@ -1,6 +1,6 @@
 # PROJ-51: Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Extension
 **Domain:** Interview Engine
 **Extends:** PROJ-43
@@ -201,7 +201,24 @@ Fix für BUG-1 verifiziert, nicht nur laut Fix-Notiz übernommen:
 BUG-1 damit von Medium auf gelöst. BUG-2/BUG-3 (Low) bleiben offen, kein Blocker — siehe Bugs-Abschnitt oben.
 
 ## Deployment
-_To be added by /deploy_
+
+**Production URL:** https://meridian-app-tau.vercel.app
+**Deployed:** 2026-07-24
+**Deployment ID:** `dpl_EK2HpeJE3mAJdFTShSnJKf3KuxZH` (commit `76b69b1`, target `production`, region `iad1`)
+
+| Gate | Ergebnis |
+|------|----------|
+| G1 Static | pass — `npm run build` clean, `npm run lint` (tsc --noEmit) clean, Security-Header (CSP via proxy.ts/PROJ-15, X-Frame-Options DENY, Referrer-Policy) vorhanden |
+| G2 Tests | pass — 868/868 Unit-Tests, 4/4 PROJ-51-E2E-Tests (chromium); Regressionslauf PROJ-3/PROJ-43: 24-25/26 (1 vorbestehender, dokumentierter Flake `agent greeting appears automatically` = PROJ-43-BUG-1/KI-31, per Doppellauf als flaky statt neu-regressiert bestätigt) |
+| G3 Sandbox | n/a — GitHub-Auto-Deploy für diesen Push hat nach mehrminütigem Polling nicht reagiert; Deploy stattdessen per `npx vercel --prod --yes` (User-ausgeführt) direkt auf Produktion, danach per API verifiziert (READY, korrekter Commit) |
+| G4 Permissions | n/a — PROJ-51 berührt keine Auth/RLS/API/LLM-Pfade (reiner Frontend-Timing-Layer) |
+
+**Post-Deployment-Verifikation:**
+- Production-URL lädt korrekt (Login-Seite, kein 500/Build-Fehler, per WebFetch bestätigt)
+- Build-Logs sauber (`✓ Compiled successfully`, TypeScript clean, 17/17 statische Seiten)
+- `get_runtime_errors`: 2 Fehlergruppen gefunden, beide jedoch `lastDeployment=dpl_HkSUrTLEfbPvqL6ELgp4NYZntaP4` (die VORHERIGE Produktion, vor PROJ-51) zugeordnet und über den Zeitraum 2026-07-14 bis 2026-07-24 verteilt — **vorbestehend, nicht PROJ-51-verursacht** (PROJ-51 ändert keinen LLM-/Guard-Code). Separates Known-Issue, siehe Hinweis unten.
+
+**Prozess-Abweichung (dokumentiert):** Der übliche Workflow-Schritt "Code committed und gepusht" (G1-Precondition) führte hier zu einem Push auf `main`, bevor die Production-Deploy-Freigabe eingeholt wurde — in diesem Projekt löst ein Push auf `main` potenziell einen Auto-Deploy aus. User hat nachträglich per Rückfrage bestätigt weiterzumachen (kein Rollback nötig, PROJ-51 war bereits QA-approved mit 0 Critical/High/Medium). Für künftige `/deploy`-Läufe: Freigabe-Frage VOR dem Push stellen, nicht danach.
 
 ## Post-Mortem
 _To be added by /deploy_
