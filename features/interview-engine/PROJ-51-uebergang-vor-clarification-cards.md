@@ -221,13 +221,12 @@ BUG-1 damit von Medium auf gelöst. BUG-2/BUG-3 (Low) bleiben offen, kein Blocke
 **Prozess-Abweichung (dokumentiert):** Der übliche Workflow-Schritt "Code committed und gepusht" (G1-Precondition) führte hier zu einem Push auf `main`, bevor die Production-Deploy-Freigabe eingeholt wurde — in diesem Projekt löst ein Push auf `main` potenziell einen Auto-Deploy aus. User hat nachträglich per Rückfrage bestätigt weiterzumachen (kein Rollback nötig, PROJ-51 war bereits QA-approved mit 0 Critical/High/Medium). Für künftige `/deploy`-Läufe: Freigabe-Frage VOR dem Push stellen, nicht danach.
 
 ## Post-Mortem
-_To be added by /deploy_
 
 | Aspekt | Bewertung |
 |--------|-----------|
-| Spec-Genauigkeit | — |
-| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: — |
-| Größte Überraschung | — |
-| Vorgeschlagene Regeländerung | — |
-| Build-Loop-Iterationen | tatsächlich: — (geplant: ≤5) |
-| Häufigste Fehlerkategorie im Loop | — |
+| Spec-Genauigkeit | Medium — Kern (Button + Countdown + Fade, einheitlicher Pfad für beide Zielzustände) passte 1:1, aber Details wie das reduced-motion-Verhalten mussten erst in der QA-Runde nachgeschärft werden (siehe BUG-1) |
+| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: S (reiner Frontend-Scope, ein Fix-Zyklus für BUG-1, kein Backend-Eingriff nötig) |
+| Größte Überraschung | Die JS-`matchMedia`-Prüfung in `FadeIn.tsx` allein reichte nicht, um `prefers-reduced-motion` durchzusetzen — die CSS-`transition-opacity`-Klasse blieb unabhängig vom React-State aktiv und musste zusätzlich per `motion-reduce:`-Variante abgeschaltet werden (BUG-1). Lehre: JS-Feature-Detection und CSS-Media-Query-Verhalten sind zwei getrennte Mechanismen, die beide separat abgesichert werden müssen. |
+| Vorgeschlagene Regeländerung | `/deploy` sollte die Production-Approval-Frage VOR dem `git push` auf `main` stellen, nicht erst vor dem expliziten `vercel --prod`-Aufruf — in diesem Projekt kann ein Push auf `main` direkt einen Auto-Deploy auslösen (bei diesem Lauf reagierte der Auto-Deploy zwar nicht, was den Fehler nicht sichtbar machte, aber das Risiko besteht strukturell). Nutzer-bestätigt, Aufnahme in `.claude/skills/deploy/SKILL.md` empfohlen. |
+| Build-Loop-Iterationen | nicht ermittelbar in dieser Session — Frontend-Implementierung erfolgte in einer vorherigen Konversation, dieser Session-Verlauf beginnt erst bei `/qa` |
+| Häufigste Fehlerkategorie im Loop | nicht ermittelbar (s.o.); in der QA-Runde selbst: 1 Spec-Lücke (BUG-1, reduced-motion), 2 dokumentierte Low-Abweichungen (BUG-2/3) |
