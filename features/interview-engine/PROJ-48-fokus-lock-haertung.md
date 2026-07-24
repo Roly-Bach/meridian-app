@@ -1,6 +1,6 @@
 # PROJ-48: Fokus-Lock-Härtung (Bootstrap, Discovery-Exhausted-Guard, Talker-Zieltreue)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-44

@@ -1,6 +1,6 @@
 # PROJ-43: Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-29

@@ -1,6 +1,6 @@
 # PROJ-44: Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22

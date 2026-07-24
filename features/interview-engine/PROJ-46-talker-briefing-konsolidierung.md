@@ -1,6 +1,6 @@
 # PROJ-46: Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22

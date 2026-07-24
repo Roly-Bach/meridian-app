@@ -1,6 +1,6 @@
 # PROJ-42: Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Revision
 **Domain:** Interview Engine
 **Extends:** PROJ-22

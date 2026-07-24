@@ -56,15 +56,15 @@
 | PROJ-37 | Static-Prompt-Drift konsolidieren (Talker vs. Greeting/Reconnect) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-37-static-prompt-drift-konsolidieren.md) | P2 | S | 0:0:0 |
 | PROJ-38 | Slot-Write-Encoding-Fix (Eval-Signal wiederherstellen) | Revision | Interview Engine | PROJ-27 | Deployed | [spec](interview-engine/PROJ-38-slot-write-encoding-eval-signal.md) | P1 | S | 0:0:0 |
 | PROJ-39 | Eval-Judge-Parsing-Härtung (dialog_naturalness + slotDepth) | Revision | Interview Engine | PROJ-31 | Deployed | [spec](interview-engine/PROJ-39-eval-judge-parsing-haertung.md) | P1 | S | 0:0:1 |
-| PROJ-40 | Eval-Instrument-Validierung + Versuchsplan | Revision | Interview Engine | PROJ-31 | Approved | [spec](interview-engine/PROJ-40-eval-instrument-validierung-versuchsplan.md) | P1 | L | 0:0:0 |
+| PROJ-40 | Eval-Instrument-Validierung + Versuchsplan | Revision | Interview Engine | PROJ-31 | Deployed | [spec](interview-engine/PROJ-40-eval-instrument-validierung-versuchsplan.md) | P1 | L | 0:0:0 |
 | PROJ-41 | Interview-Modell-Auswahl (OSS-Screening + EU-Prod-Route) | Revision | Platform | PROJ-9 | Blocked | [spec](platform/PROJ-41-interview-modell-auswahl.md) | P1 | L | — |
-| PROJ-42 | Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard) | Revision | Interview Engine | PROJ-22 | Approved | [spec](interview-engine/PROJ-42-interview-grenzfall-robustheit.md) | P0 | M | 0:1:1 |
-| PROJ-43 | Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards) | Revision | Interview Engine | PROJ-29 | Approved | [spec](interview-engine/PROJ-43-elicitation-reorientierung.md) | P1 | XL | 0:1:2 |
-| PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | Approved | [spec](interview-engine/PROJ-44-pipeline-simplifikation.md) | P1 | XL | 0:2:0 |
+| PROJ-42 | Interview-Grenzfall-Robustheit (Wrap-up + Rollen-Guard) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-42-interview-grenzfall-robustheit.md) | P0 | M | 0:1:1 |
+| PROJ-43 | Elicitation-Reorientierung (AI-Treiber, Zahlen→Cards) | Revision | Interview Engine | PROJ-29 | Deployed | [spec](interview-engine/PROJ-43-elicitation-reorientierung.md) | P1 | XL | 0:1:2 |
+| PROJ-44 | Pipeline-Simplifikation (Analyst-vor-Talker + Legacy-Pfad) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-44-pipeline-simplifikation.md) | P1 | XL | 0:2:0 |
 | PROJ-45 | Schema-Konsolidierung + AI-Wert-Faktoren | Revision | Wissensbank | PROJ-25 | Deployed | [spec](wissensbank/PROJ-45-schema-konsolidierung-ai-wert-faktoren.md) | P1 | XL | 0:1:0 |
-| PROJ-46 | Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst) | Revision | Interview Engine | PROJ-22 | Approved | [spec](interview-engine/PROJ-46-talker-briefing-konsolidierung.md) | P1 | XL | 0:0:1 |
+| PROJ-46 | Talker-Briefing-Konsolidierung (Judgment-Signale → Analyst) | Revision | Interview Engine | PROJ-22 | Deployed | [spec](interview-engine/PROJ-46-talker-briefing-konsolidierung.md) | P1 | XL | 0:0:1 |
 | PROJ-47 | Clarification-Card-Generierung entkoppeln (LLM-Teil: OpenItem/Qualitative) | Revision | Interview Engine | PROJ-43 | Roadmap | — | P2 | — | — |
-| PROJ-48 | Fokus-Lock-Härtung (Bootstrap, Discovery-Exhausted-Guard, Talker-Zieltreue) | Revision | Interview Engine | PROJ-44 | Approved | [spec](interview-engine/PROJ-48-fokus-lock-haertung.md) | P1 | L | 0:0:1 |
+| PROJ-48 | Fokus-Lock-Härtung (Bootstrap, Discovery-Exhausted-Guard, Talker-Zieltreue) | Revision | Interview Engine | PROJ-44 | Deployed | [spec](interview-engine/PROJ-48-fokus-lock-haertung.md) | P1 | L | 0:0:1 |
 | PROJ-49 | Prozess-Priorisierungsmechanik (KI-Relevanz-Bewertung entdeckter Prozesse) | Epic | Use Case Engine | — | Roadmap | — | P2 | — | — |
 | PROJ-50 | Opener-Frage-Überarbeitung (Hauptaufgaben/Arbeitstag mischt zwei Antworten) | Revision | Interview Engine | PROJ-2 | Roadmap | — | P2 | — | — |
 | PROJ-51 | Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung) | Extension | Interview Engine | PROJ-43 | Roadmap | — | P2 | — | — |
