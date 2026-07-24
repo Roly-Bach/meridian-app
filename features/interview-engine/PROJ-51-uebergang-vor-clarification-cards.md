@@ -1,6 +1,6 @@
 # PROJ-51: Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung)
 
-## Status: Planned
+## Status: In Progress
 **Type:** Extension
 **Domain:** Interview Engine
 **Extends:** PROJ-43
@@ -132,6 +132,17 @@ ChatInterface
 - **`page.tsx`**: `ClarificationView` und `ChatCompletedScreen` sind jetzt in `<FadeIn>` gewrappt.
 - **`progress.tsx`** (shadcn-Komponente, lokal erweitert): neuer optionaler `indicatorClassName`-Prop, damit die Progress-Füllung Meridian Pink (`#E040FB`) statt des shadcn-Default-`bg-primary` nutzt — konsistent mit der bestehenden Konvention (Interview-UI nutzt durchgängig Hex-Werte statt Theme-Tokens). Keine Breaking-Change, da `Progress` vorher nirgends im Projekt verwendet wurde.
 - **Manuell verifiziert** (Playwright gegen echten Dev-Server, Netzwerk-Mocks nur für die Backend-Antworten, alle UI-Interaktionen real): Auto-Advance nach 5s, sofortiger Advance per Klick, beide Zielpfade (mit Cards → `ClarificationView`, ohne Cards → `ChatCompletedScreen`), `prefers-reduced-motion` (Countdown-Balken ausgeblendet, kein Fade). `npm run build` + `npm run lint` grün.
+
+## Implementation Notes — Update 2026-07-24 (Cycle 2, nach Refinement)
+
+Umsetzung des Refinements oben (kein Auto-Advance, Button ersetzt `ChatInput`):
+
+- **`TransitionPrompt.tsx`**: komplett neu geschrieben. Countdown-`setInterval`/`Progress`-Rendering entfernt. Nur noch Button + `onAdvance()`-Klick-Handler, doppelt abgesichert gegen Doppel-Trigger: `firedRef` (Guard gegen zwei synchrone Klicks vor Re-Render) UND jetzt zusätzlich echtes `disabled`-Attribut über `fired`-State (schließt BUG-2 aus Zyklus 1 — vorher nur funktional, nicht visuell abgesichert). Styling auf die zentrierte `max-w-[760px] mx-auto`-Footer-Leiste von `ChatInput.tsx:67` umgestellt (`border-t border-[#E5E5E5] bg-white px-6 py-4`), damit der Button optisch nahtlos an derselben Stelle sitzt.
+- **`ChatInterface.tsx`**: `MessageList` bekommt keinen `footer`-Prop mehr. Der feste Footer-Bereich rendert jetzt conditional: `{pendingTransition ? <TransitionPrompt onAdvance={handleAdvance} /> : <ChatInput ... />}` — `ChatInput` ist während eines ausstehenden Übergangs nicht mehr im DOM (vorher: sichtbar, nur `disabled`).
+- **`MessageList.tsx`**: `footer`-Prop-Erweiterung aus Zyklus 1 zurückgenommen (kein Consumer mehr) — zurück auf den ursprünglichen `{ messages }`-Props-Typ.
+- **`progress.tsx`** (shadcn): `indicatorClassName`-Erweiterung aus Zyklus 1 zurückgenommen (kein Consumer mehr, `Progress` wird im Interview-Flow nicht mehr verwendet) — zurück auf shadcn-Standard.
+- **`FadeIn.tsx`** / **`page.tsx`**: unverändert — die Fade-Überblendung beim eigentlichen Bildschirmwechsel (AC3) ist von der Auto-Advance-Entfernung nicht betroffen.
+- **Manuell verifiziert** (Playwright gegen echten Dev-Server + Screenshot): Button erscheint exakt an `ChatInput`s Position, keine Textarea/Mikrofon/Senden-Button sichtbar während `pendingTransition`, kein Countdown/Progress mehr vorhanden, Klick löst sofort aus, Button visuell disabled nach Klick, `prefers-reduced-motion` weiterhin ohne Fade. `npm run build` + `npm run lint` grün, 867/867 Unit-Tests (863 + 4 neue `TransitionPrompt.test.tsx`, keine Fake-Timer mehr nötig), 5/5 E2E-Tests (`tests/PROJ-51-...spec.ts`, Auto-Advance-Test entfernt, neuer Disabled-State-Test ergänzt).
 
 ## QA Test Results
 

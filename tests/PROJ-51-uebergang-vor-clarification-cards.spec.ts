@@ -7,6 +7,10 @@ import { randomUUID } from 'crypto'
 // intercepted via page.route — this is pure frontend timing/UI behavior, no real
 // interview data needed (mirrors PROJ-3's error-state tests, which also navigate
 // to arbitrary tokens without a DB fixture).
+//
+// Refinement 2026-07-24 (live feedback): no more auto-advance timer — the
+// "Weiter" button replaces ChatInput entirely at its fixed footer position
+// instead of appearing inline in the message history, and only fires on click.
 // ────────────────────────────────────────────────────────────────────────────
 
 const EXISTING_TURN = {
@@ -59,7 +63,7 @@ async function mockBaseRoutes(page: Page, token: string, secondGetResponse: Reco
 }
 
 test.describe('PROJ-51 — Übergang vor Clarification Cards', () => {
-  test('AC1 + AC2 (completed-path): "Weiter" button + progress appear after streaming, click advances immediately to ChatCompletedScreen', async ({ page }) => {
+  test('AC1 + AC2 (completed-path): "Weiter" button replaces ChatInput, click advances immediately to ChatCompletedScreen', async ({ page }) => {
     const token = randomUUID()
     await mockBaseRoutes(page, token, {
       interview: { id: 'interview-1', employee_name: 'Test Employee', status: 'completed' },
@@ -79,19 +83,16 @@ test.describe('PROJ-51 — Übergang vor Clarification Cards', () => {
 
     const advanceBtn = page.getByRole('button', { name: 'Weiter' })
     await expect(advanceBtn).toBeVisible({ timeout: 10000 })
-    // Progress is aria-hidden (decorative, the button is the a11y-relevant control),
-    // so it's excluded from the accessibility tree — query the raw DOM attribute instead.
-    await expect(page.locator('[role="progressbar"]')).toBeVisible()
 
-    // AC1: chat input disabled while transition is pending
-    await expect(textarea).toBeDisabled()
+    // AC1: ChatInput (textarea + mic + send) is fully replaced, not just disabled
+    await expect(textarea).not.toBeVisible()
 
-    // AC2/AC1: click advances immediately, no need to wait for the 5s auto-delay
+    // AC1: click advances immediately — no auto-advance timer exists anymore
     await advanceBtn.click()
     await expect(page.getByText('Vielen Dank! Das Interview wurde abgeschlossen.')).toBeVisible({ timeout: 2000 })
   })
 
-  test('AC1 + AC2 (clarification-path): auto-advances to ClarificationView after ~5s without a click', async ({ page }) => {
+  test('AC1 + AC2 (clarification-path): "Weiter" button click advances to ClarificationView', async ({ page }) => {
     const token = randomUUID()
     await mockBaseRoutes(page, token, {
       interview: { id: 'interview-1', employee_name: 'Test Employee', status: 'active' },
@@ -114,9 +115,9 @@ test.describe('PROJ-51 — Übergang vor Clarification Cards', () => {
     const advanceBtn = page.getByRole('button', { name: 'Weiter' })
     await expect(advanceBtn).toBeVisible({ timeout: 10000 })
 
-    // No click — wait past the fixed 5s delay (AC1) and confirm auto-advance to
-    // the clarification screen (AC2: identical mechanism, different target).
-    await expect(page.getByText('Noch ein paar kurze Bestätigungen')).toBeVisible({ timeout: 7000 })
+    // AC2: identical click-to-advance mechanism, different target screen
+    await advanceBtn.click()
+    await expect(page.getByText('Noch ein paar kurze Bestätigungen')).toBeVisible({ timeout: 2000 })
   })
 
   test('Double-click on "Weiter" does not double-fire the transition', async ({ page }) => {
@@ -154,7 +155,33 @@ test.describe('PROJ-51 — Übergang vor Clarification Cards', () => {
     await expect(page.getByText('Vielen Dank! Das Interview wurde abgeschlossen.')).toHaveCount(1)
   })
 
-  test('AC3: prefers-reduced-motion hides the countdown progress bar', async ({ page }) => {
+  test('Edge case: "Weiter" button visually disables after click', async ({ page }) => {
+    const token = randomUUID()
+    await mockBaseRoutes(page, token, {
+      interview: { id: 'interview-1', employee_name: 'Test Employee', status: 'active' },
+      state: { phase: 'clarification' },
+      turns: [EXISTING_TURN],
+      openerText: null,
+      clarificationCards: [
+        { process_step_id: 'S001', step_title: 'Rechnungsprüfung', question: 'Wie oft kommt dieser Schritt vor?', options: [], slot_key: 'frequency', answer_type: 'single', direction: null },
+      ],
+      clarificationAnswers: null,
+    })
+
+    await page.goto(`/interview/${token}`)
+    await page.waitForLoadState('networkidle')
+
+    const textarea = page.locator('textarea')
+    await textarea.fill('Das war alles von mir.')
+    await textarea.press('Enter')
+
+    const advanceBtn = page.getByRole('button', { name: 'Weiter' })
+    await expect(advanceBtn).toBeVisible({ timeout: 10000 })
+    await advanceBtn.click()
+    await expect(advanceBtn).toBeDisabled()
+  })
+
+  test('AC3: prefers-reduced-motion skips the fade transition on the target screen', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const token = randomUUID()
     await mockBaseRoutes(page, token, {
@@ -172,9 +199,6 @@ test.describe('PROJ-51 — Übergang vor Clarification Cards', () => {
     const textarea = page.locator('textarea')
     await textarea.fill('Alles klar, danke.')
     await textarea.press('Enter')
-
-    await expect(page.getByRole('button', { name: 'Weiter' })).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('[role="progressbar"]')).not.toBeVisible()
 
     // BUG-1 regression: the FadeIn wrapper around the target screen must not
     // carry an active opacity transition under prefers-reduced-motion — a

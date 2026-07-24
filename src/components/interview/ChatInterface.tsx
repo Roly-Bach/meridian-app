@@ -185,18 +185,19 @@ export function ChatInterface({ token, employeeName, existingTurns, openerText, 
         </div>
       )}
 
-      <MessageList
-        messages={messages}
-        footer={pendingTransition && <TransitionPrompt onAdvance={handleAdvance} />}
-      />
+      <MessageList messages={messages} />
 
-      <ChatInput
-        onSend={handleSend}
-        disabled={isStreaming || pendingTransition !== null}
-        voiceToken={token}
-        onVoiceCommitted={handleSend}
-        isStreamingAgent={isStreaming}
-      />
+      {pendingTransition ? (
+        <TransitionPrompt onAdvance={handleAdvance} />
+      ) : (
+        <ChatInput
+          onSend={handleSend}
+          disabled={isStreaming}
+          voiceToken={token}
+          onVoiceCommitted={handleSend}
+          isStreamingAgent={isStreaming}
+        />
+      )}
     </div>
   )
 }
