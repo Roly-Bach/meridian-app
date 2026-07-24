@@ -181,6 +181,33 @@ test.describe('PROJ-51 — Übergang vor Clarification Cards', () => {
     await expect(advanceBtn).toBeDisabled()
   })
 
+  test('BUG-4 fix: focus moves to the "Weiter" button after ChatInput unmounts', async ({ page }) => {
+    const token = randomUUID()
+    await mockBaseRoutes(page, token, {
+      interview: { id: 'interview-1', employee_name: 'Test Employee', status: 'completed' },
+      state: { phase: 'wrap_up' },
+      turns: [EXISTING_TURN],
+      openerText: null,
+      clarificationCards: null,
+      clarificationAnswers: null,
+    })
+
+    await page.goto(`/interview/${token}`)
+    await page.waitForLoadState('networkidle')
+
+    const textarea = page.locator('textarea')
+    await textarea.fill('Alles klar, danke.')
+    await textarea.focus()
+    await textarea.press('Enter')
+
+    // BUG-4 regression: when ChatInput unmounts (replaced by the "Weiter"
+    // button), keyboard/screen-reader users must not lose focus context —
+    // focus must land on the new button, not fall back to <body>.
+    const advanceBtn = page.getByRole('button', { name: 'Weiter' })
+    await expect(advanceBtn).toBeVisible({ timeout: 10000 })
+    await expect(advanceBtn).toBeFocused()
+  })
+
   test('AC3: prefers-reduced-motion skips the fade transition on the target screen', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const token = randomUUID()

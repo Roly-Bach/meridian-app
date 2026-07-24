@@ -39,4 +39,11 @@ describe('TransitionPrompt', () => {
 
     expect(onAdvance).toHaveBeenCalledTimes(1)
   })
+
+  it('BUG-4 fix: focus moves to the button on mount so keyboard/screen-reader users do not lose context', () => {
+    const onAdvance = vi.fn()
+    render(<TransitionPrompt onAdvance={onAdvance} />)
+
+    expect(screen.getByRole('button', { name: 'Weiter' })).toHaveFocus()
+  })
 })

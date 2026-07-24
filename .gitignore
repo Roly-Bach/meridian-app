@@ -77,3 +77,4 @@ next-env.d.ts
 /.claude/skills/writing-fragments
 /.claude/skills/writing-great-skills
 /.claude/skills/writing-shape
+.env*

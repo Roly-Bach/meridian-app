@@ -1,11 +1,11 @@
 # PROJ-51: Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung)
 
-## Status: In Progress
+## Status: Approved
 **Type:** Extension
 **Domain:** Interview Engine
 **Extends:** PROJ-43
 **Appetite:** S (Stunden – ½ Tag)
-**Bugs:** 0:0:2 (Stand vor Refinement, siehe unten — wird bei nächstem `/qa` neu ermittelt)
+**Bugs:** 0:0:0 (Cycle 2 / Refinement-QA, BUG-4 gefixt und verifiziert — ersetzt den Cycle-1-Stand 0:0:2)
 **Created:** 2026-07-24
 **Last Updated:** 2026-07-24
 
@@ -234,6 +234,75 @@ Fix für BUG-1 verifiziert, nicht nur laut Fix-Notiz übernommen:
 - `npm run build`: clean.
 
 BUG-1 damit von Medium auf gelöst. BUG-2/BUG-3 (Low) bleiben offen, kein Blocker — siehe Bugs-Abschnitt oben.
+
+## QA Test Results — Cycle 2 (2026-07-24, Refinement: kein Auto-Advance, Button ersetzt ChatInput)
+
+**Getestet gegen:** Commit `040d814` (main, working tree sauber). Testet den überarbeiteten Zielzustand aus dem Refinement-Abschnitt oben (kein Auto-Advance, `TransitionPrompt` ersetzt `ChatInput` an derselben Footer-Position). Der QA-Abschnitt für Cycle 1 (Auto-Advance-Variante) oben bleibt als historischer Nachweis stehen und wird durch diesen Abschnitt fachlich abgelöst.
+
+### Automatisiert
+- `npm run lint` (tsc --noEmit): clean
+- `npm test`: **867/867 grün** (70 Testdateien; Rückgang von 868→867 gegenüber Cycle 1 durch Ersatz der 5 alten `TransitionPrompt`-Tests durch 4 neue, siehe `TransitionPrompt.test.tsx`)
+- `npx playwright test tests/PROJ-51-uebergang-vor-clarification-cards.spec.ts --project=chromium`: **5/5 grün**
+- Regressionslauf `tests/PROJ-3-interview-ui.spec.ts` + `tests/PROJ-43-elicitation-reorientierung.spec.ts` (chromium): **25/26 grün, 1 vorbestehender Flake** (`Chat page: agent greeting appears automatically on first open` — identisch mit dem in Cycle 1 dokumentierten **PROJ-43-BUG-1 / KI-31**, nicht durch PROJ-51 verursacht, kein neuer Code-Pfad berührt diesen Test)
+- Mobile Safari/webkit-Projekt nicht mitgelaufen (bekanntes Environment-Problem, Memory `reference_playwright_e2e_harness_hang` — nicht PROJ-51-spezifisch)
+
+### Acceptance Criteria
+
+**AC1 — Übergang nur per manuellem Klick, Button ersetzt die Eingabeleiste**
+- [x] Kein sofortiger Bildschirmwechsel nach Streaming-Ende (E2E)
+- [x] "Weiter"-Button erscheint an `ChatInput`s fester Footer-Position, Stil konsistent zu `ClarificationView.tsx` (Code-Review `TransitionPrompt.tsx:22-33` + E2E)
+- [x] `ChatInput` (Textarea + Mikrofon + Senden-Button) ist währenddessen komplett aus dem DOM entfernt, kein Overlay (E2E: `expect(textarea).not.toBeVisible()`, Code-Review `ChatInterface.tsx:190-200` — echter conditional Swap, kein `disabled`)
+- [x] Kein Timer, kein Countdown (Code-Review: `TransitionPrompt.tsx` enthält kein `setInterval`/`Progress` mehr; `grep` auf `indicatorClassName` im gesamten `src/` liefert keinen Treffer — Cycle-1-Erweiterung vollständig zurückgenommen)
+- [x] Klick löst Übergang sofort aus (Unit + E2E)
+
+**AC2 — Einheitlicher Mechanismus für beide Zielzustände**
+- [x] Identischer `pendingTransition`-State + `TransitionPrompt` für `ClarificationView`- und `ChatCompletedScreen`-Pfad (Code-Review `ChatInterface.tsx:105-138`, beide E2E-Pfade grün)
+- [x] Kein Verhaltensunterschied außer Zielbildschirm
+
+**AC3 — Sanfte Überblendung beim eigentlichen Wechsel**
+- [x] CSS-Fade-Transition (~300ms) beim Komponenten-Swap (`FadeIn.tsx`, in `page.tsx:97-99`/`105-113` um beide Zielbildschirme gewrappt)
+- [x] Reines CSS/Tailwind, keine neue Library (package.json unverändert)
+- [x] `prefers-reduced-motion: reduce` → sofortiger Swap ohne Fade — BUG-1 aus Cycle 1 bleibt gefixt (`FadeIn.tsx:20` trägt weiterhin `motion-reduce:transition-none motion-reduce:duration-0`), erneut per E2E verifiziert (`getComputedStyle(...).transitionDuration === '0s'`)
+
+### Edge Cases
+- [x] Doppelklick auf "Weiter" löst Übergang nur einmal aus — jetzt zusätzlich mit echtem `disabled`-Attribut nach Klick (Unit + E2E, schließt Cycle-1-**BUG-2** endgültig)
+- [x] Tippen in die (nicht mehr sichtbare) Eingabeleiste strukturell unmöglich — `ChatInput` ist unmounted, nicht nur deaktiviert (Code-Review)
+- [x] `prefers-reduced-motion` aktiv — siehe AC3
+- [x] Verbindungsabbruch/Reconnect während anstehendem Übergang beeinflusst `TransitionPrompt` nicht (Code-Review `useInterviewStream.ts`: `reconnect()` ist ein einmaliger Request ohne Polling, keine Kopplung an `pendingTransition`-State)
+
+### Neuer Befund (nicht in der Spec als Edge Case dokumentiert)
+Bei manueller Fokus-Prüfung (Playwright `document.activeElement` nach dem Unmount von `ChatInput`): wenn der Mitarbeiter mit der Tastatur/einem Screenreader arbeitet und in der fokussierten `Textarea` `Enter` drückt, verschwindet diese beim Phasenwechsel ersatzlos aus dem DOM. Der Fokus fällt dabei auf `<body>` zurück — weder wird der Fokus programmatisch auf den neuen "Weiter"-Button gesetzt, noch gibt es eine `aria-live`-Ankündigung des Phasenwechsels. Für Screenreader-Nutzer ist damit nicht erkennbar, dass ein neues interaktives Element (der Button) erschienen ist; sie müssten die Seite erneut explorieren, um es zu finden. Siehe **BUG-4** unten.
+
+### Bugs
+
+**BUG-4 (Low) — Fokus geht beim `ChatInput`→`TransitionPrompt`-Wechsel verloren, keine Screenreader-Ankündigung**
+Reproduktion: Textarea fokussieren, Nachricht senden (Enter), warten bis Server-Status einen Phasenwechsel meldet. `ChatInput` wird unmounted, `TransitionPrompt` gerendert. `document.activeElement` ist danach `<body>` statt des neuen "Weiter"-Buttons — verifiziert per Playwright-Check (`ACTIVE ELEMENT: BODY`). Kein `aria-live`-Bereich kündigt den Phasenwechsel an. Praktische Auswirkung: sehende Tastatur-Nutzer müssen erneut per Tab navigieren, um den Button zu erreichen; Screenreader-Nutzer erfahren nichts vom neuen interaktiven Element, bis sie die Seite erneut explorieren.
+Datei: `src/components/interview/ChatInterface.tsx:190-200` (Swap-Stelle), `src/components/interview/TransitionPrompt.tsx` (fehlender Fokus/`aria-live`)
+→ Fix-Ansatz: Fokus programmatisch auf den "Weiter"-Button setzen (`ref` + `.focus()`) sobald `TransitionPrompt` mountet, plus optional `aria-live="polite"`-Ankündigung des Phasenwechsels.
+
+**Fix (2026-07-24, direkt in dieser QA-Session auf Nutzerwunsch):** `TransitionPrompt.tsx` bekommt einen `buttonRef` + `useEffect`, der den Button beim Mount fokussiert (`buttonRef.current?.focus()`), sowie einen `sr-only`-`<span role="status" aria-live="polite">`, der den Phasenwechsel textlich ankündigt ("Das Gespräch ist an dieser Stelle abgeschlossen. Klicke auf 'Weiter', um fortzufahren."). `Button` (shadcn) forwarded `ref` bereits nativ (`React.forwardRef`), keine Änderung an `button.tsx` nötig.
+Verifiziert: neuer Unit-Test `TransitionPrompt.test.tsx` ("BUG-4 fix: focus moves to the button on mount…") + neuer E2E-Test `tests/PROJ-51-...spec.ts` ("BUG-4 fix: focus moves to the 'Weiter' button after ChatInput unmounts", `expect(advanceBtn).toBeFocused()`). `npm run lint` clean, `npm test`: **868/868 grün** (867 + 1 neuer Fokus-Unit-Test), `npx playwright test tests/PROJ-51-...spec.ts --project=chromium`: **6/6 grün** (5 + 1 neuer Fokus-E2E-Test).
+
+Verwandte Cycle-1-Bugs — Status:
+- **BUG-1** (Medium, reduced-motion) — weiterhin gefixt, siehe AC3 oben.
+- **BUG-2** (Low, Button nicht visuell deaktiviert) — behoben (siehe Edge Cases oben, `disabled`-Attribut + Test).
+- **BUG-3** (Low, kein Screenreader-Hinweis vor automatischem Wechsel) — durch die Refinement-Entscheidung "kein Auto-Advance" strukturell entfallen (es gibt keinen automatischen Wechsel mehr, vor dem gewarnt werden müsste). Abgelöst durch das neue, enger gefasste **BUG-4** oben (Fokus/Ankündigung beim manuellen Wechsel).
+
+### Regressionstests
+- `MessageList.tsx`: `footer`-Prop-Erweiterung aus Cycle 1 vollständig zurückgenommen, zurück auf ursprünglichen `{ messages }`-Typ (Code-Review, keine anderen Consumer, Regressionslauf PROJ-3/PROJ-43 grün)
+- `progress.tsx`: `indicatorClassName`-Erweiterung zurückgenommen, Komponente zurück auf shadcn-Standard, keine Consumer mehr im Projekt (`grep` bestätigt)
+- Kein neues Backend/keine neue Route — Object-Ownership-Pflichtpunkt entfällt weiterhin
+
+### Security-Audit
+Unverändert gegenüber Cycle 1: reiner Frontend-Scope, kein neuer Server-State, keine neue Route, kein User-Input-Rendering in `TransitionPrompt`/`FadeIn`. Keine Befunde.
+
+### Eval-Gate — Hinweis + User-Entscheidung (fortgeführt aus Cycle 1)
+PROJ-51 bleibt reiner Client-Timing-Layer, kein Backend-/Turn-Loop-/Prompt-Code betroffen — die Refinement-Änderung (kein Auto-Advance, andere Button-Position) verstärkt das eher (noch weniger Server-Interaktion als Cycle 1). Die Cycle-1-User-Entscheidung, das Eval-Gate für PROJ-51 als nicht anwendbar zu behandeln, gilt unverändert fort. E2E-Suite bleibt Ersatznachweis.
+
+### Production-Ready Empfehlung
+**0 Critical, 0 High, 0 Medium, 1 Low (BUG-4).** Nach der Bugs-H:M:L-Regel technisch **READY**.
+
+**Re-Check abgeschlossen (2026-07-24): BUG-4 gefixt und verifiziert** (siehe Fix-Notiz oben). **0 Critical, 0 High, 0 Medium, 0 Low. READY.** Status → **Approved**.
 
 ## Deployment
 
