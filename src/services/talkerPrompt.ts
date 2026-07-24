@@ -197,7 +197,7 @@ function formatStepTracker(steps: StepEntry[]): string {
 // Iteration 1 (ADR-011 D7): Max. 5 Zeilen pro Phase, taktisches Briefing.
 // Injected per-turn in buildDynamicContext so static prompt stays cacheable.
 
-function buildPhaseMethodology(phase: Phase, hasExploringSteps = false, isCompletionFarewell = false): string {
+function buildPhaseMethodology(phase: Phase, isCompletionFarewell = false): string {
   if (phase === 'intro') {
     return `## Methodik: intro
 Erkläre kurz den Gesprächszweck (Prozesswissen dokumentieren, vertraulich behandelt) und stelle eine offene Einstiegsfrage.
@@ -222,21 +222,27 @@ Welcher Schritt und welches Themenfeld gerade dran sind, legt ausschließlich de
   }
 
   if (phase === 'clarification') {
-    if (hasExploringSteps) {
-      // Pt8: Late-topic routing — exploring steps exist, no clarification cards.
-      // Ask 1-2 targeted questions about the late-discovered topic, then wind down.
-      return `## Methodik: clarification (late topic)
-Ein neu genannter Prozessschritt wurde entdeckt. Stelle 1–2 gezielte Fragen dazu: Häufigkeit, Dauer, genutzte Systeme.
-Kein vollständiger Walkthrough nötig — kurze direkte Fragen, max. 2 Turns.
-Danach kurz verabschieden.`
-    }
     // BUG-5 (PROJ-42 QA, 2026-07-16): this turn is the closing→clarification
-    // transition (cards are pending, no step still exploring) — previously a
-    // bare "hier sind Abschlussfragen" announcement with no farewell anywhere
-    // in the interview, violating the AC's "jede Beendigung läuft über eine
+    // transition (cards are pending) — previously a bare "hier sind
+    // Abschlussfragen" announcement with no farewell anywhere in the
+    // interview, violating the AC's "jede Beendigung läuft über eine
     // formulierte, kohärente Verabschiedung". Fold a real farewell into this
     // single Talker turn instead of a separate call — matches the AC order
     // (Verabschiedung → Cards → completed) without a second LLM round-trip.
+    //
+    // KI-36 (Praxistest Sayang 2026-07-24): this branch used to fork on
+    // hasExploringSteps — a step never even walked through (e.g. bulk-
+    // registered from a Turn-1 process enumeration the Fokus-Lock never
+    // reached) triggered a "late topic" variant that asked 1–2 MORE open
+    // questions before winding down. Cards are always computed/pinned in the
+    // SAME turn this phase is entered (resolveTurnLifecycle), so that further
+    // question was never answerable — the frontend swaps to the
+    // clarification TransitionPrompt as soon as it sees phase==='clarification'
+    // WITH cards (ChatInterface.tsx's checkCompleted), leaving whatever the
+    // Talker just asked without a reply box. The clarification-entry turn now
+    // unconditionally reads as a clean farewell — an unexplored step's gaps
+    // go entirely through the clarification cards instead (PROJ-47/52
+    // territory, not this Talker turn's job).
     return `## Methodik: clarification
 Das inhaltliche Gespräch ist abgeschlossen. Verabschiede dich jetzt kurz und herzlich (z.B. Dank für die Zeit) UND weise im selben Antworttext darauf hin, dass gleich noch ein paar kurze Abschlussfragen im Interface erscheinen.
 Stelle im Chat KEINE weitere Frage — die Abschlussfragen erscheinen im Interface, nicht im Chat.`
@@ -313,7 +319,7 @@ export function buildDynamicContext(ctx: InterviewContext, briefing?: AnalystBri
   // (measured on interview 1f5d350d turn 31, 2026-07-11 batch). Short-circuiting here removes
   // both the token cost (~1562 → ~200-250) and the contradiction at once.
   if (ctx.isCompletionFarewell) {
-    const farewellMethodology = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, false, true)}\n</methodology>`
+    const farewellMethodology = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, true)}\n</methodology>`
     return `## Interview-Kontext
 - Mitarbeiter: ${ctx.employeeName}${ctx.employeeRole ? `, ${ctx.employeeRole}` : ''}
 - Abteilung: ${ctx.department}
@@ -352,8 +358,7 @@ ${farewellMethodology}`
   }
 
   // Phase methodology injected per-turn (not in static prompt)
-  const hasExploringSteps = ctx.stepTracker.some(s => s.status === 'exploring')
-  const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, hasExploringSteps, ctx.isCompletionFarewell)}\n</methodology>`
+  const methodologySection = `\n<methodology>\n${buildPhaseMethodology(ctx.phase, ctx.isCompletionFarewell)}\n</methodology>`
 
   // E3.6 — Profile-adaptive framing: inject only when role is known
   const profileFraming = ctx.employeeRole

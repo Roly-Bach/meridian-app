@@ -474,6 +474,19 @@ describe('resolveTurnLifecycle — hard stop', () => {
     expect(result.phase).toBe('clarification')
     expect(result.complete).toBe(false)
   })
+
+  // KI-36 (Praxistest Sayang 2026-07-24): a card pinned on the same turn
+  // hard-stop fires (even for a step still 'exploring') is fine at the
+  // resolveTurnLifecycle level — the fix (forcing a clean farewell instead of
+  // a further open question) lives in talkerPrompt.ts's methodology text, not
+  // here. See talkerPrompt.test.ts for that regression guard.
+  it('pins cards immediately even when the gapped step was never walked through (KI-36 fix lives in talkerPrompt.ts)', () => {
+    const tracker = [makeStep('Candidate Journey', 'exploring', emptySlots, { id: 'S003' })]
+    const result = resolveTurnLifecycle(baseCtx({ phase: 'explore', timerMinutes: 10, maxDurationMinutes: 10, stepTracker: tracker }), null)
+    expect(result.phase).toBe('clarification')
+    expect(result.complete).toBe(false)
+    expect(result.clarificationCards?.length).toBeGreaterThan(0)
+  })
 })
 
 // ─── D2 terminination invariant ───────────────────────────────────────────────

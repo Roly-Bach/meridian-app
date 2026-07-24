@@ -206,7 +206,7 @@ Die zwei `background`-Varianten sind der konkrete Beleg dafür, warum Closures e
 | `formatStepTracker(steps)` | rendert den vollen Tracker (alle Phasen außer walkthrough_step); `[done]`-Steps als Kompaktzeile (WP3, 2026-07-14), `walkthrough`/`exploring`-Steps weiterhin mit maskierten Slot-Werten (ADR-015 Fix 4) | intern | 111 |
 | `fmtPotenzial(sv, label)` | verschachtelt in `formatStepTracker`: zeigt bei Potenzial-Slots nur ✓/fehlt, nie den Rohwert (ADR-015 Fix 4) | intern (verschachtelt) | — |
 | `fmtTazite(sv, label)` | verschachtelt in `formatStepTracker`: dieselbe Maskierung für O2–O5-Tazite-Slots | intern (verschachtelt) | — |
-| `buildPhaseMethodology(phase, hasExploringSteps, isCompletionFarewell)` | Methodik-Textblock pro Phase, inkl. KI-19-Verzweigung | intern | 183 |
+| `buildPhaseMethodology(phase, isCompletionFarewell)` | Methodik-Textblock pro Phase, inkl. KI-19-Verzweigung; `clarification`-Zweig seit KI-36 (2026-07-24) ohne `hasExploringSteps`-Fork — immer Verabschiedung, keine "late topic"-Nachfragen mehr | intern | 183 |
 | `WALKTHROUGH_EXAMPLES` | einziges kanonisches Few-Shot-Beispiel (KI-20-Fix) | intern (const) | 284 |
 | `buildDynamicContext(ctx, briefing)` | Haupt-Assemblierungsfunktion des per-Turn dynamischen Prompts; früher Return-Zweig für `isCompletionFarewell` (WP1, 2026-07-14) unterdrückt fast den gesamten Block | exportiert | 306 |
 

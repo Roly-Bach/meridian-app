@@ -419,6 +419,17 @@ export function resolveTurnLifecycle(ctx: OrchestratorContext, analystSuggestion
   // ADR-022 (Nutzer-Korrektur): never skips already-generated clarification
   // cards — they carry the quantitative ROI slots — so a pending-cards turn
   // routes to 'clarification' instead of completing out from under them.
+  //
+  // KI-36 (fix relocated to talkerPrompt.ts): the turn that pins
+  // phase='clarification' + cards must always read as a clean farewell, never
+  // a further open question the frontend then makes unanswerable
+  // (ChatInterface.tsx's checkCompleted swaps to the TransitionPrompt as soon
+  // as it sees phase==='clarification' WITH cards — whatever the Talker just
+  // asked has no reply box left). That's enforced unconditionally in
+  // talkerPrompt.ts's buildPhaseMethodology (the former hasExploringSteps
+  // "late topic" branch, which could ask 1–2 more questions here, is removed
+  // — see that file for the rationale). This function's job stays unchanged:
+  // decide phase/cards from the tracker, nothing turn-count- or grace-based.
   if (ctx.timerMinutes >= ctx.maxDurationMinutes) {
     const cards = computeClarificationCards(ctx.stepTracker, analystSuggestion?.clarification_cards)
     if (cards.length > 0) {

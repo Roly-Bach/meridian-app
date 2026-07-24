@@ -73,6 +73,22 @@ describe('talkerPrompt — BUG-5 clarification-transition farewell regression', 
     const ctx = buildDynamicContext(baseContext({ phase: 'clarification' }))
     expect(ctx).toMatch(/KEINE weitere Frage/)
   })
+
+  // KI-36 (Praxistest Sayang 2026-07-24): a step still 'exploring' (never even
+  // walked through — e.g. bulk-registered from a Turn-1 process enumeration
+  // the Fokus-Lock never reached) used to route this same turn to a "late
+  // topic" variant that asked 1-2 MORE open questions before winding down.
+  // Cards are always pinned in the SAME turn (resolveTurnLifecycle), so that
+  // question was never answerable once the frontend swapped to the
+  // clarification TransitionPrompt. The clarification-entry turn must force
+  // the farewell regardless of stepTracker contents.
+  it('forces the farewell even when a step is still status exploring — no "late topic" follow-up question', () => {
+    const ctx = buildDynamicContext(baseContext({ phase: 'clarification', stepTracker: [trackerStep({ status: 'exploring' })] as any }))
+    expect(ctx).toMatch(/Verabschiede dich jetzt kurz und herzlich/)
+    expect(ctx).toMatch(/KEINE weitere Frage/)
+    expect(ctx).not.toMatch(/late topic/)
+    expect(ctx).not.toMatch(/gezielte Fragen dazu/)
+  })
 })
 
 // ─── WP1 regression: farewell turn suppresses the entire dynamic block ───────────
