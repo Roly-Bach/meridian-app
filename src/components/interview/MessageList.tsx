@@ -13,12 +13,21 @@ export type Message = {
 export function MessageList({ messages }: { messages: Message[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const isPinnedToBottomRef = useRef(true)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
-    if (distFromBottom < 120) {
+    const handleScroll = () => {
+      const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+      isPinnedToBottomRef.current = distFromBottom < 120
+    }
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    if (isPinnedToBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages])

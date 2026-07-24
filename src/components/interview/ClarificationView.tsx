@@ -101,18 +101,22 @@ export function ClarificationView({ token, employeeName, cards, initialAnswers, 
         <span className="text-[14px] font-medium text-[#111111]">Interview mit {employeeName}</span>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-6 max-w-[720px] mx-auto w-full">
-        <p className="text-[15px] text-[#111111] font-medium mb-6">
-          Noch ein paar kurze Bestätigungen zu dem was wir besprochen haben.
-        </p>
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 py-6 max-w-[720px] mx-auto w-full">
+          <p className="text-[15px] text-[#111111] font-medium mb-6">
+            Noch ein paar kurze Bestätigungen zu dem was wir besprochen haben.
+          </p>
 
-        <ClarificationCards cards={cards} answers={answers} onAnswer={handleAnswer} />
+          <ClarificationCards cards={cards} answers={answers} onAnswer={handleAnswer} />
 
-        {error && (
-          <p className="mt-4 text-[13px] text-[#EF4444]">{error}</p>
-        )}
+          {error && (
+            <p className="mt-4 text-[13px] text-[#EF4444]">{error}</p>
+          )}
+        </div>
+      </div>
 
-        <div className="mt-6 flex justify-end">
+      <div className="border-t border-[#E5E5E5] bg-white px-6 py-4 flex-shrink-0">
+        <div className="flex justify-end max-w-[760px] mx-auto">
           <Button
             onClick={handleSubmit}
             disabled={!allAnswered || isSubmitting}
