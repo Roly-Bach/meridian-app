@@ -1,6 +1,6 @@
 # PROJ-51: Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung)
 
-## Status: Approved
+## Status: Deployed
 **Type:** Extension
 **Domain:** Interview Engine
 **Extends:** PROJ-43
@@ -324,6 +324,28 @@ PROJ-51 bleibt reiner Client-Timing-Layer, kein Backend-/Turn-Loop-/Prompt-Code 
 
 **Prozess-Abweichung (dokumentiert):** Der übliche Workflow-Schritt "Code committed und gepusht" (G1-Precondition) führte hier zu einem Push auf `main`, bevor die Production-Deploy-Freigabe eingeholt wurde — in diesem Projekt löst ein Push auf `main` potenziell einen Auto-Deploy aus. User hat nachträglich per Rückfrage bestätigt weiterzumachen (kein Rollback nötig, PROJ-51 war bereits QA-approved mit 0 Critical/High/Medium). Für künftige `/deploy`-Läufe: Freigabe-Frage VOR dem Push stellen, nicht danach.
 
+## Deployment — Update 2026-07-24 (Cycle 2, BUG-4-Fix + finaler Deploy)
+
+**Production URL:** https://meridian-app-tau.vercel.app
+**Deployed:** 2026-07-24
+**Deployment ID:** `dpl_58BqFh9FRpwef3Y5wAPVNz1eusUX` (commit `d338c8a`, target `production`, region `fra1`)
+
+| Gate | Ergebnis |
+|------|----------|
+| G1 Static | pass — `npm run build` clean, `npm run lint` (tsc --noEmit) clean |
+| G2 Tests | pass — 868/868 Unit-Tests, 6/6 PROJ-51-E2E-Tests (chromium, inkl. BUG-4-Fokus-Regressionstest); Regressionslauf PROJ-3/PROJ-43 (chromium): 25 passed, 1 vorbestehender dokumentierter Flake (`agent greeting appears automatically` = PROJ-43-BUG-1/KI-31, nicht PROJ-51-verursacht) |
+| G3 Sandbox | n/a — GitHub-Auto-Deploy für Push auf `main` griff diesmal korrekt (state BUILDING → READY in ~1min), kein manueller `vercel --prod`-Fallback nötig |
+| G4 Permissions | n/a — reiner Frontend-Timing-Layer, keine Auth/RLS/API/LLM-Pfade berührt |
+
+**Diese Runde deployt:** den in QA Cycle 2 bereits verifizierten BUG-4-Fix (Fokus auf "Weiter"-Button + `aria-live`-Ankündigung beim `ChatInput`→`TransitionPrompt`-Wechsel), der zwischen QA-Abschluss und diesem `/deploy`-Lauf uncommitted im Working Tree lag, sowie den `features/INDEX.md`-Status-Sync (In Progress → Approved).
+
+**Freigabe-Reihenfolge korrigiert:** Anders als beim ersten PROJ-51-Deploy (siehe Post-Mortem-Regeländerungsvorschlag oben) wurde die Production-Approval-Frage diesmal VOR dem `git push` auf `main` gestellt (User-Freigabe per `AskUserQuestion` eingeholt, dann committed + gepusht). Prozess-Lehre aus Cycle 1 damit befolgt.
+
+**Post-Deployment-Verifikation:**
+- Production-URL lädt korrekt (`/login` → HTTP 200, `/` → HTTP 307 Redirect, curl-verifiziert)
+- `get_runtime_errors` (letzte Stunde): keine Runtime-Errors gefunden
+- Build-Logs sauber (Deployment state `READY`, alias korrekt auf `meridian-app-tau.vercel.app` gesetzt)
+
 ## Post-Mortem
 
 | Aspekt | Bewertung |
@@ -334,3 +356,14 @@ PROJ-51 bleibt reiner Client-Timing-Layer, kein Backend-/Turn-Loop-/Prompt-Code 
 | Vorgeschlagene Regeländerung | `/deploy` sollte die Production-Approval-Frage VOR dem `git push` auf `main` stellen, nicht erst vor dem expliziten `vercel --prod`-Aufruf — in diesem Projekt kann ein Push auf `main` direkt einen Auto-Deploy auslösen (bei diesem Lauf reagierte der Auto-Deploy zwar nicht, was den Fehler nicht sichtbar machte, aber das Risiko besteht strukturell). Nutzer-bestätigt, Aufnahme in `.claude/skills/deploy/SKILL.md` empfohlen. |
 | Build-Loop-Iterationen | nicht ermittelbar in dieser Session — Frontend-Implementierung erfolgte in einer vorherigen Konversation, dieser Session-Verlauf beginnt erst bei `/qa` |
 | Häufigste Fehlerkategorie im Loop | nicht ermittelbar (s.o.); in der QA-Runde selbst: 1 Spec-Lücke (BUG-1, reduced-motion), 2 dokumentierte Low-Abweichungen (BUG-2/3) |
+
+## Post-Mortem — Update 2026-07-24 (Cycle 2 / finaler Deploy)
+
+| Aspekt | Bewertung |
+|--------|-----------|
+| Spec-Genauigkeit | High — BUG-4-Fix-Ansatz aus der QA-Session passte 1:1, keine Überraschungen beim Deploy selbst |
+| Appetite vs. tatsächlich | geschätzt: S / tatsächlich: S |
+| Größte Überraschung | Keine — Ablauf war erwartungsgemäß (G1/G2 grün identisch zum QA-Report, Auto-Deploy lief diesmal sauber durch ohne manuellen `vercel --prod`-Fallback) |
+| Vorgeschlagene Regeländerung | Keine neue — die Cycle-1-Regel (Freigabe-Frage vor `git push`) wurde in diesem Lauf befolgt und hat sich bewährt |
+| Build-Loop-Iterationen | 0 — kein Coder-Loop in dieser Session, nur Commit + Push eines bereits fertigen, QA-verifizierten Diffs |
+| Häufigste Fehlerkategorie im Loop | „—" (kein Loop) |
