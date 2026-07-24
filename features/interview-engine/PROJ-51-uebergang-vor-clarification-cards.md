@@ -1,57 +1,59 @@
 # PROJ-51: Übergang vor Clarification Cards (kein abrupter Sprung nach Verabschiedung)
 
-## Status: Deployed
+## Status: Planned
 **Type:** Extension
 **Domain:** Interview Engine
 **Extends:** PROJ-43
 **Appetite:** S (Stunden – ½ Tag)
-**Bugs:** 0:0:2
+**Bugs:** 0:0:2 (Stand vor Refinement, siehe unten — wird bei nächstem `/qa` neu ermittelt)
 **Created:** 2026-07-24
 **Last Updated:** 2026-07-24
+
+## Refinement 2026-07-24 (Live-Feedback nach Deploy)
+
+Nach dem Production-Deploy (`dpl_EK2HpeJE3mAJdFTShSnJKf3KuxZH`, siehe Deployment-Sektion) hat der Nutzer den Übergang in einem echten Live-Interview erlebt und zwei Änderungen am Design angestoßen:
+
+1. **Kein Auto-Advance mehr.** Der automatische Übergang nach 5s fixer Wartezeit entfällt vollständig — nur noch manueller Klick auf "Weiter" löst den Übergang aus. Countdown-Anzeige entfällt damit ebenfalls.
+2. **Neue Position des "Weiter"-Buttons.** Statt inline unterhalb der letzten Nachricht (als `MessageList`-Footer) ersetzt der Button die komplette `ChatInput`-Zeile (Textarea + Mikrofon + Senden-Button) an ihrer festen Footer-Position, solange ein Übergang aussteht.
+
+Die Acceptance Criteria, Edge Cases und der Tech-Design-Abschnitt unten sind bereits auf diesen neuen Zielzustand aktualisiert. Die Abschnitte **Implementation Notes / QA Test Results / Deployment / Post-Mortem** weiter unten bleiben unverändert als historischer Nachweis des ERSTEN Baus/Deploys (Auto-Advance-Variante, 2026-07-24) stehen — sie beschreiben nicht mehr den aktuellen Zielzustand. Nach diesem Refine folgt ein neuer `/frontend` → `/qa` → `/deploy`-Zyklus für die überarbeitete Version.
 
 ## Context
 
 Nach der letzten Talker-Nachricht (Verabschiedung, inkl. Ankündigung der Abschlussfragen — `talkerPrompt.ts:224-233`) springt die UI ohne jede Verzögerung zum nächsten Bildschirm. Ursache: `checkCompleted()` in [ChatInterface.tsx:99-119](../../src/components/interview/ChatInterface.tsx#L99-L119) prüft unmittelbar nach Streaming-Ende den Server-Status und löst bei Bedarf sofort einen harten Komponenten-Swap aus — entweder zu `ClarificationView` (Zeile 109-112, wenn `phase === 'clarification'` und Cards vorhanden sind) oder direkt zu `ChatCompletedScreen` (Zeile 113-115, wenn `status === 'completed'` ohne Cards). Beide Pfade sind vom selben strukturellen Problem betroffen: der Mitarbeiter hat keine Zeit, die letzte Nachricht des Agenten zu lesen, bevor der Bildschirm wechselt.
 
-PROJ-51 führt einen einheitlichen, clientseitigen Übergangsmechanismus für beide Fälle ein: automatischer Wechsel nach fixer Wartezeit, jederzeit durch manuellen Klick überspringbar, mit sanfter Überblendung beim eigentlichen Wechsel. Reiner Frontend-Scope — kein Backend-Eingriff, keine neuen Felder, kein neuer State in der Turn-Loop.
+PROJ-51 führt einen einheitlichen, clientseitigen Übergangsmechanismus für beide Fälle ein: manueller Wechsel per "Weiter"-Button (kein automatischer Timer), mit sanfter Überblendung beim eigentlichen Wechsel. Reiner Frontend-Scope — kein Backend-Eingriff, keine neuen Felder, kein neuer State in der Turn-Loop.
 
 ## Dependencies
 - **Extends: PROJ-43** (Elicitation-Reorientierung) — führte den Clarification-Card-Mechanismus und die Farewell+Card-Ankündigung in einer Nachricht ein (`talkerPrompt.ts:224-233`), auf dem dieser Übergang aufbaut.
 
 ## User Stories
 - Als Mitarbeiter (interviewte Person) möchte ich die Verabschiedungsnachricht des Agenten vollständig lesen können, bevor die Abschlussfragen erscheinen, damit ich mich nicht überrumpelt fühle.
-- Als Mitarbeiter möchte ich den Übergang zu den Abschlussfragen selbst auslösen können, wenn ich schneller fertig bin als die automatische Wartezeit, damit ich nicht unnötig warten muss.
+- Als Mitarbeiter möchte ich den Übergang zu den Abschlussfragen durch einen klaren, bewussten Klick selbst auslösen, damit die Seite nicht ungefragt automatisch weiterspringt, während ich noch die Nachricht lese oder nachdenke.
 - Als Mitarbeiter möchte ich, dass der Bildschirmwechsel visuell sanft wirkt, damit sich das Interview als ein zusammenhängender, durchdachter Ablauf anfühlt statt als technischer Sprung.
 - Als KI-Berater möchte ich, dass dieser Übergang konsistent für beide Fälle gilt (mit und ohne anschließende Cards), damit das Verhalten nicht von einer für den Mitarbeiter unsichtbaren Server-Bedingung abhängt.
 
 ## Acceptance Criteria
 
-### AC1 — Verzögerter Übergang nach Streaming-Ende
+### AC1 — Übergang nur per manuellem Klick, Button ersetzt die Eingabeleiste
 - [ ] Sobald die letzte Talker-Nachricht vollständig gestreamt ist UND der Server-Status einen Phasenwechsel meldet (`phase === 'clarification'` mit Cards ODER `status === 'completed'`), wird der Bildschirmwechsel NICHT sofort ausgeführt.
-- [ ] Ein "Weiter"-Button (Stil konsistent zu [ClarificationView.tsx:116-122](../../src/components/interview/ClarificationView.tsx#L116-L122)) erscheint sofort nach Streaming-Ende unterhalb der letzten Nachricht.
-- [ ] Der Button zeigt einen dezenten visuellen Countdown-Indikator (z.B. Fortschrittsfüllung im Button), der die verbleibende Zeit bis zum automatischen Übergang visualisiert.
-- [ ] Ohne Klick erfolgt der automatische Übergang nach 5 Sekunden fixer Wartezeit (kein dynamisches Berechnen nach Textlänge).
-- [ ] Ein Klick auf den Button während der Wartezeit löst den Übergang sofort aus, unabhängig von der verbleibenden Countdown-Zeit.
+- [ ] An der festen Footer-Position, an der sonst `ChatInput` (Textarea + Mikrofon + Senden-Button) steht, erscheint sofort nach Streaming-Ende stattdessen ein "Weiter"-Button (Stil konsistent zu [ClarificationView.tsx:116-122](../../src/components/interview/ClarificationView.tsx#L116-L122)). `ChatInput` ist währenddessen nicht sichtbar (kein Overlay, echter Ersatz an derselben Stelle).
+- [ ] Kein automatischer Timer, kein Countdown — der Übergang erfolgt ausschließlich durch Klick auf den Button.
+- [ ] Ein Klick auf den Button löst den Übergang sofort aus.
 
 ### AC2 — Einheitlicher Mechanismus für beide Zielzustände
-- [ ] Der Übergangsmechanismus (Button + Countdown + Delay) gilt identisch für beide bestehenden `checkCompleted()`-Pfade: Wechsel zu `ClarificationView` (mit Cards) und direkter Wechsel zu `ChatCompletedScreen` (ohne Cards, `status === 'completed'`).
+- [ ] Der Übergangsmechanismus (Button ersetzt `ChatInput`, Übergang per Klick) gilt identisch für beide bestehenden `checkCompleted()`-Pfade: Wechsel zu `ClarificationView` (mit Cards) und direkter Wechsel zu `ChatCompletedScreen` (ohne Cards, `status === 'completed'`).
 - [ ] Kein Verhaltensunterschied zwischen den beiden Fällen aus Sicht des Mitarbeiters außer dem jeweils folgenden Zielbildschirm.
 
 ### AC3 — Sanfte Überblendung beim eigentlichen Wechsel
 - [ ] Der tatsächliche Komponenten-Swap (Chat-Ansicht → Zielbildschirm) erfolgt mit einer CSS-Fade-Transition (ca. 300–400ms), nicht als harter, unmittelbarer Wechsel.
 - [ ] Die Fade-Transition nutzt reines CSS/Tailwind, keine neue Animations-Library.
-- [ ] Nutzer mit `prefers-reduced-motion: reduce` erhalten den Wechsel ohne Fade-Animation (sofortiger Swap nach Ablauf der Wartezeit/Button-Klick).
-
-### AC4 — Verbindungsverhalten während der Wartezeit
-- [ ] Ein während der 5-Sekunden-Wartezeit auftretender Verbindungsabbruch mit anschließendem Reconnect beeinflusst den Countdown nicht — er läuft unverändert weiter, da der Serverzustand zu diesem Zeitpunkt bereits final ist (kein erneutes Polling während der Wartezeit nötig).
+- [ ] Nutzer mit `prefers-reduced-motion: reduce` erhalten den Wechsel ohne Fade-Animation (sofortiger Swap nach Button-Klick).
 
 ## Edge Cases
-- **Doppelklick auf "Weiter":** Button wird nach dem ersten Klick deaktiviert, kein doppeltes Auslösen des Übergangs möglich.
-- **Mitarbeiter scrollt während der Wartezeit in der Historie nach oben:** Countdown und Button bleiben unbeeinflusst, kein Pausieren durch Scroll-Verhalten.
-- **Sehr kurze Verabschiedungsnachricht:** Feste 5s gelten unabhängig von Nachrichtenlänge — kein Sonderfall.
-- **Verbindungsabbruch während der Wartezeit (siehe AC4):** Countdown läuft weiter, kein Pausieren.
-- **`prefers-reduced-motion` aktiv (siehe AC3):** Kein Fade, sofortiger Swap nach Delay/Klick.
-- **Mitarbeiter verlässt den Tab/wechselt Fenster während der Wartezeit:** Timer läuft im Hintergrund-Tab ggf. gedrosselt weiter (Browser-Standardverhalten) — kein Sonderverhalten nötig, da kein Datenverlust möglich (Übergang ist rein clientseitiges UI-Timing, Server-State bereits final).
+- **Doppelklick auf "Weiter":** Button wird nach dem ersten Klick deaktiviert (sichtbar, nicht nur intern geguarded — siehe BUG-2 aus dem ersten Zyklus, hier jetzt explizite AC statt nur Edge-Case-Text), kein doppeltes Auslösen des Übergangs möglich.
+- **`prefers-reduced-motion` aktiv (siehe AC3):** Kein Fade, sofortiger Swap nach Klick.
+- **Mitarbeiter versucht während anstehendem Übergang etwas in die (nicht mehr sichtbare) Eingabeleiste zu tippen:** Nicht möglich, da `ChatInput` durch den Button ersetzt ist, nicht nur überlagert — kein Sonderfall, strukturell ausgeschlossen.
 
 ## Technical Requirements (optional)
 - Kein neues Backend-Feld, keine neue API-Route — der bestehende `checkCompleted()`-Response-Shape (`ChatInterface.tsx:103-108`) bleibt unverändert.
@@ -98,6 +100,28 @@ Beides existiert nur im Browser-Tab, nichts wird an den Server geschickt. Bei ei
 ### Dependencies
 
 Keine neuen npm-Pakete. Button und Progress sind bereits im Projekt installiert (`src/components/ui/`).
+
+### Tech Design — Update 2026-07-24 (nach Refinement, siehe oben)
+
+Component Structure ändert sich gegenüber dem ersten Zyklus:
+
+```
+ChatInterface
+├── MessageList (footer-Prop entfällt wieder — TransitionPrompt lebt nicht
+│   mehr hier; footer-Prop-Erweiterung aus Zyklus 1 wird zu totem Code,
+│   Kandidat für Revert in MessageList.tsx)
+└── Footer-Slot (fest positioniert, wie bisher ChatInput):
+    ├── ChatInput (wenn kein Übergang aussteht — unverändert)
+    └── TransitionPrompt (wenn Übergang aussteht — ERSETZT ChatInput
+        an derselben Stelle, kein Nebeneinander)
+        └── "Weiter"-Button (kein Countdown, kein Progress-Element mehr)
+```
+
+- **`TransitionPrompt.tsx`**: Countdown-Logik (`setInterval`, `DELAY_MS`, `Progress`-Rendering) entfällt komplett. Nur noch Button + `onAdvance()`-Klick-Handler + `firedRef`-Guard (jetzt auch `disabled`-Attribut gesetzt, schließt BUG-2 aus Zyklus 1 mit). Styling wechselt von der rechtsbündigen `MessageList`-Footer-Optik auf die zentrierte `max-w-[760px] mx-auto`-Zeilenlogik von `ChatInput.tsx:67`, damit der Button optisch nahtlos an derselben Stelle sitzt.
+- **`ChatInterface.tsx`**: Der feste Footer-Bereich (aktuell Zeile 193-199, `<ChatInput .../>`) wird conditional: `pendingTransition ? <TransitionPrompt onAdvance={handleAdvance} /> : <ChatInput ... />`. Der `footer`-Prop an `<MessageList>` (Zeile 190) entfällt wieder.
+- **`MessageList.tsx`**: `footer`-Prop-Erweiterung aus Zyklus 1 zurücknehmen (kein Consumer mehr) — oder unangetastet lassen, falls ein künftiges Feature sie braucht; Entscheidung liegt bei `/frontend`.
+- **`progress.tsx`** (`indicatorClassName`-Erweiterung aus Zyklus 1): wird ebenfalls konsumentenlos. Kein Rückbau nötig (non-breaking, optionaler Prop), aber zur Kenntnis für `/frontend`.
+- Kein Einfluss auf `FadeIn.tsx`/`page.tsx` — die Fade-Überblendung beim eigentlichen Bildschirmwechsel (AC3) bleibt strukturell unverändert.
 
 ## Implementation Notes (Frontend)
 
