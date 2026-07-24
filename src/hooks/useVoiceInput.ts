@@ -167,6 +167,8 @@ export function useVoiceInput({
     }
 
     ws.onmessage = (event: MessageEvent) => {
+      // Ignore late events from a socket already superseded by a reconnect (token refresh)
+      if (wsRef.current !== ws) return
       let msg: { message_type?: string; text?: string }
       try {
         msg = JSON.parse(event.data as string) as typeof msg
@@ -191,6 +193,8 @@ export function useVoiceInput({
     let closedByError = false
 
     ws.onerror = () => {
+      // Ignore late events from a socket already superseded by a reconnect (token refresh)
+      if (wsRef.current !== ws) return
       closedByError = true
       setState('error')
       toast.error('Sprachaufnahme unterbrochen')
@@ -198,7 +202,14 @@ export function useVoiceInput({
 
     ws.onclose = () => {
       const wasIntentional = intentionalCloseRef.current
+      // Always consume the flag here so it can never leak "true" onto a later,
+      // genuinely unexpected close of whatever socket is active by then.
       intentionalCloseRef.current = false
+
+      // This socket was already replaced (e.g. token-refresh reconnect finished before
+      // this old socket's close event arrived) — the replacement owns cleanup/state now.
+      if (wsRef.current !== ws) return
+
       cleanup({ flushPartialAsFallback: !wasIntentional })
       if (!closedByError) {
         if (!wasIntentional) {
