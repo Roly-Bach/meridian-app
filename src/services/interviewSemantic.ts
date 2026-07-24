@@ -476,7 +476,13 @@ const DAUER_TO_MINUTEN: Record<string, number> = {
 
 function resolveWithFactorTable(slot: SchemaSlotNumber | null | undefined, table: Record<string, number>): number | null {
   if (slot?.value == null) return null
-  const factor = slot.einheit != null ? (table[slot.einheit] ?? 1) : 1
+  // Absent einheit → intentional default (ADR-025 D5, canonical unit). A PRESENT but
+  // unrecognized einheit (e.g. a ratio like "pro_100_rechnungen") is a different case:
+  // we have no idea how to convert it, so signal "not computable" instead of silently
+  // guessing factor 1 (KI-33 — that guess previously corrupted ROI numbers).
+  if (slot.einheit == null) return Math.round(slot.value * 100) / 100
+  const factor = table[slot.einheit]
+  if (factor == null) return null
   return Math.round(slot.value * factor * 100) / 100
 }
 
