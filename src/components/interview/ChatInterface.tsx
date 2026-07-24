@@ -4,8 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { MessageList, type Message } from './MessageList'
 import { ChatInput } from './ChatInput'
+import { TransitionPrompt } from './TransitionPrompt'
 import { useInterviewStream } from '@/hooks/useInterviewStream'
 import type { ClarificationCard } from '@/services/interviewTypes'
+
+type PendingTransition =
+  | { kind: 'clarification'; cards: ClarificationCard[]; answers: Record<string, string | string[]> }
+  | { kind: 'completed' }
 
 type Turn = {
   id: string
@@ -43,6 +48,7 @@ export function ChatInterface({ token, employeeName, existingTurns, openerText, 
     turnsToMessages(existingTurns, existingTurns.length > 0 ? openerText : null)
   )
   const [showReconnectBanner, setShowReconnectBanner] = useState(() => existingTurns.length > 0)
+  const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null)
   const reconnectBannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { isStreaming, error, sendMessage, reconnect, start, clearError } = useInterviewStream(token)
 
@@ -107,14 +113,27 @@ export function ChatInterface({ token, employeeName, existingTurns, openerText, 
         clarificationAnswers?: Record<string, string | string[]> | null
       }
       if (data.state?.phase === 'clarification' && data.clarificationCards?.length) {
-        onClarification?.(data.clarificationCards, data.clarificationAnswers ?? {})
+        setPendingTransition({
+          kind: 'clarification',
+          cards: data.clarificationCards,
+          answers: data.clarificationAnswers ?? {},
+        })
         return
       }
       if (data.interview?.status === 'completed') {
-        onCompleted?.()
+        setPendingTransition({ kind: 'completed' })
       }
     } catch {
       // Non-critical — ignore
+    }
+  }
+
+  function handleAdvance() {
+    if (!pendingTransition) return
+    if (pendingTransition.kind === 'clarification') {
+      onClarification?.(pendingTransition.cards, pendingTransition.answers)
+    } else {
+      onCompleted?.()
     }
   }
 
@@ -166,11 +185,14 @@ export function ChatInterface({ token, employeeName, existingTurns, openerText, 
         </div>
       )}
 
-      <MessageList messages={messages} />
+      <MessageList
+        messages={messages}
+        footer={pendingTransition && <TransitionPrompt onAdvance={handleAdvance} />}
+      />
 
       <ChatInput
         onSend={handleSend}
-        disabled={isStreaming}
+        disabled={isStreaming || pendingTransition !== null}
         voiceToken={token}
         onVoiceCommitted={handleSend}
         isStreamingAgent={isStreaming}

@@ -5,6 +5,7 @@ import { ChatErrorScreen } from '@/components/interview/ChatErrorScreen'
 import { ChatCompletedScreen } from '@/components/interview/ChatCompletedScreen'
 import { ChatInterface } from '@/components/interview/ChatInterface'
 import { ClarificationView } from '@/components/interview/ClarificationView'
+import { FadeIn } from '@/components/interview/FadeIn'
 import type { ClarificationCard } from '@/services/interviewTypes'
 
 type Interview = {
@@ -92,18 +93,24 @@ export default function InterviewPage({ params }: { params: Promise<{ token: str
   }
 
   if (pageState.status === 'completed') {
-    return <ChatCompletedScreen />
+    return (
+      <FadeIn>
+        <ChatCompletedScreen />
+      </FadeIn>
+    )
   }
 
   if (pageState.status === 'clarification') {
     return (
-      <ClarificationView
-        token={token}
-        employeeName={pageState.employeeName}
-        cards={pageState.cards}
-        initialAnswers={pageState.answers}
-        onCompleted={() => setPageState({ status: 'completed' })}
-      />
+      <FadeIn>
+        <ClarificationView
+          token={token}
+          employeeName={pageState.employeeName}
+          cards={pageState.cards}
+          initialAnswers={pageState.answers}
+          onCompleted={() => setPageState({ status: 'completed' })}
+        />
+      </FadeIn>
     )
   }
 

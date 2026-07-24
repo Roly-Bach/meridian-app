@@ -10,7 +10,7 @@ export type Message = {
   isStreaming?: boolean
 }
 
-export function MessageList({ messages }: { messages: Message[] }) {
+export function MessageList({ messages, footer }: { messages: Message[]; footer?: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -21,7 +21,7 @@ export function MessageList({ messages }: { messages: Message[] }) {
     if (distFromBottom < 120) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages])
+  }, [messages, footer])
 
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto px-6 py-6">
@@ -33,6 +33,7 @@ export function MessageList({ messages }: { messages: Message[] }) {
           isStreaming={msg.isStreaming}
         />
       ))}
+      {footer}
       <div ref={bottomRef} />
     </div>
   )
